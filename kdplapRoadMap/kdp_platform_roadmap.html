@@ -1,0 +1,187 @@
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); color: var(--color-text-primary); }
+  .roadmap { padding: 1.5rem 0; max-width: 860px; }
+  .phase-row { margin-bottom: 1.5rem; }
+  .phase-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; cursor: pointer; user-select: none; }
+  .phase-badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+  .ph-1 { background: #EEEDFE; color: #3C3489; }
+  .ph-2 { background: #E1F5EE; color: #085041; }
+  .ph-3 { background: #FAEEDA; color: #633806; }
+  .ph-4 { background: #E6F1FB; color: #0C447C; }
+  .phase-title { font-size: 15px; font-weight: 500; }
+  .phase-timeline { font-size: 12px; color: var(--color-text-secondary); margin-left: auto; }
+  .chevron { font-size: 11px; color: var(--color-text-secondary); transition: transform 0.2s; }
+  .chevron.open { transform: rotate(90deg); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .card:hover { border-color: var(--color-border-secondary); background: var(--color-background-secondary); }
+  .card.done { opacity: 0.55; }
+  .card.active { border-left: 3px solid #7F77DD; }
+  .card-title { font-size: 13px; font-weight: 500; margin-bottom: 5px; display: flex; align-items: center; gap: 7px; }
+  .card-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-todo { background: var(--color-border-secondary); }
+  .dot-active { background: #7F77DD; }
+  .dot-done { background: #1D9E75; }
+  .progress-bar { height: 4px; background: var(--color-background-secondary); border-radius: 2px; margin: 6px 0 12px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
+  .pf-1 { background: #7F77DD; }
+  .pf-2 { background: #1D9E75; }
+  .pf-3 { background: #EF9F27; }
+  .pf-4 { background: #378ADD; }
+  .legend { display: flex; gap: 16px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: var(--color-background-secondary); border-radius: 8px; padding: 12px 14px; }
+  .stat-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
+  .stat-val { font-size: 20px; font-weight: 500; }
+  .collapse-body { overflow: hidden; transition: max-height 0.3s ease; }
+  .collapse-body.open { max-height: 1000px; }
+  .collapse-body.closed { max-height: 0; }
+  .action-row { display: flex; gap: 8px; margin-top: 1rem; flex-wrap: wrap; }
+  .btn { font-size: 12px; border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-primary); padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+  .btn:hover { background: var(--color-background-secondary); }
+  .tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-top: 6px; font-weight: 500; }
+  .tag-mvp { background: #EEEDFE; color: #534AB7; }
+  .tag-core { background: #E1F5EE; color: #0F6E56; }
+  .tag-growth { background: #FAEEDA; color: #854F0B; }
+</style>
+
+<div class="roadmap">
+  <div class="summary">
+    <div class="stat"><div class="stat-label">Total phases</div><div class="stat-val">4</div></div>
+    <div class="stat"><div class="stat-label">Estimated timeline</div><div class="stat-val">~9 mo</div></div>
+    <div class="stat"><div class="stat-label">Total features</div><div class="stat-val" id="total-feat">20</div></div>
+    <div class="stat"><div class="stat-label">Completed</div><div class="stat-val" id="done-count">0</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="leg-item"><div class="dot dot-todo"></div>To do</div>
+    <div class="leg-item"><div class="dot dot-active"></div>In progress</div>
+    <div class="leg-item"><div class="dot dot-done"></div>Done</div>
+    <span style="flex:1"></span>
+    <div class="leg-item"><span class="tag tag-mvp">MVP</span> Must ship</div>
+    <div class="leg-item"><span class="tag tag-core">Core</span> Core feature</div>
+    <div class="leg-item"><span class="tag tag-growth">Growth</span> Revenue driver</div>
+  </div>
+
+  <div id="phases"></div>
+
+  <div class="action-row">
+    <button class="btn" onclick="sendPrompt('Let\'s start Phase 1. Help me set up the tech stack for a KDP book generator web app. I have intermediate web dev skills. ↗')">Start Phase 1 now ↗</button>
+    <button class="btn" onclick="sendPrompt('What tech stack do you recommend for building a KDP book generator platform similar to Book Bolt? ↗')">Recommend a tech stack ↗</button>
+    <button class="btn" onclick="sendPrompt('Show me a competitor analysis of Book Bolt vs Bookgenie vs what we\'re building ↗')">Compare with competitors ↗</button>
+  </div>
+</div>
+
+<script>
+const phases = [
+  {
+    id: 1, title: "Foundation & MVP", timeline: "Months 1–2", color: "ph-1", bar: "pf-1",
+    desc: "Build the core web app skeleton and your first working generator.",
+    features: [
+      { title: "Project setup", desc: "HTML/CSS + Supabase auth, domain, hosting on Vercel.", tag: "mvp", status: "todo" },
+      { title: "User auth", desc: "Sign up, login, password reset. Free tier users only.", tag: "mvp", status: "todo" },
+      { title: "Word search generator", desc: "Input words → auto-layout grid → export as PDF (KDP-ready 8.5×11).", tag: "mvp", status: "todo" },
+      { title: "Sudoku generator", desc: "Easy/medium/hard difficulty. Auto-fill solution page.", tag: "mvp", status: "todo" },
+      { title: "Basic dashboard", desc: "List of user's generated books. Download button per book.", tag: "mvp", status: "todo" },
+    ]
+  },
+  {
+    id: 2, title: "Core Generators", timeline: "Months 3–5", color: "ph-2", bar: "pf-2",
+    desc: "Expand to all book types. Add templates and customization.",
+    features: [
+      { title: "Crossword generator", desc: "Clue/answer input → auto-layout crossword grid → PDF export.", tag: "core", status: "todo" },
+      { title: "Journal & notebook builder", desc: "Choose line spacing, dot grid, blank. Set margins for KDP bleed.", tag: "core", status: "todo" },
+      { title: "Coloring page generator", desc: "Upload or pick from preset line-art. Package into PDF book.", tag: "core", status: "todo" },
+      { title: "Kids activity book", desc: "Combine mazes, connect-the-dots, and tracing in one book.", tag: "core", status: "todo" },
+      { title: "Cover designer", desc: "Drag-and-drop cover builder. KDP cover template sizes built-in.", tag: "core", status: "todo" },
+      { title: "Template library", desc: "20+ starter templates per book type. One-click apply.", tag: "core", status: "todo" },
+    ]
+  },
+  {
+    id: 3, title: "Monetization", timeline: "Months 6–7", color: "ph-3", bar: "pf-3",
+    desc: "Turn traffic into revenue. Launch subscriptions and premium features.",
+    features: [
+      { title: "Subscription tiers", desc: "Free (3 books/mo), Pro ($9/mo unlimited), Team ($29/mo).", tag: "growth", status: "todo" },
+      { title: "Stripe integration", desc: "Payments, upgrade/downgrade, invoice emails.", tag: "growth", status: "todo" },
+      { title: "Bulk export", desc: "Download all books as ZIP. Pro feature.", tag: "growth", status: "todo" },
+      { title: "KDP uploader helper", desc: "Checklist + guide to submit directly to Amazon KDP.", tag: "growth", status: "todo" },
+      { title: "Niche keyword tool", desc: "Search Amazon BSR data to find low-competition niches.", tag: "growth", status: "todo" },
+    ]
+  },
+  {
+    id: 4, title: "Growth & Scale", timeline: "Months 8–9", color: "ph-4", bar: "pf-4",
+    desc: "Compete head-on with Book Bolt. Add AI and community features.",
+    features: [
+      { title: "AI prompt-to-book", desc: "Type a theme → AI generates full word list, clues, or content.", tag: "growth", status: "todo" },
+      { title: "Interior marketplace", desc: "Sell/share interiors. Creators earn commission.", tag: "growth", status: "todo" },
+      { title: "Puzzle pack bundles", desc: "Seasonal bundles (Christmas, Halloween) ready to publish.", tag: "growth", status: "todo" },
+      { title: "Analytics dashboard", desc: "Track which books you've published and estimated royalties.", tag: "growth", status: "todo" },
+    ]
+  }
+];
+
+const statusCycle = { todo: "active", active: "done", done: "todo" };
+const dotClass = { todo: "dot-todo", active: "dot-active", done: "dot-done" };
+
+let state = phases.map(p => ({ ...p, open: p.id === 1, features: p.features.map(f => ({ ...f })) }));
+
+function countDone() {
+  return state.flatMap(p => p.features).filter(f => f.status === "done").length;
+}
+
+function render() {
+  const container = document.getElementById("phases");
+  container.innerHTML = "";
+  document.getElementById("done-count").textContent = countDone();
+
+  state.forEach((phase, pi) => {
+    const doneCount = phase.features.filter(f => f.status === "done").length;
+    const pct = Math.round((doneCount / phase.features.length) * 100);
+
+    const row = document.createElement("div");
+    row.className = "phase-row";
+
+    row.innerHTML = `
+      <div class="phase-header" onclick="togglePhase(${pi})">
+        <span class="phase-badge ${phase.color}">Phase ${phase.id}</span>
+        <span class="phase-title">${phase.title}</span>
+        <span class="phase-timeline">${phase.timeline}</span>
+        <span class="chevron ${phase.open ? 'open' : ''}">&#9654;</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill ${phase.bar}" style="width:${pct}%"></div></div>
+      <div class="collapse-body ${phase.open ? 'open' : 'closed'}">
+        <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;">${phase.desc}</p>
+        <div class="cards">
+          ${phase.features.map((f, fi) => `
+            <div class="card ${f.status === 'done' ? 'done' : ''} ${f.status === 'active' ? 'active' : ''}" onclick="cycleStatus(${pi},${fi})">
+              <div class="card-title">
+                <div class="dot ${dotClass[f.status]}"></div>
+                ${f.title}
+              </div>
+              <div class="card-desc">${f.desc}</div>
+              <span class="tag tag-${f.tag}">${f.tag.charAt(0).toUpperCase()+f.tag.slice(1)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function togglePhase(pi) {
+  state[pi].open = !state[pi].open;
+  render();
+}
+
+function cycleStatus(pi, fi) {
+  const f = state[pi].features[fi];
+  f.status = statusCycle[f.status];
+  render();
+}
+
+render();
+</script>

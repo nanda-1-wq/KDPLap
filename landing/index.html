@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KDP Lab — Create Low-Content Books in Minutes</title>
+<meta name="description" content="Generate puzzle books, journals, planners and coloring books for Amazon KDP. No design skills required."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════ -->
+<nav id="navbar">
+
+  <a class="logo" href="#">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20">
+        <rect x="3" y="2" width="8" height="10" rx="1.5"/>
+        <rect x="9" y="6" width="8" height="10" rx="1.5" opacity="0.7"/>
+        <rect x="6" y="10" width="8" height="7"  rx="1.5" opacity="0.5"/>
+      </svg>
+    </div>
+    <span class="logo-name">KDP <em>Lab</em></span>
+  </a>
+
+  <ul class="nav-center">
+
+    <li class="nav-item">
+      <button class="nav-link" tabindex="0">
+        Features
+        <span class="nav-badge">New</span>
+        <svg class="chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <polyline points="2,4 6,8 10,4"/>
+        </svg>
+      </button>
+      <div class="dropdown">
+        <div class="dropdown-header">Book Generators</div>
+
+        <a class="dropdown-item" href="#">
+          <div class="di-icon">
+            <svg viewBox="0 0 20 20">
+              <rect x="3" y="3" width="6" height="6" rx="1"/>
+              <rect x="11" y="3" width="6" height="6" rx="1"/>
+              <rect x="3" y="11" width="6" height="6" rx="1"/>
+              <rect x="11" y="11" width="6" height="6" rx="1"/>
+            </svg>
+          </div>
+          <div class="di-text">
+            <span class="di-title">Puzzle Generator</span>
+            <span class="di-desc">Word search, sudoku, crossword</span>
+          </div>
+        </a>
+
+        <a class="dropdown-item" href="#">
+          <div class="di-icon">
+            <svg viewBox="0 0 20 20">
+              <rect x="4" y="2" width="12" height="16" rx="2"/>
+              <line x1="7" y1="7"  x2="13" y2="7"  stroke="currentColor" stroke-width="1.5" fill="none"/>
+              <line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="1.5" fill="none"/>
+              <line x1="7" y1="13" x2="11" y2="13" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            </svg>
+          </div>
+          <div class="di-text">
+            <span class="di-title">Journal Creator</span>
+            <span class="di-desc">Lined, dot grid, blank pages</span>
+          </div>
+        </a>
+
+        <a class="dropdown-item" href="#">
+          <div class="di-icon">
+            <svg viewBox="0 0 20 20">
+              <rect x="3" y="4" width="14" height="12" rx="2"/>
+              <line x1="3"  y1="8"  x2="17" y2="8"  stroke="currentColor" stroke-width="1.5" fill="none"/>
+              <line x1="8"  y1="4"  x2="8"  y2="16" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            </svg>
+          </div>
+          <div class="di-text">
+            <span class="di-title">Planner Builder</span>
+            <span class="di-desc">Daily, weekly, monthly planners</span>
+          </div>
+        </a>
+
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-header">Design &amp; Research</div>
+
+        <a class="dropdown-item" href="#">
+          <div class="di-icon">
+            <svg viewBox="0 0 20 20">
+              <circle cx="10" cy="10" r="7"/>
+              <path d="M10 3 L10 17M3 10 L17 10" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            </svg>
+          </div>
+          <div class="di-text">
+            <span class="di-title">Cover Designer</span>
+            <span class="di-desc">KDP-ready cover templates</span>
+          </div>
+        </a>
+
+        <a class="dropdown-item" href="#">
+          <div class="di-icon">
+            <svg viewBox="0 0 20 20">
+              <circle cx="9" cy="9" r="5"/>
+              <line x1="13" y1="13" x2="17" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+            </svg>
+          </div>
+          <div class="di-text">
+            <span class="di-title">Keyword Tool</span>
+            <span class="di-desc">Amazon BSR niche research</span>
+          </div>
+        </a>
+
+        <a class="dropdown-item" href="#">
+          <div class="di-icon">
+            <svg viewBox="0 0 20 20">
+              <path d="M10 2 L12 8 L18 8 L13 12 L15 18 L10 14 L5 18 L7 12 L2 8 L8 8 Z"/>
+            </svg>
+          </div>
+          <div class="di-text">
+            <span class="di-title">Book Idea Generator</span>
+            <span class="di-desc">AI-powered niche suggestions</span>
+          </div>
+        </a>
+      </div>
+    </li>
+
+    <li class="nav-item"><a class="nav-link" href="#how-it-works">How It Works</a></li>
+    <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
+    <li class="nav-item"><a class="nav-link" href="#templates">Templates</a></li>
+    <li class="nav-item"><a class="nav-link" href="#blog">Blog</a></li>
+
+  </ul>
+
+  <div class="nav-right">
+    <a class="btn-login" href="signup.html">Log in</a>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+      <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>
+    </button>
+    <a class="btn-cta hide-mobile" href="signup.html">
+      Get Started Free <span class="btn-cta-arrow">&rarr;</span>
+    </a>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+</nav>
+
+<!-- Mobile menu -->
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#features">Features</a>
+  <a href="#how-it-works">How It Works</a>
+  <a href="#templates">Templates</a>
+  <a href="#blog">Blog</a>
+  <a class="btn-cta" href="signup.html">Get Started Free &rarr;</a>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════ -->
+<section class="hero" id="top">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <div class="hero-row">
+
+    <!-- Left: text content -->
+    <div class="hero-text">
+      <div class="hero-badge">
+        <div class="badge-dot">
+          <svg viewBox="0 0 12 12">
+            <polygon points="6,1 8,5 12,5 9,8 10,12 6,9 2,12 3,8 0,5 4,5"/>
+          </svg>
+        </div>
+        Now in Beta &mdash; Free to use
+      </div>
+
+      <h1>Create Low-Content<br>Books <span class="accent">in Minutes</span></h1>
+
+      <p class="hero-sub">
+        Generate puzzle books, journals, planners &amp; coloring books
+        ready for Amazon KDP. No design skills required.
+      </p>
+
+      <div class="hero-cta">
+        <a class="cta-main" href="signup.html">Get Started Free &rarr;</a>
+        <a class="cta-alt"  href="#how-it-works">See how it works</a>
+      </div>
+    </div>
+
+    <!-- Right: vertical mock card -->
+    <div class="hero-visual">
+      <div class="float-badge float-badge-1">
+        <div class="fb-dot" style="background:#1D9E75"></div>
+        PDF exported &mdash; KDP Ready
+      </div>
+      <div class="float-badge float-badge-2">
+        <div class="fb-dot" style="background:#7C3AED"></div>
+        Word Search generated in 4s
+      </div>
+
+      <div class="mock-card">
+        <div class="mock-topbar">
+          <div class="mock-dots"><span></span><span></span><span></span></div>
+          <div class="mock-label">KDP Lab Dashboard</div>
+        </div>
+
+        <div class="mock-stats-vertical">
+          <div class="mock-stat">
+            <div class="mock-stat-label">Books created</div>
+            <div class="mock-stat-val accent">47</div>
+          </div>
+          <div class="mock-stat">
+            <div class="mock-stat-label">PDFs exported</div>
+            <div class="mock-stat-val">312</div>
+          </div>
+          <div class="mock-stat">
+            <div class="mock-stat-label">Est. royalties</div>
+            <div class="mock-stat-val accent">$1.2K</div>
+          </div>
+        </div>
+
+        <div class="mock-bar-row mock-bar-row--vertical">
+          <div class="mock-bar"    style="height:40%"></div>
+          <div class="mock-bar"    style="height:60%"></div>
+          <div class="mock-bar hi" style="height:85%"></div>
+          <div class="mock-bar"    style="height:55%"></div>
+          <div class="mock-bar hi" style="height:95%"></div>
+          <div class="mock-bar"    style="height:72%"></div>
+          <div class="mock-bar hi" style="height:88%"></div>
+        </div>
+
+        <div class="mock-activity">
+          <div class="mock-activity-dot" style="background:#1D9E75"></div>
+          <span>3 books published this week</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     HOW IT WORKS
+═══════════════════════════════════════════ -->
+<section class="section" id="how-it-works">
+  <div class="section-inner">
+    <span class="section-label">How It Works</span>
+    <h2 class="section-title">From idea to published book<br>in <span class="accent">four steps</span></h2>
+    <p class="section-desc">No complicated tools. No design experience. Just pick, generate, design, and publish.</p>
+
+    <div class="steps-grid">
+
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="16.5" y1="16.5" x2="21" y2="21"/>
+          </svg>
+        </div>
+        <h3>Pick a Niche</h3>
+        <p>Choose a profitable niche for your book. Puzzle books, journals, planners &mdash; find what sells.</p>
+      </div>
+
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <path d="M9 3v18M3 9h18"/>
+          </svg>
+        </div>
+        <h3>Generate Content</h3>
+        <p>Our generators create word searches, sudoku, crosswords, lined pages, and more &mdash; instantly.</p>
+      </div>
+
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="3"/>
+            <path d="M2 8h20"/>
+            <circle cx="8" cy="14" r="2"/>
+          </svg>
+        </div>
+        <h3>Design Your Cover</h3>
+        <p>Use the built-in cover designer with KDP-ready templates. Drag, drop, done.</p>
+      </div>
+
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14l-5-4.87 6.91-1.01z"/>
+          </svg>
+        </div>
+        <h3>Publish to KDP</h3>
+        <p>Export your KDP-ready PDF and follow our step-by-step publishing guide to go live on Amazon.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FEATURES
+═══════════════════════════════════════════ -->
+<section class="section section--alt" id="features">
+  <div class="section-inner">
+    <span class="section-label">Features</span>
+    <h2 class="section-title">Everything you need to<br><span class="accent">build and sell</span></h2>
+    <p class="section-desc">Powerful generators, smart templates, and publishing tools &mdash; all in one platform.</p>
+
+    <!-- 3 highlight cards -->
+    <div class="feature-highlights">
+
+      <div class="feature-hl-card">
+        <div class="feature-hl-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+        </div>
+        <h3>Puzzle Generators</h3>
+        <p>Create word searches, sudoku, and crossword puzzles with adjustable difficulty. Auto-generates solution pages and formats to KDP specs.</p>
+        <span class="feature-hl-tag">Most Popular</span>
+      </div>
+
+      <div class="feature-hl-card">
+        <div class="feature-hl-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="2" width="16" height="20" rx="2.5"/>
+            <line x1="8" y1="8" x2="16" y2="8"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+            <line x1="8" y1="16" x2="13" y2="16"/>
+          </svg>
+        </div>
+        <h3>Journal &amp; Notebook Builder</h3>
+        <p>Build journals with lined, dot grid, or blank pages. Set custom margins for KDP bleed requirements. One-click full book generation.</p>
+        <span class="feature-hl-tag">Core</span>
+      </div>
+
+      <div class="feature-hl-card">
+        <div class="feature-hl-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="3"/>
+            <path d="M2 8h20"/>
+            <circle cx="8" cy="14" r="2"/>
+            <line x1="14" y1="12" x2="18" y2="12"/>
+            <line x1="14" y1="15" x2="17" y2="15"/>
+          </svg>
+        </div>
+        <h3>Cover Designer</h3>
+        <p>Drag-and-drop cover builder with KDP template sizes built in. Choose from starter designs or build from scratch.</p>
+        <span class="feature-hl-tag">Core</span>
+      </div>
+
+    </div>
+
+    <!-- Smaller features grid -->
+    <div class="feature-grid">
+
+      <div class="feature-card">
+        <div class="feature-card-icon">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="14" height="12" rx="2"/>
+            <line x1="3" y1="8" x2="17" y2="8"/>
+            <line x1="8" y1="4" x2="8" y2="16"/>
+          </svg>
+        </div>
+        <h4>Planner Builder</h4>
+        <p>Daily, weekly, and monthly planner layouts</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-icon">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2 L12 8 L18 8 L13 12 L15 18 L10 14 L5 18 L7 12 L2 8 L8 8 Z"/>
+          </svg>
+        </div>
+        <h4>Coloring Pages</h4>
+        <p>Upload or pick from preset line-art collections</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-icon">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="10" cy="6" r="3"/>
+            <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+          </svg>
+        </div>
+        <h4>Kids Activity Books</h4>
+        <p>Mazes, connect-the-dots, and tracing pages</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-icon">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="16" height="16" rx="2"/>
+            <path d="M6 10l3 3 5-6"/>
+          </svg>
+        </div>
+        <h4>KDP Publishing Guide</h4>
+        <p>Step-by-step checklist to submit to Amazon</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-icon">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="9" r="5"/>
+            <line x1="13" y1="13" x2="17" y2="17"/>
+          </svg>
+        </div>
+        <h4>Niche Keyword Tool</h4>
+        <p>Find low-competition niches with Amazon BSR data</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-icon">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 15l4-8 4 5 3-3 3 6"/>
+            <rect x="2" y="2" width="16" height="16" rx="2"/>
+          </svg>
+        </div>
+        <h4>PDF Export</h4>
+        <p>KDP-ready 8.5&times;11 PDFs with bleed and margins</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     PRICING (Beta Banner)
+═══════════════════════════════════════════ -->
+<section class="section" id="pricing">
+  <div class="section-inner">
+    <div class="beta-banner">
+      <div class="beta-banner-content">
+        <span class="beta-pill">Beta</span>
+        <h2>Free during Beta</h2>
+        <p>We're building KDP Lab in the open. All features are free while we're in beta &mdash; no credit card required. Just sign up and start creating.</p>
+        <a class="cta-main" href="signup.html">Get Started Free &rarr;</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     TEMPLATES (Category Cards)
+═══════════════════════════════════════════ -->
+<section class="section section--alt" id="templates">
+  <div class="section-inner">
+    <span class="section-label">Templates</span>
+    <h2 class="section-title">Start with a template,<br><span class="accent">publish in minutes</span></h2>
+    <p class="section-desc">Pick a category, customize, and export. Every template is sized and formatted for Amazon KDP.</p>
+
+    <div class="template-grid">
+
+      <a class="template-card" href="signup.html">
+        <div class="template-card-visual">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="8" y="8" width="13" height="13" rx="2"/>
+            <rect x="27" y="8" width="13" height="13" rx="2"/>
+            <rect x="8" y="27" width="13" height="13" rx="2"/>
+            <rect x="27" y="27" width="13" height="13" rx="2"/>
+          </svg>
+        </div>
+        <h3>Puzzle Books</h3>
+        <p>Word search, sudoku, crosswords</p>
+        <span class="template-card-count">12 templates</span>
+      </a>
+
+      <a class="template-card" href="signup.html">
+        <div class="template-card-visual">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="10" y="4" width="28" height="40" rx="3"/>
+            <line x1="16" y1="14" x2="32" y2="14"/>
+            <line x1="16" y1="20" x2="32" y2="20"/>
+            <line x1="16" y1="26" x2="32" y2="26"/>
+            <line x1="16" y1="32" x2="28" y2="32"/>
+          </svg>
+        </div>
+        <h3>Journals &amp; Notebooks</h3>
+        <p>Lined, dot grid, blank, graph</p>
+        <span class="template-card-count">8 templates</span>
+      </a>
+
+      <a class="template-card" href="signup.html">
+        <div class="template-card-visual">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="6" y="8" width="36" height="32" rx="3"/>
+            <line x1="6" y1="16" x2="42" y2="16"/>
+            <line x1="6" y1="24" x2="42" y2="24"/>
+            <line x1="6" y1="32" x2="42" y2="32"/>
+            <line x1="18" y1="8" x2="18" y2="40"/>
+          </svg>
+        </div>
+        <h3>Planners</h3>
+        <p>Daily, weekly, monthly layouts</p>
+        <span class="template-card-count">10 templates</span>
+      </a>
+
+      <a class="template-card" href="signup.html">
+        <div class="template-card-visual">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="24" cy="20" r="10"/>
+            <path d="M14 38c0-5.5 4.5-10 10-10s10 4.5 10 10"/>
+            <path d="M20 18c1-2 3-3 4-3s3 1 4 3"/>
+          </svg>
+        </div>
+        <h3>Coloring Books</h3>
+        <p>Line-art collections and borders</p>
+        <span class="template-card-count">6 templates</span>
+      </a>
+
+      <a class="template-card" href="signup.html">
+        <div class="template-card-visual">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="16" cy="20" r="4"/>
+            <path d="M8 36l6-8 4 4 8-10 10 14"/>
+            <rect x="6" y="6" width="36" height="36" rx="4"/>
+          </svg>
+        </div>
+        <h3>Book Covers</h3>
+        <p>KDP-sized cover designs</p>
+        <span class="template-card-count">15 templates</span>
+      </a>
+
+      <a class="template-card" href="signup.html">
+        <div class="template-card-visual">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 8c0 0 4 4 12 4s12-4 12-4v32c0 0-4 4-12 4s-12-4-12-4z"/>
+            <path d="M12 16c0 0 4 4 12 4s12-4 12-4"/>
+            <path d="M12 24c0 0 4 4 12 4s12-4 12-4"/>
+          </svg>
+        </div>
+        <h3>Kids Activity</h3>
+        <p>Mazes, tracing, connect-the-dots</p>
+        <span class="template-card-count">9 templates</span>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     BLOG (Placeholder Posts)
+═══════════════════════════════════════════ -->
+<section class="section" id="blog">
+  <div class="section-inner">
+    <span class="section-label">Blog</span>
+    <h2 class="section-title">Learn, build, <span class="accent">publish</span></h2>
+    <p class="section-desc">Guides and tips to help you succeed with low-content publishing on Amazon KDP.</p>
+
+    <div class="blog-grid">
+
+      <a class="blog-card" href="#">
+        <div class="blog-card-img">
+          <span class="blog-card-tag">Guide</span>
+        </div>
+        <div class="blog-card-body">
+          <time>Coming Soon</time>
+          <h3>How to Find Profitable KDP Niches in 2026</h3>
+          <p>A step-by-step guide to researching niches, analyzing competition, and picking winners.</p>
+        </div>
+      </a>
+
+      <a class="blog-card" href="#">
+        <div class="blog-card-img">
+          <span class="blog-card-tag">Tutorial</span>
+        </div>
+        <div class="blog-card-body">
+          <time>Coming Soon</time>
+          <h3>Create Your First Puzzle Book in Under 10 Minutes</h3>
+          <p>From word list to KDP-ready PDF &mdash; a walkthrough of the full puzzle book creation flow.</p>
+        </div>
+      </a>
+
+      <a class="blog-card" href="#">
+        <div class="blog-card-img">
+          <span class="blog-card-tag">Tips</span>
+        </div>
+        <div class="blog-card-body">
+          <time>Coming Soon</time>
+          <h3>5 Cover Design Mistakes That Kill KDP Sales</h3>
+          <p>Your cover is your first impression. Learn what to avoid and how to stand out in search results.</p>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FINAL CTA
+═══════════════════════════════════════════ -->
+<section class="section section--cta">
+  <div class="section-inner" style="text-align:center">
+    <h2 class="section-title" style="color:#fff">Ready to create your<br>first book?</h2>
+    
+    <a class="cta-main cta-main--light" href="signup.html">Get Started Free &rarr;</a>
+    <p class="section-desc" style="color:rgba(255,255,255,0.7)">Sign up free and start generating KDP-ready books today.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="footer-inner">
+    <span class="footer-copy">&copy; 2026 KDP Lab. All rights reserved.</span>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+    </div>
+    <div class="footer-social">
+      <a href="3Desso" aria-label="X (Twitter)" class="social-link">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      </a>
+      <a href="#" aria-label="LinkedIn" class="social-link">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>
