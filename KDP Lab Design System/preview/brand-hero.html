@@ -1,0 +1,97 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 20px; }
+.hero-preview {
+  background: linear-gradient(170deg, #EDE9FE 0%, #F8F7FF 45%, #FFFFFF 100%);
+  border-radius: 16px; padding: 40px 32px; position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 40px;
+}
+.hero-preview::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(124,58,237,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+  pointer-events: none;
+}
+.orb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(60px); }
+.orb1 { width: 300px; height: 300px; background: radial-gradient(circle, rgba(167,139,250,0.28) 0%, transparent 70%); top: -100px; left: -60px; }
+.orb2 { width: 250px; height: 250px; background: radial-gradient(circle, rgba(124,58,237,0.14) 0%, transparent 70%); bottom: -60px; right: -40px; }
+
+.hero-text { flex: 1; position: relative; z-index: 1; }
+.badge { display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,0.85); border: 1px solid rgba(124,58,237,0.25); border-radius: 20px; padding: 5px 14px 5px 8px; font-size: 12px; font-weight: 500; color: #7C3AED; margin-bottom: 20px; }
+.badge-dot { width: 20px; height: 20px; background: linear-gradient(135deg, #7C3AED, #A78BFA); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.badge-dot svg { width: 10px; height: 10px; fill: #fff; }
+h1 { font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 800; line-height: 1.1; letter-spacing: -2px; color: #1A0A3C; }
+.accent { background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.sub { font-size: 14px; color: #5B4B8A; max-width: 340px; margin: 14px 0 0; line-height: 1.7; font-weight: 300; }
+.cta-row { display: flex; gap: 10px; margin-top: 20px; }
+.btn-main { display: inline-flex; align-items: center; gap: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; color: #fff; background: linear-gradient(135deg, #7C3AED 0%, #9D6FEC 100%); border: none; cursor: pointer; padding: 11px 22px; border-radius: 12px; box-shadow: 0 8px 32px rgba(124,58,237,0.35); position: relative; overflow: hidden; }
+.btn-main::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 55%); }
+.btn-alt { display: inline-flex; align-items: center; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 400; color: #5B4B8A; background: rgba(255,255,255,0.8); border: 1px solid rgba(124,58,237,0.25); cursor: pointer; padding: 11px 22px; border-radius: 12px; }
+
+.mock { width: 220px; flex-shrink: 0; position: relative; z-index: 1; }
+.mock-card { background: #fff; border: 1px solid rgba(124,58,237,0.25); border-radius: 16px; box-shadow: 0 24px 80px rgba(124,58,237,0.18); padding: 16px; position: relative; overflow: hidden; }
+.mock-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #7C3AED, #A78BFA, #7C3AED); background-size: 200%; }
+.mock-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.dots { display: flex; gap: 4px; }
+.dots span { width: 7px; height: 7px; border-radius: 50%; }
+.mock-label { font-size: 9px; color: #9585C0; background: #EDE9FE; padding: 2px 8px; border-radius: 20px; }
+.stat { background: #F8F7FF; border: 1px solid rgba(124,58,237,0.12); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.stat-lbl { font-size: 9px; color: #9585C0; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: #1A0A3C; }
+.stat-val.v { color: #7C3AED; }
+.bars { display: flex; gap: 5px; align-items: flex-end; height: 56px; margin-top: 8px; }
+.bar { flex: 1; border-radius: 3px 3px 0 0; background: #EDE9FE; }
+.bar.hi { background: linear-gradient(to top, #7C3AED, #A78BFA); }
+.act { display: flex; align-items: center; gap: 6px; font-size: 9px; color: #5B4B8A; padding: 8px 0 2px; border-top: 1px solid rgba(124,58,237,0.1); margin-top: 6px; }
+.act-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.float { position: absolute; background: #fff; border: 1px solid rgba(124,58,237,0.25); border-radius: 10px; padding: 6px 10px; font-size: 10px; font-weight: 500; color: #1A0A3C; box-shadow: 0 8px 40px rgba(124,58,237,0.14); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.float-dot { width: 6px; height: 6px; border-radius: 50%; }
+.f1 { top: -10px; right: -16px; }
+.f2 { bottom: -10px; left: -16px; }
+</style></head><body>
+<div class="hero-preview">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+
+  <div class="hero-text">
+    <div class="badge">
+      <div class="badge-dot"><svg viewBox="0 0 12 12"><polygon points="6,1 8,5 12,5 9,8 10,12 6,9 2,12 3,8 0,5 4,5"/></svg></div>
+      Now in Beta — Free to use
+    </div>
+    <h1>Create Low-Content<br>Books <span class="accent">in Minutes</span></h1>
+    <p class="sub">Generate puzzle books, journals, planners &amp; coloring books ready for Amazon KDP. No design skills required.</p>
+    <div class="cta-row">
+      <button class="btn-main">Get Started Free →</button>
+      <button class="btn-alt">See how it works</button>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="float f1"><span class="float-dot" style="background:#1D9E75"></span>PDF exported — KDP Ready</div>
+    <div class="float f2"><span class="float-dot" style="background:#7C3AED"></span>Generated in 4s</div>
+    <div class="mock-card">
+      <div class="mock-topbar">
+        <div class="dots"><span style="background:#FF5F57"></span><span style="background:#FEBC2E"></span><span style="background:#28C840"></span></div>
+        <div class="mock-label">KDP Lab Dashboard</div>
+      </div>
+      <div class="stat"><span class="stat-lbl">Books created</span><span class="stat-val v">47</span></div>
+      <div class="stat"><span class="stat-lbl">PDFs exported</span><span class="stat-val">312</span></div>
+      <div class="stat"><span class="stat-lbl">Est. royalties</span><span class="stat-val v">$1.2K</span></div>
+      <div class="bars">
+        <div class="bar" style="height:40%"></div>
+        <div class="bar" style="height:60%"></div>
+        <div class="bar hi" style="height:85%"></div>
+        <div class="bar" style="height:55%"></div>
+        <div class="bar hi" style="height:95%"></div>
+        <div class="bar" style="height:72%"></div>
+        <div class="bar hi" style="height:88%"></div>
+      </div>
+      <div class="act"><div class="act-dot" style="background:#1D9E75"></div><span>3 books published this week</span></div>
+    </div>
+  </div>
+</div>
+</body></html>

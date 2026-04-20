@@ -1,0 +1,73 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 20px; display: flex; gap: 16px; }
+
+/* Feature card */
+.feature-card {
+  background: white; border: 1px solid rgba(124,58,237,0.12);
+  border-radius: 16px; padding: 24px 20px; flex: 1;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.feature-card:hover { border-color: rgba(124,58,237,0.25); box-shadow: 0 8px 40px rgba(124,58,237,0.14); transform: translateY(-2px); }
+.icon-box { width: 44px; height: 44px; background: #EDE9FE; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.icon-box svg { width: 22px; height: 22px; stroke: #7C3AED; }
+.card-title { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: #1A0A3C; margin-bottom: 8px; letter-spacing: -0.3px; }
+.card-desc { font-size: 13px; color: #5B4B8A; line-height: 1.6; font-weight: 300; }
+.card-tag { display: inline-block; margin-top: 14px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #7C3AED; background: #EDE9FE; padding: 3px 10px; border-radius: 20px; }
+
+/* Small feature card */
+.small-card {
+  background: white; border: 1px solid rgba(124,58,237,0.12);
+  border-radius: 12px; padding: 16px; display: flex; align-items: flex-start; gap: 12px;
+  flex: 1;
+}
+.small-icon { width: 36px; height: 36px; background: #EDE9FE; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.small-icon svg { width: 18px; height: 18px; stroke: #7C3AED; }
+.small-title { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #1A0A3C; margin-bottom: 3px; }
+.small-desc { font-size: 11px; color: #9585C0; line-height: 1.5; }
+
+.col { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+</style></head><body>
+
+<div class="feature-card">
+  <div class="icon-box">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    </svg>
+  </div>
+  <div class="card-title">Puzzle Generators</div>
+  <div class="card-desc">Create word searches, sudoku, and crossword puzzles with adjustable difficulty. Auto-generates solution pages.</div>
+  <span class="card-tag">Most Popular</span>
+</div>
+
+<div class="col">
+  <div class="small-card">
+    <div class="small-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="14" height="12" rx="2"/>
+        <line x1="3" y1="8" x2="17" y2="8"/><line x1="8" y1="4" x2="8" y2="16"/>
+      </svg>
+    </div>
+    <div><div class="small-title">Planner Builder</div><div class="small-desc">Daily, weekly, monthly layouts</div></div>
+  </div>
+  <div class="small-card">
+    <div class="small-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9" cy="9" r="5"/><line x1="13" y1="13" x2="17" y2="17"/>
+      </svg>
+    </div>
+    <div><div class="small-title">Keyword Tool</div><div class="small-desc">Amazon BSR niche research</div></div>
+  </div>
+  <div class="small-card">
+    <div class="small-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 15l4-8 4 5 3-3 3 6"/><rect x="2" y="2" width="16" height="16" rx="2"/>
+      </svg>
+    </div>
+    <div><div class="small-title">PDF Export</div><div class="small-desc">KDP-ready 8.5×11 with bleed</div></div>
+  </div>
+</div>
+</body></html>

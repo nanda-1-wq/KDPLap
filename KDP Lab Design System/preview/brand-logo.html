@@ -1,0 +1,70 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 24px; display: flex; gap: 20px; align-items: flex-start; }
+.card { background: white; border: 1px solid rgba(124,58,237,0.12); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.dark { background: #0F0B1A; border-color: rgba(167,139,250,0.15); }
+.logo-row { display: flex; align-items: center; gap: 10px; }
+.logo-icon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(124,58,237,0.35);
+  position: relative; overflow: hidden;
+}
+.logo-icon::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 55%); }
+.logo-icon svg { width: 18px; height: 18px; fill: #fff; position: relative; z-index: 1; }
+.logo-name { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: -0.4px; color: #1A0A3C; }
+.logo-name.dark { color: #F0ECF9; }
+.logo-name em { font-style: normal; color: #7C3AED; }
+.logo-name-dm em { color: #A78BFA; }
+
+.label { font-size: 10px; color: #9585C0; font-family: 'JetBrains Mono', monospace; }
+.label.dark { color: #7A6B9A; }
+
+.icon-only { display: flex; gap: 12px; align-items: center; }
+.logo-sm .logo-icon { width: 28px; height: 28px; border-radius: 8px; }
+.logo-sm .logo-icon svg { width: 14px; height: 14px; }
+.logo-sm .logo-name { font-size: 16px; }
+.logo-lg .logo-icon { width: 48px; height: 48px; border-radius: 13px; }
+.logo-lg .logo-icon svg { width: 24px; height: 24px; }
+.logo-lg .logo-name { font-size: 28px; }
+</style></head><body>
+
+<div class="card">
+  <div class="label">LIGHT BACKGROUND</div>
+  <div class="logo-row logo-lg">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity="0.7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity="0.5"/></svg>
+    </div>
+    <span class="logo-name">KDP <em>Lab</em></span>
+  </div>
+  <div class="icon-only">
+    <div class="logo-row logo-sm">
+      <div class="logo-icon"><svg viewBox="0 0 20 20"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity="0.7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity="0.5"/></svg></div>
+      <span class="logo-name" style="font-size:16px">KDP <em>Lab</em></span>
+    </div>
+    <div class="logo-icon" style="width:36px;height:36px;border-radius:10px">
+      <svg viewBox="0 0 20 20" style="width:18px;height:18px;fill:white;position:relative;z-index:1"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity="0.7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity="0.5"/></svg>
+    </div>
+  </div>
+</div>
+
+<div class="card dark">
+  <div class="label dark">DARK BACKGROUND</div>
+  <div class="logo-row logo-lg">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity="0.7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity="0.5"/></svg>
+    </div>
+    <span class="logo-name logo-name-dm" style="color:#F0ECF9;font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;letter-spacing:-0.4px">KDP <em>Lab</em></span>
+  </div>
+  <div style="background:linear-gradient(135deg,#7C3AED,#5B21B6);padding:12px;border-radius:10px;display:inline-flex;align-items:center;gap:10px">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity="0.7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity="0.5"/></svg>
+    </div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:white;letter-spacing:-0.4px">KDP <em style="font-style:normal;color:rgba(255,255,255,0.6)">Lab</em></span>
+  </div>
+</div>
+
+</body></html>

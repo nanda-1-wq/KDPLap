@@ -1,0 +1,40 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #0F0B1A; padding: 20px; }
+.row { display: flex; gap: 10px; }
+.swatch { flex: 1; border-radius: 10px; overflow: hidden; }
+.color { height: 64px; border: 1px solid rgba(167,139,250,0.18); border-bottom: none; border-radius: 10px 10px 0 0; }
+.meta { padding: 8px 10px; background: #1A1530; border: 1px solid rgba(167,139,250,0.15); border-top: none; border-radius: 0 0 8px 8px; }
+.name { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #F0ECF9; }
+.hex { font-size: 10px; color: #7A6B9A; margin-top: 2px; }
+.label { font-size: 9px; font-weight: 500; color: #B0A3CC; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 3px; }
+</style></head><body>
+<div class="row">
+  <div class="swatch">
+    <div class="color" style="background:#0F0B1A"></div>
+    <div class="meta"><div class="name">dark-bg</div><div class="hex">#0F0B1A</div><div class="label">Page BG</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#140F22"></div>
+    <div class="meta"><div class="name">dark-surface</div><div class="hex">#140F22</div><div class="label">Alt Sect.</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#1A1530"></div>
+    <div class="meta"><div class="name">dark-card</div><div class="hex">#1A1530</div><div class="label">Cards</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#A78BFA"></div>
+    <div class="meta"><div class="name">violet-dm</div><div class="hex">#A78BFA</div><div class="label">Primary DM</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#F0ECF9"></div>
+    <div class="meta"><div class="name">text-dm</div><div class="hex">#F0ECF9</div><div class="label">Text DM</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#B0A3CC"></div>
+    <div class="meta"><div class="name">text-mid-dm</div><div class="hex">#B0A3CC</div><div class="label">Mid DM</div></div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 20px; }
+.row { display: flex; gap: 10px; }
+.swatch { flex: 1; border-radius: 10px; overflow: hidden; }
+.color { height: 72px; }
+.meta { padding: 8px 10px; background: white; border: 1px solid rgba(124,58,237,0.12); border-top: none; border-radius: 0 0 8px 8px; }
+.name { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: #1A0A3C; }
+.label { font-size: 9px; color: #9585C0; margin-top: 2px; }
+</style></head><body>
+<div class="row">
+  <div class="swatch">
+    <div class="color" style="background: linear-gradient(135deg, #7C3AED 0%, #9D6FEC 100%)"></div>
+    <div class="meta"><div class="name">Primary CTA</div><div class="label">135° #7C3AED→#9D6FEC</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)"></div>
+    <div class="meta"><div class="name">Violet</div><div class="label">135° #7C3AED→#A78BFA</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)"></div>
+    <div class="meta"><div class="name">CTA BG</div><div class="label">135° #7C3AED→#5B21B6</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background: linear-gradient(170deg, #EDE9FE 0%, #F8F7FF 45%, #FFFFFF 100%)"></div>
+    <div class="meta"><div class="name">Hero BG</div><div class="label">170° pale→white</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%); display:flex; align-items:center; justify-content:center;">
+      <span style="font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:800; background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; background-color: white; padding: 4px 12px; border-radius: 4px;">Accent Text</span>
+    </div>
+    <div class="meta"><div class="name">Text Gradient</div><div class="label">background-clip: text</div></div>
+  </div>
+</div>
+</body></html>

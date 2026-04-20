@@ -1,0 +1,62 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #F8F7FF; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.token { background: white; border: 1px solid rgba(124,58,237,0.12); border-radius: 10px; padding: 12px; }
+.demo { margin-bottom: 6px; }
+.name { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: #7C3AED; }
+.val { font-size: 10px; color: #9585C0; margin-top: 2px; }
+</style></head><body>
+<!-- Radii -->
+<div class="grid">
+  <div class="token">
+    <div class="demo" style="height:28px;background:#EDE9FE;border-radius:8px"></div>
+    <div class="name">radius-sm</div><div class="val">8px — nav items</div>
+  </div>
+  <div class="token">
+    <div class="demo" style="height:28px;background:#EDE9FE;border-radius:10px"></div>
+    <div class="name">radius-md</div><div class="val">10px — buttons</div>
+  </div>
+  <div class="token">
+    <div class="demo" style="height:28px;background:#EDE9FE;border-radius:12px"></div>
+    <div class="name">radius-base</div><div class="val">12px — small cards</div>
+  </div>
+  <div class="token">
+    <div class="demo" style="height:28px;background:#EDE9FE;border-radius:16px"></div>
+    <div class="name">radius-xl</div><div class="val">16px — cards</div>
+  </div>
+  <div class="token">
+    <div class="demo" style="height:28px;background:#EDE9FE;border-radius:20px"></div>
+    <div class="name">radius-2xl</div><div class="val">20px — hero card</div>
+  </div>
+  <div class="token">
+    <div class="demo" style="height:28px;background:#EDE9FE;border-radius:9999px"></div>
+    <div class="name">radius-full</div><div class="val">9999px — pills</div>
+  </div>
+  <div class="token">
+    <div class="demo" style="height:28px;background:white;border:1px solid rgba(124,58,237,0.12);border-radius:8px"></div>
+    <div class="name">border</div><div class="val">rgba(124,58,237,.12)</div>
+  </div>
+  <div class="token">
+    <div class="demo" style="height:28px;background:white;border:1px solid rgba(124,58,237,0.25);border-radius:8px"></div>
+    <div class="name">border-strong</div><div class="val">rgba(124,58,237,.25)</div>
+  </div>
+</div>
+<!-- Shadows -->
+<div class="grid">
+  <div class="token" style="box-shadow:0 2px 16px rgba(124,58,237,0.08)">
+    <div class="name">shadow-sm</div><div class="val">2px 16px 0.08</div>
+  </div>
+  <div class="token" style="box-shadow:0 8px 40px rgba(124,58,237,0.14)">
+    <div class="name">shadow-md</div><div class="val">8px 40px 0.14</div>
+  </div>
+  <div class="token" style="box-shadow:0 24px 80px rgba(124,58,237,0.18)">
+    <div class="name">shadow-lg</div><div class="val">24px 80px 0.18</div>
+  </div>
+  <div class="token" style="box-shadow:0 4px 20px rgba(124,58,237,0.35)">
+    <div class="name">shadow-btn</div><div class="val">4px 20px 0.35</div>
+  </div>
+</div>
+</body></html>

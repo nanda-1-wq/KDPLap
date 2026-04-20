@@ -1,0 +1,90 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+/* Primary CTA */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+  color: #fff;
+  background: linear-gradient(135deg, #7C3AED 0%, #9D6FEC 100%);
+  border: none; cursor: pointer; padding: 9px 20px; border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(124,58,237,0.35);
+  position: relative; overflow: hidden;
+}
+.btn-primary::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 55%);
+}
+
+/* Primary large */
+.btn-primary-lg {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+  color: #fff;
+  background: linear-gradient(135deg, #7C3AED 0%, #9D6FEC 100%);
+  border: none; cursor: pointer; padding: 13px 28px; border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(124,58,237,0.35);
+  position: relative; overflow: hidden;
+}
+.btn-primary-lg::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 55%);
+}
+
+/* Ghost */
+.btn-ghost {
+  display: inline-flex; align-items: center;
+  font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 400;
+  color: #5B4B8A;
+  background: rgba(255,255,255,0.8);
+  border: 1px solid rgba(124,58,237,0.25); cursor: pointer;
+  padding: 13px 28px; border-radius: 12px;
+}
+
+/* Login link style */
+.btn-link {
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 400;
+  color: #5B4B8A; background: none; border: none; cursor: pointer;
+  padding: 7px 14px; border-radius: 8px;
+}
+
+/* White on violet */
+.btn-light {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+  color: #7C3AED; background: #fff; border: none; cursor: pointer;
+  padding: 13px 28px; border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+
+.label { font-size: 10px; color: #9585C0; font-family: 'JetBrains Mono', monospace; }
+</style></head><body>
+<div class="row">
+  <div>
+    <button class="btn-primary">Get Started Free →</button>
+    <div class="label" style="margin-top:6px">btn-cta (nav)</div>
+  </div>
+  <div>
+    <button class="btn-primary-lg">Get Started Free →</button>
+    <div class="label" style="margin-top:6px">cta-main (hero)</div>
+  </div>
+  <div>
+    <button class="btn-ghost">See how it works</button>
+    <div class="label" style="margin-top:6px">cta-alt (ghost)</div>
+  </div>
+  <div>
+    <button class="btn-link">Log in</button>
+    <div class="label" style="margin-top:6px">btn-login</div>
+  </div>
+</div>
+<div class="row" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);padding:16px;border-radius:12px">
+  <div>
+    <button class="btn-light">Get Started Free →</button>
+    <div class="label" style="margin-top:6px;color:rgba(255,255,255,0.5)">cta-main--light (on violet)</div>
+  </div>
+</div>
+</body></html>

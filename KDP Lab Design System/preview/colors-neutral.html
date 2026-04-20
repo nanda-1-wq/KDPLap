@@ -1,0 +1,40 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 20px; }
+.row { display: flex; gap: 10px; }
+.swatch { flex: 1; border-radius: 10px; overflow: hidden; }
+.color { height: 64px; }
+.meta { padding: 8px 10px; background: white; border: 1px solid rgba(124,58,237,0.12); border-top: none; border-radius: 0 0 8px 8px; }
+.name { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #1A0A3C; }
+.hex { font-size: 10px; color: #9585C0; margin-top: 2px; }
+.label { font-size: 9px; font-weight: 500; color: #5B4B8A; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 3px; }
+</style></head><body>
+<div class="row">
+  <div class="swatch">
+    <div class="color" style="background:#1A0A3C"></div>
+    <div class="meta"><div class="name">text</div><div class="hex">#1A0A3C</div><div class="label">Primary</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#5B4B8A"></div>
+    <div class="meta"><div class="name">text-mid</div><div class="hex">#5B4B8A</div><div class="label">Secondary</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#9585C0"></div>
+    <div class="meta"><div class="name">text-muted</div><div class="hex">#9585C0</div><div class="label">Muted</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#FFFFFF; border: 1px solid rgba(124,58,237,0.12); border-bottom: none;"></div>
+    <div class="meta"><div class="name">white</div><div class="hex">#FFFFFF</div><div class="label">Surface</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#F8F7FF; border: 1px solid rgba(124,58,237,0.12); border-bottom: none;"></div>
+    <div class="meta"><div class="name">off-white</div><div class="hex">#F8F7FF</div><div class="label">Page BG</div></div>
+  </div>
+  <div class="swatch">
+    <div class="color" style="background:#1D9E75"></div>
+    <div class="meta"><div class="name">success</div><div class="hex">#1D9E75</div><div class="label">Green</div></div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; gap: 10px; }
+
+.field-wrap { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.field-label { font-size: 11px; font-weight: 500; color: #5B4B8A; }
+
+input, textarea, select {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color: #1A0A3C;
+  background: white;
+  border: 1px solid rgba(124,58,237,0.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
+}
+input::placeholder { color: #9585C0; }
+
+.input-focused {
+  border-color: #7C3AED !important;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+}
+.error-msg { font-size: 11px; color: #ef4444; margin-top: 3px; }
+
+select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%239585C0' stroke-width='1.8'%3E%3Cpolyline points='2,4 6,8 10,4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 12px; padding-right: 36px; }
+</style></head><body>
+
+<div class="row">
+  <div class="field-wrap">
+    <div class="field-label">Default</div>
+    <input type="text" placeholder="Enter words for your puzzle…">
+  </div>
+  <div class="field-wrap">
+    <div class="field-label">Focused</div>
+    <input type="text" class="input-focused" value="Word Search Book">
+  </div>
+</div>
+<div class="row">
+  <div class="field-wrap">
+    <div class="field-label">Error state</div>
+    <input type="email" class="input-error" value="not-an-email">
+    <div class="error-msg">Please enter a valid email address</div>
+  </div>
+  <div class="field-wrap">
+    <div class="field-label">Select / Dropdown</div>
+    <select>
+      <option>Easy</option>
+      <option selected>Medium</option>
+      <option>Hard</option>
+    </select>
+  </div>
+</div>
+<div class="row">
+  <div class="field-wrap">
+    <div class="field-label">Textarea</div>
+    <textarea rows="3" placeholder="Enter your words, one per line…&#10;cat&#10;dog&#10;fish"></textarea>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 0; }
+
+.navbar {
+  height: 70px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 1rem;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(124,58,237,0.12);
+  box-shadow: 0 8px 40px rgba(124,58,237,0.14);
+}
+
+.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(124,58,237,0.35);
+  position: relative; overflow: hidden;
+}
+.logo-icon::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 55%); }
+.logo-icon svg { width: 18px; height: 18px; fill: #fff; position: relative; z-index: 1; }
+.logo-name { font-family: 'JetBrains Mono', monospace; font-size: 19px; font-weight: 700; letter-spacing: -0.4px; color: #1A0A3C; }
+.logo-name em { font-style: normal; color: #7C3AED; }
+
+.nav-links { display: flex; gap: 2px; margin: 0 auto; list-style: none; }
+.nav-link { font-size: 14px; font-weight: 400; color: #5B4B8A; text-decoration: none; padding: 7px 13px; border-radius: 8px; display: flex; align-items: center; gap: 5px; }
+.nav-link:hover { color: #7C3AED; background: rgba(124,58,237,0.08); }
+.nav-link.active { color: #7C3AED; }
+
+.nav-badge { font-size: 9px; font-weight: 600; background: linear-gradient(135deg, #7C3AED, #A78BFA); color: #fff; padding: 2px 6px; border-radius: 20px; text-transform: uppercase; }
+
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.btn-login { font-size: 14px; color: #5B4B8A; text-decoration: none; padding: 7px 14px; border-radius: 8px; }
+.btn-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; color: #fff;
+  background: linear-gradient(135deg, #7C3AED 0%, #9D6FEC 100%);
+  border: none; cursor: pointer; padding: 9px 20px; border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(124,58,237,0.35); position: relative; overflow: hidden;
+}
+.btn-cta::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 55%); }
+.theme-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: none; border: 1px solid rgba(124,58,237,0.12); border-radius: 9px; cursor: pointer; color: #5B4B8A; }
+.theme-btn svg { width: 18px; height: 18px; }
+</style></head><body>
+
+<nav class="navbar">
+  <a class="logo" href="#">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity="0.7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity="0.5"/></svg>
+    </div>
+    <span class="logo-name">KDP <em>Lab</em></span>
+  </a>
+
+  <ul class="nav-links">
+    <li><a class="nav-link" href="#">Features <span class="nav-badge">New</span></a></li>
+    <li><a class="nav-link active" href="#">How It Works</a></li>
+    <li><a class="nav-link" href="#">Templates</a></li>
+    <li><a class="nav-link" href="#">Blog</a></li>
+  </ul>
+
+  <div class="nav-right">
+    <a class="btn-login" href="#">Log in</a>
+    <button class="theme-btn">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+    </button>
+    <button class="btn-cta">Get Started Free →</button>
+  </div>
+</nav>
+
+</body></html>

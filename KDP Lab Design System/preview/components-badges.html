@@ -1,0 +1,69 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: #F8F7FF; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Section label */
+.section-label { display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #7C3AED; background: #EDE9FE; padding: 4px 12px; border-radius: 20px; }
+
+/* Nav badge */
+.nav-badge { font-size: 9px; font-weight: 600; background: linear-gradient(135deg, #7C3AED, #A78BFA); color: #fff; padding: 2px 6px; border-radius: 20px; letter-spacing: 0.3px; text-transform: uppercase; }
+
+/* Beta pill */
+.beta-pill { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #fff; background: linear-gradient(135deg, #7C3AED, #A78BFA); padding: 4px 14px; border-radius: 20px; }
+
+/* Float badge */
+.float-badge { background: #fff; border: 1px solid rgba(124,58,237,0.25); border-radius: 12px; padding: 8px 14px; font-size: 11px; font-weight: 500; color: #1A0A3C; box-shadow: 0 8px 40px rgba(124,58,237,0.14); display: inline-flex; align-items: center; gap: 6px; }
+.fb-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* Step number */
+.step-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #C4B5FD; letter-spacing: 1px; }
+
+/* Template count */
+.count-pill { display: inline-block; font-size: 11px; font-weight: 500; color: #7C3AED; background: #EDE9FE; padding: 3px 10px; border-radius: 20px; }
+
+/* Feature tag */
+.feature-tag { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #7C3AED; background: #EDE9FE; padding: 3px 10px; border-radius: 20px; }
+
+/* Blog tag */
+.blog-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #fff; background: #7C3AED; padding: 3px 10px; border-radius: 20px; }
+
+.divider { height: 1px; background: rgba(124,58,237,0.1); }
+.group-label { font-size: 10px; color: #9585C0; font-family: 'JetBrains Mono', monospace; }
+</style></head><body>
+
+<div class="group-label">SECTION LABELS & PILLS</div>
+<div class="row">
+  <span class="section-label">How It Works</span>
+  <span class="section-label">Features</span>
+  <span class="section-label">Templates</span>
+  <span class="beta-pill">Beta</span>
+  <span class="nav-badge">New</span>
+</div>
+
+<div class="divider"></div>
+<div class="group-label">FLOATING NOTIFICATION BADGES</div>
+<div class="row">
+  <span class="float-badge"><span class="fb-dot" style="background:#1D9E75"></span>PDF exported — KDP Ready</span>
+  <span class="float-badge"><span class="fb-dot" style="background:#7C3AED"></span>Word Search generated in 4s</span>
+</div>
+
+<div class="divider"></div>
+<div class="group-label">CARD TAGS & COUNTS</div>
+<div class="row">
+  <span class="feature-tag">Most Popular</span>
+  <span class="feature-tag">Core</span>
+  <span class="count-pill">12 templates</span>
+  <span class="count-pill">8 templates</span>
+  <span class="blog-tag">Guide</span>
+  <span class="blog-tag">Tutorial</span>
+  <span class="blog-tag">Tips</span>
+  <span class="step-num">01</span>
+  <span class="step-num">02</span>
+  <span class="step-num">03</span>
+  <span class="step-num">04</span>
+</div>
+
+</body></html>
