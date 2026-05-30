@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sudoku Generator — KDP Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Tokens ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --violet:#7C3AED;--violet-mid:#9D6FEC;--violet-light:#C4B5FD;
+  --violet-pale:#EDE9FE;--violet-dim:rgba(124,58,237,.08);
+  --violet-border:rgba(124,58,237,.12);--violet-border-strong:rgba(124,58,237,.22);
+  --white:#fff;--off-white:#F8F7FF;
+  --text:#1A0A3C;--text-mid:#5B4B8A;--text-muted:#9585C0;
+  --shadow-sm:0 2px 16px rgba(124,58,237,.08);
+  --shadow-md:0 8px 40px rgba(124,58,237,.14);
+  --shadow-btn:0 4px 20px rgba(124,58,237,.35);
+  --shadow-btn-hover:0 8px 32px rgba(124,58,237,.45);
+  --gradient-primary:linear-gradient(135deg,#7C3AED 0%,#9D6FEC 100%);
+  --font-display:'JetBrains Mono',monospace;
+  --font-body:'DM Sans',sans-serif;
+}
+body{
+  font-family:var(--font-body);background:var(--off-white);
+  color:var(--text);visibility:hidden;min-height:100vh;
+}
+body.ready{visibility:visible;}
+
+/* ── Top bar ── */
+.topbar{
+  height:60px;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--violet-border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;position:sticky;top:0;z-index:50;
+}
+.topbar-left{display:flex;align-items:center;gap:12px;}
+.back-btn{
+  display:flex;align-items:center;gap:6px;font-size:13px;
+  color:var(--text-mid);text-decoration:none;
+  padding:6px 10px;border-radius:8px;transition:background .15s,color .15s;
+}
+.back-btn:hover{background:var(--violet-dim);color:var(--violet);}
+.back-btn svg{width:14px;height:14px;}
+.topbar-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text);}
+.btn-logout-sm{
+  font-size:12px;font-weight:500;color:var(--text-mid);
+  background:none;border:1px solid var(--violet-border);
+  border-radius:8px;padding:5px 12px;cursor:pointer;
+  transition:background .15s,color .15s;
+}
+.btn-logout-sm:hover{background:var(--violet-dim);color:var(--violet);}
+
+/* ── Page layout ── */
+.page{max-width:1100px;margin:0 auto;padding:28px 24px;display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start;}
+@media(max-width:900px){.page{grid-template-columns:1fr;}}
+@media(max-width:600px){.page{padding:16px;gap:16px;}}
+
+/* ── Panel ── */
+.panel{
+  background:var(--white);border-radius:16px;
+  border:1px solid var(--violet-border);padding:24px;
+  position:sticky;top:84px;
+}
+.panel-title{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);margin-bottom:20px;}
+
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
+.field-label{font-size:11px;font-weight:500;color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;}
+input[type="text"],select{
+  font-family:var(--font-body);font-size:14px;color:var(--text);
+  background:var(--white);border:1px solid var(--violet-border-strong);
+  border-radius:10px;padding:10px 14px;outline:none;width:100%;
+  transition:border-color .2s,box-shadow .2s;
+}
+input[type="text"]:focus,select:focus{border-color:var(--violet);box-shadow:0 0 0 3px rgba(124,58,237,.12);}
+input[type="text"]::placeholder{color:var(--text-muted);}
+select{
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%239585C0' stroke-width='1.8'%3E%3Cpolyline points='2,4 6,8 10,4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;background-size:12px;padding-right:36px;
+}
+
+/* Difficulty radio cards */
+.diff-group{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+.diff-card input[type="radio"]{position:absolute;opacity:0;width:0;height:0;}
+.diff-card label{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:10px 6px;border-radius:10px;cursor:pointer;
+  border:1.5px solid var(--violet-border);
+  font-size:12px;font-weight:600;color:var(--text-mid);
+  transition:border-color .15s,background .15s,color .15s;
+  user-select:none;
+}
+.diff-card label span{font-size:9px;font-weight:400;color:var(--text-muted);}
+.diff-card input:checked + label{
+  border-color:var(--violet);background:var(--violet-pale);color:var(--violet);
+}
+.diff-card input:checked + label span{color:var(--violet-mid);}
+.diff-card label:hover{border-color:var(--violet-border-strong);background:var(--off-white);}
+
+/* ── Buttons ── */
+.btn-primary{
+  width:100%;padding:11px;
+  font-family:var(--font-body);font-size:14px;font-weight:500;
+  color:#fff;border:none;cursor:pointer;
+  background:var(--gradient-primary);border-radius:10px;
+  box-shadow:var(--shadow-btn);
+  transition:box-shadow .25s,transform .2s,opacity .2s;
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn-primary::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.1);opacity:0;transition:opacity .2s;}
+.btn-primary:hover{box-shadow:var(--shadow-btn-hover);transform:translateY(-1px);}
+.btn-primary:hover::before{opacity:1;}
+.btn-primary:active{transform:translateY(0);}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.btn-secondary{
+  width:100%;padding:10px;margin-top:8px;
+  font-family:var(--font-body);font-size:14px;font-weight:500;
+  color:var(--violet);background:var(--violet-pale);
+  border:1px solid var(--violet-border-strong);border-radius:10px;
+  cursor:pointer;transition:background .15s;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn-secondary:hover{background:#e0d7fc;}
+.btn-secondary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-save{
+  width:100%;padding:10px;margin-top:8px;
+  font-family:var(--font-body);font-size:14px;font-weight:500;
+  color:var(--text-mid);background:var(--white);
+  border:1px solid var(--violet-border-strong);border-radius:10px;
+  cursor:pointer;transition:background .15s,color .15s,border-color .15s;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn-save:hover{background:var(--violet-dim);color:var(--violet);}
+.btn-save:disabled{opacity:.5;cursor:not-allowed;}
+.btn-primary svg,.btn-secondary svg,.btn-save svg{width:15px;height:15px;}
+
+/* ── Alerts ── */
+.alert{border-radius:10px;padding:10px 13px;font-size:13px;line-height:1.5;margin-bottom:12px;display:none;}
+.alert.show{display:block;}
+.alert-error{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;}
+
+/* ── Preview area ── */
+.preview-area{background:var(--white);border-radius:16px;border:1px solid var(--violet-border);padding:28px;min-height:500px;}
+.preview-placeholder{
+  height:460px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;text-align:center;
+}
+.preview-placeholder-icon{width:64px;height:64px;border-radius:16px;background:var(--violet-pale);display:flex;align-items:center;justify-content:center;}
+.preview-placeholder-icon svg{width:28px;height:28px;color:var(--violet);}
+.preview-placeholder-title{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);}
+.preview-placeholder-body{font-size:13px;color:var(--text-muted);max-width:260px;line-height:1.6;}
+
+.preview-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+.preview-book-title{font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--text);}
+.preview-meta{font-size:12px;color:var(--text-muted);margin-top:3px;}
+
+/* ── Section labels ── */
+.section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px;}
+
+/* ── Sudoku grid ── */
+.sudoku-wrap{overflow-x:auto;margin-bottom:20px;}
+.sudoku-grid{
+  display:inline-grid;
+  grid-template-columns:repeat(9,38px);
+  border:2.5px solid var(--text);
+  border-radius:2px;
+  background:var(--text); /* fills gaps caused by border-spacing */
+  gap:0;
+}
+@media(max-width:480px){
+  .sudoku-grid{grid-template-columns:repeat(9,30px);}
+  .s-cell{width:30px!important;height:30px!important;font-size:13px!important;}
+}
+.s-cell{
+  width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:16px;font-weight:700;
+  color:var(--text);background:var(--white);
+  border-right:1px solid rgba(124,58,237,.2);
+  border-bottom:1px solid rgba(124,58,237,.2);
+}
+.s-cell.clue{background:var(--violet-pale);color:var(--violet);}
+.s-cell.solved{color:#888;font-weight:400;}
+.s-cell.box-r{border-right:2.5px solid var(--text);}
+.s-cell.box-b{border-bottom:2.5px solid var(--text);}
+.s-cell.last-col{border-right:none;}
+.s-cell.last-row{border-bottom:none;}
+
+/* ── Difficulty badge ── */
+.diff-badge{
+  display:inline-flex;align-items:center;
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+  padding:3px 10px;border-radius:999px;
+  width:fit-content;
+}
+.diff-badge.easy{background:#dcfce7;color:#166534;}
+.diff-badge.medium{background:#fef9c3;color:#713f12;}
+.diff-badge.hard{background:#fce7f3;color:#9d174d;}
+
+/* ── Solution toggle ── */
+.solution-toggle{
+  display:flex;align-items:center;gap:6px;margin-top:12px;margin-bottom:12px;
+  font-family:var(--font-body);font-size:13px;font-weight:500;
+  color:var(--text-mid);background:none;border:1px solid var(--violet-border);
+  border-radius:8px;padding:7px 14px;cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s;
+  width:fit-content;
+}
+.solution-toggle:hover{background:var(--violet-dim);color:var(--violet);border-color:var(--violet-border-strong);}
+.solution-toggle svg{width:14px;height:14px;transition:transform .2s;}
+.solution-toggle.open svg{transform:rotate(180deg);}
+
+/* ── Stats row ── */
+.puzzle-stats{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
+.pstat{font-size:12px;color:var(--text-muted);}
+.pstat strong{font-family:var(--font-display);color:var(--text);font-weight:700;}
+
+/* ── Spinner ── */
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+.spinner-dark{border-color:var(--violet-pale);border-top-color:var(--violet);}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:#1a0a3c;color:#fff;border-radius:10px;padding:12px 20px;
+  font-size:13px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,.25);
+  transition:transform .3s ease,opacity .3s ease;
+  opacity:0;z-index:999;pointer-events:none;white-space:nowrap;
+}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.toast.error{background:#991b1b;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <a class="back-btn" href="../dashboard.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="10,3 5,8 10,13"/></svg>
+      Dashboard
+    </a>
+    <span style="color:var(--violet-border);font-size:18px;">|</span>
+    <span class="topbar-title">Sudoku Generator</span>
+  </div>
+  <button class="btn-logout-sm" id="logoutBtn">Log out</button>
+</header>
+
+<div class="page">
+  <!-- ── Left panel ── -->
+  <aside class="panel">
+    <div class="panel-title">Puzzle Settings</div>
+
+    <div class="alert alert-error" id="formError"></div>
+
+    <div class="field">
+      <label class="field-label" for="bookTitle">Book Title</label>
+      <input type="text" id="bookTitle" placeholder="e.g. Daily Sudoku Vol. 1" maxlength="80"/>
+    </div>
+
+    <div class="field">
+      <div class="field-label" style="margin-bottom:8px;">Difficulty</div>
+      <div class="diff-group">
+        <div class="diff-card">
+          <input type="radio" name="difficulty" id="diff-easy" value="easy"/>
+          <label for="diff-easy">Easy<span>40 clues</span></label>
+        </div>
+        <div class="diff-card">
+          <input type="radio" name="difficulty" id="diff-medium" value="medium" checked/>
+          <label for="diff-medium">Medium<span>32 clues</span></label>
+        </div>
+        <div class="diff-card">
+          <input type="radio" name="difficulty" id="diff-hard" value="hard"/>
+          <label for="diff-hard">Hard<span>26 clues</span></label>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="generateBtn">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5,3 13,8 5,13"/></svg>
+      Generate Puzzle
+    </button>
+
+    <button class="btn-secondary" id="exportBtn" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 11v2a1 1 0 001 1h8a1 1 0 001-1v-2"/></svg>
+      Export as PDF
+    </button>
+
+    <button class="btn-save" id="saveBtn" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 9v4a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><path d="M8 2v7"/><path d="M5 6l3-3 3 3"/></svg>
+      Save to My Books
+    </button>
+  </aside>
+
+  <!-- ── Preview ── -->
+  <main class="preview-area" id="previewArea">
+    <div class="preview-placeholder" id="placeholder">
+      <div class="preview-placeholder-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+      </div>
+      <div class="preview-placeholder-title">Your puzzle will appear here</div>
+      <p class="preview-placeholder-body">Choose a difficulty and hit <strong>Generate Puzzle</strong> to create a unique Sudoku.</p>
+    </div>
+    <div id="puzzleOutput" style="display:none;"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
+        integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+        integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
+        crossorigin="anonymous"></script>
+<script src="../../js/supabase.js"></script>
+<script>
+/* ════════════════════════════════════════════════
+   KDP Lab — Sudoku Generator
+   Vanilla JS, MRV backtracking engine
+════════════════════════════════════════════════ */
+(async function () {
+
+  /* ── Auth guard ── */
+  const user = await kdp.requireAuth('../../login.html');
+  if (!user) return;
+  document.body.classList.add('ready');
+
+  /* ── Logout ── */
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await kdp.signOut();
+    location.href = '../../login.html';
+  });
+
+  /* ── State ── */
+  let currentPuzzle   = null;
+  let currentSolution = null;
+  let currentIsClue   = null;
+  let currentTitle    = '';
+  let currentDiff     = 'medium';
+
+  /* ══════════════════════════════════════════
+     SUDOKU ENGINE
+  ══════════════════════════════════════════ */
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function isValid(grid, row, col, num) {
+    for (let c = 0; c < 9; c++) if (grid[row][c] === num) return false;
+    for (let r = 0; r < 9; r++) if (grid[r][col] === num) return false;
+    const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+    for (let r = br; r < br + 3; r++)
+      for (let c = bc; c < bc + 3; c++)
+        if (grid[r][c] === num) return false;
+    return true;
+  }
+
+  /* Solve in-place using MRV heuristic. randomize=true for generation. */
+  function solveGrid(grid, randomize = false) {
+    let bestR = -1, bestC = -1, bestCnt = 10;
+    scan: for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (grid[r][c] !== 0) continue;
+        let cnt = 0;
+        for (let n = 1; n <= 9; n++) if (isValid(grid, r, c, n)) cnt++;
+        if (cnt === 0) return false;        // dead end
+        if (cnt < bestCnt) { bestCnt = cnt; bestR = r; bestC = c; }
+        if (bestCnt === 1) break scan;      // can't improve
+      }
+    }
+    if (bestR === -1) return true;          // all cells filled → solved
+
+    const nums = randomize ? shuffle([1,2,3,4,5,6,7,8,9]) : [1,2,3,4,5,6,7,8,9];
+    for (const n of nums) {
+      if (isValid(grid, bestR, bestC, n)) {
+        grid[bestR][bestC] = n;
+        if (solveGrid(grid, randomize)) return true;
+        grid[bestR][bestC] = 0;
+      }
+    }
+    return false;
+  }
+
+  /* Count solutions up to `limit` (stops early — used for uniqueness check). */
+  function countSolutions(grid, limit = 2) {
+    let count = 0;
+    function inner(g) {
+      if (count >= limit) return;
+      let bestR = -1, bestC = -1, bestCnt = 10;
+      scan: for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          if (g[r][c] !== 0) continue;
+          let cnt = 0;
+          for (let n = 1; n <= 9; n++) if (isValid(g, r, c, n)) cnt++;
+          if (cnt === 0) return;
+          if (cnt < bestCnt) { bestCnt = cnt; bestR = r; bestC = c; }
+          if (bestCnt === 1) break scan;
+        }
+      }
+      if (bestR === -1) { count++; return; }
+      for (let n = 1; n <= 9; n++) {
+        if (count >= limit) return;
+        if (isValid(g, bestR, bestC, n)) {
+          g[bestR][bestC] = n;
+          inner(g);
+          g[bestR][bestC] = 0;
+        }
+      }
+    }
+    inner(grid.map(r => [...r]));
+    return count;
+  }
+
+  /* Generate puzzle + solution for given difficulty. */
+  function generatePuzzle(difficulty) {
+    // Step 1: random complete solution
+    const solution = Array.from({length: 9}, () => Array(9).fill(0));
+    solveGrid(solution, true);
+
+    // Step 2: remove cells while maintaining a unique solution
+    const clueTargets = { easy: 40, medium: 32, hard: 26 };
+    const targetClues  = clueTargets[difficulty] ?? 32;
+
+    const puzzle    = solution.map(r => [...r]);
+    const positions = shuffle([...Array(81).keys()]);
+    let remaining   = 81;
+
+    for (const pos of positions) {
+      if (remaining <= targetClues) break;
+      const r = Math.floor(pos / 9), c = pos % 9;
+      if (puzzle[r][c] === 0) continue;
+      const saved = puzzle[r][c];
+      puzzle[r][c] = 0;
+      if (countSolutions(puzzle, 2) === 1) {
+        remaining--;
+      } else {
+        puzzle[r][c] = saved;
+      }
+    }
+
+    const isClue = puzzle.map(row => row.map(v => v !== 0));
+    return { puzzle, solution, isClue, clues: remaining };
+  }
+
+  /* ══════════════════════════════════════════
+     RENDERING
+  ══════════════════════════════════════════ */
+
+  function buildGridHTML(grid, isClue, isSolution = false) {
+    let html = '<div class="sudoku-grid">';
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const cls = ['s-cell'];
+        if (isClue[r][c])         cls.push('clue');
+        else if (isSolution)      cls.push('solved');
+        if (c === 8)              cls.push('last-col');
+        else if (c===2 || c===5)  cls.push('box-r');
+        if (r === 8)              cls.push('last-row');
+        else if (r===2 || r===5)  cls.push('box-b');
+        html += `<div class="${cls.join(' ')}">${grid[r][c] || ''}</div>`;
+      }
+    }
+    return html + '</div>';
+  }
+
+  function renderOutput(puzzle, solution, isClue, title, difficulty, clues) {
+    document.getElementById('placeholder').style.display = 'none';
+    const out = document.getElementById('puzzleOutput');
+    out.style.display = 'block';
+
+    const diffLabel = { easy:'Easy', medium:'Medium', hard:'Hard' }[difficulty] || difficulty;
+
+    out.innerHTML = `
+      <div class="preview-header">
+        <div>
+          <div class="preview-book-title">${escHtml(title)}</div>
+          <div class="preview-meta">${clues} clues given</div>
+        </div>
+        <span class="diff-badge ${difficulty}">${diffLabel}</span>
+      </div>
+
+      <div class="section-label">Puzzle</div>
+      <div class="sudoku-wrap">${buildGridHTML(puzzle, isClue, false)}</div>
+
+      <button class="solution-toggle" id="solToggle">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3,5 8,11 13,5"/></svg>
+        Show Solution
+      </button>
+      <div id="solSection" style="display:none;">
+        <div class="section-label" style="margin-top:12px;">Solution</div>
+        <div class="sudoku-wrap">${buildGridHTML(solution, isClue, true)}</div>
+      </div>`;
+
+    const toggle  = document.getElementById('solToggle');
+    const solSect = document.getElementById('solSection');
+    toggle.addEventListener('click', () => {
+      const open = solSect.style.display !== 'none';
+      solSect.style.display = open ? 'none' : 'block';
+      toggle.classList.toggle('open', !open);
+      toggle.innerHTML = `
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3,5 8,11 13,5"/></svg>
+        ${open ? 'Show' : 'Hide'} Solution`;
+    });
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ══════════════════════════════════════════
+     GENERATE BUTTON
+  ══════════════════════════════════════════ */
+  document.getElementById('generateBtn').addEventListener('click', async () => {
+    const formErr = document.getElementById('formError');
+    formErr.classList.remove('show');
+
+    const title = document.getElementById('bookTitle').value.trim();
+    const diff  = document.querySelector('input[name="difficulty"]:checked')?.value || 'medium';
+
+    if (!title) {
+      formErr.textContent = 'Please enter a book title.';
+      formErr.classList.add('show');
+      document.getElementById('bookTitle').focus();
+      return;
+    }
+
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Generating…';
+
+    // Yield to render the loading state before the synchronous heavy work
+    await new Promise(r => setTimeout(r, 30));
+
+    const { puzzle, solution, isClue, clues } = generatePuzzle(diff);
+
+    currentPuzzle   = puzzle;
+    currentSolution = solution;
+    currentIsClue   = isClue;
+    currentTitle    = title;
+    currentDiff     = diff;
+
+    renderOutput(puzzle, solution, isClue, title, diff, clues);
+
+    btn.disabled = false;
+    btn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5,3 13,8 5,13"/></svg> Generate Puzzle`;
+
+    document.getElementById('exportBtn').disabled = false;
+    document.getElementById('saveBtn').disabled   = false;
+  });
+
+  /* ══════════════════════════════════════════
+     PDF EXPORT  (jsPDF — letter 8.5×11)
+  ══════════════════════════════════════════
+     Page 1: Puzzle   — clue cells shaded, empty cells blank
+     Page 2: Solution — clue cells shaded, solved cells in lighter ink
+  ══════════════════════════════════════════ */
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    if (!currentPuzzle) return;
+    exportPDF(currentPuzzle, currentSolution, currentIsClue, currentTitle, currentDiff);
+  });
+
+  function exportPDF(puzzle, solution, isClue, title, difficulty) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
+
+    const gridSize = 5.4;                        // total grid width/height in inches
+    const cell     = gridSize / 9;               // 0.6 in per cell
+    const gx       = (8.5 - gridSize) / 2;       // horizontally centered
+    const gy       = 1.55;                        // top of grid
+
+    drawPDFPage(doc, puzzle,   isClue, title, difficulty, gx, gy, cell, gridSize, false);
+    doc.addPage();
+    drawPDFPage(doc, solution, isClue, title, difficulty, gx, gy, cell, gridSize, true);
+
+    const slug = title.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+    doc.save(`${slug}-sudoku.pdf`);
+    showToast('PDF exported!');
+  }
+
+  function drawPDFPage(doc, grid, isClue, title, difficulty, gx, gy, cell, gridSize, isSolution) {
+    const W = 8.5;
+    const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+    const pageLabel = isSolution ? `Solution — ${diffLabel}` : `${diffLabel} Puzzle`;
+
+    /* ── Title ── */
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor('#1A0A3C');
+    doc.text(title, W / 2, 0.78, { align: 'center' });
+
+    /* ── Subtitle ── */
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor('#5B4B8A');
+    doc.text(pageLabel.toUpperCase(), W / 2, 1.08, { align: 'center' });
+
+    /* ── Draw cell backgrounds ── */
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const cx = gx + c * cell;
+        const cy = gy + r * cell;
+        if (isClue[r][c]) {
+          doc.setFillColor('#EDE9FE');   // clue: violet-pale
+          doc.rect(cx, cy, cell, cell, 'F');
+        } else if (isSolution) {
+          doc.setFillColor('#FAFAFA');   // solved: near-white
+          doc.rect(cx, cy, cell, cell, 'F');
+        }
+      }
+    }
+
+    /* ── Cell numbers ── */
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const val = grid[r][c];
+        if (!val) continue;
+        const cx = gx + c * cell;
+        const cy = gy + r * cell;
+        if (isClue[r][c]) {
+          doc.setFont('Helvetica', 'bold');
+          doc.setTextColor('#1A0A3C');
+        } else {
+          doc.setFont('Helvetica', 'normal');
+          doc.setTextColor('#6B7280');
+        }
+        doc.setFontSize(13);
+        doc.text(String(val), cx + cell / 2, cy + cell * 0.68, { align: 'center' });
+      }
+    }
+
+    /* ── Thin cell lines (non-box) ── */
+    doc.setLineWidth(0.007);
+    doc.setDrawColor('#D1D5DB');
+    for (let i = 1; i < 9; i++) {
+      if (i % 3 === 0) continue;
+      doc.line(gx + i * cell, gy,           gx + i * cell, gy + gridSize);
+      doc.line(gx,            gy + i * cell, gx + gridSize, gy + i * cell);
+    }
+
+    /* ── Thick box lines + outer border ── */
+    doc.setLineWidth(0.022);
+    doc.setDrawColor('#1A0A3C');
+    for (let i = 0; i <= 9; i += 3) {
+      doc.line(gx + i * cell, gy,           gx + i * cell, gy + gridSize);
+      doc.line(gx,            gy + i * cell, gx + gridSize, gy + i * cell);
+    }
+
+    /* ── Footer ── */
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor('#9585C0');
+    doc.text('Generated with KDP Lab', W / 2, 10.65, { align: 'center' });
+  }
+
+  /* ══════════════════════════════════════════
+     SAVE TO SUPABASE
+  ══════════════════════════════════════════ */
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    if (!currentPuzzle) return;
+    const btn = document.getElementById('saveBtn');
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner spinner-dark"></span> Saving…';
+
+    const { error } = await kdp.saveBook({
+      title:   currentTitle,
+      type:    'sudoku',
+      content: {
+        difficulty: currentDiff,
+        clues: currentIsClue.flat().filter(Boolean).length,
+        puzzle:   currentPuzzle,
+        solution: currentSolution
+      }
+    });
+
+    btn.disabled = false;
+    btn.innerHTML = orig;
+
+    if (error) showToast('Save failed: ' + error.message, true);
+    else        showToast('✓ Saved to My Books!');
+  });
+
+  /* ── Toast ── */
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.toggle('error', isError);
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+})();
+</script>
+</body>
+</html>
