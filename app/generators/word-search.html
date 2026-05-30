@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Word Search Generator — KDP Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Tokens ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --violet:#7C3AED;--violet-mid:#9D6FEC;--violet-light:#C4B5FD;
+  --violet-pale:#EDE9FE;--violet-dim:rgba(124,58,237,.08);
+  --violet-border:rgba(124,58,237,.12);--violet-border-strong:rgba(124,58,237,.22);
+  --white:#fff;--off-white:#F8F7FF;
+  --text:#1A0A3C;--text-mid:#5B4B8A;--text-muted:#9585C0;
+  --shadow-sm:0 2px 16px rgba(124,58,237,.08);
+  --shadow-md:0 8px 40px rgba(124,58,237,.14);
+  --shadow-btn:0 4px 20px rgba(124,58,237,.35);
+  --shadow-btn-hover:0 8px 32px rgba(124,58,237,.45);
+  --gradient-primary:linear-gradient(135deg,#7C3AED 0%,#9D6FEC 100%);
+  --font-display:'JetBrains Mono',monospace;
+  --font-body:'DM Sans',sans-serif;
+}
+body{
+  font-family:var(--font-body);
+  background:var(--off-white);color:var(--text);
+  visibility:hidden;min-height:100vh;
+}
+body.ready{visibility:visible;}
+
+/* ── Top bar ── */
+.topbar{
+  height:60px;background:rgba(255,255,255,.92);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--violet-border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;position:sticky;top:0;z-index:50;
+}
+.topbar-left{display:flex;align-items:center;gap:12px;}
+.back-btn{
+  display:flex;align-items:center;gap:6px;
+  font-size:13px;color:var(--text-mid);text-decoration:none;
+  padding:6px 10px;border-radius:8px;
+  transition:background .15s,color .15s;
+}
+.back-btn:hover{background:var(--violet-dim);color:var(--violet);}
+.back-btn svg{width:14px;height:14px;}
+.topbar-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text);}
+.btn-logout-sm{
+  font-size:12px;font-weight:500;color:var(--text-mid);
+  background:none;border:1px solid var(--violet-border);
+  border-radius:8px;padding:5px 12px;cursor:pointer;
+  transition:background .15s,color .15s;
+}
+.btn-logout-sm:hover{background:var(--violet-dim);color:var(--violet);}
+
+/* ── Page layout ── */
+.page{max-width:1100px;margin:0 auto;padding:28px 24px;display:grid;grid-template-columns:320px 1fr;gap:24px;align-items:start;}
+@media(max-width:900px){.page{grid-template-columns:1fr;}}
+@media(max-width:600px){.page{padding:16px;gap:16px;}}
+
+/* ── Panel (form) ── */
+.panel{
+  background:var(--white);border-radius:16px;
+  border:1px solid var(--violet-border);padding:24px;
+  position:sticky;top:84px;
+}
+.panel-title{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);margin-bottom:20px;}
+
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
+.field-label{font-size:11px;font-weight:500;color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;}
+input[type="text"],select,textarea{
+  font-family:var(--font-body);font-size:14px;color:var(--text);
+  background:var(--white);border:1px solid var(--violet-border-strong);
+  border-radius:10px;padding:10px 14px;outline:none;width:100%;
+  transition:border-color .2s,box-shadow .2s;
+}
+input[type="text"]:focus,select:focus,textarea:focus{
+  border-color:var(--violet);box-shadow:0 0 0 3px rgba(124,58,237,.12);
+}
+input[type="text"]::placeholder,textarea::placeholder{color:var(--text-muted);}
+select{
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%239585C0' stroke-width='1.8'%3E%3Cpolyline points='2,4 6,8 10,4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;background-size:12px;padding-right:36px;
+}
+textarea{resize:vertical;min-height:140px;line-height:1.5;}
+.field-hint{font-size:11px;color:var(--text-muted);margin-top:3px;}
+
+/* ── Buttons ── */
+.btn-primary{
+  width:100%;padding:11px;
+  font-family:var(--font-body);font-size:14px;font-weight:500;
+  color:#fff;border:none;cursor:pointer;
+  background:var(--gradient-primary);border-radius:10px;
+  box-shadow:var(--shadow-btn);
+  transition:box-shadow .25s,transform .2s,opacity .2s;
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn-primary::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.1);opacity:0;transition:opacity .2s;}
+.btn-primary:hover{box-shadow:var(--shadow-btn-hover);transform:translateY(-1px);}
+.btn-primary:hover::before{opacity:1;}
+.btn-primary:active{transform:translateY(0);}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.btn-secondary{
+  width:100%;padding:10px;margin-top:8px;
+  font-family:var(--font-body);font-size:14px;font-weight:500;
+  color:var(--violet);background:var(--violet-pale);
+  border:1px solid var(--violet-border-strong);border-radius:10px;
+  cursor:pointer;transition:background .15s,box-shadow .2s;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn-secondary:hover{background:#e0d7fc;}
+.btn-secondary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-save{
+  width:100%;padding:10px;margin-top:8px;
+  font-family:var(--font-body);font-size:14px;font-weight:500;
+  color:var(--text-mid);background:var(--white);
+  border:1px solid var(--violet-border-strong);border-radius:10px;
+  cursor:pointer;transition:background .15s,color .15s,border-color .15s;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn-save:hover{background:var(--violet-dim);color:var(--violet);border-color:var(--violet-border-strong);}
+.btn-save:disabled{opacity:.5;cursor:not-allowed;}
+.btn-save svg,.btn-secondary svg,.btn-primary svg{width:15px;height:15px;}
+
+/* ── Alerts ── */
+.alert{border-radius:10px;padding:10px 13px;font-size:13px;line-height:1.5;margin-bottom:12px;display:none;}
+.alert.show{display:block;}
+.alert-error{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;}
+.alert-info{background:var(--violet-pale);border:1px solid var(--violet-border-strong);color:var(--text-mid);}
+.alert-success{background:#f0fdf4;border:1px solid #86efac;color:#166534;}
+
+/* ── Preview area ── */
+.preview-area{background:var(--white);border-radius:16px;border:1px solid var(--violet-border);padding:28px;min-height:400px;}
+.preview-placeholder{
+  height:380px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;text-align:center;
+}
+.preview-placeholder-icon{
+  width:64px;height:64px;border-radius:16px;background:var(--violet-pale);
+  display:flex;align-items:center;justify-content:center;
+}
+.preview-placeholder-icon svg{width:28px;height:28px;color:var(--violet);}
+.preview-placeholder-title{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);}
+.preview-placeholder-body{font-size:13px;color:var(--text-muted);max-width:260px;line-height:1.6;}
+
+.preview-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:20px;flex-wrap:wrap;gap:10px;
+}
+.preview-book-title{font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--text);}
+.preview-meta{font-size:12px;color:var(--text-muted);}
+
+/* ── Grid ── */
+.grid-wrap{overflow-x:auto;margin-bottom:24px;}
+.grid-container{
+  display:inline-grid;
+  gap:2px;
+}
+.grid-cell{
+  width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:13px;font-weight:600;
+  color:var(--text);background:var(--off-white);border-radius:4px;
+  user-select:none;
+  transition:background .15s;
+}
+.grid-cell.placed{color:var(--violet);background:var(--violet-pale);}
+
+/* ── Word list ── */
+.wordlist-title{
+  font-family:var(--font-display);font-size:13px;font-weight:700;
+  color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;
+  margin-bottom:10px;
+}
+.word-list{
+  display:flex;flex-wrap:wrap;gap:8px;
+}
+.word-pill{
+  font-family:var(--font-display);font-size:12px;font-weight:600;
+  color:var(--text);background:var(--off-white);
+  border:1px solid var(--violet-border);
+  border-radius:6px;padding:4px 10px;
+}
+.skipped-list{margin-top:10px;font-size:12px;color:#ef4444;}
+
+/* ── Skipped words warning ── */
+.skip-notice{
+  background:#fef9c3;border:1px solid #fcd34d;
+  border-radius:8px;padding:8px 12px;
+  font-size:12px;color:#713f12;margin-top:12px;
+}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:#1a0a3c;color:#fff;border-radius:10px;padding:12px 20px;
+  font-size:13px;font-weight:500;
+  box-shadow:0 8px 32px rgba(0,0,0,.25);
+  transition:transform .3s ease,opacity .3s ease;
+  opacity:0;z-index:999;pointer-events:none;
+  white-space:nowrap;
+}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.toast.error{background:#991b1b;}
+
+/* ── Spinner ── */
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <div class="topbar-left">
+    <a class="back-btn" href="../dashboard.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="10,3 5,8 10,13"/></svg>
+      Dashboard
+    </a>
+    <span style="color:var(--violet-border);font-size:18px;">|</span>
+    <span class="topbar-title">Word Search Generator</span>
+  </div>
+  <button class="btn-logout-sm" id="logoutBtn">Log out</button>
+</header>
+
+<div class="page">
+  <!-- ── Left panel: inputs ── -->
+  <aside class="panel">
+    <div class="panel-title">Book Settings</div>
+
+    <div class="alert alert-error" id="formError"></div>
+
+    <div class="field">
+      <label class="field-label" for="bookTitle">Book Title</label>
+      <input type="text" id="bookTitle" placeholder="e.g. Animals Word Search" maxlength="80"/>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="gridSize">Grid Size</label>
+      <select id="gridSize">
+        <option value="10">10 × 10 (Easy)</option>
+        <option value="15" selected>15 × 15 (Standard)</option>
+        <option value="20">20 × 20 (Challenge)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="wordInput">Words (one per line)</label>
+      <textarea id="wordInput" placeholder="CAT&#10;DOG&#10;FISH&#10;BIRD&#10;LION"></textarea>
+      <span class="field-hint" id="wordCount">0 words</span>
+    </div>
+
+    <button class="btn-primary" id="generateBtn">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5,3 13,8 5,13"/></svg>
+      Generate Puzzle
+    </button>
+
+    <button class="btn-secondary" id="exportBtn" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 11v2a1 1 0 001 1h8a1 1 0 001-1v-2"/></svg>
+      Export as PDF
+    </button>
+
+    <button class="btn-save" id="saveBtn" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 9v4a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><path d="M8 2v7"/><path d="M5 6l3-3 3 3"/></svg>
+      Save to My Books
+    </button>
+  </aside>
+
+  <!-- ── Right: preview ── -->
+  <main class="preview-area" id="previewArea">
+    <div class="preview-placeholder" id="placeholder">
+      <div class="preview-placeholder-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/><rect x="17" y="3" width="5" height="5" rx="1"/><rect x="3" y="10" width="5" height="5" rx="1"/><rect x="10" y="10" width="5" height="5" rx="1"/><rect x="17" y="10" width="5" height="5" rx="1"/><rect x="3" y="17" width="5" height="5" rx="1"/><rect x="10" y="17" width="5" height="5" rx="1"/><rect x="17" y="17" width="5" height="5" rx="1"/></svg>
+      </div>
+      <div class="preview-placeholder-title">Your puzzle will appear here</div>
+      <p class="preview-placeholder-body">Enter your words on the left and hit <strong>Generate Puzzle</strong> to see your word search.</p>
+    </div>
+    <div id="puzzleOutput" style="display:none;"></div>
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
+        integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+        integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
+        crossorigin="anonymous"></script>
+<script src="../../js/supabase.js"></script>
+<script>
+/* ════════════════════════════════════════════════
+   KDP Lab — Word Search Generator
+   Vanilla JS, no frameworks
+════════════════════════════════════════════════ */
+(async function () {
+
+  /* ── Auth guard ── */
+  const user = await kdp.requireAuth('../../login.html');
+  if (!user) return;
+  document.body.classList.add('ready');
+
+  /* ── Logout ── */
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await kdp.signOut();
+    location.href = '../../login.html';
+  });
+
+  /* ── State ── */
+  let currentGrid   = null;   // 2D array of uppercase letters
+  let currentWords  = [];     // words actually placed
+  let skippedWords  = [];     // words that didn't fit
+  let currentTitle  = '';
+  let currentSize   = 15;
+
+  /* ── Word count hint ── */
+  const wordInput  = document.getElementById('wordInput');
+  const wordCountEl= document.getElementById('wordCount');
+  wordInput.addEventListener('input', () => {
+    const words = parseWords(wordInput.value);
+    wordCountEl.textContent = `${words.length} word${words.length !== 1 ? 's' : ''}`;
+  });
+
+  /* ── Parse words helper ── */
+  function parseWords(raw) {
+    return raw.split('\n')
+      .map(w => w.trim().toUpperCase().replace(/[^A-Z]/g, ''))
+      .filter(w => w.length > 0);
+  }
+
+  /* ════════════════════════════════════════════
+     WORD SEARCH ALGORITHM
+  ════════════════════════════════════════════ */
+  const DIRECTIONS = [
+    [0, 1],   // →
+    [0,-1],   // ←
+    [1, 0],   // ↓
+    [-1,0],   // ↑
+    [1, 1],   // ↘
+    [-1,-1],  // ↖
+    [1,-1],   // ↙
+    [-1,1],   // ↗
+  ];
+
+  function generateWordSearch(words, size) {
+    // Initialize empty grid
+    const grid = Array.from({length:size}, () => Array(size).fill(''));
+    const placed = [];
+    const skipped = [];
+    const MAX_RETRIES = 200;
+
+    for (const word of words) {
+      if (word.length > size) { skipped.push(word); continue; }
+
+      let success = false;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        const dir = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
+        const [dr, dc] = dir;
+
+        // Calculate valid start ranges
+        const rowStart = dr >= 0 ? 0 : size - 1;
+        const rowEnd   = dr >= 0 ? size - word.length * dr : size - 1 + word.length * dr;
+        const colStart = dc >= 0 ? 0 : size - 1;
+        const colEnd   = dc >= 0 ? size - word.length * dc : size - 1 + word.length * dc;
+
+        const minRow = Math.min(rowStart, rowEnd);
+        const maxRow = Math.max(rowStart, rowEnd);
+        const minCol = Math.min(colStart, colEnd);
+        const maxCol = Math.max(colStart, colEnd);
+
+        if (maxRow <= minRow || maxCol <= minCol) continue; // degenerate range
+
+        const row = minRow + Math.floor(Math.random() * (maxRow - minRow));
+        const col = minCol + Math.floor(Math.random() * (maxCol - minCol));
+
+        // Check if word fits (only clash on different letters)
+        let fits = true;
+        for (let i = 0; i < word.length; i++) {
+          const r = row + i * dr;
+          const c = col + i * dc;
+          if (r < 0 || r >= size || c < 0 || c >= size) { fits = false; break; }
+          if (grid[r][c] !== '' && grid[r][c] !== word[i]) { fits = false; break; }
+        }
+        if (!fits) continue;
+
+        // Place word
+        for (let i = 0; i < word.length; i++) {
+          grid[row + i * dr][col + i * dc] = word[i];
+        }
+        placed.push(word);
+        success = true;
+        break;
+      }
+      if (!success) skipped.push(word);
+    }
+
+    // Fill remaining cells with random letters
+    const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (grid[r][c] === '') {
+          grid[r][c] = ALPHA[Math.floor(Math.random() * 26)];
+        }
+      }
+    }
+
+    return { grid, placed, skipped };
+  }
+
+  /* ════════════════════════════════════════════
+     GENERATE BUTTON
+  ════════════════════════════════════════════ */
+  document.getElementById('generateBtn').addEventListener('click', () => {
+    const formErr = document.getElementById('formError');
+    formErr.classList.remove('show');
+
+    const title = document.getElementById('bookTitle').value.trim();
+    const size  = parseInt(document.getElementById('gridSize').value, 10);
+    const words = parseWords(wordInput.value);
+
+    if (!title) {
+      formErr.textContent = 'Please enter a book title.';
+      formErr.classList.add('show');
+      document.getElementById('bookTitle').focus();
+      return;
+    }
+    if (words.length === 0) {
+      formErr.textContent = 'Please enter at least one word.';
+      formErr.classList.add('show');
+      wordInput.focus();
+      return;
+    }
+
+    const { grid, placed, skipped } = generateWordSearch(words, size);
+
+    currentGrid  = grid;
+    currentWords = placed;
+    skippedWords = skipped;
+    currentTitle = title;
+    currentSize  = size;
+
+    renderPreview(grid, placed, skipped, title, size);
+
+    document.getElementById('exportBtn').disabled = false;
+    document.getElementById('saveBtn').disabled   = false;
+  });
+
+  /* ════════════════════════════════════════════
+     RENDER PREVIEW
+  ════════════════════════════════════════════ */
+  function renderPreview(grid, placed, skipped, title, size) {
+    const placeholder = document.getElementById('placeholder');
+    const output      = document.getElementById('puzzleOutput');
+    placeholder.style.display = 'none';
+    output.style.display = 'block';
+
+    // Build grid cells (highlight placed-word letters)
+    const placedSet = buildPlacedSet(grid, placed, size);
+
+    const cellSize = size <= 10 ? 36 : size <= 15 ? 30 : 24;
+    let gridHtml = `<div class="grid-container" style="grid-template-columns:repeat(${size},${cellSize}px);">`;
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const isPlaced = placedSet.has(`${r},${c}`);
+        gridHtml += `<div class="grid-cell${isPlaced ? ' placed' : ''}">${grid[r][c]}</div>`;
+      }
+    }
+    gridHtml += '</div>';
+
+    // Word pills
+    const wordPills = placed.map(w => `<span class="word-pill">${w}</span>`).join('');
+
+    // Skipped notice
+    const skipNotice = skipped.length > 0
+      ? `<div class="skip-notice">⚠ ${skipped.length} word${skipped.length>1?'s':''} couldn't fit (too long or no room): <strong>${skipped.join(', ')}</strong>. Try a larger grid.</div>`
+      : '';
+
+    output.innerHTML = `
+      <div class="preview-header">
+        <div>
+          <div class="preview-book-title">${escHtml(title)}</div>
+          <div class="preview-meta">${size}×${size} grid · ${placed.length} word${placed.length!==1?'s':''}</div>
+        </div>
+      </div>
+      <div class="grid-wrap">${gridHtml}</div>
+      ${skipNotice}
+      <div class="wordlist-title" style="margin-top:${skipNotice?'12px':'0'};">Find these words</div>
+      <div class="word-list">${wordPills}</div>`;
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* Build set of (r,c) coords that are part of any placed word */
+  function buildPlacedSet(grid, placed, size) {
+    const set = new Set();
+    for (const word of placed) {
+      // scan all directions from all starts
+      outer: for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          for (const [dr, dc] of DIRECTIONS) {
+            if (grid[r][c] !== word[0]) continue;
+            let match = true;
+            const coords = [];
+            for (let i = 0; i < word.length; i++) {
+              const nr = r + i * dr;
+              const nc = c + i * dc;
+              if (nr < 0 || nr >= size || nc < 0 || nc >= size || grid[nr][nc] !== word[i]) {
+                match = false; break;
+              }
+              coords.push(`${nr},${nc}`);
+            }
+            if (match) {
+              coords.forEach(k => set.add(k));
+              // don't break — same word might appear in multiple directions (highlight all)
+            }
+          }
+        }
+      }
+    }
+    return set;
+  }
+
+  /* ════════════════════════════════════════════
+     EXPORT PDF  (jsPDF — letter 8.5×11in)
+  ════════════════════════════════════════════ */
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    if (!currentGrid) return;
+    exportPDF(currentGrid, currentWords, currentTitle, currentSize);
+  });
+
+  function exportPDF(grid, words, title, size) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
+
+    const W = 8.5, H = 11;
+    const MARGIN = 0.6;
+    const contentW = W - MARGIN * 2;
+
+    // ── Title ──
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(26, 10, 60); // --text
+    doc.text(title, W / 2, MARGIN + 0.25, { align: 'center' });
+
+    // ── Grid ──
+    const cellSize = contentW / size;  // inches per cell
+    const gridTop  = MARGIN + 0.6;
+
+    doc.setFont('Courier', 'bold');
+    const fontSize = Math.min(10, cellSize * 68); // scale font to cell
+    doc.setFontSize(fontSize);
+    doc.setTextColor(26, 10, 60);
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const x = MARGIN + c * cellSize + cellSize / 2;
+        const y = gridTop + r * cellSize + cellSize * 0.72;
+        doc.text(grid[r][c], x, y, { align: 'center' });
+      }
+    }
+
+    // ── Grid border (light) ──
+    doc.setDrawColor(196, 181, 253); // --violet-light
+    doc.setLineWidth(0.01);
+    // horizontal lines
+    for (let r = 0; r <= size; r++) {
+      const y = gridTop + r * cellSize;
+      doc.line(MARGIN, y, MARGIN + contentW, y);
+    }
+    // vertical lines
+    for (let c = 0; c <= size; c++) {
+      const x = MARGIN + c * cellSize;
+      doc.line(x, gridTop, x, gridTop + size * cellSize);
+    }
+
+    // ── Word list ──
+    const wordListTop = gridTop + size * cellSize + 0.35;
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(91, 75, 138); // --text-mid
+    doc.text('FIND THESE WORDS', MARGIN, wordListTop);
+
+    doc.setFont('Courier', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(26, 10, 60);
+
+    const cols     = 2;
+    const colW     = contentW / cols;
+    const lineH    = 0.2;
+    const perCol   = Math.ceil(words.length / cols);
+
+    words.forEach((word, i) => {
+      const col = Math.floor(i / perCol);
+      const row = i % perCol;
+      const x   = MARGIN + col * colW;
+      const y   = wordListTop + 0.22 + row * lineH;
+      if (y < H - MARGIN) {
+        doc.text('• ' + word, x, y);
+      }
+    });
+
+    // ── Save ──
+    const filename = title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-word-search.pdf';
+    doc.save(filename);
+    showToast('PDF exported!');
+  }
+
+  /* ════════════════════════════════════════════
+     SAVE TO SUPABASE
+  ════════════════════════════════════════════ */
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    if (!currentGrid) return;
+
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner"></span> Saving…';
+
+    const { error } = await kdp.saveBook({
+      title:   currentTitle,
+      type:    'word-search',
+      content: { words: currentWords, skipped: skippedWords, gridSize: currentSize, grid: currentGrid }
+    });
+
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 9v4a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><path d="M8 2v7"/><path d="M5 6l3-3 3 3"/></svg> Save to My Books`;
+
+    if (error) {
+      showToast('Save failed: ' + error.message, true);
+    } else {
+      showToast('✓ Saved to My Books!');
+    }
+  });
+
+  /* ── Toast helper ── */
+  function showToast(msg, isError = false) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.toggle('error', isError);
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+  }
+
+})();
+</script>
+</body>
+</html>
