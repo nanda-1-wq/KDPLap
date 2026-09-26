@@ -67,6 +67,22 @@ body.ready{visibility:visible;}
 }
 .panel-title{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);margin-bottom:20px;}
 
+/* ── Project meta (from New Project modal) ── */
+.project-meta{
+  background:var(--violet-pale);border:1px solid var(--violet-border-strong);
+  border-radius:10px;padding:12px 14px;margin-bottom:18px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.project-meta-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;}
+.project-meta-label{color:var(--text-mid);font-weight:500;text-transform:uppercase;letter-spacing:.6px;font-size:10px;}
+.project-meta-value{color:var(--text);font-family:var(--font-display);font-weight:700;text-align:right;}
+.project-meta-edit{
+  margin-top:6px;font-size:11px;font-weight:600;
+  color:var(--violet);background:none;border:none;cursor:pointer;
+  text-align:left;padding:0;text-decoration:underline;
+}
+.project-meta-edit:hover{color:#5B21B6;}
+
 .field{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
 .field-label{font-size:11px;font-weight:500;color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;}
 input[type="text"],select{
@@ -258,6 +274,23 @@ select{
 
     <div class="alert alert-error" id="formError"></div>
 
+    <!-- Project meta (set from New Project modal) -->
+    <div id="projectMeta" class="project-meta" style="display:none;">
+      <div class="project-meta-row">
+        <span class="project-meta-label">Trim</span>
+        <span class="project-meta-value" id="metaTrim">—</span>
+      </div>
+      <div class="project-meta-row">
+        <span class="project-meta-label">Pages</span>
+        <span class="project-meta-value" id="metaPages">—</span>
+      </div>
+      <div class="project-meta-row">
+        <span class="project-meta-label">Bleed</span>
+        <span class="project-meta-value" id="metaBleed">—</span>
+      </div>
+      <button type="button" class="project-meta-edit" id="editProjectBtn">Edit project settings</button>
+    </div>
+
     <div class="field">
       <label class="field-label" for="bookTitle">Book Title</label>
       <input type="text" id="bookTitle" placeholder="e.g. Daily Sudoku Vol. 1" maxlength="80"/>
@@ -322,6 +355,7 @@ select{
         integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
         crossorigin="anonymous"></script>
 <script src="../../js/supabase.js"></script>
+<script src="../../js/new-project-modal.js"></script>
 <script>
 /* ════════════════════════════════════════════════
    KDP Lab — Sudoku Generator
@@ -341,11 +375,32 @@ select{
   });
 
   /* ── State ── */
-  let currentPuzzle   = null;
-  let currentSolution = null;
+  let currentPuzzle   = null;   // preview puzzle (first generated)
+  let currentSolution = null;   // preview solution
   let currentIsClue   = null;
   let currentTitle    = '';
   let currentDiff     = 'medium';
+  let currentSet      = [];     // [{ puzzle, solution, isClue, clues }, …] one per puzzle for export
+  let projectSettings = null;
+
+  /* ── Standard generator entry point ── */
+  function applyProjectSettings(settings) {
+    projectSettings = settings;
+    const titleEl = document.getElementById('bookTitle');
+    if (!titleEl.value.trim()) titleEl.value = settings.projectName;
+    document.getElementById('projectMeta').style.display = 'flex';
+    document.getElementById('metaTrim').textContent  = `${settings.trimSize.w} × ${settings.trimSize.h} in`;
+    document.getElementById('metaPages').textContent = settings.pageCount;
+    document.getElementById('metaBleed').textContent = settings.bleed ? 'Bleed' : 'No bleed';
+  }
+
+  const project = KDPNewProject.requireSettings({
+    defaultName:  'My Sudoku Book',
+    dashboardUrl: '../dashboard.html',
+    onSettings:   applyProjectSettings
+  });
+
+  document.getElementById('editProjectBtn').addEventListener('click', project.reopen);
 
   /* ══════════════════════════════════════════
      SUDOKU ENGINE
@@ -477,18 +532,21 @@ select{
     return html + '</div>';
   }
 
-  function renderOutput(puzzle, solution, isClue, title, difficulty, clues) {
+  function renderOutput(puzzle, solution, isClue, title, difficulty, clues, numPuzzles) {
     document.getElementById('placeholder').style.display = 'none';
     const out = document.getElementById('puzzleOutput');
     out.style.display = 'block';
 
     const diffLabel = { easy:'Easy', medium:'Medium', hard:'Hard' }[difficulty] || difficulty;
+    const setNote = numPuzzles && numPuzzles > 1
+      ? ` · <strong style="color:var(--violet);">${numPuzzles} puzzles</strong> in export`
+      : '';
 
     out.innerHTML = `
       <div class="preview-header">
         <div>
           <div class="preview-book-title">${escHtml(title)}</div>
-          <div class="preview-meta">${clues} clues given</div>
+          <div class="preview-meta">${clues} clues given${setNote}</div>
         </div>
         <span class="diff-badge ${difficulty}">${diffLabel}</span>
       </div>
@@ -545,15 +603,30 @@ select{
     // Yield to render the loading state before the synchronous heavy work
     await new Promise(r => setTimeout(r, 30));
 
-    const { puzzle, solution, isClue, clues } = generatePuzzle(diff);
+    // Each puzzle = puzzle page + solution page → N puzzles fills 2N pages
+    const pageCount = (projectSettings && projectSettings.pageCount) || 2;
+    const numPuzzles = Math.max(1, Math.floor(pageCount / 2));
 
+    const set = [];
+    for (let i = 0; i < numPuzzles; i++) {
+      set.push(generatePuzzle(diff));
+      // Yield between puzzles so the UI can update the spinner label
+      if (i < numPuzzles - 1) {
+        btn.innerHTML = `<span class="spinner"></span> Generating ${i + 1} of ${numPuzzles}…`;
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    const { puzzle, solution, isClue, clues } = set[0];
+
+    currentSet      = set;
     currentPuzzle   = puzzle;
     currentSolution = solution;
     currentIsClue   = isClue;
     currentTitle    = title;
     currentDiff     = diff;
 
-    renderOutput(puzzle, solution, isClue, title, diff, clues);
+    renderOutput(puzzle, solution, isClue, title, diff, clues, numPuzzles);
 
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5,3 13,8 5,13"/></svg> Generate Puzzle`;
@@ -563,50 +636,63 @@ select{
   });
 
   /* ══════════════════════════════════════════
-     PDF EXPORT  (jsPDF — letter 8.5×11)
-  ══════════════════════════════════════════
-     Page 1: Puzzle   — clue cells shaded, empty cells blank
-     Page 2: Solution — clue cells shaded, solved cells in lighter ink
+     PDF EXPORT — trim size from project, all puzzles first
+                  then all solutions at the back
   ══════════════════════════════════════════ */
   document.getElementById('exportBtn').addEventListener('click', () => {
-    if (!currentPuzzle) return;
-    exportPDF(currentPuzzle, currentSolution, currentIsClue, currentTitle, currentDiff);
+    if (!currentSet.length) return;
+    exportPDF(currentSet, currentTitle, currentDiff);
   });
 
-  function exportPDF(puzzle, solution, isClue, title, difficulty) {
+  function exportPDF(set, title, difficulty) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
 
-    const gridSize = 5.4;                        // total grid width/height in inches
-    const cell     = gridSize / 9;               // 0.6 in per cell
-    const gx       = (8.5 - gridSize) / 2;       // horizontally centered
-    const gy       = 1.55;                        // top of grid
+    const trim = (projectSettings && projectSettings.trimSize) || { w: 8.5, h: 11 };
+    const W = trim.w, H = trim.h;
+    const bleed = !!(projectSettings && projectSettings.bleed);
+    const MARGIN = Math.max(0.4, bleed ? 0.5 : 0.4);
 
-    drawPDFPage(doc, puzzle,   isClue, title, difficulty, gx, gy, cell, gridSize, false);
-    doc.addPage();
-    drawPDFPage(doc, solution, isClue, title, difficulty, gx, gy, cell, gridSize, true);
+    // Square grid that fits both axes with room for title above + footer below
+    const gridSize = Math.min(W - MARGIN * 2, H - MARGIN * 2 - 1.6);
+    const cell     = gridSize / 9;
+    const gx       = (W - gridSize) / 2;
+    const gy       = MARGIN + 1.0;
+
+    const doc = new jsPDF({ unit: 'in', format: [W, H], orientation: W > H ? 'landscape' : 'portrait' });
+
+    set.forEach((p, i) => {
+      if (i > 0) doc.addPage([W, H], W > H ? 'landscape' : 'portrait');
+      drawPDFPage(doc, p.puzzle, p.isClue, title, difficulty, gx, gy, cell, gridSize, false, i + 1, set.length, { W, H, MARGIN });
+    });
+
+    set.forEach((p, i) => {
+      doc.addPage([W, H], W > H ? 'landscape' : 'portrait');
+      drawPDFPage(doc, p.solution, p.isClue, title, difficulty, gx, gy, cell, gridSize, true, i + 1, set.length, { W, H, MARGIN });
+    });
 
     const slug = title.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
     doc.save(`${slug}-sudoku.pdf`);
-    showToast('PDF exported!');
+    showToast(`PDF exported — ${set.length * 2} pages, ${W}×${H} in`);
   }
 
-  function drawPDFPage(doc, grid, isClue, title, difficulty, gx, gy, cell, gridSize, isSolution) {
-    const W = 8.5;
+  function drawPDFPage(doc, grid, isClue, title, difficulty, gx, gy, cell, gridSize, isSolution, num, total, geom) {
+    const { W, H, MARGIN } = geom;
     const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
-    const pageLabel = isSolution ? `Solution — ${diffLabel}` : `${diffLabel} Puzzle`;
+    const pageLabel = isSolution
+      ? `Solution ${num} of ${total} — ${diffLabel}`
+      : `${diffLabel} Puzzle ${num} of ${total}`;
 
     /* ── Title ── */
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(20);
+    doc.setFontSize(Math.min(20, W * 2.8));
     doc.setTextColor('#1A0A3C');
-    doc.text(title, W / 2, 0.78, { align: 'center' });
+    doc.text(title, W / 2, MARGIN + 0.3, { align: 'center' });
 
     /* ── Subtitle ── */
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor('#5B4B8A');
-    doc.text(pageLabel.toUpperCase(), W / 2, 1.08, { align: 'center' });
+    doc.text(pageLabel.toUpperCase(), W / 2, MARGIN + 0.6, { align: 'center' });
 
     /* ── Draw cell backgrounds ── */
     for (let r = 0; r < 9; r++) {
@@ -663,7 +749,7 @@ select{
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor('#9585C0');
-    doc.text('Generated with KDP Lab', W / 2, 10.65, { align: 'center' });
+    doc.text('Generated with KDP Lab', W / 2, H - MARGIN + 0.2, { align: 'center' });
   }
 
   /* ══════════════════════════════════════════
@@ -683,7 +769,9 @@ select{
         difficulty: currentDiff,
         clues: currentIsClue.flat().filter(Boolean).length,
         puzzle:   currentPuzzle,
-        solution: currentSolution
+        solution: currentSolution,
+        project:  projectSettings,
+        puzzles:  currentSet.length
       }
     });
 

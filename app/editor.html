@@ -1,0 +1,1934 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KDP Lab — Editor</title>
+<link rel="stylesheet" href="../KDP Lab Design System/colors_and_type.css" />
+<style>
+/* ═══════════════════════════════════════════════════
+   KDP LAB EDITOR — Book Bolt Studio–style canvas
+═══════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-body);
+  background: #ECECEF;
+  color: var(--fg1);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: inherit; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─── Layout shell ────────────────────────────────── */
+.editor {
+  display: grid;
+  grid-template-rows: 40px 1fr 32px;
+  grid-template-columns: 180px 1fr 220px;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "left   canvas right"
+    "status status status";
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ─── Top menu bar ───────────────────────────────── */
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.08);
+  padding: 0 12px;
+  font-size: 13px;
+  position: relative;
+  z-index: 50;
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar-right {
+  margin-left: auto;
+  gap: 8px;
+}
+
+.menu-btn {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  color: var(--fg1);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.menu-btn:hover,
+.menu-btn.open { color: var(--accent); }
+.menu-btn.open { background: rgba(124, 58, 237, 0.06); }
+
+.menu-btn .tooltip {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2a2a33;
+  color: #fff;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 51;
+}
+.menu-btn.open .tooltip { opacity: 1; }
+
+.icon-btn {
+  background: none;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg2);
+  transition: background 0.15s, color 0.15s;
+}
+.icon-btn:hover { background: rgba(124, 58, 237, 0.08); color: var(--accent); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.icon-btn svg { width: 16px; height: 16px; }
+
+.saved-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: #E5E5E8;
+  color: #5B4B8A;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  transition: background 0.2s, color 0.2s;
+}
+.saved-badge.saved {
+  background: #C8F2D7;
+  color: #1D6E47;
+}
+
+.save-btn {
+  padding: 4px 16px;
+  border: 1.5px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.save-btn:hover { background: rgba(124, 58, 237, 0.06); }
+
+.autosave-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid rgba(124, 58, 237, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+}
+.checkbox:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px; top: 1px;
+  width: 4px; height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7C3AED, #9D6FEC);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ─── Dropdown menu ──────────────────────────────── */
+.dropdown {
+  position: absolute;
+  top: 38px;
+  left: 0;
+  min-width: 260px;
+  background: #fff;
+  border: 1px solid rgba(124, 58, 237, 0.10);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(20, 8, 50, 0.15);
+  padding: 6px 0;
+  display: none;
+  z-index: 100;
+  font-size: 14px;
+}
+.dropdown.show { display: block; }
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  cursor: pointer;
+  color: var(--fg1);
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+.dropdown-item:hover { background: rgba(124, 58, 237, 0.06); }
+.dropdown-item.disabled { color: var(--fg3); cursor: not-allowed; }
+.dropdown-item.disabled:hover { background: transparent; }
+
+.dropdown-shortcut {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-left: 28px;
+}
+.dropdown-shortcut.disabled { color: rgba(124, 58, 237, 0.4); }
+
+.dropdown-divider {
+  height: 1px;
+  background: rgba(124, 58, 237, 0.08);
+  margin: 6px 0;
+}
+
+.dropdown-meta {
+  padding: 6px 16px;
+  color: var(--fg2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dropdown-meta .label {
+  font-weight: 600;
+  color: var(--fg1);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.dropdown-meta a {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* ─── Left thumbnails panel ──────────────────────── */
+.thumbs {
+  grid-area: left;
+  background: #fff;
+  border-right: 1px solid rgba(124, 58, 237, 0.08);
+  overflow-y: auto;
+  padding: 14px 0;
+}
+.thumbs::-webkit-scrollbar { width: 6px; }
+.thumbs::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.18); border-radius: 3px; }
+
+.thumb-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 18px;
+}
+
+.thumb {
+  width: 100%;
+  aspect-ratio: 6 / 9;
+  background: #fff;
+  border: 1.5px solid rgba(124, 58, 237, 0.15);
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.thumb:hover { border-color: rgba(124, 58, 237, 0.4); }
+.thumb.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+}
+.thumb.cover {
+  aspect-ratio: auto;
+  height: auto;
+  overflow: hidden;
+  padding: 0;
+}
+.thumb.cover svg { display: block; }
+
+.thumb-label {
+  font-size: 12px;
+  color: var(--fg2);
+  margin: 8px 0 0;
+  text-align: center;
+}
+
+.add-page {
+  display: block;
+  width: calc(100% - 36px);
+  margin: 12px 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.add-page:hover { color: var(--color-violet-700); }
+
+/* ─── Right layers panel ─────────────────────────── */
+.layers {
+  grid-area: right;
+  background: #fff;
+  border-left: 1px solid rgba(124, 58, 237, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.layers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.08);
+}
+.layers-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--fg2);
+  font-weight: 500;
+}
+.layers-header-title svg { width: 12px; height: 12px; color: var(--fg3); }
+
+.layers-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--fg3);
+}
+.layers-empty {
+  text-align: center;
+  padding: 40px 12px;
+  color: var(--fg3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ─── Canvas area ────────────────────────────────── */
+.canvas-wrap {
+  grid-area: canvas;
+  position: relative;
+  background: #DDDDE0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Apply-to-all bar at top of canvas */
+.canvas-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 24px;
+  background: #fff;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.08);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.canvas-topbar .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  background: #F4F1FB;
+  border-radius: 6px;
+}
+.canvas-topbar .select-all-btn {
+  margin-left: auto;
+  padding: 6px 14px;
+  border: 1.5px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Scroll container */
+.canvas-scroll {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  padding: 60px 60px 60px 100px;
+}
+.canvas-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
+.canvas-scroll::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.25); border-radius: 5px; }
+
+.canvas-stage {
+  position: relative;
+  transform-origin: top left;
+  display: inline-block;
+  min-width: 100%;
+}
+
+/* Vertical toolbar */
+.vtoolbar {
+  position: absolute;
+  left: 12px;
+  top: 60px;
+  background: #fff;
+  border: 1px solid rgba(124, 58, 237, 0.10);
+  border-radius: 10px;
+  padding: 6px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 4px 16px rgba(20, 8, 50, 0.06);
+  z-index: 10;
+}
+.vtool {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--fg2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.vtool:hover { background: rgba(124, 58, 237, 0.08); color: var(--accent); }
+.vtool.active {
+  background: rgba(124, 58, 237, 0.12);
+  color: var(--accent);
+}
+.vtool svg { width: 18px; height: 18px; }
+
+/* Page (interior single page) */
+.page {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(20, 8, 50, 0.12);
+}
+
+.guide-bleed {
+  position: absolute;
+  border: 2px solid #E94F4F;
+  pointer-events: none;
+}
+.guide-trim {
+  position: absolute;
+  border: 1.5px solid #1A0A3C;
+  pointer-events: none;
+}
+.guide-live {
+  position: absolute;
+  border: 1.5px dashed #4CC57D;
+  pointer-events: none;
+}
+.guide-spine {
+  position: absolute;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(233, 79, 79, 0.18) 0 2px,
+    transparent 2px 4px
+  );
+  border-left: 1.5px dashed #6EC4FF;
+  border-right: 1.5px dashed #6EC4FF;
+  pointer-events: none;
+}
+
+/* Cover spread labels */
+.cover-label {
+  position: absolute;
+  font-size: 13px;
+  color: var(--fg2);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cover-label .dim {
+  display: block;
+  color: var(--fg3);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Barcode placeholder */
+.barcode {
+  position: absolute;
+  background: #FCD34D;
+  border: 1px solid #B7841E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 10px;
+  color: #5C3C00;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* On-page legend text (interior) */
+.legend {
+  position: absolute;
+  color: #1A0A3C;
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+.legend h4 {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: #1A0A3C;
+  letter-spacing: 0;
+}
+.legend p { margin: 0 0 14px; color: #1A0A3C; font-weight: 400; font-size: 12px; line-height: 1.45;}
+
+/* Cover info panel (right of cover spread) */
+.cover-info {
+  position: absolute;
+  color: #1A0A3C;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.cover-info h3 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: #1A0A3C;
+  letter-spacing: 0;
+}
+.cover-info .sub {
+  font-size: 12px;
+  color: var(--fg2);
+  margin-bottom: 16px;
+}
+
+/* ─── Status bar ─────────────────────────────────── */
+.statusbar {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border-top: 1px solid rgba(124, 58, 237, 0.08);
+  padding: 0 14px;
+  font-size: 12px;
+  color: var(--fg2);
+}
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #F4F1FB;
+  padding: 4px 10px;
+  border-radius: 6px;
+  max-width: 60%;
+}
+.status-left .name {
+  font-weight: 600;
+  color: var(--fg1);
+}
+.status-left a { font-size: 12px; }
+.status-mid {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+.status-mid label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--fg2);
+}
+.zoom-slider {
+  width: 120px;
+}
+.zoom-input {
+  width: 52px;
+  padding: 3px 6px;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: center;
+  color: var(--fg1);
+}
+.fit-btn {
+  border: 1.5px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  padding: 2px 14px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fit-btn:hover { background: rgba(124, 58, 237, 0.06); }
+
+/* ─── Settings modal ─────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(20, 8, 50, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+
+.settings-modal {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(20, 8, 50, 0.35);
+  transform: translateY(8px);
+  transition: transform 0.2s ease;
+}
+.modal-overlay.show .settings-modal { transform: translateY(0); }
+
+.settings-tabs {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.08);
+  position: relative;
+}
+.settings-tab {
+  padding: 18px 18px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--fg2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  letter-spacing: -0.1px;
+}
+.settings-tab.active { color: var(--accent); }
+.settings-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+.settings-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--fg2);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+.settings-close:hover { background: rgba(124, 58, 237, 0.06); color: var(--accent); }
+.settings-close svg { width: 18px; height: 18px; }
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.settings-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg1);
+  margin-bottom: 10px;
+}
+.radio-group {
+  display: flex;
+  gap: 24px;
+  margin-top: 6px;
+}
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--fg1);
+}
+.radio input {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid rgba(124, 58, 237, 0.4);
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.radio input:checked { border-color: var(--accent); }
+.radio input:checked::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.select-field {
+  appearance: none;
+  background: #fff;
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  border-radius: 8px;
+  padding: 11px 38px 11px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--fg1);
+  width: 100%;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%235B4B8A' stroke-width='1.8'%3E%3Cpolyline points='2,4 6,8 10,4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+}
+
+.section-divider {
+  margin: 12px 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--fg3);
+  font-size: 13px;
+}
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--fg1);
+}
+.check-row .check-text {
+  line-height: 1.5;
+}
+.check-row .check-text .desc {
+  display: block;
+  color: var(--fg2);
+  font-size: 13px;
+  margin-top: 1px;
+}
+
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  padding: 16px 28px;
+  border-top: 1px solid rgba(124, 58, 237, 0.08);
+}
+.reset-link {
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-primary {
+  padding: 9px 28px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary:hover { background: var(--color-violet-700); }
+
+/* ─── Misc ───────────────────────────────────────── */
+.invisible { visibility: hidden; }
+</style>
+</head>
+
+<body>
+
+<div class="editor">
+
+  <!-- ═══════ TOP MENU BAR ═══════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-btn" data-menu="project">Project<span class="tooltip">Project</span></button>
+      <button class="menu-btn" data-menu="download">Download<span class="tooltip">Download</span></button>
+      <button class="menu-btn" data-menu="file">File<span class="tooltip">File</span></button>
+      <button class="menu-btn" data-menu="edit">Edit<span class="tooltip">Edit</span></button>
+      <button class="menu-btn" id="btnSettings">Settings</button>
+
+      <button class="icon-btn" id="btnPreview" title="Preview" style="margin-left:6px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+
+    <div class="topbar-right">
+      <span class="saved-badge" id="savedBadge">Saved</span>
+      <button class="save-btn" id="btnSave">Save</button>
+      <label class="autosave-wrap">
+        <input type="checkbox" class="checkbox" id="autosaveToggle" checked />
+        AutoSave
+      </label>
+      <button class="icon-btn" id="btnUndo" title="Undo (Ctrl+Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+      </button>
+      <button class="icon-btn" id="btnRedo" title="Redo (Ctrl+Y)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+      </button>
+      <button class="icon-btn" id="btnHistory" title="History">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+      </button>
+      <div class="avatar" id="userAvatar">U</div>
+    </div>
+
+    <!-- ─── Dropdowns ─── -->
+    <div class="dropdown" id="menu-project"></div>
+    <div class="dropdown" id="menu-download"></div>
+    <div class="dropdown" id="menu-file"></div>
+    <div class="dropdown" id="menu-edit"></div>
+  </header>
+
+  <!-- ═══════ LEFT THUMBNAILS ═══════ -->
+  <aside class="thumbs" id="thumbsPanel"></aside>
+
+  <!-- ═══════ CANVAS ═══════ -->
+  <main class="canvas-wrap">
+    <div class="canvas-topbar">
+      <span class="pill" id="applyAllBar">
+        <a href="#" id="applyAll">Apply to all pages</a>
+        <span style="color:var(--fg3); margin:0 4px;">·</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--fg3);"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      </span>
+      <button class="select-all-btn">Select All …</button>
+    </div>
+
+    <div class="canvas-scroll" id="canvasScroll">
+      <div class="canvas-stage" id="canvasStage">
+        <!-- page is rendered here by JS -->
+      </div>
+    </div>
+
+    <!-- vertical toolbar -->
+    <nav class="vtoolbar" id="vtoolbar">
+      <button class="vtool active" data-tool="select" title="Select">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-6 1-2 7L5 3z"/></svg>
+      </button>
+      <button class="vtool" data-tool="shapes" title="Shapes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="12 3 22 21 2 21"/></svg>
+      </button>
+      <button class="vtool" data-tool="text" title="Text">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5h14v3h-5v11h-4V8H5z"/></svg>
+      </button>
+      <button class="vtool" data-tool="image" title="Image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 18l-6-6-9 8"/></svg>
+      </button>
+      <button class="vtool" data-tool="puzzle" title="Puzzle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v4h-3a2 2 0 1 0 0 4h3v3h-3a2 2 0 1 1 0 4h3v3h-4v-3a2 2 0 1 1-4 0v3H6v-4h3a2 2 0 1 0 0-4H6v-3h3a2 2 0 1 0 0-4H6V3h4z"/></svg>
+      </button>
+      <button class="vtool" data-tool="masks" title="Masks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5c4-2 12-2 16 0v8c-2 5-6 7-8 7s-6-2-8-7V5z"/><circle cx="9" cy="11" r="1"/><circle cx="15" cy="11" r="1"/></svg>
+      </button>
+      <button class="vtool" data-tool="lines" title="Lines / Patterns">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <button class="vtool" data-tool="snap-grid" title="Snap Grid">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+      </button>
+      <button class="vtool" data-tool="ai" title="AI / Sparkle">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.7 5.3L19 9l-5.3 1.7L12 16l-1.7-5.3L5 9l5.3-1.7z"/><path d="M19 14l.7 2 2 .7-2 .7L19 19l-.7-1.6L17 16.7l1.6-.7z"/></svg>
+      </button>
+    </nav>
+  </main>
+
+  <!-- ═══════ RIGHT LAYERS PANEL ═══════ -->
+  <aside class="layers">
+    <div class="layers-header">
+      <span class="layers-header-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 12 15 18 9"/></svg>
+        Normal order
+      </span>
+      <button class="icon-btn" title="Add layer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+    <div class="layers-body">
+      <div class="layers-empty">
+        No layers yet.<br>
+        Add shapes, text, or images to see them here.
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════ STATUS BAR ═══════ -->
+  <footer class="statusbar">
+    <div class="status-left">
+      <span class="name" id="statusProjectName">project</span>
+      <span style="color: var(--fg3);" id="statusSummary"></span>
+      <a href="#" id="statusProjectId" style="color: var(--accent);">Project Id —</a>
+      <span style="color: var(--fg3);" id="statusPageName">— Cover</span>
+    </div>
+    <div class="status-mid">
+      <label><input type="checkbox" class="checkbox" id="snapToggle" checked> Snap</label>
+      <label><input type="checkbox" class="checkbox" id="cutToggle" checked> Cut</label>
+      <input type="range" id="zoomSlider" class="zoom-slider" min="10" max="200" value="50" />
+      <input type="number" id="zoomInput" class="zoom-input" min="10" max="500" value="50" />
+      <button class="fit-btn" id="btnFit">Fit</button>
+    </div>
+  </footer>
+</div>
+
+<!-- ═══════ SETTINGS MODAL ═══════ -->
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="settings-modal" role="dialog" aria-modal="true">
+    <div class="settings-tabs">
+      <button class="settings-tab active" data-tab="general">General</button>
+      <button class="settings-tab" data-tab="guides">Guides &amp; Grid</button>
+      <button class="settings-tab" data-tab="keyboard">Keyboard</button>
+      <button class="settings-tab" data-tab="window">Window</button>
+      <button class="settings-close" id="settingsClose">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="5" x2="15" y2="15"/><line x1="15" y1="5" x2="5" y2="15"/></svg>
+      </button>
+    </div>
+
+    <div class="settings-body">
+      <!-- General tab -->
+      <div class="settings-tabpane" data-tabpane="general">
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Theme</div>
+            <div class="radio-group">
+              <label class="radio"><input type="radio" name="theme" value="dark"> Dark</label>
+              <label class="radio"><input type="radio" name="theme" value="light" checked> Light</label>
+            </div>
+          </div>
+          <div>
+            <div class="settings-label">Language</div>
+            <select class="select-field" id="settingLang">
+              <option>English</option><option>Español</option><option>Français</option><option>Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <div class="section-divider">Images</div>
+        <label class="check-row">
+          <input type="checkbox" class="checkbox" id="settingResize" checked style="margin-top:2px;">
+          <span class="check-text">
+            Enable page resize filter
+            <span class="desc">Uncheck for better performance. Narrow lines may disappear from the canvas when zooming in and out, but not from the PDF download.</span>
+          </span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" class="checkbox" id="settingUploads" checked style="margin-top:2px;">
+          <span class="check-text">Uploads optimization</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" class="checkbox" id="settingOverlay" style="margin-top:2px;">
+          <span class="check-text">Preview overlay themes</span>
+        </label>
+      </div>
+
+      <!-- Guides & Grid -->
+      <div class="settings-tabpane" data-tabpane="guides" style="display:none;">
+        <label class="check-row">
+          <input type="checkbox" class="checkbox" checked style="margin-top:2px;">
+          <span class="check-text" style="display:flex;align-items:center;gap:18px;">
+            Object Snap?
+            <span style="display:inline-flex;align-items:center;gap:10px;color:var(--fg2);">
+              Snap Distance (px)
+              <input type="number" value="5" style="width:60px;padding:6px 8px;border:1px solid rgba(124,58,237,0.22);border-radius:6px;font-family:inherit;text-align:center;">
+            </span>
+          </span>
+        </label>
+        <div class="section-divider">Guide Lines</div>
+        <label class="check-row">
+          <input type="checkbox" class="checkbox" style="margin-top:2px;">
+          <span class="check-text">Lock Lines?</span>
+        </label>
+        <div style="margin:14px 0;">
+          <div class="settings-label">Page Edges</div>
+          <div class="radio-group" style="flex-wrap:wrap;">
+            <label class="radio"><input type="radio" name="pageEdges"> Visible</label>
+            <label class="radio"><input type="radio" name="pageEdges"> Auto (visible when near objects)</label>
+            <label class="radio"><input type="radio" name="pageEdges" checked> Disabled</label>
+          </div>
+        </div>
+        <div style="margin:14px 0;">
+          <div class="settings-label">Page Center</div>
+          <div class="radio-group" style="flex-wrap:wrap;">
+            <label class="radio"><input type="radio" name="pageCenter"> Visible</label>
+            <label class="radio"><input type="radio" name="pageCenter" checked> Auto (visible when near objects)</label>
+            <label class="radio"><input type="radio" name="pageCenter"> Disabled</label>
+          </div>
+        </div>
+        <div style="margin:14px 0;">
+          <div class="settings-label">Amazon KDP Margins</div>
+          <div class="radio-group" style="flex-wrap:wrap;">
+            <label class="radio"><input type="radio" name="kdpMargins" checked> Visible</label>
+            <label class="radio"><input type="radio" name="kdpMargins"> Auto (visible when near objects)</label>
+            <label class="radio"><input type="radio" name="kdpMargins"> Disabled</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keyboard -->
+      <div class="settings-tabpane" data-tabpane="keyboard" style="display:none;">
+        <div class="section-divider" style="margin-top:0;">Object Moving (Arrows)</div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Regular Distance (px)</div>
+            <input type="number" value="5" class="select-field" style="background-image:none;padding:11px 14px;">
+          </div>
+          <div>
+            <div class="settings-label">SHIFT Distance (px)</div>
+            <input type="number" value="50" class="select-field" style="background-image:none;padding:11px 14px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Window -->
+      <div class="settings-tabpane" data-tabpane="window" style="display:none;">
+        <label class="check-row"><input type="checkbox" class="checkbox" checked style="margin-top:2px;"><span class="check-text">Page Previews</span></label>
+        <label class="check-row"><input type="checkbox" class="checkbox" checked style="margin-top:2px;"><span class="check-text">Layers</span></label>
+        <label class="check-row"><input type="checkbox" class="checkbox" checked style="margin-top:2px;"><span class="check-text">Viewport Control (Snap, Cut, Zoom)</span></label>
+        <label class="check-row"><input type="checkbox" class="checkbox" checked style="margin-top:2px;"><span class="check-text">Project Notes and Info</span></label>
+        <label class="check-row"><input type="checkbox" class="checkbox" checked style="margin-top:2px;"><span class="check-text">AI Assistant</span></label>
+      </div>
+    </div>
+
+    <div class="settings-footer">
+      <a class="reset-link" id="resetDefault">Reset Default</a>
+      <button class="btn-primary" id="settingsSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/new-project-modal.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════
+   KDP LAB EDITOR — controller
+════════════════════════════════════════════════════════════ */
+(function () {
+
+  /* ── State ──────────────────────────────────── */
+  const STORE_KEY = 'kdp:editor-state';
+  const SESSION_KEY = 'kdp:new-project';
+
+  const DEFAULT_SETTINGS = {
+    projectType: 'Paperback: Cover and Interior',
+    contentMode: 'low-content',
+    projectName: 'My KDP Project',
+    trimSize: { label: '6 x 9 in (15.24 x 22.86 cm)', w: 6, h: 9 },
+    paperType: 'Black & white interior with white paper',
+    bleed: true,
+    pageCount: 100,
+    createdAt: new Date().toISOString()
+  };
+
+  const state = {
+    settings: KDPNewProject.getSettings() || DEFAULT_SETTINGS,
+    projectId: null,
+    pages: [],          // [{id, type:'cover'|'odd'|'even', name}]
+    currentPageIdx: 0,
+    zoom: 0.5,
+    saved: true,
+    autosave: true
+  };
+
+  if (!KDPNewProject.getSettings()) {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(DEFAULT_SETTINGS));
+  }
+
+  /* ── Helpers ────────────────────────────────── */
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+  function genId(prefix) {
+    return prefix + Math.floor(1000000 + Math.random() * 9000000);
+  }
+
+  function isCoverProject() {
+    return /Cover and Interior/i.test(state.settings.projectType);
+  }
+  function bookKind() {
+    if (/Hardcover/i.test(state.settings.projectType)) return 'Hardcover';
+    if (/Paperback/i.test(state.settings.projectType)) return 'Paperback';
+    if (/eBook/i.test(state.settings.projectType))    return 'eBook';
+    return 'Paperback';
+  }
+  function paperColor() {
+    if (/cream/i.test(state.settings.paperType)) return 'Cream';
+    if (/Premium color/i.test(state.settings.paperType)) return 'Premium color';
+    if (/Standard color/i.test(state.settings.paperType)) return 'Standard color';
+    return 'White';
+  }
+  function paperShort() {
+    const p = state.settings.paperType;
+    if (/white paper$/i.test(p) && /Black & white/i.test(p)) return 'B&W (white)';
+    if (/cream paper$/i.test(p)) return 'B&W (cream)';
+    if (/Standard color/i.test(p)) return 'Std color';
+    if (/Premium color/i.test(p)) return 'Premium color';
+    return 'B&W (white)';
+  }
+
+  // KDP spine width per inch by paper type (in inches per page)
+  function spineFactor() {
+    const p = state.settings.paperType || '';
+    if (/Black & white interior with cream paper/i.test(p)) return 0.0025;
+    if (/Black & white interior with white paper/i.test(p)) return 0.002252;
+    if (/Standard color interior with white paper/i.test(p)) return 0.002347;
+    if (/Premium color interior with white paper/i.test(p)) return 0.002347;
+    return 0.002252;
+  }
+  function spineInches() {
+    return state.settings.pageCount * spineFactor();
+  }
+
+  function mmFromIn(inches) { return inches * 25.4; }
+
+  /* ── Initial pages ──────────────────────────── */
+  function initPages() {
+    state.pages = [];
+    if (isCoverProject()) {
+      state.pages.push({ id: genId('PG'), type: 'cover', name: 'Cover' });
+    }
+    state.pages.push({ id: genId('PG'), type: 'odd', name: 'Page 1 (Odd)' });
+    state.pages.push({ id: genId('PG'), type: 'even', name: 'Page 2 (Even)' });
+    state.currentPageIdx = 0;
+  }
+
+  function addPage() {
+    const interiorCount = state.pages.filter(p => p.type !== 'cover').length;
+    const next = interiorCount + 1;
+    const type = next % 2 === 1 ? 'odd' : 'even';
+    state.pages.push({ id: genId('PG'), type, name: `Page ${next} (${type === 'odd' ? 'Odd' : 'Even'})` });
+    markUnsaved();
+    renderThumbs();
+  }
+
+  /* ── Status bar / persistence ───────────────── */
+  function renderStatus() {
+    const s = state.settings;
+    const trim = s.trimSize.label.split(' (')[0];
+    const bleedTxt = s.bleed ? 'Bleed' : 'No Bleed';
+    const kind = bookKind();
+    const summary = ` — ${trim}, ${s.pageCount} pages, ${bleedTxt}, ${paperShort()}, ${kind}`;
+    $('#statusProjectName').textContent = s.projectName.toLowerCase();
+    $('#statusSummary').textContent = summary;
+    $('#statusProjectId').textContent = `Project Id ${state.projectId}`;
+    const page = state.pages[state.currentPageIdx];
+    $('#statusPageName').textContent = page ? `(${ /Cover/i.test(state.settings.projectType) ? 'Cover + Interior' : 'Interior'}) — ${page.name}` : '';
+  }
+
+  function markUnsaved() {
+    state.saved = false;
+    const b = $('#savedBadge');
+    b.classList.remove('saved');
+    b.textContent = 'Unsaved';
+  }
+  function markSaved() {
+    state.saved = true;
+    const b = $('#savedBadge');
+    b.classList.add('saved');
+    b.textContent = 'Saved';
+  }
+
+  function persist() {
+    const payload = {
+      settings: state.settings,
+      projectId: state.projectId,
+      pages: state.pages,
+      currentPageIdx: state.currentPageIdx,
+      zoom: state.zoom,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(STORE_KEY, JSON.stringify(payload));
+    markSaved();
+  }
+
+  function loadPersisted() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      // Only re-hydrate if same project (same name + trim)
+      if (data.settings && data.settings.projectName === state.settings.projectName
+          && data.settings.trimSize && data.settings.trimSize.label === state.settings.trimSize.label) {
+        state.pages = data.pages || state.pages;
+        state.projectId = data.projectId || state.projectId;
+        state.currentPageIdx = data.currentPageIdx || 0;
+        state.zoom = data.zoom || state.zoom;
+        return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  /* ── Render thumbnails ─────────────────────── */
+  function coverThumbSVG() {
+    // Mini schematic of the spread: back | spine | front, with bleed/trim/live + barcode
+    const trimW = state.settings.trimSize.w;
+    const trimH = state.settings.trimSize.h;
+    const bleed = bleedIn();
+    const spine = spineInches();
+    const totalW = trimW * 2 + spine + bleed * 2;
+    const totalH = trimH + bleed * 2;
+
+    const safe = SAFE_IN;
+    const bcW = 2.0, bcH = 1.2;
+
+    return `
+      <svg viewBox="0 0 ${totalW} ${totalH}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block;">
+        <rect x="0" y="0" width="${totalW}" height="${totalH}" fill="#fff"/>
+        ${bleed > 0 ? `<rect x="${bleed/2}" y="${bleed/2}" width="${totalW - bleed}" height="${totalH - bleed}" fill="none" stroke="#E94F4F" stroke-width="${bleed}"/>` : ''}
+        <rect x="${bleed}" y="${bleed}" width="${totalW - bleed*2}" height="${totalH - bleed*2}" fill="none" stroke="#1A0A3C" stroke-width="0.03"/>
+        <rect x="${bleed + trimW}" y="${bleed}" width="${spine}" height="${trimH}" fill="none" stroke="#6EC4FF" stroke-width="0.03" stroke-dasharray="0.08,0.06"/>
+        <rect x="${bleed + safe}" y="${bleed + safe}" width="${trimW - safe*2}" height="${trimH - safe*2}" fill="none" stroke="#4CC57D" stroke-width="0.03" stroke-dasharray="0.08,0.06"/>
+        <rect x="${bleed + trimW + spine + safe}" y="${bleed + safe}" width="${trimW - safe*2}" height="${trimH - safe*2}" fill="none" stroke="#4CC57D" stroke-width="0.03" stroke-dasharray="0.08,0.06"/>
+        <rect x="${bleed + (trimW - bcW)/2}" y="${totalH - bleed - safe - bcH - 0.15}" width="${bcW}" height="${bcH}" fill="#FCD34D" stroke="#B7841E" stroke-width="0.02"/>
+      </svg>
+    `;
+  }
+
+  function renderThumbs() {
+    const panel = $('#thumbsPanel');
+    panel.innerHTML = '';
+    state.pages.forEach((page, idx) => {
+      const block = document.createElement('div');
+      block.className = 'thumb-block';
+      const isCover = page.type === 'cover';
+      const innerHTML = isCover ? coverThumbSVG() : '';
+      block.innerHTML = `
+        <div class="thumb ${isCover ? 'cover' : ''} ${idx === state.currentPageIdx ? 'active' : ''}" data-idx="${idx}">${innerHTML}</div>
+        <div class="thumb-label">${page.name}</div>
+      `;
+      panel.appendChild(block);
+
+      // Insert Add Page button between pages
+      const isLast = idx === state.pages.length - 1;
+      if (!isLast || page.type !== 'cover') {
+        const btn = document.createElement('button');
+        btn.className = 'add-page';
+        btn.textContent = 'Add Page';
+        btn.dataset.afterIdx = idx;
+        panel.appendChild(btn);
+      }
+    });
+    // wire thumbs
+    panel.querySelectorAll('.thumb').forEach(t => {
+      t.addEventListener('click', () => {
+        state.currentPageIdx = parseInt(t.dataset.idx, 10);
+        renderThumbs();
+        renderCanvas();
+        renderStatus();
+      });
+    });
+    panel.querySelectorAll('.add-page').forEach(b => {
+      b.addEventListener('click', () => addPage());
+    });
+  }
+
+  /* ── Render canvas page ─────────────────────── */
+  // 96 DPI base (1in = 96px at zoom 1.0)
+  const DPI = 96;
+
+  function bleedIn() { return state.settings.bleed ? 0.125 : 0; }
+  const SAFE_IN = 0.375;   // 9.525mm safe / live area
+
+  function renderCanvas() {
+    const stage = $('#canvasStage');
+    stage.innerHTML = '';
+    stage.style.transform = `scale(${state.zoom})`;
+
+    const page = state.pages[state.currentPageIdx];
+    if (!page) return;
+
+    if (page.type === 'cover' && isCoverProject()) {
+      renderCoverSpread(stage);
+    } else {
+      renderInteriorPage(stage, page);
+    }
+  }
+
+  function renderInteriorPage(stage, page) {
+    const trimW_in = state.settings.trimSize.w;
+    const trimH_in = state.settings.trimSize.h;
+    const bleed_in = bleedIn();
+
+    const trimW = trimW_in * DPI;
+    const trimH = trimH_in * DPI;
+    const bleed = bleed_in * DPI;
+    const safe  = SAFE_IN * DPI;
+
+    const pageW = trimW + bleed * 2;
+    const pageH = trimH + bleed * 2;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'page';
+    wrap.style.width = pageW + 'px';
+    wrap.style.height = pageH + 'px';
+
+    // Bleed (red border, outermost)
+    if (bleed_in > 0) {
+      const r = document.createElement('div');
+      r.className = 'guide-bleed';
+      r.style.left = '0px'; r.style.top = '0px';
+      r.style.width = pageW + 'px'; r.style.height = pageH + 'px';
+      wrap.appendChild(r);
+    }
+    // Trim (black solid)
+    const t = document.createElement('div');
+    t.className = 'guide-trim';
+    t.style.left = bleed + 'px'; t.style.top = bleed + 'px';
+    t.style.width = trimW + 'px'; t.style.height = trimH + 'px';
+    wrap.appendChild(t);
+
+    // Live/safe (green dashed)
+    const l = document.createElement('div');
+    l.className = 'guide-live';
+    l.style.left = (bleed + safe) + 'px';
+    l.style.top  = (bleed + safe) + 'px';
+    l.style.width  = (trimW - safe * 2) + 'px';
+    l.style.height = (trimH - safe * 2) + 'px';
+    wrap.appendChild(l);
+
+    // Legend text inside live area
+    const legend = document.createElement('div');
+    legend.className = 'legend';
+    legend.style.left = (bleed + safe + 14) + 'px';
+    legend.style.top  = (bleed + safe + 14) + 'px';
+    legend.style.maxWidth = (trimW - safe * 2 - 28) + 'px';
+    legend.innerHTML = `
+      <h4>Black Solid Line = Trim Size</h4>
+      <p>This is where your book will be cut to produce the final trim size.</p>
+      <h4>Green Dashed Line = Live Area</h4>
+      <p>Position logos, text, and essential images in this area.</p>
+      <h4>Red Area = Out of Live/Bleed</h4>
+      <p>Your background artwork must fill this red area. Do not place logos, text, or essential images in this red area. If your design has elements in this area that you don't want to lose due to print requirements, it may be removed.</p>
+      <h4>REMOVE THIS TEMPLATE LAYER FROM FINAL ARTWORK</h4>
+      <p>Whatever is visible in your digital artwork will also be visible on your printed artwork.</p>
+    `;
+    wrap.appendChild(legend);
+
+    // Bottom corner page label
+    const corner = document.createElement('div');
+    corner.style.position = 'absolute';
+    corner.style.left = (bleed + 8) + 'px';
+    corner.style.bottom = (bleed + 8) + 'px';
+    corner.style.fontSize = '10px';
+    corner.style.color = '#5B4B8A';
+    corner.style.pointerEvents = 'none';
+    corner.innerHTML = `${page.name}<br>${trimW_in}" x ${trimH_in}"<br>(${mmFromIn(trimW_in).toFixed(2)}mm x ${mmFromIn(trimH_in).toFixed(2)}mm)`;
+    wrap.appendChild(corner);
+
+    stage.appendChild(wrap);
+  }
+
+  function renderCoverSpread(stage) {
+    const trimW_in = state.settings.trimSize.w;
+    const trimH_in = state.settings.trimSize.h;
+    const bleed_in = bleedIn();
+    const spine_in = spineInches();
+
+    const overallW_in = (trimW_in * 2) + spine_in + (bleed_in * 2);
+    const overallH_in = trimH_in + (bleed_in * 2);
+
+    const trimW = trimW_in * DPI;
+    const trimH = trimH_in * DPI;
+    const bleed = bleed_in * DPI;
+    const spine = spine_in * DPI;
+    const safe = SAFE_IN * DPI;
+
+    const totalW = overallW_in * DPI;
+    const totalH = overallH_in * DPI;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'page';
+    wrap.style.width = totalW + 'px';
+    wrap.style.height = totalH + 'px';
+
+    // Bleed border (red, outer)
+    if (bleed_in > 0) {
+      const r = document.createElement('div');
+      r.className = 'guide-bleed';
+      r.style.left = '0px'; r.style.top = '0px';
+      r.style.width = totalW + 'px'; r.style.height = totalH + 'px';
+      wrap.appendChild(r);
+    }
+
+    // Trim rectangle (outer trim of full spread)
+    const t = document.createElement('div');
+    t.className = 'guide-trim';
+    t.style.left = bleed + 'px'; t.style.top = bleed + 'px';
+    t.style.width = (totalW - bleed * 2) + 'px';
+    t.style.height = (totalH - bleed * 2) + 'px';
+    wrap.appendChild(t);
+
+    // Spine guides (vertical dashed lines)
+    const spineX = bleed + trimW;
+    const sp = document.createElement('div');
+    sp.className = 'guide-spine';
+    sp.style.left = spineX + 'px';
+    sp.style.top = bleed + 'px';
+    sp.style.width = spine + 'px';
+    sp.style.height = trimH + 'px';
+    wrap.appendChild(sp);
+
+    // Live area on back cover
+    const lvBack = document.createElement('div');
+    lvBack.className = 'guide-live';
+    lvBack.style.left = (bleed + safe) + 'px';
+    lvBack.style.top  = (bleed + safe) + 'px';
+    lvBack.style.width  = (trimW - safe * 2) + 'px';
+    lvBack.style.height = (trimH - safe * 2) + 'px';
+    wrap.appendChild(lvBack);
+
+    // Live area on front cover
+    const lvFront = document.createElement('div');
+    lvFront.className = 'guide-live';
+    lvFront.style.left = (bleed + trimW + spine + safe) + 'px';
+    lvFront.style.top  = (bleed + safe) + 'px';
+    lvFront.style.width  = (trimW - safe * 2) + 'px';
+    lvFront.style.height = (trimH - safe * 2) + 'px';
+    wrap.appendChild(lvFront);
+
+    // Barcode placeholder (yellow box on back cover, bottom center)
+    const bc = document.createElement('div');
+    bc.className = 'barcode';
+    const bcW = 2.0 * DPI, bcH = 1.2 * DPI;
+    bc.style.width = bcW + 'px';
+    bc.style.height = bcH + 'px';
+    bc.style.left = (bleed + (trimW - bcW) / 2) + 'px';
+    bc.style.bottom = (bleed + safe + 10) + 'px';
+    bc.innerHTML = `Barcode<br>Location &amp; Size<br>2.00" x 1.20"<br>(50.80mm x 30.48mm)`;
+    wrap.appendChild(bc);
+
+    // Back-cover legend block (top-left of back cover, inside live area)
+    const legend = document.createElement('div');
+    legend.className = 'legend';
+    legend.style.left = (bleed + safe + 14) + 'px';
+    legend.style.top  = (bleed + safe + 14) + 'px';
+    legend.style.maxWidth = (trimW - safe * 2 - 28) + 'px';
+    legend.innerHTML = `
+      <h4>Black Solid Line = Trim Size</h4>
+      <p>This is where your book will be cut to produce the final trim size.</p>
+      <h4>Blue Dashed Line = Spine Fold</h4>
+      <p>Fold placement may vary slightly.</p>
+      <h4>White Area = Live Area</h4>
+      <p>Position logos, text, and essential images in this area.</p>
+      <h4>Red Area = Out of Live/Bleed</h4>
+      <p>Your background artwork must fill this red area. Do not place logos, text, or essential images in this red area. If your design has elements in this area that you don't want to lose due to print requirements, it may be removed.</p>
+      <h4>REMOVE THIS TEMPLATE LAYER FROM FINAL ARTWORK.</h4>
+      <p>Whatever is visible in your digital artwork will also be visible on your printed artwork.</p>
+    `;
+    wrap.appendChild(legend);
+
+    // Cover info panel (centered on front cover area, like reference)
+    const info = document.createElement('div');
+    info.className = 'cover-info';
+    info.style.left = (bleed + trimW + spine + safe + 30) + 'px';
+    info.style.top  = (bleed + safe + 22) + 'px';
+    info.style.maxWidth = (trimW - safe * 2 - 60) + 'px';
+    info.innerHTML = `
+      <h3>${bookKind()} Book</h3>
+      <div class="sub">Cover Template - Left to Right</div>
+      <div><b>${trimW_in} x ${trimH_in}" Book</b></div>
+      <div class="sub">(${mmFromIn(trimW_in).toFixed(2)}mm x ${mmFromIn(trimH_in).toFixed(2)}mm)</div>
+      <div><b>${overallW_in.toFixed(3)} x ${overallH_in.toFixed(3)}"</b> Overall Dimensions</div>
+      <div class="sub">(${mmFromIn(overallW_in).toFixed(2)}mm x ${mmFromIn(overallH_in).toFixed(2)}mm)</div>
+      <div><b>${spine_in.toFixed(3)}"</b> Spine Width</div>
+      <div class="sub">(${mmFromIn(spine_in).toFixed(2)}mm)</div>
+      <div style="margin-top:10px;">${paperColor()}<br>${state.settings.pageCount} Pages<br>${/cream/i.test(state.settings.paperType) ? 'Cream Paper' : 'White Paper'}</div>
+    `;
+    wrap.appendChild(info);
+
+    // Bottom labels
+    const backLabel = document.createElement('div');
+    backLabel.className = 'cover-label';
+    backLabel.style.left = (bleed + 12) + 'px';
+    backLabel.style.bottom = '8px';
+    backLabel.innerHTML = `Back Cover<br><span class="dim">${trimW_in}" x ${trimH_in}"<br>(${mmFromIn(trimW_in).toFixed(2)}mm x ${mmFromIn(trimH_in).toFixed(2)}mm)</span>`;
+    wrap.appendChild(backLabel);
+
+    const frontLabel = document.createElement('div');
+    frontLabel.className = 'cover-label';
+    frontLabel.style.right = (bleed + 12) + 'px';
+    frontLabel.style.bottom = '8px';
+    frontLabel.style.textAlign = 'right';
+    frontLabel.innerHTML = `Front Cover<br><span class="dim">${trimW_in}" x ${trimH_in}"<br>(${mmFromIn(trimW_in).toFixed(2)}mm x ${mmFromIn(trimH_in).toFixed(2)}mm)</span>`;
+    wrap.appendChild(frontLabel);
+
+    stage.appendChild(wrap);
+  }
+
+  /* ── Menus ──────────────────────────────────── */
+  function buildMenus() {
+    const s = state.settings;
+    const trim = s.trimSize.label.split(' (')[0];
+    const summary = `${trim}, ${s.pageCount} pages, ${s.bleed ? 'Bleed' : 'No Bleed'}, ${paperShort()}`;
+    const page = state.pages[state.currentPageIdx];
+
+    $('#menu-project').innerHTML = `
+      <div class="dropdown-item" data-act="new-project">New Project</div>
+      <div class="dropdown-item" data-act="my-projects">My Projects</div>
+      <div class="dropdown-item" data-act="clone-project">Clone Project</div>
+      <div class="dropdown-item" data-act="rename-project">Rename Project</div>
+      <div class="dropdown-item" data-act="delete-project">Delete Project</div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-meta">
+        <div class="label">Current Project</div>
+        ${s.projectName} <br>
+        <span style="color:var(--fg3);">${summary} (${ isCoverProject() ? 'Cover + Interior' : 'Interior'})</span>
+      </div>
+      <div class="dropdown-meta">
+        <a href="#">Project Id ${state.projectId}</a>
+      </div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-meta">
+        <div class="label">Current Page</div>
+        ${page ? page.name : '—'}<br>
+        <a href="#">Page Id ${page ? page.id : ''}</a>
+      </div>
+    `;
+
+    $('#menu-download').innerHTML = `
+      <div class="dropdown-item" data-act="dl-proj-cmyk">Download Current Project CMYK (Printed Books)</div>
+      <div class="dropdown-item" data-act="dl-proj-rgb">Download Current Project RGB (EBooks)</div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-item" data-act="dl-page-cmyk">Download Current Page CMYK (Printed Books)</div>
+      <div class="dropdown-item" data-act="dl-page-rgb">Download Current Page RGB (EBooks)</div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-item" data-act="cmyk-article"><a href="#" style="color:var(--accent);">CMYK or RGB Article</a></div>
+    `;
+
+    $('#menu-file').innerHTML = `
+      <div class="dropdown-item" data-act="export-png">Export to PNG</div>
+      <div class="dropdown-item" data-act="save-json">Save as File (JSON)</div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-item" data-act="load-json">Load from File (JSON)</div>
+      <div class="dropdown-item" data-act="import-pages">Import All Pages (JSON)</div>
+    `;
+
+    $('#menu-edit').innerHTML = `
+      <div class="dropdown-item" data-act="clear-page">Clear Current Page</div>
+      <div class="dropdown-item" data-act="clear-pages">Clear Pages</div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-item" data-act="undo">Undo<span class="dropdown-shortcut">Ctrl+Z</span></div>
+      <div class="dropdown-item" data-act="redo">Redo<span class="dropdown-shortcut">Ctrl+Y</span></div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-item" data-act="select-all">Select All<span class="dropdown-shortcut">Ctrl+A</span></div>
+      <div class="dropdown-item" data-act="select-texts">Select All Texts</div>
+      <div class="dropdown-item" data-act="select-texture">Select Texture</div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-item disabled" data-act="cut">Cut<span class="dropdown-shortcut disabled">Ctrl+X</span></div>
+      <div class="dropdown-item disabled" data-act="copy">Copy<span class="dropdown-shortcut disabled">Ctrl+C</span></div>
+      <div class="dropdown-item disabled" data-act="duplicate">Duplicate<span class="dropdown-shortcut disabled">Ctrl+J</span></div>
+      <div class="dropdown-item" data-act="paste">Paste<span class="dropdown-shortcut">Ctrl+V</span></div>
+    `;
+
+    // wire dropdown actions
+    $$('.dropdown .dropdown-item').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        if (el.classList.contains('disabled')) return;
+        handleAction(el.dataset.act);
+        closeMenus();
+        ev.stopPropagation();
+      });
+    });
+  }
+
+  function handleAction(act) {
+    switch (act) {
+      case 'new-project':
+        KDPNewProject.open({
+          defaultName: state.settings.projectName,
+          onCreate: (s) => {
+            state.settings = s;
+            state.projectId = genId('').slice(0, 7);
+            initPages();
+            renderAll();
+            persist();
+          }
+        });
+        break;
+      case 'my-projects':
+        window.location.href = './dashboard.html';
+        break;
+      case 'rename-project':
+        const n = prompt('New project name:', state.settings.projectName);
+        if (n && n.trim()) {
+          state.settings.projectName = n.trim();
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.settings));
+          markUnsaved();
+          buildMenus();
+          renderStatus();
+        }
+        break;
+      case 'delete-project':
+        if (confirm('Delete this project?')) {
+          localStorage.removeItem(STORE_KEY);
+          sessionStorage.removeItem(SESSION_KEY);
+          window.location.href = './dashboard.html';
+        }
+        break;
+      case 'clear-page':
+        if (confirm('Clear current page?')) {
+          // Pages have no editable content in this scaffold — just toast
+          alert('Current page cleared.');
+        }
+        break;
+      case 'clear-pages':
+        if (confirm('Clear all pages?')) {
+          initPages();
+          renderAll();
+          markUnsaved();
+        }
+        break;
+      case 'undo':   /* TODO history */  break;
+      case 'redo':   /* TODO history */  break;
+      case 'save-json':
+        downloadJSON();
+        break;
+      case 'load-json':
+        loadJSONFile();
+        break;
+      case 'export-png':
+        alert('PNG export will be available once page content is added.');
+        break;
+      case 'dl-proj-cmyk': case 'dl-proj-rgb':
+      case 'dl-page-cmyk': case 'dl-page-rgb':
+        alert('PDF download will be available once page content is added.');
+        break;
+      default:
+        // no-op
+    }
+  }
+
+  function downloadJSON() {
+    const data = {
+      settings: state.settings,
+      projectId: state.projectId,
+      pages: state.pages
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${state.settings.projectName.replace(/\W+/g, '_')}.kdplab.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function loadJSONFile() {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.json';
+    inp.onchange = () => {
+      const file = inp.files[0];
+      if (!file) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const data = JSON.parse(r.result);
+          if (data.settings) state.settings = data.settings;
+          if (data.projectId) state.projectId = data.projectId;
+          if (data.pages) state.pages = data.pages;
+          state.currentPageIdx = 0;
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.settings));
+          renderAll();
+          persist();
+        } catch (e) { alert('Invalid file.'); }
+      };
+      r.readAsText(file);
+    };
+    inp.click();
+  }
+
+  /* ── Menu open/close ────────────────────────── */
+  function closeMenus() {
+    $$('.menu-btn').forEach(b => b.classList.remove('open'));
+    $$('.dropdown').forEach(d => d.classList.remove('show'));
+  }
+
+  function wireMenus() {
+    $$('.menu-btn[data-menu]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const key = btn.dataset.menu;
+        const dd = $('#menu-' + key);
+        const alreadyOpen = dd.classList.contains('show');
+        closeMenus();
+        if (!alreadyOpen) {
+          dd.classList.add('show');
+          btn.classList.add('open');
+          // position dropdown under button
+          const rect = btn.getBoundingClientRect();
+          const parentRect = btn.parentElement.getBoundingClientRect();
+          dd.style.left = (rect.left - parentRect.left) + 'px';
+        }
+      });
+    });
+    document.addEventListener('click', closeMenus);
+  }
+
+  /* ── Settings modal ─────────────────────────── */
+  function openSettings() { $('#settingsOverlay').classList.add('show'); }
+  function closeSettings() { $('#settingsOverlay').classList.remove('show'); }
+
+  function wireSettings() {
+    $('#btnSettings').addEventListener('click', openSettings);
+    $('#settingsClose').addEventListener('click', closeSettings);
+    $('#settingsSave').addEventListener('click', () => {
+      const theme = $$('input[name="theme"]').find(r => r.checked).value;
+      document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : '');
+      closeSettings();
+    });
+    $('#resetDefault').addEventListener('click', (e) => {
+      e.preventDefault();
+      $$('.settings-body input[type="checkbox"]').forEach(c => c.checked = c.defaultChecked);
+      $$('.settings-body input[type="radio"]').forEach(c => c.checked = c.defaultChecked);
+    });
+    $('#settingsOverlay').addEventListener('click', (e) => {
+      if (e.target === $('#settingsOverlay')) closeSettings();
+    });
+    $$('.settings-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        $$('.settings-tab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        const key = t.dataset.tab;
+        $$('.settings-tabpane').forEach(p => p.style.display = p.dataset.tabpane === key ? '' : 'none');
+      });
+    });
+  }
+
+  /* ── Top bar buttons ────────────────────────── */
+  function wireTopbar() {
+    $('#btnSave').addEventListener('click', persist);
+    $('#autosaveToggle').addEventListener('change', (e) => {
+      state.autosave = e.target.checked;
+    });
+    $('#btnUndo').addEventListener('click', () => handleAction('undo'));
+    $('#btnRedo').addEventListener('click', () => handleAction('redo'));
+    $('#btnHistory').addEventListener('click', () => { /* TODO history panel */ });
+    $('#btnPreview').addEventListener('click', () => alert('Preview mode coming soon.'));
+  }
+
+  /* ── Vertical toolbar ───────────────────────── */
+  function wireVtoolbar() {
+    $$('.vtool').forEach(v => {
+      v.addEventListener('click', () => {
+        $$('.vtool').forEach(x => x.classList.remove('active'));
+        v.classList.add('active');
+      });
+    });
+  }
+
+  /* ── Zoom controls ──────────────────────────── */
+  function setZoom(z, opts) {
+    state.zoom = Math.max(0.1, Math.min(5, z));
+    const pct = Math.round(state.zoom * 100);
+    $('#zoomSlider').value = pct;
+    $('#zoomInput').value = pct;
+    const stage = $('#canvasStage');
+    if (stage) stage.style.transform = `scale(${state.zoom})`;
+    if (!opts || !opts.silent) markUnsaved();
+  }
+
+  function fitToScreen() {
+    const page = state.pages[state.currentPageIdx];
+    if (!page) return;
+    const trimW_in = state.settings.trimSize.w;
+    const trimH_in = state.settings.trimSize.h;
+    const bleed_in = bleedIn();
+
+    let pageW_in, pageH_in;
+    if (page.type === 'cover' && isCoverProject()) {
+      pageW_in = (trimW_in * 2) + spineInches() + (bleed_in * 2);
+      pageH_in = trimH_in + (bleed_in * 2);
+    } else {
+      pageW_in = trimW_in + bleed_in * 2;
+      pageH_in = trimH_in + bleed_in * 2;
+    }
+    const pageW = pageW_in * DPI;
+    const pageH = pageH_in * DPI;
+
+    const scroll = $('#canvasScroll');
+    const avW = scroll.clientWidth - 160;  // padding + toolbar
+    const avH = scroll.clientHeight - 80;
+    const z = Math.min(avW / pageW, avH / pageH);
+    setZoom(z, { silent: true });
+  }
+
+  function wireZoom() {
+    $('#zoomSlider').addEventListener('input', e => setZoom(parseInt(e.target.value, 10) / 100, { silent: true }));
+    $('#zoomInput').addEventListener('change', e => setZoom(parseInt(e.target.value, 10) / 100, { silent: true }));
+    $('#btnFit').addEventListener('click', fitToScreen);
+  }
+
+  /* ── Keyboard shortcuts ─────────────────────── */
+  function wireKeys() {
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault(); persist();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault(); handleAction('undo');
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault(); handleAction('redo');
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault(); handleAction('select-all');
+      }
+      if (e.key === 'Escape') closeMenus();
+    });
+  }
+
+  /* ── Autosave ───────────────────────────────── */
+  function startAutosave() {
+    setInterval(() => {
+      if (state.autosave && !state.saved) persist();
+    }, 30000);
+  }
+
+  /* ── Render everything ──────────────────────── */
+  function renderAll() {
+    buildMenus();
+    renderThumbs();
+    renderCanvas();
+    renderStatus();
+    setZoom(state.zoom, { silent: true });
+  }
+
+  /* ── Init ───────────────────────────────────── */
+  function init() {
+    // Show user initial
+    const email = (window.SUPABASE && typeof window.SUPABASE.getUser === 'function' ? null : null);
+    $('#userAvatar').textContent = (state.settings.projectName || 'U').trim().charAt(0).toUpperCase();
+
+    // Project ID — stable across reloads if persisted
+    state.projectId = genId('').slice(0, 7);
+    initPages();
+
+    // Hydrate from localStorage if same project
+    loadPersisted();
+
+    wireMenus();
+    wireSettings();
+    wireTopbar();
+    wireVtoolbar();
+    wireZoom();
+    wireKeys();
+
+    renderAll();
+    setTimeout(fitToScreen, 50);
+
+    startAutosave();
+    markSaved();
+
+    // Mark unsaved if user clicks anywhere in the canvas (placeholder for real edits)
+    // — disabled to keep "Saved" until real changes land.
+  }
+
+  // Boot once DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

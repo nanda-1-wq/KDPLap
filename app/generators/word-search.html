@@ -70,6 +70,22 @@ body.ready{visibility:visible;}
 }
 .panel-title{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);margin-bottom:20px;}
 
+/* ── Project meta (from New Project modal) ── */
+.project-meta{
+  background:var(--violet-pale);border:1px solid var(--violet-border-strong);
+  border-radius:10px;padding:12px 14px;margin-bottom:18px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.project-meta-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;}
+.project-meta-label{color:var(--text-mid);font-weight:500;text-transform:uppercase;letter-spacing:.6px;font-size:10px;}
+.project-meta-value{color:var(--text);font-family:var(--font-display);font-weight:700;text-align:right;}
+.project-meta-edit{
+  margin-top:6px;font-size:11px;font-weight:600;
+  color:var(--violet);background:none;border:none;cursor:pointer;
+  text-align:left;padding:0;text-decoration:underline;
+}
+.project-meta-edit:hover{color:#5B21B6;}
+
 .field{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
 .field-label{font-size:11px;font-weight:500;color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;}
 input[type="text"],select,textarea{
@@ -236,6 +252,23 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
 
     <div class="alert alert-error" id="formError"></div>
 
+    <!-- Project meta (set from New Project modal) -->
+    <div id="projectMeta" class="project-meta" style="display:none;">
+      <div class="project-meta-row">
+        <span class="project-meta-label">Trim</span>
+        <span class="project-meta-value" id="metaTrim">—</span>
+      </div>
+      <div class="project-meta-row">
+        <span class="project-meta-label">Pages</span>
+        <span class="project-meta-value" id="metaPages">—</span>
+      </div>
+      <div class="project-meta-row">
+        <span class="project-meta-label">Bleed</span>
+        <span class="project-meta-value" id="metaBleed">—</span>
+      </div>
+      <button type="button" class="project-meta-edit" id="editProjectBtn">Edit project settings</button>
+    </div>
+
     <div class="field">
       <label class="field-label" for="bookTitle">Book Title</label>
       <input type="text" id="bookTitle" placeholder="e.g. Animals Word Search" maxlength="80"/>
@@ -296,6 +329,7 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
         integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
         crossorigin="anonymous"></script>
 <script src="../../js/supabase.js"></script>
+<script src="../../js/new-project-modal.js"></script>
 <script>
 /* ════════════════════════════════════════════════
    KDP Lab — Word Search Generator
@@ -315,11 +349,36 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
   });
 
   /* ── State ── */
-  let currentGrid   = null;   // 2D array of uppercase letters
-  let currentWords  = [];     // words actually placed
-  let skippedWords  = [];     // words that didn't fit
+  let currentGrid   = null;   // 2D array of uppercase letters (preview only — first page)
+  let currentPages  = [];     // [{ grid, placed, skipped }, …] one per puzzle page
+  let currentWords  = [];     // words actually placed on preview page
+  let skippedWords  = [];     // words that didn't fit on preview page
   let currentTitle  = '';
   let currentSize   = 15;
+  let projectSettings = null;  // populated from KDPNewProject
+
+  /* ── Standard generator entry point ── */
+  function applyProjectSettings(settings) {
+    projectSettings = settings;
+
+    // Prefill book title from project name (only on first apply)
+    const titleEl = document.getElementById('bookTitle');
+    if (!titleEl.value.trim()) titleEl.value = settings.projectName;
+
+    // Render meta strip
+    document.getElementById('projectMeta').style.display = 'flex';
+    document.getElementById('metaTrim').textContent  = `${settings.trimSize.w} × ${settings.trimSize.h} in`;
+    document.getElementById('metaPages').textContent = settings.pageCount;
+    document.getElementById('metaBleed').textContent = settings.bleed ? 'Bleed' : 'No bleed';
+  }
+
+  const project = KDPNewProject.requireSettings({
+    defaultName:  'My Word Search Book',
+    dashboardUrl: '../dashboard.html',
+    onSettings:   applyProjectSettings
+  });
+
+  document.getElementById('editProjectBtn').addEventListener('click', project.reopen);
 
   /* ── Word count hint ── */
   const wordInput  = document.getElementById('wordInput');
@@ -439,15 +498,23 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
       return;
     }
 
-    const { grid, placed, skipped } = generateWordSearch(words, size);
+    // Generate N puzzle pages (one per requested page) — same word list,
+    // each page gets a fresh randomized layout.
+    const pageCount = (projectSettings && projectSettings.pageCount) || 1;
+    const pages = [];
+    for (let i = 0; i < pageCount; i++) {
+      pages.push(generateWordSearch(words, size));
+    }
+    const { grid, placed, skipped } = pages[0];
 
+    currentPages = pages;
     currentGrid  = grid;
     currentWords = placed;
     skippedWords = skipped;
     currentTitle = title;
     currentSize  = size;
 
-    renderPreview(grid, placed, skipped, title, size);
+    renderPreview(grid, placed, skipped, title, size, pageCount);
 
     document.getElementById('exportBtn').disabled = false;
     document.getElementById('saveBtn').disabled   = false;
@@ -456,7 +523,7 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
   /* ════════════════════════════════════════════
      RENDER PREVIEW
   ════════════════════════════════════════════ */
-  function renderPreview(grid, placed, skipped, title, size) {
+  function renderPreview(grid, placed, skipped, title, size, pageCount) {
     const placeholder = document.getElementById('placeholder');
     const output      = document.getElementById('puzzleOutput');
     placeholder.style.display = 'none';
@@ -483,11 +550,15 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
       ? `<div class="skip-notice">⚠ ${skipped.length} word${skipped.length>1?'s':''} couldn't fit (too long or no room): <strong>${skipped.join(', ')}</strong>. Try a larger grid.</div>`
       : '';
 
+    const pagesNote = pageCount && pageCount > 1
+      ? ` · <strong style="color:var(--violet);">${pageCount} pages</strong> in export`
+      : '';
+
     output.innerHTML = `
       <div class="preview-header">
         <div>
           <div class="preview-book-title">${escHtml(title)}</div>
-          <div class="preview-meta">${size}×${size} grid · ${placed.length} word${placed.length!==1?'s':''}</div>
+          <div class="preview-meta">${size}×${size} grid · ${placed.length} word${placed.length!==1?'s':''}${pagesNote}</div>
         </div>
       </div>
       <div class="grid-wrap">${gridHtml}</div>
@@ -531,88 +602,120 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
   }
 
   /* ════════════════════════════════════════════
-     EXPORT PDF  (jsPDF — letter 8.5×11in)
+     EXPORT PDF  (jsPDF — trim size from project)
   ════════════════════════════════════════════ */
   document.getElementById('exportBtn').addEventListener('click', () => {
-    if (!currentGrid) return;
-    exportPDF(currentGrid, currentWords, currentTitle, currentSize);
+    if (!currentPages.length) return;
+    exportPDF(currentPages, currentTitle, currentSize);
   });
 
-  function exportPDF(grid, words, title, size) {
+  function exportPDF(pages, title, size) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
 
-    const W = 8.5, H = 11;
-    const MARGIN = 0.6;
+    // Trim size from project settings (fallback: 6 × 9 in)
+    const trim = (projectSettings && projectSettings.trimSize) || { w: 6, h: 9 };
+    const W = trim.w, H = trim.h;
+    const bleed = !!(projectSettings && projectSettings.bleed);
+
+    // KDP outer margin: 0.375" with bleed, 0.25" without (we keep a comfy 0.4" floor)
+    const MARGIN = Math.max(0.4, bleed ? 0.5 : 0.4);
     const contentW = W - MARGIN * 2;
+    const contentH = H - MARGIN * 2;
+
+    const doc = new jsPDF({
+      unit: 'in',
+      format: [W, H],
+      orientation: W > H ? 'landscape' : 'portrait'
+    });
+
+    pages.forEach((page, pageIdx) => {
+      if (pageIdx > 0) doc.addPage([W, H], W > H ? 'landscape' : 'portrait');
+      drawPuzzlePage(doc, page, title, size, pageIdx + 1, pages.length, {
+        W, H, MARGIN, contentW, contentH
+      });
+    });
+
+    const filename = title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-word-search.pdf';
+    doc.save(filename);
+    showToast(`PDF exported — ${pages.length} page${pages.length!==1?'s':''}, ${W}×${H} in`);
+  }
+
+  function drawPuzzlePage(doc, page, title, size, pageNum, totalPages, geom) {
+    const { W, H, MARGIN, contentW, contentH } = geom;
+    const { grid, placed } = page;
 
     // ── Title ──
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.setTextColor(26, 10, 60); // --text
+    doc.setFontSize(Math.min(22, W * 3.2));
+    doc.setTextColor(26, 10, 60);
     doc.text(title, W / 2, MARGIN + 0.25, { align: 'center' });
 
-    // ── Grid ──
-    const cellSize = contentW / size;  // inches per cell
+    // ── Puzzle # subtitle ──
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(149, 133, 192);
+    doc.text(`Puzzle ${pageNum} of ${totalPages}`, W / 2, MARGIN + 0.45, { align: 'center' });
+
+    // ── Grid sizing: leave room for word list below ──
+    const wordListBudget = Math.max(1.2, contentH * 0.22);
     const gridTop  = MARGIN + 0.6;
+    const gridAvail = Math.min(contentW, contentH - 0.6 - wordListBudget);
+    const cellSize  = gridAvail / size;
+    const gridLeft  = MARGIN + (contentW - cellSize * size) / 2;  // center horizontally
 
     doc.setFont('Courier', 'bold');
-    const fontSize = Math.min(10, cellSize * 68); // scale font to cell
-    doc.setFontSize(fontSize);
+    doc.setFontSize(Math.min(11, cellSize * 68));
     doc.setTextColor(26, 10, 60);
 
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        const x = MARGIN + c * cellSize + cellSize / 2;
-        const y = gridTop + r * cellSize + cellSize * 0.72;
+        const x = gridLeft + c * cellSize + cellSize / 2;
+        const y = gridTop  + r * cellSize + cellSize * 0.72;
         doc.text(grid[r][c], x, y, { align: 'center' });
       }
     }
 
-    // ── Grid border (light) ──
-    doc.setDrawColor(196, 181, 253); // --violet-light
+    // ── Grid border ──
+    doc.setDrawColor(196, 181, 253);
     doc.setLineWidth(0.01);
-    // horizontal lines
     for (let r = 0; r <= size; r++) {
       const y = gridTop + r * cellSize;
-      doc.line(MARGIN, y, MARGIN + contentW, y);
+      doc.line(gridLeft, y, gridLeft + cellSize * size, y);
     }
-    // vertical lines
     for (let c = 0; c <= size; c++) {
-      const x = MARGIN + c * cellSize;
-      doc.line(x, gridTop, x, gridTop + size * cellSize);
+      const x = gridLeft + c * cellSize;
+      doc.line(x, gridTop, x, gridTop + cellSize * size);
     }
 
     // ── Word list ──
-    const wordListTop = gridTop + size * cellSize + 0.35;
+    const wordListTop = gridTop + cellSize * size + 0.3;
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(9);
-    doc.setTextColor(91, 75, 138); // --text-mid
+    doc.setTextColor(91, 75, 138);
     doc.text('FIND THESE WORDS', MARGIN, wordListTop);
 
     doc.setFont('Courier', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(26, 10, 60);
 
-    const cols     = 2;
+    const cols     = W < 6 ? 2 : 3;
     const colW     = contentW / cols;
     const lineH    = 0.2;
-    const perCol   = Math.ceil(words.length / cols);
+    const perCol   = Math.ceil(placed.length / cols);
 
-    words.forEach((word, i) => {
+    placed.forEach((word, i) => {
       const col = Math.floor(i / perCol);
       const row = i % perCol;
       const x   = MARGIN + col * colW;
       const y   = wordListTop + 0.22 + row * lineH;
-      if (y < H - MARGIN) {
-        doc.text('• ' + word, x, y);
-      }
+      if (y < H - MARGIN) doc.text('• ' + word, x, y);
     });
 
-    // ── Save ──
-    const filename = title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-word-search.pdf';
-    doc.save(filename);
-    showToast('PDF exported!');
+    // ── Page number footer ──
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(149, 133, 192);
+    doc.text(String(pageNum), W / 2, H - MARGIN + 0.18, { align: 'center' });
   }
 
   /* ════════════════════════════════════════════
@@ -628,7 +731,14 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
     const { error } = await kdp.saveBook({
       title:   currentTitle,
       type:    'word-search',
-      content: { words: currentWords, skipped: skippedWords, gridSize: currentSize, grid: currentGrid }
+      content: {
+        words:    currentWords,
+        skipped:  skippedWords,
+        gridSize: currentSize,
+        grid:     currentGrid,
+        project:  projectSettings,
+        pages:    currentPages.length
+      }
     });
 
     saveBtn.disabled = false;

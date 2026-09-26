@@ -344,7 +344,7 @@ body.ready{visibility:visible;}
           <span class="section-title">Quick Actions</span>
         </div>
         <div class="generator-grid">
-          <a class="gen-card" href="generators/word-search.html">
+          <a class="gen-card" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">
             <div class="gen-icon">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="4" height="4" rx=".8"/><rect x="8" y="2" width="4" height="4" rx=".8"/><rect x="14" y="2" width="4" height="4" rx=".8"/><rect x="2" y="8" width="4" height="4" rx=".8"/><rect x="8" y="8" width="4" height="4" rx=".8"/><rect x="14" y="8" width="4" height="4" rx=".8"/><rect x="2" y="14" width="4" height="4" rx=".8"/><rect x="8" y="14" width="4" height="4" rx=".8"/><rect x="14" y="14" width="4" height="4" rx=".8"/></svg>
             </div>
@@ -352,7 +352,7 @@ body.ready{visibility:visible;}
             <div class="gen-title">Word Search</div>
             <div class="gen-desc">Enter words, pick grid size, export KDP-ready PDF</div>
           </a>
-          <a class="gen-card" href="generators/sudoku.html">
+          <a class="gen-card" href="generators/sudoku.html" data-generator="sudoku" data-generator-name="Sudoku">
             <div class="gen-icon">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg>
             </div>
@@ -375,7 +375,7 @@ body.ready{visibility:visible;}
       <section class="section" id="sec-books">
         <div class="section-header">
           <span class="section-title">My Books</span>
-          <a class="btn-cta" href="generators/word-search.html">
+          <a class="btn-cta" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
             New Book
           </a>
@@ -391,15 +391,15 @@ body.ready{visibility:visible;}
           <span class="section-title">Create New Book</span>
         </div>
         <div class="generator-grid">
-          <a class="gen-card" href="generators/word-search.html">
+          <a class="gen-card" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">
             <div class="gen-icon">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="4" height="4" rx=".8"/><rect x="8" y="2" width="4" height="4" rx=".8"/><rect x="14" y="2" width="4" height="4" rx=".8"/><rect x="2" y="8" width="4" height="4" rx=".8"/><rect x="8" y="8" width="4" height="4" rx=".8"/><rect x="14" y="8" width="4" height="4" rx=".8"/><rect x="2" y="14" width="4" height="4" rx=".8"/><rect x="8" y="14" width="4" height="4" rx=".8"/><rect x="14" y="14" width="4" height="4" rx=".8"/></svg>
             </div>
             <span class="gen-badge">Live</span>
             <div class="gen-title">Word Search Generator</div>
-            <div class="gen-desc">Enter up to 30 words, choose 10×10, 15×15, or 20×20 grid. Export as print-ready 8.5×11 PDF.</div>
+            <div class="gen-desc">Enter up to 30 words, choose 10×10, 15×15, or 20×20 grid. Export as print-ready KDP PDF.</div>
           </a>
-          <a class="gen-card" href="generators/sudoku.html">
+          <a class="gen-card" href="generators/sudoku.html" data-generator="sudoku" data-generator-name="Sudoku">
             <div class="gen-icon">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg>
             </div>
@@ -430,7 +430,7 @@ body.ready{visibility:visible;}
           </div>
           <div class="empty-title">Templates coming in Phase 2</div>
           <p class="empty-body">20+ starter templates per book type — word search, sudoku, journal, planner. One-click apply.</p>
-          <a class="btn-cta" href="generators/word-search.html">Start from scratch →</a>
+          <a class="btn-cta" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">Start from scratch →</a>
         </div>
       </section>
 
@@ -462,6 +462,7 @@ body.ready{visibility:visible;}
         integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
         crossorigin="anonymous"></script>
 <script src="../js/supabase.js"></script>
+<script src="../js/new-project-modal.js"></script>
 <script>
 (async function () {
   /* ── Auth guard ── */
@@ -549,7 +550,7 @@ body.ready{visibility:visible;}
           </div>
           <div class="empty-title">No books yet</div>
           <p class="empty-body">Create your first book using the word search generator and it will appear here.</p>
-          <a class="btn-cta" href="generators/word-search.html">Create your first book →</a>
+          <a class="btn-cta" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">Create your first book →</a>
         </div>`;
       return;
     }
@@ -568,6 +569,21 @@ body.ready{visibility:visible;}
     const { data } = await kdp.listBooks();
     if (data) document.getElementById('statBooks').textContent = data.length;
   })();
+
+  /* ── Intercept generator-card clicks → show New Project modal ── */
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-generator]');
+    if (!trigger) return;
+    e.preventDefault();
+    const generator = trigger.dataset.generator || '';
+    const name      = trigger.dataset.generatorName || '';
+    // Clear any stale settings from a prior aborted flow
+    KDPNewProject.clearSettings();
+    // Remember which generator was picked so the editor can offer it later
+    sessionStorage.setItem('kdp:generator', generator);
+    // Editor is now the main workspace — always land there after Create
+    KDPNewProject.openAndNavigate('editor.html', name ? `My ${name} Book` : '');
+  });
 
 })();
 </script>

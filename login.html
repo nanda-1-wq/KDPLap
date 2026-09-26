@@ -1,254 +1,534 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Log In — KDP Lab</title>
-<meta name="description" content="Log in to KDP Lab and create low-content books for Amazon KDP."/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet"/>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --violet:#7C3AED;--violet-mid:#9D6FEC;--violet-light:#C4B5FD;
-  --violet-pale:#EDE9FE;--violet-glow:rgba(124,58,237,.22);
-  --violet-dim:rgba(124,58,237,.08);--violet-border:rgba(124,58,237,.12);
-  --violet-border-strong:rgba(124,58,237,.25);
-  --white:#fff;--off-white:#F8F7FF;
-  --text:#1A0A3C;--text-mid:#5B4B8A;--text-muted:#9585C0;
-  --shadow-sm:0 2px 16px rgba(124,58,237,.08);
-  --shadow-md:0 8px 40px rgba(124,58,237,.14);
-  --shadow-btn:0 4px 20px rgba(124,58,237,.35);
-  --shadow-btn-hover:0 8px 32px rgba(124,58,237,.45);
-  --gradient-hero-bg:linear-gradient(170deg,#EDE9FE 0%,#F8F7FF 45%,#fff 100%);
-  --gradient-primary:linear-gradient(135deg,#7C3AED 0%,#9D6FEC 100%);
-  --font-display:'JetBrains Mono',monospace;
-  --font-body:'DM Sans',sans-serif;
-}
-body{
-  font-family:var(--font-body);
-  background:var(--gradient-hero-bg);
-  min-height:100vh;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  padding:24px 16px;color:var(--text);
-}
-.logo{display:flex;align-items:center;gap:8px;text-decoration:none;margin-bottom:28px;}
-.logo-icon{width:34px;height:34px;border-radius:9px;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;}
-.logo-icon svg{width:18px;height:18px;fill:white;}
-.logo-name{font-family:var(--font-display);font-size:19px;font-weight:800;color:var(--text);letter-spacing:-0.5px;}
-.logo-name em{font-style:italic;color:var(--violet);}
-.card{
-  width:100%;max-width:420px;
-  background:var(--white);border-radius:20px;
-  box-shadow:var(--shadow-md);border:1px solid var(--violet-border);
-  padding:36px 32px 32px;
-}
-@media(max-width:480px){.card{padding:28px 20px 24px;}}
-.card-title{font-family:var(--font-display);font-size:22px;font-weight:800;letter-spacing:-0.5px;color:var(--text);margin-bottom:4px;}
-.card-sub{font-size:14px;font-weight:400;color:var(--text-muted);margin-bottom:28px;line-height:1.5;}
-.field{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
-.field-label{font-size:11px;font-weight:500;color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;}
-input{
-  font-family:var(--font-body);font-size:14px;color:var(--text);
-  background:var(--white);border:1px solid var(--violet-border-strong);
-  border-radius:10px;padding:11px 14px;outline:none;width:100%;
-  transition:border-color .2s,box-shadow .2s;
-}
-input:focus{border-color:var(--violet);box-shadow:0 0 0 3px rgba(124,58,237,.12);}
-input.error{border-color:#ef4444;}
-input::placeholder{color:var(--text-muted);}
-.err-msg{font-size:11px;color:#ef4444;margin-top:3px;display:none;}
-.err-msg.show{display:block;}
-.pw-wrap{position:relative;}
-.pw-wrap input{padding-right:42px;}
-.pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--text-muted);display:flex;align-items:center;}
-.pw-toggle:hover{color:var(--violet);}
-.pw-toggle svg{width:16px;height:16px;}
-.forgot-link{
-  display:block;text-align:right;margin-top:-8px;margin-bottom:16px;
-  font-size:12px;color:var(--violet);text-decoration:none;font-weight:500;
-}
-.forgot-link:hover{text-decoration:underline;}
-.btn-primary{
-  width:100%;padding:12px;
-  font-family:var(--font-body);font-size:15px;font-weight:500;
-  color:#fff;border:none;cursor:pointer;
-  background:var(--gradient-primary);border-radius:10px;
-  box-shadow:var(--shadow-btn);
-  transition:box-shadow .25s,transform .2s,opacity .2s;
-  position:relative;overflow:hidden;
-}
-.btn-primary::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.1);opacity:0;transition:opacity .2s;}
-.btn-primary:hover{box-shadow:var(--shadow-btn-hover);transform:translateY(-1px);}
-.btn-primary:hover::before{opacity:1;}
-.btn-primary:active{transform:translateY(0);}
-.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none;}
-.alert{border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.5;margin-bottom:16px;display:none;}
-.alert.show{display:block;}
-.alert-error{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;}
-.card-footer{margin-top:22px;text-align:center;font-size:13px;color:var(--text-muted);}
-.card-footer a{color:var(--violet);text-decoration:none;font-weight:500;}
-.card-footer a:hover{text-decoration:underline;}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log In — KDP Lab</title>
+  <meta name="description" content="Log in to KDP Lab and create low-content books for Amazon KDP." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap"
+    rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
 
-/* ── Divider ── */
-.divider{display:flex;align-items:center;gap:10px;margin:18px 0 14px;}
-.divider-line{flex:1;height:1px;background:var(--violet-border);}
-.divider-text{font-size:11px;color:var(--text-muted);white-space:nowrap;}
+    :root {
+      --violet: #7C3AED;
+      --violet-mid: #9D6FEC;
+      --violet-light: #C4B5FD;
+      --violet-pale: #EDE9FE;
+      --violet-glow: rgba(124, 58, 237, .22);
+      --violet-dim: rgba(124, 58, 237, .08);
+      --violet-border: rgba(124, 58, 237, .12);
+      --violet-border-strong: rgba(124, 58, 237, .25);
+      --white: #fff;
+      --off-white: #F8F7FF;
+      --text: #1A0A3C;
+      --text-mid: #5B4B8A;
+      --text-muted: #9585C0;
+      --shadow-sm: 0 2px 16px rgba(124, 58, 237, .08);
+      --shadow-md: 0 8px 40px rgba(124, 58, 237, .14);
+      --shadow-btn: 0 4px 20px rgba(124, 58, 237, .35);
+      --shadow-btn-hover: 0 8px 32px rgba(124, 58, 237, .45);
+      --gradient-hero-bg: linear-gradient(170deg, #EDE9FE 0%, #F8F7FF 45%, #fff 100%);
+      --gradient-primary: linear-gradient(135deg, #7C3AED 0%, #9D6FEC 100%);
+      --font-display: 'JetBrains Mono', monospace;
+      --font-body: 'DM Sans', sans-serif;
+    }
 
-/* ── Social buttons ── */
-.btn-social{
-  width:100%;padding:11px 14px;margin-bottom:10px;
-  font-family:var(--font-body);font-size:14px;font-weight:500;
-  border-radius:10px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  transition:box-shadow .2s,transform .15s;
-}
-.btn-social:last-of-type{margin-bottom:0;}
-.btn-social:active{transform:translateY(0)!important;}
-.btn-social:disabled{opacity:.6;cursor:not-allowed;transform:none!important;}
-.btn-social svg{width:18px;height:18px;flex-shrink:0;}
-.btn-google{background:#fff;color:var(--text);border:1.5px solid #e2e2e2;}
-.btn-google:hover{box-shadow:0 2px 12px rgba(0,0,0,.12);transform:translateY(-1px);}
-</style>
+    body {
+      font-family: var(--font-body);
+      background: var(--gradient-hero-bg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      color: var(--text);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      margin-bottom: 28px;
+    }
+
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--gradient-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg {
+      width: 18px;
+      height: 18px;
+      fill: white;
+    }
+
+    .logo-name {
+      font-family: var(--font-display);
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+
+    .logo-name em {
+      font-style: italic;
+      color: var(--violet);
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--white);
+      border-radius: 20px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--violet-border);
+      padding: 36px 32px 32px;
+    }
+
+    @media(max-width:480px) {
+      .card {
+        padding: 28px 20px 24px;
+      }
+    }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .card-sub {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 16px;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-mid);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+
+    input {
+      font-family: var(--font-body);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--white);
+      border: 1px solid var(--violet-border-strong);
+      border-radius: 10px;
+      padding: 11px 14px;
+      outline: none;
+      width: 100%;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    input:focus {
+      border-color: var(--violet);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
+    }
+
+    input.error {
+      border-color: #ef4444;
+    }
+
+    input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .err-msg {
+      font-size: 11px;
+      color: #ef4444;
+      margin-top: 3px;
+      display: none;
+    }
+
+    .err-msg.show {
+      display: block;
+    }
+
+    .pw-wrap {
+      position: relative;
+    }
+
+    .pw-wrap input {
+      padding-right: 42px;
+    }
+
+    .pw-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+    }
+
+    .pw-toggle:hover {
+      color: var(--violet);
+    }
+
+    .pw-toggle svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .forgot-link {
+      display: block;
+      text-align: right;
+      margin-top: -8px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: var(--violet);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .forgot-link:hover {
+      text-decoration: underline;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 12px;
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 500;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      background: var(--gradient-primary);
+      border-radius: 10px;
+      box-shadow: var(--shadow-btn);
+      transition: box-shadow .25s, transform .2s, opacity .2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, .1);
+      opacity: 0;
+      transition: opacity .2s;
+    }
+
+    .btn-primary:hover {
+      box-shadow: var(--shadow-btn-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:hover::before {
+      opacity: 1;
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .alert {
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .alert.show {
+      display: block;
+    }
+
+    .alert-error {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+    }
+
+    .card-footer {
+      margin-top: 22px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .card-footer a {
+      color: var(--violet);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .card-footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 18px 0 14px;
+    }
+
+    .divider-line {
+      flex: 1;
+      height: 1px;
+      background: var(--violet-border);
+    }
+
+    .divider-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* ── Social buttons ── */
+    .btn-social {
+      width: 100%;
+      padding: 11px 14px;
+      margin-bottom: 10px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: box-shadow .2s, transform .15s;
+    }
+
+    .btn-social:last-of-type {
+      margin-bottom: 0;
+    }
+
+    .btn-social:active {
+      transform: translateY(0) !important;
+    }
+
+    .btn-social:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-social svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .btn-google {
+      background: #fff;
+      color: var(--text);
+      border: 1.5px solid #e2e2e2;
+    }
+
+    .btn-google:hover {
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .12);
+      transform: translateY(-1px);
+    }
+  </style>
 </head>
+
 <body>
 
-<a class="logo" href="landing/index.html">
-  <div class="logo-icon">
-    <svg viewBox="0 0 20 20"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity=".7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity=".5"/></svg>
-  </div>
-  <span class="logo-name">KDP <em>Lab</em></span>
-</a>
-
-<div class="card">
-  <h1 class="card-title">Welcome back</h1>
-  <p class="card-sub">Log in to continue building your KDP books.</p>
-
-  <div class="alert alert-error" id="globalError"></div>
-
-  <form id="loginForm" novalidate>
-    <div class="field">
-      <label class="field-label" for="email">Email</label>
-      <input id="email" type="email" placeholder="jane@example.com" autocomplete="email"/>
-      <span class="err-msg" id="emailErr">Please enter a valid email address.</span>
+  <a class="logo" href="landing/index.html">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20">
+        <rect x="3" y="2" width="8" height="10" rx="1.5" />
+        <rect x="9" y="6" width="8" height="10" rx="1.5" opacity=".7" />
+        <rect x="6" y="10" width="8" height="7" rx="1.5" opacity=".5" />
+      </svg>
     </div>
+    <span class="logo-name">KDP <em>Lab</em></span>
+  </a>
 
-    <div class="field">
-      <label class="field-label" for="password">Password</label>
-      <div class="pw-wrap">
-        <input id="password" type="password" placeholder="Your password" autocomplete="current-password"/>
-        <button type="button" class="pw-toggle" id="pwToggle" aria-label="Toggle password visibility">
-          <svg id="eyeIcon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="10" cy="10" r="2.5"/></svg>
-        </button>
+  <div class="card">
+    <h1 class="card-title">Welcome back</h1>
+    <p class="card-sub">Log in to continue building your KDP books.</p>
+
+    <div class="alert alert-error" id="globalError"></div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label class="field-label" for="email">Email</label>
+        <input id="email" type="email" placeholder="jane@example.com" autocomplete="email" />
+        <span class="err-msg" id="emailErr">Please enter a valid email address.</span>
       </div>
-      <span class="err-msg" id="pwErr">Please enter your password.</span>
+
+      <div class="field">
+        <label class="field-label" for="password">Password</label>
+        <div class="pw-wrap">
+          <input id="password" type="password" placeholder="Your password" autocomplete="current-password" />
+          <button type="button" class="pw-toggle" id="pwToggle" aria-label="Toggle password visibility">
+            <svg id="eyeIcon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round">
+              <path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" />
+              <circle cx="10" cy="10" r="2.5" />
+            </svg>
+          </button>
+        </div>
+        <span class="err-msg" id="pwErr">Please enter your password.</span>
+      </div>
+
+      <a class="forgot-link" href="forgot-password.html">Forgot password?</a>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Log In</button>
+    </form>
+
+    <!-- Social auth -->
+    <div class="divider">
+      <div class="divider-line"></div>
+      <span class="divider-text">— or continue with —</span>
+      <div class="divider-line"></div>
     </div>
 
-    <a class="forgot-link" href="forgot-password.html">Forgot password?</a>
+    <button class="btn-social btn-google" id="googleBtn">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+          fill="#4285F4" />
+        <path
+          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+          fill="#34A853" />
+        <path
+          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+          fill="#FBBC05" />
+        <path
+          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+          fill="#EA4335" />
+      </svg>
+      Continue with Google
+    </button>
 
-    <button type="submit" class="btn-primary" id="submitBtn">Log In</button>
-  </form>
-
-  <!-- Social auth -->
-  <div class="divider">
-    <div class="divider-line"></div>
-    <span class="divider-text">— or continue with —</span>
-    <div class="divider-line"></div>
+    <div class="card-footer">
+      Don't have an account? <a href="signup.html">Sign up free</a>
+    </div>
   </div>
 
-  <button class="btn-social btn-google" id="googleBtn">
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-    </svg>
-    Continue with Google
-  </button>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
+    integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
+    crossorigin="anonymous"></script>
+  <script src="js/supabase.js"></script>
+  <script>
+    (function () {
+      const form = document.getElementById('loginForm');
+      const emailEl = document.getElementById('email');
+      const pwEl = document.getElementById('password');
+      const submitBtn = document.getElementById('submitBtn');
+      const globalErr = document.getElementById('globalError');
+      const pwToggle = document.getElementById('pwToggle');
+      const eyeIcon = document.getElementById('eyeIcon');
 
-  <div class="card-footer">
-    Don't have an account? <a href="signup.html">Sign up free</a>
-  </div>
-</div>
+      pwToggle.addEventListener('click', () => {
+        const isHidden = pwEl.type === 'password';
+        pwEl.type = isHidden ? 'text' : 'password';
+        eyeIcon.innerHTML = isHidden
+          ? '<path d="M17.94 17.94A10 10 0 0112 20c-5.5 0-9-6-9-6a18.4 18.4 0 015.06-5.06M9.9 4.24A9 9 0 0112 4c5.5 0 9 6 9 6a18.4 18.4 0 01-2.16 2.84M1 1l22 22"/><circle cx="12" cy="12" r="2.5"/>'
+          : '<path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="10" cy="10" r="2.5"/>';
+      });
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
-        integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
-        crossorigin="anonymous"></script>
-<script src="js/supabase.js"></script>
-<script>
-(function () {
-  const form     = document.getElementById('loginForm');
-  const emailEl  = document.getElementById('email');
-  const pwEl     = document.getElementById('password');
-  const submitBtn= document.getElementById('submitBtn');
-  const globalErr= document.getElementById('globalError');
-  const pwToggle = document.getElementById('pwToggle');
-  const eyeIcon  = document.getElementById('eyeIcon');
+      function setGlobal(msg) { globalErr.textContent = msg; globalErr.classList.add('show'); }
+      function clearGlobal() { globalErr.classList.remove('show'); }
 
-  pwToggle.addEventListener('click', () => {
-    const isHidden = pwEl.type === 'password';
-    pwEl.type = isHidden ? 'text' : 'password';
-    eyeIcon.innerHTML = isHidden
-      ? '<path d="M17.94 17.94A10 10 0 0112 20c-5.5 0-9-6-9-6a18.4 18.4 0 015.06-5.06M9.9 4.24A9 9 0 0112 4c5.5 0 9 6 9 6a18.4 18.4 0 01-2.16 2.84M1 1l22 22"/><circle cx="12" cy="12" r="2.5"/>'
-      : '<path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="10" cy="10" r="2.5"/>';
-  });
+      // Social OAuth
+      const redirectTo = `${location.origin}/app/dashboard.html`;
 
-  function setGlobal(msg){ globalErr.textContent = msg; globalErr.classList.add('show'); }
-  function clearGlobal(){ globalErr.classList.remove('show'); }
+      document.getElementById('googleBtn').addEventListener('click', async function () {
+        const btn = this;
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.textContent = 'Redirecting…';
+        const { error } = await window.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+        if (error) { setGlobal(error.message); btn.disabled = false; btn.innerHTML = orig; }
+      });
 
-  // Social OAuth
-  const redirectTo = `${location.origin}/app/dashboard.html`;
+      function showErr(el, msgEl) { el.classList.add('error'); msgEl.classList.add('show'); }
+      function clearErr(el, msgEl) { el.classList.remove('error'); msgEl.classList.remove('show'); }
 
-  document.getElementById('googleBtn').addEventListener('click', async function () {
-    const btn = this;
-    const orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.textContent = 'Redirecting…';
-    const { error } = await window.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
-    if (error) { setGlobal(error.message); btn.disabled = false; btn.innerHTML = orig; }
-  });
+      emailEl.addEventListener('input', () => clearErr(emailEl, document.getElementById('emailErr')));
+      pwEl.addEventListener('input', () => clearErr(pwEl, document.getElementById('pwErr')));
 
-  function showErr(el, msgEl){ el.classList.add('error'); msgEl.classList.add('show'); }
-  function clearErr(el, msgEl){ el.classList.remove('error'); msgEl.classList.remove('show'); }
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearGlobal();
+        let valid = true;
 
-  emailEl.addEventListener('input', () => clearErr(emailEl, document.getElementById('emailErr')));
-  pwEl.addEventListener('input',    () => clearErr(pwEl,    document.getElementById('pwErr')));
+        const email = emailEl.value.trim();
+        const pw = pwEl.value;
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    clearGlobal();
-    let valid = true;
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showErr(emailEl, document.getElementById('emailErr')); valid = false;
+        }
+        if (!pw) {
+          showErr(pwEl, document.getElementById('pwErr')); valid = false;
+        }
+        if (!valid) return;
 
-    const email = emailEl.value.trim();
-    const pw    = pwEl.value;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Logging in…';
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showErr(emailEl, document.getElementById('emailErr')); valid = false;
-    }
-    if (!pw) {
-      showErr(pwEl, document.getElementById('pwErr')); valid = false;
-    }
-    if (!valid) return;
+        const { data, error } = await kdp.signIn(email, pw);
 
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Logging in…';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Log In';
 
-    const { data, error } = await kdp.signIn(email, pw);
+        if (error) {
+          setGlobal(error.message === 'Invalid login credentials'
+            ? 'Incorrect email or password. Please try again.'
+            : error.message);
+          return;
+        }
 
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Log In';
-
-    if (error) {
-      setGlobal(error.message === 'Invalid login credentials'
-        ? 'Incorrect email or password. Please try again.'
-        : error.message);
-      return;
-    }
-
-    location.href = 'app/dashboard.html';
-  });
-})();
-</script>
+        location.href = 'app/dashboard.html';
+      });
+    })();
+  </script>
 </body>
+
 </html>
