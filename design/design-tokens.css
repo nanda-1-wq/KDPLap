@@ -1,0 +1,42 @@
+/* KDP Lab design tokens · v1 · approved Step D (D1 colors, D2 logo)
+   Single source of truth for the app. Claude Code reads this file in Step E. */
+:root {
+  /* Base: ink on paper (all UI) */
+  --ink: #1C1C1A;          /* text, primary buttons */
+  --ink-2: #3D3D39;        /* body text on white, nav items */
+  --graphite: #55554F;     /* secondary text, labels (7:1 on white) */
+  --muted: #75756F;        /* disabled text, future-version labels */
+  --stone: #D9D9D5;        /* borders */
+  --stone-2: #B8B8B3;      /* dashed placeholders, soft borders */
+  --mist: #E6E6E2;         /* active nav item, chips, tracks */
+  --paper: #F3F3F1;        /* page background */
+  --surface: #FFFFFF;      /* cards, inputs, dialogs */
+  --surface-2: #F8F8F6;    /* side panels, tree background */
+
+  /* Functional: meaning only, small areas, always with icon + word */
+  --danger: #B42318;   --danger-bg: #FDECEA;   /* 6.6:1 on white */
+  --success: #1E7A46;  --success-bg: #E7F4EC;  /* 5.4:1 on white */
+  --warning: #8A5A00;  --warning-bg: #FDF3DC;  /* 5.9:1 on white */
+
+  /* Brand: logo and landing page ONLY, never inside the app UI */
+  --brand-navy: #14213D;
+  --brand-blue: #2E6AE6;
+
+  /* Type */
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-label: "IBM Plex Mono", ui-monospace, monospace;
+  --font-read: "Source Serif 4", Georgia, serif;   /* editor only */
+  --text-xs: 12px;  --text-sm: 13px;  --text-md: 14px;  --text-base: 15px;
+  --text-lg: 16px;  --text-xl: 18px;  --text-2xl: 22px; --text-3xl: 28px; --text-4xl: 30px;
+  --text-read: 18px; --leading-read: 1.75;
+
+  /* Space (4px grid) */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+
+  /* Shape */
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 10px; --radius-xl: 12px;
+  --radius-2xl: 16px; --radius-pill: 999px;
+  --control-h: 44px;       /* minimum touch target */
+  --shadow-menu: 0 8px 24px rgba(28, 28, 26, 0.12);  /* menus only */
+}
