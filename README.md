@@ -1,6 +1,6 @@
 # KDP Lab
 
-**Create low-content books for Amazon KDP in minutes.**
+KDP Lab is being rebuilt as an AI studio for nonfiction books. It will help you validate a topic, plan the book, and write it chapter by chapter. The old low-content features (puzzle books, journals, planners) are archived, and the notes below describe that archived version.
 
 > Live site: [https://nanda-1-wq.github.io/KDPLap/](https://nanda-1-wq.github.io/KDPLap/)
 

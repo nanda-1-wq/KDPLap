@@ -40,3 +40,36 @@
   --control-h: 44px;       /* minimum touch target */
   --shadow-menu: 0 8px 24px rgba(28, 28, 26, 0.12);  /* menus only */
 }
+
+/* Landing theme: landing page ONLY (brand navy and blue allowed here).
+   Light values come from the base palette. Dark switches with the OS setting. */
+:root {
+  --lp-bg: var(--paper);
+  --lp-text: var(--ink);            /* pill links */
+  --lp-heading: var(--brand-navy);  /* h1, feature titles, chip text, icons */
+  --lp-text-2: var(--graphite);     /* lead text, notes, footer */
+  --lp-border: var(--stone);
+  --lp-chip: var(--mist);           /* status chip, icon tiles */
+  --lp-accent: var(--brand-blue);   /* status dot, "LAB" */
+  --lp-cta-bg: var(--brand-navy);
+  --lp-cta-text: #FFFFFF;
+  --lp-logo: var(--brand-navy);
+  --lp-logo-cut: #FFFFFF;
+  --lp-focus: var(--ink);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lp-bg: #0C1424;
+    --lp-text: #F3F3F1;
+    --lp-heading: #FFFFFF;
+    --lp-text-2: #AEB8CC;
+    --lp-border: #26324F;
+    --lp-chip: #1C2A4A;
+    --lp-accent: #7FA6F2;
+    --lp-cta-bg: #7FA6F2;
+    --lp-cta-text: #0C1424;
+    --lp-logo: #FFFFFF;
+    --lp-logo-cut: #0C1424;
+    --lp-focus: #FFFFFF;
+  }
+}
