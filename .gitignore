@@ -11,3 +11,7 @@ KDP referance/
 .env
 .env.test
 .env.*.local
+
+# Private notes and local tooling
+KDP-Lab-Project-Brief.md
+.claude/skills/
