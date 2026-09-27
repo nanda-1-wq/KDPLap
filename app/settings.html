@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings · KDP Lab</title>
+  <link rel="icon" href="../design/logo/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../design/design-tokens.css" />
+  <link rel="stylesheet" href="../css/app.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" data-shell></aside>
+
+    <main class="app-main">
+      <header class="page-head">
+        <div>
+          <h1>Settings</h1>
+          <p>Your account and defaults.</p>
+        </div>
+      </header>
+
+      <div class="center-state">
+        <div class="state-box">
+          <div class="state-icon" aria-hidden="true" data-icon="settings"></div>
+          <div class="chip-label">COMING IN E11</div>
+          <h2>Settings are on their way</h2>
+          <p>This page is built in task E11, with your defaults and AI usage.</p>
+            <p class="account-line">Signed in as <strong id="accountEmail"></strong></p>
+            <div class="state-actions">
+              <button type="button" class="btn btn-secondary" id="logoutBtn">Log out</button>
+            </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
+    integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
+    crossorigin="anonymous"></script>
+  <script src="../js/supabase.js"></script>
+  <script src="../js/shell.js"></script>
+  <script>
+  (async function () {
+    const user = await kdpShell.init({ active: 'settings' });
+    if (!user) return;
+    document.querySelector('[data-icon]').innerHTML = kdpShell.icon('settings', 26);
+    document.getElementById('accountEmail').textContent = user.email || '';
+    const logoutBtn = document.getElementById('logoutBtn');
+    logoutBtn.addEventListener('click', async () => {
+      logoutBtn.disabled = true;
+      logoutBtn.textContent = 'Logging out…';
+      await kdp.signOut();
+      location.replace('../login.html');
+    });
+  })();
+  </script>
+</body>
+</html>

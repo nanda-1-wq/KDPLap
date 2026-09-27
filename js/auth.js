@@ -71,10 +71,15 @@
     });
   }
 
-  /** Already signed in: skip the form. */
+  /** Already signed in: skip the form. Otherwise reveal it (see auth-checking in the page head). */
   async function redirectIfSignedIn() {
-    const session = await kdp.getSession();
-    if (session) location.replace(DASHBOARD);
+    let session = null;
+    try { session = await kdp.getSession(); } catch (e) { /* show the form */ }
+    if (session) {
+      location.replace(DASHBOARD);
+      return;
+    }
+    document.documentElement.classList.remove('auth-checking');
   }
 
   /* ── UI states ────────────────────────────────── */

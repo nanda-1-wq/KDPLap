@@ -96,11 +96,41 @@ window.kdp = {
     return { error };
   },
 
+  /** Books for the Books page, with pen name, brief length, and chapter targets. One query. */
   async listBooks() {
     return window.sb
       .from('books')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select(`id, title, subtitle, status, current_step, updated_at,
+               pen_names ( name ),
+               book_briefs ( length_range ),
+               chapters ( word_target, needs_review )`)
+      .order('updated_at', { ascending: false });
+  },
+
+  /** Tokens used since the 1st of this month (counted AI calls only). */
+  async getMonthUsage() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const { data, error } = await window.sb
+      .from('ai_usage')
+      .select('input_tokens, output_tokens')
+      .eq('counted', true)
+      .gte('created_at', monthStart);
+    if (error) return { tokens: 0, error };
+    const tokens = data.reduce((sum, r) => sum + r.input_tokens + r.output_tokens, 0);
+    return { tokens, error: null };
+  },
+
+  /** The user's settings row. Created with defaults on first visit. */
+  async ensureUserSettings(userId) {
+    const read = () => window.sb.from('user_settings').select('*').maybeSingle();
+    const { data, error } = await read();
+    if (error || data) return { data, error };
+    // Missing: insert a row with the table defaults. If another tab created it
+    // first (duplicate key 23505), just read it again.
+    const ins = await window.sb.from('user_settings').insert({ user_id: userId });
+    if (ins.error && ins.error.code !== '23505') return { data: null, error: ins.error };
+    return read();
   },
 
   async deleteBook(id) {

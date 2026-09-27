@@ -1,591 +1,295 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Dashboard — KDP Lab</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet"/>
-<style>
-/* ── Reset & Tokens ── */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --violet:#7C3AED;--violet-mid:#9D6FEC;--violet-light:#C4B5FD;
-  --violet-pale:#EDE9FE;--violet-dim:rgba(124,58,237,.08);
-  --violet-border:rgba(124,58,237,.12);--violet-border-strong:rgba(124,58,237,.22);
-  --white:#fff;--off-white:#F8F7FF;
-  --text:#1A0A3C;--text-mid:#5B4B8A;--text-muted:#9585C0;
-  --shadow-sm:0 2px 16px rgba(124,58,237,.08);
-  --shadow-md:0 8px 40px rgba(124,58,237,.14);
-  --shadow-btn:0 4px 20px rgba(124,58,237,.35);
-  --shadow-btn-hover:0 8px 32px rgba(124,58,237,.45);
-  --gradient-primary:linear-gradient(135deg,#7C3AED 0%,#9D6FEC 100%);
-  --gradient-cta:linear-gradient(135deg,#7C3AED 0%,#5B21B6 100%);
-  --font-display:'JetBrains Mono',monospace;
-  --font-body:'DM Sans',sans-serif;
-  --sidebar-w:230px;
-  --topbar-h:60px;
-}
-
-/* ── Body guard: hidden until auth check passes ── */
-body{
-  font-family:var(--font-body);
-  background:var(--off-white);color:var(--text);
-  visibility:hidden;
-}
-body.ready{visibility:visible;}
-
-/* ── Layout ── */
-.layout{display:flex;min-height:100vh;}
-
-/* ── Sidebar ── */
-.sidebar{
-  width:var(--sidebar-w);
-  background:var(--white);
-  border-right:1px solid var(--violet-border);
-  display:flex;flex-direction:column;
-  position:fixed;top:0;left:0;bottom:0;
-  z-index:100;
-  transition:transform .25s ease;
-}
-.sidebar-logo{
-  height:var(--topbar-h);display:flex;align-items:center;gap:8px;
-  padding:0 20px;border-bottom:1px solid var(--violet-border);
-  text-decoration:none;
-}
-.logo-icon{
-  width:30px;height:30px;border-radius:8px;
-  background:var(--gradient-primary);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-}
-.logo-icon svg{width:16px;height:16px;fill:white;}
-.logo-name{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);letter-spacing:-0.5px;}
-.logo-name em{font-style:italic;color:var(--violet);}
-
-.sidebar-nav{flex:1;padding:16px 12px;display:flex;flex-direction:column;gap:2px;}
-.nav-item{
-  display:flex;align-items:center;gap:10px;
-  padding:9px 12px;border-radius:10px;
-  font-size:14px;font-weight:500;color:var(--text-mid);
-  cursor:pointer;text-decoration:none;
-  transition:background .15s,color .15s;
-  border:none;background:none;width:100%;text-align:left;
-}
-.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:.7;}
-.nav-item:hover{background:var(--violet-dim);color:var(--violet);}
-.nav-item:hover svg{opacity:1;}
-.nav-item.active{background:var(--violet-pale);color:var(--violet);font-weight:600;}
-.nav-item.active svg{opacity:1;}
-
-.sidebar-bottom{padding:16px 12px;border-top:1px solid var(--violet-border);}
-.user-row{display:flex;align-items:center;gap:8px;padding:8px 12px;}
-.user-avatar{
-  width:30px;height:30px;border-radius:50%;
-  background:var(--gradient-primary);
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;
-}
-.user-avatar span{color:#fff;font-size:12px;font-weight:700;font-family:var(--font-display);}
-.user-info{flex:1;min-width:0;}
-.user-email{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-
-/* ── Main area ── */
-.main{
-  margin-left:var(--sidebar-w);
-  flex:1;display:flex;flex-direction:column;min-height:100vh;
-}
-
-/* ── Top bar ── */
-.topbar{
-  height:var(--topbar-h);
-  background:rgba(255,255,255,.92);
-  backdrop-filter:blur(16px);
-  border-bottom:1px solid var(--violet-border);
-  display:flex;align-items:center;justify-content:space-between;
-  padding:0 28px;
-  position:sticky;top:0;z-index:50;
-}
-.topbar-left{display:flex;align-items:center;gap:12px;}
-.hamburger{
-  display:none;background:none;border:none;cursor:pointer;
-  padding:6px;border-radius:8px;color:var(--text-mid);
-}
-.hamburger:hover{background:var(--violet-dim);color:var(--violet);}
-.hamburger svg{width:20px;height:20px;}
-.page-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text);}
-
-.topbar-right{display:flex;align-items:center;gap:12px;}
-.user-email-top{font-size:13px;color:var(--text-muted);}
-.btn-logout{
-  font-family:var(--font-body);font-size:13px;font-weight:500;
-  color:var(--text-mid);background:none;border:1px solid var(--violet-border);
-  border-radius:8px;padding:6px 14px;cursor:pointer;
-  transition:background .15s,color .15s,border-color .15s;
-}
-.btn-logout:hover{background:var(--violet-dim);color:var(--violet);border-color:var(--violet-border-strong);}
-
-/* ── Content ── */
-.content{flex:1;padding:32px 28px;}
-
-/* ── Sections ── */
-.section{display:none;}
-.section.active{display:block;}
-
-/* ── Empty state ── */
-.empty-state{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;padding:80px 24px;gap:16px;
-}
-.empty-icon{
-  width:72px;height:72px;border-radius:20px;
-  background:var(--violet-pale);
-  display:flex;align-items:center;justify-content:center;
-  margin-bottom:4px;
-}
-.empty-icon svg{width:32px;height:32px;color:var(--violet);}
-.empty-title{font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--text);}
-.empty-body{font-size:14px;color:var(--text-muted);max-width:320px;line-height:1.6;}
-.btn-cta{
-  display:inline-flex;align-items:center;gap:6px;
-  font-family:var(--font-body);font-size:14px;font-weight:500;
-  color:#fff;background:var(--gradient-primary);
-  border:none;border-radius:10px;padding:10px 20px;
-  cursor:pointer;text-decoration:none;
-  box-shadow:var(--shadow-btn);
-  transition:box-shadow .25s,transform .2s;
-}
-.btn-cta:hover{box-shadow:var(--shadow-btn-hover);transform:translateY(-1px);}
-.btn-cta svg{width:14px;height:14px;}
-
-/* ── Dashboard stats row ── */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:28px;}
-.stat-card{
-  background:var(--white);border-radius:14px;
-  border:1px solid var(--violet-border);
-  padding:20px;display:flex;flex-direction:column;gap:4px;
-}
-.stat-label{font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;}
-.stat-value{font-family:var(--font-display);font-size:26px;font-weight:800;color:var(--text);}
-.stat-sub{font-size:12px;color:var(--text-muted);}
-
-/* ── Book cards ── */
-.books-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:8px;}
-.book-card{
-  background:var(--white);border-radius:14px;
-  border:1px solid var(--violet-border);
-  padding:20px;display:flex;flex-direction:column;gap:8px;
-  transition:box-shadow .2s,transform .2s;
-}
-.book-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-2px);}
-.book-type-badge{
-  display:inline-flex;align-items:center;gap:5px;
-  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;
-  color:var(--violet);background:var(--violet-pale);
-  padding:3px 9px;border-radius:999px;
-  width:fit-content;
-}
-.book-title{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--text);line-height:1.3;}
-.book-date{font-size:11px;color:var(--text-muted);}
-
-/* ── Section header ── */
-.section-header{
-  display:flex;align-items:center;justify-content:space-between;
-  margin-bottom:24px;flex-wrap:wrap;gap:12px;
-}
-.section-title{font-family:var(--font-display);font-size:20px;font-weight:800;color:var(--text);}
-
-/* ── Create new cards ── */
-.generator-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;}
-.gen-card{
-  background:var(--white);border-radius:16px;
-  border:1px solid var(--violet-border);
-  padding:24px 20px;display:flex;flex-direction:column;gap:10px;
-  text-decoration:none;
-  transition:box-shadow .2s,transform .2s,border-color .2s;
-}
-.gen-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-2px);border-color:var(--violet-border-strong);}
-.gen-icon{
-  width:44px;height:44px;border-radius:12px;
-  background:var(--violet-pale);
-  display:flex;align-items:center;justify-content:center;
-}
-.gen-icon svg{width:20px;height:20px;color:var(--violet);}
-.gen-title{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--text);}
-.gen-desc{font-size:12px;color:var(--text-muted);line-height:1.5;}
-.gen-badge{
-  display:inline-block;font-size:9px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.7px;
-  padding:2px 7px;border-radius:999px;
-  background:#dcfce7;color:#166534;width:fit-content;
-}
-.gen-badge.soon{background:#fef9c3;color:#713f12;}
-
-/* ── Loading spinner ── */
-.spinner{
-  width:20px;height:20px;border:2px solid var(--violet-pale);
-  border-top-color:var(--violet);border-radius:50%;
-  animation:spin .7s linear infinite;
-  margin:0 auto;
-}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-/* ── Overlay for mobile sidebar ── */
-.sidebar-overlay{
-  display:none;position:fixed;inset:0;
-  background:rgba(0,0,0,.35);z-index:99;
-}
-.sidebar-overlay.show{display:block;}
-
-/* ── Responsive ── */
-@media(max-width:768px){
-  .sidebar{transform:translateX(-100%);}
-  .sidebar.open{transform:translateX(0);}
-  .main{margin-left:0;}
-  .hamburger{display:flex;}
-  .user-email-top{display:none;}
-  .content{padding:20px 16px;}
-  .topbar{padding:0 16px;}
-}
-@media(max-width:480px){
-  .stats-row{grid-template-columns:1fr 1fr;}
-  .generator-grid{grid-template-columns:1fr 1fr;}
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Books · KDP Lab</title>
+  <link rel="icon" href="../design/logo/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../design/design-tokens.css" />
+  <link rel="stylesheet" href="../css/app.css" />
 </head>
 <body>
+  <div class="app">
+    <aside class="sidebar" data-shell></aside>
 
-<!-- Sidebar overlay (mobile) -->
-<div class="sidebar-overlay" id="sidebarOverlay"></div>
-
-<div class="layout">
-  <!-- ── Sidebar ── -->
-  <aside class="sidebar" id="sidebar">
-    <a class="sidebar-logo" href="../landing/index.html">
-      <div class="logo-icon">
-        <svg viewBox="0 0 20 20"><rect x="3" y="2" width="8" height="10" rx="1.5"/><rect x="9" y="6" width="8" height="10" rx="1.5" opacity=".7"/><rect x="6" y="10" width="8" height="7" rx="1.5" opacity=".5"/></svg>
-      </div>
-      <span class="logo-name">KDP <em>Lab</em></span>
-    </a>
-
-    <nav class="sidebar-nav" id="sidebarNav">
-      <button class="nav-item active" data-section="dashboard">
-        <svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
-        Dashboard
-      </button>
-      <button class="nav-item" data-section="books">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="4" y="2" width="12" height="16" rx="2"/><line x1="7" y1="7" x2="13" y2="7"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="7" y1="13" x2="11" y2="13"/></svg>
-        My Books
-      </button>
-      <button class="nav-item" data-section="create">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><line x1="10" y1="6" x2="10" y2="14"/><line x1="6" y1="10" x2="14" y2="10"/></svg>
-        Create New
-      </button>
-      <button class="nav-item" data-section="templates">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="16" height="5" rx="1.5"/><rect x="2" y="9" width="7" height="9" rx="1.5"/><rect x="11" y="9" width="7" height="9" rx="1.5"/></svg>
-        Templates
-      </button>
-      <button class="nav-item" data-section="settings">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="2.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"/></svg>
-        Settings
-      </button>
-    </nav>
-
-    <div class="sidebar-bottom">
-      <div class="user-row">
-        <div class="user-avatar"><span id="userInitial">?</span></div>
-        <div class="user-info">
-          <div class="user-email" id="sidebarEmail">Loading…</div>
+    <main class="app-main" id="main">
+      <header class="page-head">
+        <div>
+          <h1>Books</h1>
+          <p id="subtitle">Pick up where you left off.</p>
         </div>
-      </div>
-    </div>
-  </aside>
+        <label class="search" id="searchBox">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <input type="search" id="search" placeholder="Search books" aria-label="Search books" autocomplete="off" />
+        </label>
+      </header>
 
-  <!-- ── Main ── -->
-  <div class="main">
-    <!-- Top bar -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
-        </button>
-        <span class="page-title" id="pageTitle">Dashboard</span>
-      </div>
-      <div class="topbar-right">
-        <span class="user-email-top" id="topbarEmail">…</span>
-        <button class="btn-logout" id="logoutBtn">Log out</button>
-      </div>
-    </header>
+      <!-- Filled by the script: loading, list, empty, or error -->
+      <div id="view" class="view" aria-live="polite"></div>
+    </main>
+  </div>
 
-    <!-- Sections -->
-    <div class="content">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
+    integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
+    crossorigin="anonymous"></script>
+  <script src="../js/supabase.js"></script>
+  <script src="../js/shell.js"></script>
+  <script>
+  (async function () {
+    const view = document.getElementById('view');
+    const searchBox = document.getElementById('searchBox');
+    const searchEl = document.getElementById('search');
+    const subtitle = document.getElementById('subtitle');
 
-      <!-- ── Dashboard overview ── -->
-      <section class="section active" id="sec-dashboard">
-        <div class="stats-row">
-          <div class="stat-card">
-            <span class="stat-label">Books Created</span>
-            <span class="stat-value" id="statBooks">—</span>
-            <span class="stat-sub">all time</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Generators</span>
-            <span class="stat-value">1</span>
-            <span class="stat-sub">word search ready</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Plan</span>
-            <span class="stat-value" style="font-size:18px">Free</span>
-            <span class="stat-sub">up to 3 books / mo</span>
-          </div>
-        </div>
+    const STEPS = {
+      1: ['Plan', '01 Brief'], 2: ['Plan', '02 Research'], 3: ['Plan', '03 Positioning'], 4: ['Plan', '04 Title'],
+      5: ['Produce', '05 Outline'], 6: ['Write', '06 Write'], 7: ['Produce', '07 Quality Control'],
+      8: ['Package', '08 Format'], 9: ['Package', '09 Cover'], 10: ['Release', '10 Metadata'], 11: ['Release', '11 Publish']
+    };
+    const LENGTH_RANGES = {
+      '5-8k': [5000, 8000], '8-12k': [8000, 12000], '12-20k': [12000, 20000], '20-30k': [20000, 30000], '30k+': [30000, null]
+    };
+    const WARN_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
 
-        <div class="section-header">
-          <span class="section-title">Quick Actions</span>
-        </div>
-        <div class="generator-grid">
-          <a class="gen-card" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">
-            <div class="gen-icon">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="4" height="4" rx=".8"/><rect x="8" y="2" width="4" height="4" rx=".8"/><rect x="14" y="2" width="4" height="4" rx=".8"/><rect x="2" y="8" width="4" height="4" rx=".8"/><rect x="8" y="8" width="4" height="4" rx=".8"/><rect x="14" y="8" width="4" height="4" rx=".8"/><rect x="2" y="14" width="4" height="4" rx=".8"/><rect x="8" y="14" width="4" height="4" rx=".8"/><rect x="14" y="14" width="4" height="4" rx=".8"/></svg>
-            </div>
-            <span class="gen-badge">Live</span>
-            <div class="gen-title">Word Search</div>
-            <div class="gen-desc">Enter words, pick grid size, export KDP-ready PDF</div>
-          </a>
-          <a class="gen-card" href="generators/sudoku.html" data-generator="sudoku" data-generator-name="Sudoku">
-            <div class="gen-icon">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg>
-            </div>
-            <span class="gen-badge">Live</span>
-            <div class="gen-title">Sudoku</div>
-            <div class="gen-desc">Easy, medium, hard difficulty with solution page</div>
-          </a>
-          <div class="gen-card" style="opacity:.6;cursor:not-allowed;">
-            <div class="gen-icon" style="background:#f3f4f6;">
-              <svg viewBox="0 0 20 20" fill="none" stroke="#9ca3af" stroke-width="1.6" stroke-linecap="round"><rect x="4" y="2" width="12" height="16" rx="2"/><line x1="7" y1="7" x2="13" y2="7"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="7" y1="13" x2="11" y2="13"/></svg>
-            </div>
-            <span class="gen-badge soon">Coming soon</span>
-            <div class="gen-title">Journal</div>
-            <div class="gen-desc">Lined, dot grid, and blank page journals</div>
-          </div>
-        </div>
-      </section>
+    let books = [];
+    let filter = 'all';
+    let query = '';
 
-      <!-- ── My Books ── -->
-      <section class="section" id="sec-books">
-        <div class="section-header">
-          <span class="section-title">My Books</span>
-          <a class="btn-cta" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
-            New Book
-          </a>
-        </div>
-        <div id="booksContainer">
-          <div class="spinner" style="margin-top:40px;"></div>
-        </div>
-      </section>
+    /* ── Helpers ─────────────────────────────── */
 
-      <!-- ── Create New ── -->
-      <section class="section" id="sec-create">
-        <div class="section-header">
-          <span class="section-title">Create New Book</span>
-        </div>
-        <div class="generator-grid">
-          <a class="gen-card" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">
-            <div class="gen-icon">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="2" width="4" height="4" rx=".8"/><rect x="8" y="2" width="4" height="4" rx=".8"/><rect x="14" y="2" width="4" height="4" rx=".8"/><rect x="2" y="8" width="4" height="4" rx=".8"/><rect x="8" y="8" width="4" height="4" rx=".8"/><rect x="14" y="8" width="4" height="4" rx=".8"/><rect x="2" y="14" width="4" height="4" rx=".8"/><rect x="8" y="14" width="4" height="4" rx=".8"/><rect x="14" y="14" width="4" height="4" rx=".8"/></svg>
-            </div>
-            <span class="gen-badge">Live</span>
-            <div class="gen-title">Word Search Generator</div>
-            <div class="gen-desc">Enter up to 30 words, choose 10×10, 15×15, or 20×20 grid. Export as print-ready KDP PDF.</div>
-          </a>
-          <a class="gen-card" href="generators/sudoku.html" data-generator="sudoku" data-generator-name="Sudoku">
-            <div class="gen-icon">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg>
-            </div>
-            <span class="gen-badge">Live</span>
-            <div class="gen-title">Sudoku Generator</div>
-            <div class="gen-desc">Auto-fill easy / medium / hard grids with solution page.</div>
-          </a>
-          <div class="gen-card" style="opacity:.55;cursor:not-allowed;">
-            <div class="gen-icon" style="background:#f3f4f6;"><svg viewBox="0 0 20 20" fill="none" stroke="#9ca3af" stroke-width="1.6"><path d="M6 6h8M6 10h8M6 14h4"/><rect x="3" y="2" width="14" height="16" rx="2"/></svg></div>
-            <span class="gen-badge soon">Phase 2</span>
-            <div class="gen-title">Crossword Generator</div>
-            <div class="gen-desc">Clue/answer input → auto-layout crossword grid.</div>
-          </div>
-          <div class="gen-card" style="opacity:.55;cursor:not-allowed;">
-            <div class="gen-icon" style="background:#f3f4f6;"><svg viewBox="0 0 20 20" fill="none" stroke="#9ca3af" stroke-width="1.6"><rect x="4" y="2" width="12" height="16" rx="2"/><line x1="7" y1="7" x2="13" y2="7"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="7" y1="13" x2="11" y2="13"/></svg></div>
-            <span class="gen-badge soon">Phase 2</span>
-            <div class="gen-title">Journal Creator</div>
-            <div class="gen-desc">Lined, dot grid, blank pages with KDP margins.</div>
-          </div>
-        </div>
-      </section>
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => n.toLocaleString('en-US');
+    const one = (rel) => (Array.isArray(rel) ? rel[0] : rel) || null;   // to-one embeds may come as object or array
 
-      <!-- ── Templates ── -->
-      <section class="section" id="sec-templates">
-        <div class="empty-state">
-          <div class="empty-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
-          </div>
-          <div class="empty-title">Templates coming in Phase 2</div>
-          <p class="empty-body">20+ starter templates per book type — word search, sudoku, journal, planner. One-click apply.</p>
-          <a class="btn-cta" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">Start from scratch →</a>
-        </div>
-      </section>
-
-      <!-- ── Settings ── -->
-      <section class="section" id="sec-settings">
-        <div class="section-header">
-          <span class="section-title">Settings</span>
-        </div>
-        <div style="background:var(--white);border-radius:16px;border:1px solid var(--violet-border);padding:28px;max-width:480px;">
-          <div style="margin-bottom:20px;">
-            <div style="font-size:11px;font-weight:500;color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Account Email</div>
-            <div id="settingsEmail" style="font-size:14px;color:var(--text);font-weight:500;">…</div>
-          </div>
-          <div style="padding-top:20px;border-top:1px solid var(--violet-border);">
-            <div style="font-size:11px;font-weight:500;color:var(--text-mid);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Plan</div>
-            <div style="font-size:14px;color:var(--text);font-weight:500;">Free — up to 3 books / month</div>
-          </div>
-          <div style="padding-top:20px;margin-top:20px;border-top:1px solid var(--violet-border);">
-            <button class="btn-logout" id="settingsLogout" style="color:#ef4444;border-color:rgba(239,68,68,.25);">Log out of KDP Lab</button>
-          </div>
-        </div>
-      </section>
-
-    </div><!-- /content -->
-  </div><!-- /main -->
-</div><!-- /layout -->
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
-        integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
-        crossorigin="anonymous"></script>
-<script src="../js/supabase.js"></script>
-<script src="../js/new-project-modal.js"></script>
-<script>
-(async function () {
-  /* ── Auth guard ── */
-  const user = await kdp.requireAuth('../login.html');
-  if (!user) return;
-
-  /* ── Reveal page ── */
-  document.body.classList.add('ready');
-
-  /* ── Populate user info ── */
-  const email   = user.email || '';
-  const initial = email.charAt(0).toUpperCase();
-  document.getElementById('userInitial').textContent  = initial;
-  document.getElementById('sidebarEmail').textContent = email;
-  document.getElementById('topbarEmail').textContent  = email;
-  document.getElementById('settingsEmail').textContent= email;
-
-  /* ── Logout ── */
-  async function logout() {
-    await kdp.signOut();
-    location.href = '../login.html';
-  }
-  document.getElementById('logoutBtn').addEventListener('click', logout);
-  document.getElementById('settingsLogout').addEventListener('click', logout);
-
-  /* ── Sidebar navigation ── */
-  const sectionLabels = {
-    dashboard: 'Dashboard', books: 'My Books',
-    create: 'Create New', templates: 'Templates', settings: 'Settings'
-  };
-  const navItems   = document.querySelectorAll('.nav-item[data-section]');
-  const sections   = document.querySelectorAll('.section');
-  const pageTitle  = document.getElementById('pageTitle');
-  const sidebar    = document.getElementById('sidebar');
-  const overlay    = document.getElementById('sidebarOverlay');
-  const hamburger  = document.getElementById('hamburger');
-
-  function showSection(name) {
-    sections.forEach(s => s.classList.remove('active'));
-    navItems.forEach(n => n.classList.remove('active'));
-    document.getElementById('sec-' + name)?.classList.add('active');
-    document.querySelector(`[data-section="${name}"]`)?.classList.add('active');
-    pageTitle.textContent = sectionLabels[name] || name;
-    // Load books lazily when My Books is shown
-    if (name === 'books') loadBooks();
-  }
-
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      showSection(item.dataset.section);
-      closeSidebar();
-    });
-  });
-
-  /* ── Mobile sidebar ── */
-  function openSidebar()  { sidebar.classList.add('open'); overlay.classList.add('show'); }
-  function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('show'); }
-  hamburger.addEventListener('click', () => sidebar.classList.contains('open') ? closeSidebar() : openSidebar());
-  overlay.addEventListener('click', closeSidebar);
-
-  /* ── Load books ── */
-  let booksLoaded = false;
-  async function loadBooks() {
-    if (booksLoaded) return;
-    booksLoaded = true;
-    const container = document.getElementById('booksContainer');
-    const { data, error } = await kdp.listBooks();
-
-    if (error) {
-      container.innerHTML = `<p style="color:#ef4444;font-size:13px;">Could not load books: ${error.message}</p>`;
-      return;
+    function stepLabel(book) {
+      if (book.status === 'completed') return 'Completed';
+      const s = STEPS[book.current_step] || STEPS[1];
+      return `${s[0]} · ${s[1]}`;
     }
 
-    // Update stat
-    document.getElementById('statBooks').textContent = data.length;
+    /** Words planned: sum of chapter targets, else the brief's length range. */
+    function wordsText(book) {
+      const written = 0;   // counted from sections in E10
+      const planned = (book.chapters || []).reduce((sum, c) => sum + (c.word_target || 0), 0);
+      if (planned > 0) return { text: `${num(written)} of ${num(planned)} words`, pct: written / planned };
+      const brief = one(book.book_briefs);
+      const range = brief && LENGTH_RANGES[brief.length_range];
+      if (range) {
+        const text = range[1] ? `Target ${num(range[0])} to ${num(range[1])} words` : `Target ${num(range[0])}+ words`;
+        return { text, pct: 0 };
+      }
+      return { text: 'No word target yet', pct: 0 };
+    }
 
-    if (data.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-          </div>
-          <div class="empty-title">No books yet</div>
-          <p class="empty-body">Create your first book using the word search generator and it will appear here.</p>
-          <a class="btn-cta" href="generators/word-search.html" data-generator="word-search" data-generator-name="Word Search">Create your first book →</a>
+    function editedText(iso) {
+      const then = new Date(iso);
+      const mins = Math.round((Date.now() - then) / 60000);
+      if (mins < 1) return 'Edited just now';
+      if (mins < 60) return `Edited ${mins} minute${mins === 1 ? '' : 's'} ago`;
+      const hours = Math.round(mins / 60);
+      if (hours < 24) return `Edited ${hours} hour${hours === 1 ? '' : 's'} ago`;
+      const days = Math.round(hours / 24);
+      if (days === 1) return 'Edited yesterday';
+      if (days < 7) return `Edited ${days} days ago`;
+      const opts = { month: 'short', day: 'numeric' };
+      if (then.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+      return `Edited ${then.toLocaleDateString('en-US', opts)}`;
+    }
+
+    /* ── Rendering ───────────────────────────── */
+
+    function statsHtml(stats) {
+      const usage = stats.usage;
+      const usageCard = usage === undefined
+        ? `<div class="skel skel-value"></div><div class="skel skel-line skel-w40"></div>`
+        : usage === null
+          ? `<div class="stat-value">–</div><div class="stat-note">Not available right now</div>`
+          : `<div class="stat-value">${usage.pct}%</div><div class="stat-note">Resets ${usage.resets}</div>
+             <div class="bar" role="img" aria-label="${usage.pct}% of this month's AI allowance used"><span style="width: ${usage.pct}%"></span></div>`;
+      return `
+        <section class="stats" aria-label="Summary">
+          <div class="stat"><div class="stat-label">IN PROGRESS</div><div class="stat-value">${stats.inProgress}</div><div class="stat-note">book${stats.inProgress === 1 ? '' : 's'}</div></div>
+          <div class="stat"><div class="stat-label">WORDS THIS MONTH</div><div class="stat-value">0</div><div class="stat-note">across all books</div></div>
+          <div class="stat"><div class="stat-label">AI USAGE THIS MONTH</div>${usageCard}</div>
+        </section>`;
+    }
+
+    function coverHtml(book, penName) {
+      const title = book.title || 'Untitled';
+      // A word longer than 8 letters does not fit the cover width at the normal size.
+      const long = Math.max(...title.split(/\s+/).map((w) => w.length)) > 8;
+      return `<div class="cover-ph" aria-hidden="true">
+          <div class="cover-ph-title${long ? ' long' : ''}">${esc(title)}</div>
+          <div class="cover-ph-rule"></div>
+          <div class="cover-ph-pen">${esc(penName || '')}</div>
         </div>`;
-      return;
     }
 
-    const html = `<div class="books-grid">${data.map(book => `
-      <div class="book-card">
-        <div class="book-type-badge">${book.type.replace(/-/g,' ')}</div>
-        <div class="book-title">${book.title}</div>
-        <div class="book-date">${new Date(book.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
-      </div>`).join('')}</div>`;
-    container.innerHTML = html;
-  }
+    function cardHtml(book) {
+      const pen = one(book.pen_names);
+      const penName = pen && pen.name;
+      const words = wordsText(book);
+      const completed = book.status === 'completed';
+      const needsReview = (book.chapters || []).some((c) => c.needs_review);
+      const pct = completed ? 100 : Math.round(words.pct * 100);
+      return `
+        <article class="book-card">
+          ${coverHtml(book, penName)}
+          <div class="book-body">
+            <h2 class="book-title${book.title ? '' : ' untitled'}">${esc(book.title || 'Untitled book')}</h2>
+            <div class="book-pen${penName ? '' : ' none'}">${esc(penName || 'No pen name yet')}</div>
+            <div class="book-tags">
+              <span class="pill">${esc(stepLabel(book))}</span>
+              ${needsReview ? `<span class="badge badge-warning">${WARN_ICON}Needs review</span>` : ''}
+            </div>
+            <div class="grow"></div>
+            <div class="bar" aria-hidden="true"><span style="width: ${pct}%"></span></div>
+            <div class="book-meta"><span>${words.text}</span><span>${editedText(book.updated_at)}</span></div>
+          </div>
+        </article>`;
+    }
 
-  /* ── Initial stats (book count) ── */
-  (async () => {
-    const { data } = await kdp.listBooks();
-    if (data) document.getElementById('statBooks').textContent = data.length;
+    function matches(book) {
+      if (filter === 'progress' && book.status !== 'in_progress') return false;
+      if (filter === 'completed' && book.status !== 'completed') return false;
+      if (!query) return true;
+      const pen = one(book.pen_names);
+      return `${book.title || ''} ${pen ? pen.name : ''}`.toLowerCase().includes(query);
+    }
+
+    let lastStats = null;
+
+    function renderList(stats) {
+      lastStats = stats;
+      const counts = {
+        all: books.length,
+        progress: books.filter((b) => b.status === 'in_progress').length,
+        completed: books.filter((b) => b.status === 'completed').length
+      };
+      const tab = (key, label) =>
+        `<button type="button" class="tab" data-filter="${key}" aria-pressed="${filter === key}">${label} <span class="count">${counts[key]}</span></button>`;
+      const shown = books.filter(matches);
+      let grid;
+      if (shown.length) {
+        grid = shown.map(cardHtml).join('');
+      } else if (query) {
+        grid = `<p class="inline-note">No books match “${esc(query)}”. <button type="button" class="link-btn" data-clear>Clear search</button></p>`;
+      } else {
+        grid = `<p class="inline-note">No ${filter === 'completed' ? 'completed' : 'in-progress'} books yet.</p>`;
+      }
+      view.innerHTML = `
+        ${statsHtml(stats)}
+        <div class="tabs" role="group" aria-label="Filter books">
+          ${tab('all', 'All')}${tab('progress', 'In progress')}${tab('completed', 'Completed')}
+        </div>
+        <section class="book-grid" aria-label="Your books">${grid}</section>`;
+    }
+
+    function renderLoading() {
+      const skelCard = `<div class="book-card" aria-hidden="true"><div class="cover-ph skel"></div>
+        <div class="book-body"><div class="skel skel-title"></div><div class="skel skel-line skel-w30"></div>
+        <div class="skel skel-pill"></div><div class="grow"></div>
+        <div class="skel skel-bar"></div><div class="skel skel-line"></div></div></div>`;
+      const skelStat = `<div class="stat" aria-hidden="true"><div class="skel skel-line skel-w40"></div><div class="skel skel-value"></div><div class="skel skel-line skel-w30"></div></div>`;
+      view.innerHTML = `<p class="sr-only" role="status">Loading your books…</p>
+        <section class="stats">${skelStat}${skelStat}${skelStat}</section>
+        <section class="book-grid">${skelCard}${skelCard}</section>`;
+    }
+
+    function renderEmpty() {
+      subtitle.hidden = true;
+      searchBox.hidden = true;
+      view.innerHTML = `
+        <div class="center-state">
+          <div class="state-box">
+            <div class="shelf" aria-hidden="true"><span class="s1"></span><span class="s2"></span><span class="s3"></span></div>
+            <h2>Your shelf is empty</h2>
+            <p>Every book starts from a topic that passed market validation. Score an idea in Topic Lab, then start the book from there.</p>
+            <div class="state-actions">
+              <a class="btn btn-primary" href="topic-lab.html">${kdpShell.icon('topics', 18)}Open Topic Lab</a>
+              ${kdpShell.comingNextButton('Start without a topic', 'btn-secondary')}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderError() {
+      subtitle.hidden = true;
+      searchBox.hidden = true;
+      view.innerHTML = `
+        <div class="center-state">
+          <div class="state-box" role="alert">
+            <div class="state-icon danger" aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>
+            </div>
+            <h2>We couldn't load your books</h2>
+            <p>Check your connection, then try again.</p>
+            <div class="state-actions">
+              <button type="button" class="btn btn-primary" id="retryBtn">Retry</button>
+            </div>
+          </div>
+        </div>`;
+      document.getElementById('retryBtn').addEventListener('click', load);
+    }
+
+    /* ── Data ────────────────────────────────── */
+
+    let userId = null;
+
+    async function loadUsage() {
+      const [settings, usage] = await Promise.all([kdp.ensureUserSettings(userId), kdp.getMonthUsage()]);
+      if (settings.error || !settings.data || usage.error) return null;
+      const limit = settings.data.monthly_token_limit;
+      const pct = limit > 0 ? Math.min(100, Math.round((usage.tokens / limit) * 100)) : 0;
+      const now = new Date();
+      const resets = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return { pct, resets };
+    }
+
+    async function load() {
+      subtitle.hidden = false;
+      searchBox.hidden = false;
+      renderLoading();
+
+      const usagePromise = loadUsage().catch(() => null);
+      let result;
+      try { result = await kdp.listBooks(); } catch (e) { result = { error: e }; }
+      if (result.error) { renderError(); return; }
+
+      books = result.data || [];
+      if (!books.length) { renderEmpty(); return; }
+
+      const stats = { inProgress: books.filter((b) => b.status === 'in_progress').length, usage: undefined };
+      renderList(stats);
+      stats.usage = await usagePromise;
+      renderList(stats);
+    }
+
+    /* ── Events ──────────────────────────────── */
+
+    // Keep the stats that are on screen; only the list changes.
+    const rerender = () => renderList(lastStats);
+
+    view.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-filter]');
+      if (tab) { filter = tab.dataset.filter; rerender(); view.querySelector(`[data-filter="${filter}"]`).focus(); }
+      if (e.target.closest('[data-clear]')) { searchEl.value = ''; query = ''; rerender(); searchEl.focus(); }
+    });
+    searchEl.addEventListener('input', () => {
+      query = searchEl.value.trim().toLowerCase();
+      if (books.length) rerender();
+    });
+
+    /* ── Start ───────────────────────────────── */
+
+    const user = await kdpShell.init({ active: 'books' });
+    if (!user) return;
+    userId = user.id;
+    load();
   })();
-
-  /* ── Intercept generator-card clicks → show New Project modal ── */
-  document.addEventListener('click', (e) => {
-    const trigger = e.target.closest('[data-generator]');
-    if (!trigger) return;
-    e.preventDefault();
-    const generator = trigger.dataset.generator || '';
-    const name      = trigger.dataset.generatorName || '';
-    // Clear any stale settings from a prior aborted flow
-    KDPNewProject.clearSettings();
-    // Remember which generator was picked so the editor can offer it later
-    sessionStorage.setItem('kdp:generator', generator);
-    // Editor is now the main workspace — always land there after Create
-    KDPNewProject.openAndNavigate('editor.html', name ? `My ${name} Book` : '');
-  });
-
-})();
-</script>
+  </script>
 </body>
 </html>
