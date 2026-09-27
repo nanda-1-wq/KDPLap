@@ -10,10 +10,15 @@
 const SUPABASE_URL      = 'https://hmtxnbgfzwqawfulwwrg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdHhuYmdmendxYXdmdWx3d3JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNDM2NjYsImV4cCI6MjA5NTcxOTY2Nn0.VsVQF4YymMAr5d_P709Zw8C2-5gr3FSggbIbcc3zh4I';
 
+// Show the "Continue with Google" button (provider enabled in Supabase).
+const GOOGLE_ENABLED = true;
+
 // Shared client — accessible as window.sb if needed
 window.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 window.kdp = {
+
+  googleEnabled: GOOGLE_ENABLED,
 
   /* ── Auth ─────────────────────────────────────── */
 
@@ -29,13 +34,32 @@ window.kdp = {
     return window.sb.auth.signInWithPassword({ email, password });
   },
 
+  async signInWithGoogle(redirectTo) {
+    return window.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+  },
+
   async signOut() {
     await window.sb.auth.signOut();
   },
 
+  async resendConfirmation(email) {
+    return window.sb.auth.resend({ type: 'signup', email });
+  },
+
   async resetPassword(email) {
-    const redirectTo = `${location.origin}/login.html`;
+    // Resolved against the current page, so it also works under a sub-path (GitHub Pages).
+    const redirectTo = new URL('reset-password.html', location.href).href;
     return window.sb.auth.resetPasswordForEmail(email, { redirectTo });
+  },
+
+  async updatePassword(password) {
+    return window.sb.auth.updateUser({ password });
+  },
+
+  /** Subscribe to auth events (e.g. PASSWORD_RECOVERY). Returns the subscription. */
+  onAuthChange(callback) {
+    const { data } = window.sb.auth.onAuthStateChange(callback);
+    return data.subscription;
   },
 
   async getSession() {
@@ -64,12 +88,12 @@ window.kdp = {
 
   /* ── Books ────────────────────────────────────── */
 
-  async saveBook({ title, type, content }) {
-    const session = await this.getSession();
-    if (!session) throw new Error('Not authenticated');
-    return window.sb
-      .from('books')
-      .insert({ user_id: session.user.id, title, type, content });
+  // Puzzle books (parked generators) have no table since the E2 data model.
+  // `notice` marks this as expected, so pages show it calmly, not as a failure.
+  async saveBook() {
+    const error = new Error('Saving puzzle books returns in a later version.');
+    error.notice = true;
+    return { error };
   },
 
   async listBooks() {

@@ -56,7 +56,7 @@ Keep them working. Do not change them unless asked.
 - App UI is "ink on paper": grays only.
 - Functional colors carry meaning only: `--danger` (errors, delete), `--success` (pass, done), `--warning` (check this). Always with an icon and a word. Small areas only.
 - Filled red button only at the final destructive step. In menus, delete is red text.
-- Brand navy and blue are for the logo and landing page only. Never on app buttons or cards.
+- Brand navy and blue are allowed on the logo, the landing page, and the public auth pages only. Never on app buttons or cards.
 - Fonts: IBM Plex Sans (UI), IBM Plex Mono (small labels), Source Serif 4 (editor text only).
 - Minimum 44 px for anything clickable. Visible focus ring: 2 px ink outline, 2 px offset.
 - Every screen designs its states: empty, loading or generating, error with retry, locked, needs review.

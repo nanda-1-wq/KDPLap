@@ -744,7 +744,9 @@ textarea{resize:vertical;min-height:140px;line-height:1.5;}
     saveBtn.disabled = false;
     saveBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 9v4a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><path d="M8 2v7"/><path d="M5 6l3-3 3 3"/></svg> Save to My Books`;
 
-    if (error) {
+    if (error && error.notice) {
+      showToast(error.message);
+    } else if (error) {
       showToast('Save failed: ' + error.message, true);
     } else {
       showToast('✓ Saved to My Books!');

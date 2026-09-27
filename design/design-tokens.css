@@ -41,7 +41,7 @@
   --shadow-menu: 0 8px 24px rgba(28, 28, 26, 0.12);  /* menus only */
 }
 
-/* Landing theme: landing page ONLY (brand navy and blue allowed here).
+/* Landing theme: landing page and public auth pages ONLY (brand navy and blue allowed here).
    Light values come from the base palette. Dark switches with the OS setting. */
 :root {
   --lp-bg: var(--paper);
@@ -56,6 +56,20 @@
   --lp-logo: var(--brand-navy);
   --lp-logo-cut: #FFFFFF;
   --lp-focus: var(--ink);
+
+  /* Public auth pages (sign in, sign up, reset) */
+  --lp-field-bg: var(--surface);
+  --lp-field-border: var(--stone);
+  --lp-btn-bg: var(--ink);          /* primary action */
+  --lp-btn-text: #FFFFFF;
+  --lp-btn2-bg: var(--surface);     /* Google, Resend */
+  --lp-link: var(--brand-navy);
+  --lp-icon-tile: var(--mist);
+  --lp-panel: var(--brand-navy);    /* right panel with covers */
+  --lp-panel-text: #FFFFFF;
+  --lp-panel-text-2: #C9D3E8;
+  --lp-danger: var(--danger);   --lp-danger-bg: var(--danger-bg);
+  --lp-success: var(--success); --lp-success-bg: var(--success-bg);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -71,5 +85,18 @@
     --lp-logo: #FFFFFF;
     --lp-logo-cut: #0C1424;
     --lp-focus: #FFFFFF;
+
+    --lp-field-bg: #0C1424;
+    --lp-field-border: #34425F;
+    --lp-btn-bg: #7FA6F2;
+    --lp-btn-text: #0C1424;
+    --lp-btn2-bg: var(--brand-navy);
+    --lp-link: #7FA6F2;
+    --lp-icon-tile: #1C2A4A;
+    --lp-panel: var(--brand-navy);
+    --lp-panel-text: #FFFFFF;
+    --lp-panel-text-2: #AEB8CC;
+    --lp-danger: #F29A92;  --lp-danger-bg: #3A1614;
+    --lp-success: #7FD1A2; --lp-success-bg: #12301F;
   }
 }

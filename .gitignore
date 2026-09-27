@@ -4,3 +4,10 @@ KDP referance/
 
 # Claude Code local settings
 .claude/settings.local*.json
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# Local secrets and test credentials
+.env
+.env.test
+.env.*.local
