@@ -7,7 +7,7 @@
 Design: ✅ approved (see `design/`)
 
 - [x] **E1** Project setup: design files, CLAUDE.md, this roadmap
-- [ ] **E2** Data model: tables, relations, Row Level Security (SQL migrations)
+- [x] **E2** Data model: tables, relations, Row Level Security (SQL migrations)
 - [ ] **E3** App shell + Books page + New Book + Delete, wired to Supabase
 - [ ] **E4** Topic Lab + Topic detail + Add topic (market validation scoring)
 - [ ] **E5** Pen Names + Pen name detail (bio facts, voice profile)
