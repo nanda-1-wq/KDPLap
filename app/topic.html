@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Topic Lab · KDP Lab</title>
+  <title>Topic · KDP Lab</title>
   <link rel="icon" href="../design/logo/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,19 +15,9 @@
   <div class="app">
     <aside class="sidebar" data-shell></aside>
 
-    <main class="app-main topic-lab" id="main">
-      <header class="page-head">
-        <div>
-          <h1>Topic Lab</h1>
-          <p>Score each idea with real Amazon page-1 data before you write a chapter.</p>
-        </div>
-        <button type="button" class="btn btn-primary" id="addTopicBtn" data-add-topic hidden></button>
-      </header>
-
-      <p class="notice" id="notice" role="status" hidden></p>
-
-      <!-- Filled by the script: loading, list, empty, or error -->
-      <div id="view" class="view" aria-live="polite"></div>
+    <main class="app-main topic-detail" id="main">
+      <!-- Filled by the script: loading, the topic, not found, or error -->
+      <div id="view" class="view"></div>
     </main>
   </div>
 
@@ -39,6 +29,6 @@
   <script src="../js/new-book.js"></script>
   <script src="../js/topics.js"></script>
   <script src="../js/add-topic.js"></script>
-  <script src="../js/topic-lab.js"></script>
+  <script src="../js/topic.js"></script>
 </body>
 </html>

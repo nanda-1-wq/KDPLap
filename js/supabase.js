@@ -188,6 +188,67 @@ window.kdp = {
       .order('updated_at', { ascending: false });
   },
 
+  /** All topics for Topic Lab, with their book ids (for "Open book"). One query. */
+  async listTopics() {
+    return window.sb
+      .from('topics')
+      .select(`id, name, status, checks_passed, excitement, updated_at,
+               winning_count, dead_count, authority_count, results_match, is_specific,
+               books ( id, updated_at )`)
+      .order('updated_at', { ascending: false });
+  },
+
+  /** One topic for the detail page. data is null when the id is not the user's (RLS). */
+  async getTopic(id) {
+    return window.sb
+      .from('topics')
+      .select(`id, name, status, winning_count, dead_count, authority_count, monthly_searches,
+               results_match, is_specific, excitement, author_fit, notes, checks_passed, updated_at,
+               books ( id, updated_at )`)
+      .eq('id', id)
+      .maybeSingle();
+  },
+
+  /** New topic with status 'idea'. The caller trims; the database allows 1 to 200 characters (migration 0004). */
+  async createTopic(name, notes) {
+    const { data, error } = await window.sb
+      .from('topics')
+      .insert({ name, notes: notes || null })
+      .select('id');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: new Error('Topic not created.') };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Writes the given topic fields. Returns the saved row with the new checks_passed.
+   * RLS hides other users' rows, so an update that matches no row is an error.
+   */
+  async updateTopic(id, fields) {
+    const { data, error } = await window.sb
+      .from('topics')
+      .update(fields)
+      .eq('id', id)
+      .select('id, name, status, checks_passed, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Topic not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Deletes the topic row. Its books stay: books.topic_id is set to null
+   * (supabase/migrations/0001), and the Books page shows "Unvalidated topic".
+   */
+  async deleteTopic(id) {
+    const { error, count } = await window.sb
+      .from('topics')
+      .delete({ count: 'exact' })
+      .eq('id', id);
+    if (error) return { error };
+    if (!count) return { error: Object.assign(new Error('Topic not found.'), { notFound: true }) };
+    return { error: null };
+  },
+
   /** Tokens used since the 1st of this month (counted AI calls only). */
   async getMonthUsage() {
     const now = new Date();

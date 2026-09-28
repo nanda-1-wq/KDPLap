@@ -36,6 +36,17 @@
   --app-mini-cover-w: 46px;
   --app-mini-cover-h: 69px;
   --app-mini-cover-text: 6px;
+  --app-topic-search-w: 260px;  /* design 08 */
+  --app-table-row-h: 60px;
+  --app-detail-side-w: 380px;   /* design 09 right column */
+  --app-count-w: 110px;         /* count field and Yes/No toggle */
+  --app-check-badge-w: 96px;
+  --app-status-w: 200px;
+  --app-result-title: 26px;
+  --app-result-bar-h: 8px;
+  --app-dots-lg: 12px;
+  --app-range-track: 6px;
+  --app-range-thumb: 18px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -1121,3 +1132,335 @@ a { color: var(--ink); }
   font-size: var(--text-base);
 }
 .book-content .center-state { flex-grow: 1; }
+
+/* ── Topic Lab list (design 08, row hover design 13) ── */
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.toolbar .tabs { flex-wrap: wrap; }
+.toolbar .search { width: var(--app-topic-search-w); }
+
+/* Small table buttons. Design shows 36px; 44px is the minimum target. */
+.btn-sm { padding: 0 14px; font-size: var(--text-md); }
+
+.muted-text { font-size: var(--text-md); color: var(--graphite); }
+
+/* Topic status. Functional colors come with an icon (validated, rejected). */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.status-idea { background: var(--surface); color: var(--graphite); border: 1px dashed var(--stone-2); }
+.status-researching { background: var(--mist); color: var(--ink); }
+.status-validated { background: var(--success-bg); color: var(--success); border-color: var(--success); }
+.status-book_started { background: var(--ink); color: var(--surface); }
+.status-rejected { background: var(--surface); color: var(--danger); border-color: var(--danger); }
+.status-archived { background: var(--paper); color: var(--graphite); border-color: var(--stone); }
+
+.dots-lg span { width: var(--app-dots-lg); height: var(--app-dots-lg); }
+
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.topic-table { width: 100%; border-collapse: collapse; }
+.topic-table thead tr { background: var(--surface-2); }
+.topic-table thead th {
+  padding: 14px var(--space-4);
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--graphite);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.topic-table tbody tr { border-top: 1px solid var(--mist); }
+.topic-table thead + tbody tr:first-child { border-top: 1px solid var(--mist); }
+.topic-table tbody tr:hover { background: var(--paper); }
+.topic-table tbody th, .topic-table tbody td {
+  height: var(--app-table-row-h);
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+  font-weight: 400;
+}
+.topic-table th:first-child { padding-left: var(--space-5); }
+.topic-table .next-cell { text-align: right; padding-right: var(--space-5); }
+.topic-link {
+  font-size: var(--text-base);
+  font-weight: 500;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.topic-link:hover { text-decoration: underline; }
+.checks-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-md);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.num-cell { font-size: var(--text-base); color: var(--ink-2); white-space: nowrap; }
+.date-cell { font-size: var(--text-md); color: var(--graphite); white-space: nowrap; }
+
+.skel-w60 { width: 60%; }
+.skel-w70 { width: 70%; }
+/* Table cells size to their content, so skeleton bars need fixed widths. */
+.topic-table tbody th .skel-line { width: 280px; }
+.topic-table tbody td .skel-line { width: 64px; }
+.skel-pill-sm { height: 22px; width: 90px; border-radius: var(--radius-pill); }
+.skel-btn { height: var(--control-h); width: 100px; margin-left: auto; border-radius: var(--radius-md); }
+.skel-row { height: 52px; }
+
+/* ── Add topic dialog (design 10) ─────────────── */
+
+.field-hint { font-size: var(--text-sm); color: var(--graphite); }
+.text-area {
+  padding: 10px var(--space-3);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  resize: vertical;
+  background: var(--surface);
+  color: var(--ink);
+}
+.text-area:focus-visible {
+  outline: none;
+  border: 2px solid var(--ink);
+  padding: 9px 11px;
+}
+
+/* ── Topic detail (designs 09 and 13) ─────────── */
+
+.topic-detail { padding-top: var(--space-8); }
+
+.detail-head { display: flex; flex-direction: column; gap: 10px; }
+.crumbs { font-size: var(--text-md); color: var(--graphite); }
+.crumbs a { color: var(--graphite); }
+.crumbs a:hover { color: var(--ink); }
+.detail-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-6);
+}
+.detail-title-row h1 {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.detail-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  font-size: var(--text-sm);
+  color: var(--graphite);
+}
+.save-state .spinner { width: 12px; height: 12px; }
+.save-ok { display: inline-flex; color: var(--success); }
+.save-error { display: inline-flex; align-items: center; gap: 6px; color: var(--danger); font-weight: 500; }
+.save-state .link-btn { font-size: var(--text-sm); font-weight: 600; }
+
+.status-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.status-label { font-size: var(--text-md); color: var(--graphite); }
+.select {
+  height: var(--control-h);
+  width: var(--app-status-w);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-base);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.menu-anchor { position: relative; }
+.menu-btn[aria-expanded="true"] { background: var(--mist); color: var(--ink); }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--app-detail-side-w);
+  gap: var(--space-6);
+  align-items: start;
+}
+.side-col { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+.detail-grid > .panel { padding: var(--space-6) 28px; }
+.panel.skel-stack { gap: var(--space-4); }
+.panel-title { margin: 0 0 var(--space-1); font-size: var(--text-xl); font-weight: 600; }
+.panel-title-sm { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.panel-hint { margin: 0 0 var(--space-3); font-size: var(--text-md); line-height: 1.5; color: var(--graphite); }
+
+.check-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--app-count-w) var(--app-check-badge-w);
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--mist);
+}
+.check-row.last { padding-bottom: 0; }
+.check-text { display: flex; flex-direction: column; gap: var(--space-1); }
+.check-label { font-size: var(--text-base); font-weight: 500; }
+.check-label .optional { font-weight: 400; color: var(--graphite); }
+.check-hint { font-size: var(--text-sm); line-height: 1.4; color: var(--graphite); }
+.check-note { font-size: var(--text-sm); color: var(--danger); }
+.check-note:empty { display: none; }
+.count-input { width: var(--app-count-w); }
+/* A failing count gets the red border from design 09 (the badge carries icon + word). */
+.count-input.is-failing { border: 2px solid var(--danger); padding: 0 11px; }
+.count-input.is-failing:focus-visible { border-color: var(--ink); }
+.check-result { display: flex; justify-content: center; }
+
+.check-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid currentColor;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.check-badge.pass { color: var(--success); background: var(--success-bg); }
+.check-badge.fail { color: var(--danger); background: var(--danger-bg); }
+.check-badge.warn { color: var(--warning); background: var(--warning-bg); }
+.check-badge.todo { color: var(--graphite); background: var(--surface); border: 1px dashed var(--stone-2); font-weight: 500; }
+
+/* Yes / No toggle (design 13) */
+.yesno { display: flex; width: var(--app-count-w); }
+.yesno button {
+  flex-grow: 1;
+  height: var(--control-h);
+  font-family: inherit;
+  font-size: var(--text-md);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--stone);
+  cursor: pointer;
+}
+.yesno button:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.yesno button:last-child { border-radius: 0 var(--radius-md) var(--radius-md) 0; border-left: none; }
+.yesno button:hover { background: var(--paper); }
+.yesno button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.yesno button:focus-visible { position: relative; z-index: 1; }
+
+/* Result card (designs 09 and 13) */
+.result-card { display: flex; flex-direction: column; gap: var(--space-3); }
+.result-top { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+.result-title { margin: 0; font-size: var(--app-result-title); font-weight: 600; }
+.result-bars { display: flex; gap: var(--space-1); }
+.result-bars span {
+  flex-grow: 1;
+  height: var(--app-result-bar-h);
+  border-radius: 4px;
+  background: var(--mist);
+}
+.result-bars span.pass { background: var(--success); }
+.result-bars span.fail { background: var(--danger); }
+.result-text { margin: 0; font-size: var(--text-md); line-height: 1.55; color: var(--ink-2); }
+.reason { margin: calc(-1 * var(--space-1)) 0 0; font-size: var(--text-sm); line-height: 1.45; color: var(--graphite); }
+/* "Reject topic": a secondary button with red text, not a filled red button. */
+.btn-danger-text { color: var(--danger); font-weight: 500; }
+
+/* Your judgment */
+.judgment { display: flex; flex-direction: column; gap: 18px; }
+.slider-field { display: flex; flex-direction: column; gap: var(--space-2); }
+.slider-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+/* Drawn by hand so "not set" can show a neutral track with no fill.
+   --fill (set by js/topic.js) is how much of the track is ink. */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: var(--control-h);
+  margin: calc(-1 * var(--space-2)) 0;
+  background: transparent;
+  cursor: pointer;
+}
+.range::-webkit-slider-runnable-track {
+  height: var(--app-range-track);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--ink) var(--fill, 0%), var(--mist) var(--fill, 0%));
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: var(--app-range-thumb);
+  height: var(--app-range-thumb);
+  margin-top: calc((var(--app-range-track) - var(--app-range-thumb)) / 2);
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.range::-moz-range-track {
+  height: var(--app-range-track);
+  border-radius: var(--radius-pill);
+  background: var(--mist);
+}
+.range::-moz-range-progress {
+  height: var(--app-range-track);
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+}
+.range::-moz-range-thumb {
+  width: var(--app-range-thumb);
+  height: var(--app-range-thumb);
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+/* Not set yet: neutral track, no fill, gray knob in the middle, label "— / 10". */
+.range.is-unset::-webkit-slider-runnable-track { background: var(--mist); }
+.range.is-unset::-webkit-slider-thumb { background: var(--stone-2); box-shadow: 0 0 0 1px var(--stone-2); }
+.range.is-unset::-moz-range-progress { background: transparent; }
+.range.is-unset::-moz-range-thumb { background: var(--stone-2); box-shadow: 0 0 0 1px var(--stone-2); }
+
+@media (max-width: 1100px) {
+  .detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .detail-title-row { flex-wrap: wrap; }
+}
