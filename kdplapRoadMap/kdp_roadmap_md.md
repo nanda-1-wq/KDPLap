@@ -10,7 +10,7 @@ Design: ✅ approved (see `design/`)
 - [x] **E2** Data model: tables, relations, Row Level Security (SQL migrations)
 - [x] **E3** App shell + Books page + New Book + Delete, wired to Supabase
 - [x] **E4** Topic Lab + Topic detail + Add topic (market validation scoring)
-- [ ] **E5** Pen Names + Pen name detail (bio facts, voice profile)
+- [x] **E5** Pen Names + Pen name detail (bio facts, voice profile)
 - [ ] **E6** Edge Function `generate`: auth, usage limits, prompt templates, token logging
 - [ ] **E7** Book wizard shell + 01 Brief + 02 Research
 - [ ] **E8** 03 Positioning (drift check, lock) + 04 Title
