@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book · KDP Lab</title>
+  <link rel="icon" href="../design/logo/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../design/design-tokens.css" />
+  <link rel="stylesheet" href="../css/app.css" />
+</head>
+<body>
+  <div class="book-layout">
+    <nav class="book-nav" aria-label="Book steps">
+      <a class="exit-link" href="dashboard.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+        Exit to Books
+      </a>
+      <!-- Filled by js/book.js -->
+      <div class="book-nav-body" data-book-nav></div>
+    </nav>
+
+    <div class="book-main">
+      <header class="book-head" data-book-head hidden>
+        <button type="button" class="btn btn-secondary" data-back>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          Back
+        </button>
+        <div class="book-head-center">
+          <div class="book-head-label" data-step-label></div>
+          <h1 data-step-title tabindex="-1"></h1>
+        </div>
+        <button type="button" class="btn btn-primary" data-next>
+          Next
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </header>
+      <main class="book-content" data-book-content aria-live="polite"></main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
+    integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
+    crossorigin="anonymous"></script>
+  <script src="../js/supabase.js"></script>
+  <script src="../js/book.js"></script>
+</body>
+</html>

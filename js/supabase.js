@@ -100,10 +100,41 @@ window.kdp = {
   async listBooks() {
     return window.sb
       .from('books')
-      .select(`id, title, subtitle, status, current_step, updated_at,
+      .select(`id, title, subtitle, status, current_step, updated_at, topic_id,
                pen_names ( name ),
-               book_briefs ( length_range ),
+               book_briefs ( length_range, topic_text ),
                chapters ( word_target, needs_review )`)
+      .order('updated_at', { ascending: false });
+  },
+
+  /** One book for the book page. data is null when the id is not the user's (RLS). */
+  async getBook(id) {
+    return window.sb
+      .from('books')
+      .select(`id, title, status, current_step, updated_at, topic_id,
+               pen_names ( name ),
+               book_briefs ( topic_text )`)
+      .eq('id', id)
+      .maybeSingle();
+  },
+
+  /** Creates a book and its Brief in one transaction (supabase/migrations/0002). Returns the new id. */
+  async createBook(topicId, topicText) {
+    return window.sb.rpc('create_book', {
+      p_topic_id: topicId || null,
+      p_topic_text: topicText || null
+    });
+  },
+
+  /* ── Topics ───────────────────────────────────── */
+
+  /** Validated topics for the New Book dialog, most market checks first. */
+  async listValidatedTopics() {
+    return window.sb
+      .from('topics')
+      .select('id, name, checks_passed')
+      .eq('status', 'validated')
+      .order('checks_passed', { ascending: false })
       .order('updated_at', { ascending: false });
   },
 

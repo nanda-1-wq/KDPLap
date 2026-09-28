@@ -47,7 +47,7 @@
         <svg viewBox="0 0 64 64" aria-hidden="true"><path class="mark" d="M32 49C26 43.5 17 41.5 9 43V13c9-1.8 17 .6 23 7z"/><path class="mark" d="M32 49C38 43.5 47 41.5 55 43V13c-9-1.8-17 .6-23 7z"/><path class="cut" d="M32 18.5l6 11.5-6 19.5-6-19.5z"/><path class="spine" d="M32 30V46" stroke-width="2"/></svg>
         <span class="sidebar-logo-text"><span class="kdp">KDP</span><span class="lab">LAB</span></span>
       </a>
-      ${comingNextButton(`${icon('plus', 18, 2)}New Book`, 'btn-primary btn-block')}
+      <button type="button" class="btn btn-primary btn-block" data-new-book>${icon('plus', 18, 2)}New Book</button>
       <nav class="nav-group" aria-label="Pages">${MAIN.map((i) => navItem(i, active, root)).join('')}</nav>
       <nav class="nav-group" aria-labelledby="navToolsLabel">
         <div class="nav-label" id="navToolsLabel">KDP TOOLS</div>
@@ -103,6 +103,7 @@
     // Draw the sidebar first so the layout does not jump while the session is checked.
     const el = document.querySelector('[data-shell]');
     render(el, active, root);
+    if (window.kdpNewBook) kdpNewBook.setRoot(root);
     const user = await kdp.requireAuth(`${root}login.html`);
     if (!user) return null;
     fillUser(el, user);
