@@ -27,6 +27,8 @@
         </label>
       </header>
 
+      <p class="notice" id="notice" role="status" hidden></p>
+
       <!-- Filled by the script: loading, list, empty, or error -->
       <div id="view" class="view" aria-live="polite"></div>
     </main>
@@ -38,12 +40,14 @@
   <script src="../js/supabase.js"></script>
   <script src="../js/shell.js"></script>
   <script src="../js/new-book.js"></script>
+  <script src="../js/book-actions.js"></script>
   <script>
   (async function () {
     const view = document.getElementById('view');
     const searchBox = document.getElementById('searchBox');
     const searchEl = document.getElementById('search');
     const subtitle = document.getElementById('subtitle');
+    const notice = document.getElementById('notice');
 
     const STEPS = {
       1: ['Plan', '01 Brief'], 2: ['Plan', '02 Research'], 3: ['Plan', '03 Positioning'], 4: ['Plan', '04 Title'],
@@ -53,6 +57,8 @@
     const LENGTH_RANGES = {
       '5-8k': [5000, 8000], '8-12k': [8000, 12000], '12-20k': [12000, 20000], '20-30k': [20000, 30000], '30k+': [30000, null]
     };
+    const MORE_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+    const CHECK_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
     const WARN_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
 
     let books = [];
@@ -64,6 +70,8 @@
     const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const num = (n) => n.toLocaleString('en-US');
     const one = (rel) => (Array.isArray(rel) ? rel[0] : rel) || null;   // to-one embeds may come as object or array
+
+    const bookHref = (id) => `book.html?id=${encodeURIComponent(id)}`;
 
     /** Working title: book title, else the Brief's topic, else "Untitled book". */
     function workingTitle(book) {
@@ -142,7 +150,7 @@
       const completed = book.status === 'completed';
       const needsReview = (book.chapters || []).some((c) => c.needs_review);
       const title = workingTitle(book);
-      const href = `book.html?id=${encodeURIComponent(book.id)}`;
+      const href = bookHref(book.id);
       const pct = completed ? 100 : Math.round(words.pct * 100);
       return `
         <article class="book-card is-link">
@@ -159,6 +167,10 @@
             <div class="bar" aria-hidden="true"><span style="width: ${pct}%"></span></div>
             <div class="book-meta"><span>${words.text}</span><span>${editedText(book.updated_at)}</span></div>
           </div>
+          <div class="card-actions">
+            <button type="button" class="icon-btn card-menu-btn" data-book-menu="${esc(book.id)}"
+              aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${esc(title || 'Untitled book')}">${MORE_ICON}</button>
+          </div>
         </article>`;
     }
 
@@ -174,6 +186,7 @@
 
     function renderList(stats) {
       lastStats = stats;
+      kdpBookActions.closeMenu(false);   // its card is about to be replaced
       const counts = {
         all: books.length,
         progress: books.filter((b) => b.status === 'in_progress').length,
@@ -282,6 +295,50 @@
 
     // Keep the stats that are on screen; only the list changes.
     const rerender = () => renderList(lastStats);
+
+    let noticeTimer = null;
+    function showNotice(text) {
+      notice.innerHTML = CHECK_ICON;
+      notice.append(text);
+      notice.hidden = false;
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => { notice.hidden = true; }, 8000);
+    }
+
+    const bookById = (id) => books.find((b) => b.id === id);
+
+    kdpBookActions.init({
+      bookHref,
+      getTitle: (id) => { const b = bookById(id); return b ? workingTitle(b) : ''; },
+      onRenamed(id, row) {
+        const b = bookById(id);
+        if (b) Object.assign(b, { title: row.title, updated_at: row.updated_at });
+        rerender();
+        showNotice(`Renamed to “${row.title}”.`);
+      },
+      onDeleted(id, title) {
+        // Where focus goes: the next card's ⋯, else the previous one.
+        const shownIds = books.filter(matches).map((b) => b.id);
+        const at = shownIds.indexOf(id);
+        books = books.filter((b) => b.id !== id);
+        showNotice(`Deleted “${title}”.`);
+        if (!books.length) {
+          renderEmpty();
+          const h = view.querySelector('h2');
+          h.tabIndex = -1;
+          h.focus();
+          return;
+        }
+        lastStats = { ...lastStats, inProgress: books.filter((b) => b.status === 'in_progress').length };
+        rerender();
+        const rest = shownIds.filter((x) => x !== id);
+        const nextId = rest[Math.min(Math.max(at, 0), rest.length - 1)];
+        const target = nextId
+          ? view.querySelector(`[data-book-menu="${CSS.escape(nextId)}"]`)
+          : view.querySelector(`[data-filter="${filter}"]`);
+        if (target) target.focus();
+      }
+    });
 
     view.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-filter]');

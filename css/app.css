@@ -29,6 +29,8 @@
   --app-empty-w: 520px;
   --app-state-icon: 56px;
   --app-dialog-w: 600px;
+  --app-dialog-sm-w: 560px;   /* rename, delete (design 06) */
+  --app-menu-w: 232px;        /* card menu (design 07) */
   --app-book-nav-w: 280px;
   --app-book-head-h: 80px;
   --app-mini-cover-w: 46px;
@@ -819,11 +821,130 @@ a { color: var(--ink); }
   inset: 0;
   border-radius: var(--radius-xl);
 }
-.book-card.is-link:focus-within {
+/* Ring the card only when its link has focus, not its ⋯ menu. */
+.book-card.is-link:has(.book-title a:focus-visible) {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 .book-title a:focus-visible { outline: none; }
+
+/* ── Card menu (design 07) ────────────────────── */
+
+/* Leave room for the ⋯ button next to the title. */
+.book-card .book-title { padding-right: var(--space-8); }
+.card-actions {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;   /* above the title link's full-card cover */
+}
+.card-menu-btn[aria-expanded="true"] { background: var(--mist); color: var(--ink); }
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 10;
+  width: var(--app-menu-w);
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu);
+  display: flex;
+  flex-direction: column;
+}
+.menu-item {
+  height: var(--control-h);
+  width: 100%;
+  padding: 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-base);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menu-item:hover, .menu-item:focus { background: var(--paper); }
+.menu-item:focus-visible { outline-offset: -2px; }
+.menu-item svg { flex-shrink: 0; color: var(--graphite); }
+/* Delete in a menu is red text with its icon, never a filled button. */
+.menu-item.danger, .menu-item.danger svg { color: var(--danger); }
+.menu-sep {
+  height: 1px;
+  margin: var(--space-1) 6px;
+  background: var(--stone);
+}
+
+/* ── Rename and Delete dialogs (design 06) ────── */
+
+.dialog-sm { width: min(var(--app-dialog-sm-w), calc(100vw - 32px)); }
+.dialog-sm .dialog-inner { gap: var(--space-4); }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field label { font-size: var(--text-md); font-weight: 500; }
+
+.delete-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.delete-head h2 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.delete-icon {
+  width: var(--control-h);
+  height: var(--control-h);
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--danger-bg);
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.delete-text {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.delete-text strong { color: var(--danger); }
+.dialog-sm .dialog-foot { margin-top: var(--space-6); }
+
+/* The only filled red button in the app: the final step of a delete. */
+.btn-danger { border: none; background: var(--danger); color: var(--surface); font-weight: 600; }
+.btn-danger:hover { background: color-mix(in srgb, var(--danger) 88%, var(--ink)); }
+.btn-danger:active { background: color-mix(in srgb, var(--danger) 76%, var(--ink)); }
+
+/* Short confirmation after an action, e.g. "Deleted …" */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  padding: 10px 14px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-lg);
+  color: var(--success);
+  background: var(--success-bg);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+.notice svg { flex-shrink: 0; }
 
 /* ── Book page (design 05) ────────────────────── */
 

@@ -126,6 +126,56 @@ window.kdp = {
     });
   },
 
+  /**
+   * Sets books.title (the working title; step 04 writes the same field).
+   * The caller trims it; the database allows 1 to 200 characters (migration 0003).
+   * RLS hides other users' rows, so an update that matches no row is an error.
+   */
+  async renameBook(id, title) {
+    const { data, error } = await window.sb
+      .from('books')
+      .update({ title })
+      .eq('id', id)
+      .select('id, title, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /** What a delete removes: chapters, section versions, research notes. Two queries. */
+  async getBookCounts(id) {
+    const [chapters, research] = await Promise.all([
+      // sections and section_versions have two links (section_id, current_version_id); name the one to follow.
+      window.sb
+        .from('chapters')
+        .select('id, sections ( section_versions!section_versions_section_id_fkey ( count ) )')
+        .eq('book_id', id),
+      window.sb
+        .from('research_sources')
+        .select('id', { count: 'exact', head: true })
+        .eq('book_id', id)
+    ]);
+    const error = chapters.error || research.error;
+    if (error) return { data: null, error };
+    const versions = chapters.data.reduce((sum, c) =>
+      sum + (c.sections || []).reduce((s, sec) => s + ((sec.section_versions && sec.section_versions[0] && sec.section_versions[0].count) || 0), 0), 0);
+    return { data: { chapters: chapters.data.length, versions, research: research.count || 0 }, error: null };
+  },
+
+  /**
+   * Deletes the book row. Every child table cascades (supabase/migrations/0001).
+   * RLS hides other users' rows, so a delete that removes nothing is an error.
+   */
+  async deleteBook(id) {
+    const { error, count } = await window.sb
+      .from('books')
+      .delete({ count: 'exact' })
+      .eq('id', id);
+    if (error) return { error };
+    if (!count) return { error: Object.assign(new Error('Book not found.'), { notFound: true }) };
+    return { error: null };
+  },
+
   /* ── Topics ───────────────────────────────────── */
 
   /** Validated topics for the New Book dialog, most market checks first. */
@@ -162,9 +212,5 @@ window.kdp = {
     const ins = await window.sb.from('user_settings').insert({ user_id: userId });
     if (ins.error && ins.error.code !== '23505') return { data: null, error: ins.error };
     return read();
-  },
-
-  async deleteBook(id) {
-    return window.sb.from('books').delete().eq('id', id);
   }
 };
