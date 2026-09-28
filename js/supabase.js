@@ -249,6 +249,99 @@ window.kdp = {
     return { error: null };
   },
 
+  /* ── Pen names ────────────────────────────────── */
+
+  /** All pen names for the Pen Names page, with how many books use each. One query. */
+  async listPenNames() {
+    return window.sb
+      .from('pen_names')
+      .select('id, name, niche, bio_text, voice, updated_at, books ( count )')
+      .order('name', { ascending: true });
+  },
+
+  /** One pen name for the detail page, with its books. data is null when the id is not the user's (RLS). */
+  async getPenName(id) {
+    return window.sb
+      .from('pen_names')
+      .select(`id, name, niche, bio_facts, bio_text, voice, updated_at,
+               books ( id, title, current_step, updated_at, book_briefs ( topic_text ), chapters ( needs_review ) )`)
+      .eq('id', id)
+      .maybeSingle();
+  },
+
+  /** Books that use a pen name (for the delete dialog). */
+  async listPenNameBooks(id) {
+    return window.sb
+      .from('books')
+      .select('id, title, book_briefs ( topic_text )')
+      .eq('pen_name_id', id)
+      .order('updated_at', { ascending: false });
+  },
+
+  /** New pen name. The caller trims; the database allows 1 to 100 characters (migrations 0001, 0005). */
+  async createPenName(name, niche) {
+    const { data, error } = await window.sb
+      .from('pen_names')
+      .insert({ name, niche: niche || null })
+      .select('id');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: new Error('Pen name not created.') };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Writes the given pen name fields (name, niche, bio_facts, bio_text, voice).
+   * RLS hides other users' rows, so an update that matches no row is an error.
+   */
+  async updatePenName(id, fields) {
+    const { data, error } = await window.sb
+      .from('pen_names')
+      .update(fields)
+      .eq('id', id)
+      .select('id, name, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Pen name not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Deletes the pen name row. The database refuses (foreign key, code 23503)
+   * while a book uses it (books.pen_name_id is "on delete restrict"), and it
+   * clears user_settings.default_pen_name_id itself ("on delete set null").
+   */
+  async deletePenName(id) {
+    const { error, count } = await window.sb
+      .from('pen_names')
+      .delete({ count: 'exact' })
+      .eq('id', id);
+    if (error) return { error };
+    if (!count) return { error: Object.assign(new Error('Pen name not found.'), { notFound: true }) };
+    return { error: null };
+  },
+
+  /** The default pen name id for new books, or null. Reads only; no row means no default. */
+  async getDefaultPenNameId() {
+    const { data, error } = await window.sb
+      .from('user_settings')
+      .select('default_pen_name_id')
+      .maybeSingle();
+    return { data: data ? data.default_pen_name_id : null, error };
+  },
+
+  /** Sets (or with null, clears) the default pen name for new books. 0 rows is an error. */
+  async setDefaultPenName(userId, penNameId) {
+    const settings = await this.ensureUserSettings(userId);
+    if (settings.error) return { data: null, error: settings.error };
+    const { data, error } = await window.sb
+      .from('user_settings')
+      .update({ default_pen_name_id: penNameId })
+      .eq('user_id', userId)
+      .select('default_pen_name_id');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Settings not found.'), { notFound: true }) };
+    return { data: data[0].default_pen_name_id, error: null };
+  },
+
   /** Tokens used since the 1st of this month (counted AI calls only). */
   async getMonthUsage() {
     const now = new Date();

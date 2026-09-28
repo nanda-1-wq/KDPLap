@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pen Names · KDP Lab</title>
+  <title>Pen name · KDP Lab</title>
   <link rel="icon" href="../design/logo/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../design/design-tokens.css" />
   <link rel="stylesheet" href="../css/app.css" />
 </head>
@@ -15,19 +15,9 @@
   <div class="app">
     <aside class="sidebar" data-shell></aside>
 
-    <main class="app-main pen-names" id="main">
-      <header class="page-head">
-        <div>
-          <h1>Pen Names</h1>
-          <p>Each pen name keeps one voice and one bio across all its books.</p>
-        </div>
-        <button type="button" class="btn btn-primary" id="addPenBtn" data-add-pen hidden></button>
-      </header>
-
-      <p class="notice" id="notice" role="status" hidden></p>
-
-      <!-- Filled by the script: loading, list, empty, or error -->
-      <div id="view" class="view" aria-live="polite"></div>
+    <main class="app-main pen-detail" id="main">
+      <!-- Filled by the script: loading, the pen name, not found, or error -->
+      <div id="view" class="view"></div>
     </main>
   </div>
 
@@ -38,8 +28,7 @@
   <script src="../js/shell.js"></script>
   <script src="../js/new-book.js"></script>
   <script src="../js/pen-name-common.js"></script>
-  <script src="../js/add-pen-name.js"></script>
   <script src="../js/pen-name-actions.js"></script>
-  <script src="../js/pen-names.js"></script>
+  <script src="../js/pen-name.js"></script>
 </body>
 </html>

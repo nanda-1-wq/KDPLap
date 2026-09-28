@@ -47,6 +47,11 @@
   --app-dots-lg: 12px;
   --app-range-track: 6px;
   --app-range-thumb: 18px;
+  --app-pen-avatar: 56px;        /* design 11 */
+  --app-pen-avatar-text: 20px;
+  --app-pen-avatar-lg: 64px;     /* design 12 */
+  --app-pen-avatar-lg-text: 26px;
+  --app-pen-card-pad: var(--space-6);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -1463,4 +1468,180 @@ a { color: var(--ink); }
 @media (max-width: 1100px) {
   .detail-grid { grid-template-columns: minmax(0, 1fr); }
   .detail-title-row { flex-wrap: wrap; }
+}
+
+/* ── Pen Names (designs 11, 12, 13) ───────────── */
+
+.pen-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+.pen-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-xl);
+  padding: var(--app-pen-card-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pen-card:has(.pen-card-name a):hover {
+  border-color: var(--stone-2);
+  box-shadow: var(--shadow-card-hover);
+}
+.pen-card:has(.pen-card-name a:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
+.pen-card-head { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.pen-card-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.skel-grow { flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-2); }
+.pen-card-name {
+  margin: 0;
+  padding-right: var(--space-8);   /* room for the ⋯ button */
+  font-size: var(--text-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pen-card-name a { color: inherit; text-decoration: none; }
+.pen-card-name a:focus-visible { outline: none; }
+/* The name link covers the whole card: one Tab stop, whole card clickable. */
+.pen-card-name a::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-xl); }
+.pen-niche { font-size: var(--text-md); color: var(--graphite); overflow-wrap: anywhere; }
+.pen-niche.none, .pen-meta .none { font-style: italic; }
+.pen-voice-block { display: flex; flex-direction: column; gap: 6px; flex-grow: 1; }
+.pen-voice { margin: 0; font-size: var(--text-md); line-height: 1.5; color: var(--ink-2); }
+.pen-voice.none { color: var(--graphite); }
+.pen-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--mist);
+  font-size: var(--text-md);
+  color: var(--graphite);
+}
+.pen-foot-tags { display: flex; align-items: center; gap: 6px; }
+.pen-default { color: var(--ink); white-space: nowrap; }
+
+/* Avatar: ink when the bio is ready, gray when it is missing (no brand navy in the app). */
+.pen-avatar {
+  width: var(--app-pen-avatar);
+  height: var(--app-pen-avatar);
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--app-pen-avatar-text);
+  font-weight: 600;
+}
+.pen-avatar.is-missing { background: var(--mist); color: var(--graphite); }
+.pen-avatar.lg {
+  width: var(--app-pen-avatar-lg);
+  height: var(--app-pen-avatar-lg);
+  font-size: var(--app-pen-avatar-lg-text);
+}
+.pen-avatar.skel { background: var(--mist); }
+
+/* Detail page */
+.pen-detail { padding-top: var(--space-8); }
+.pen-title { display: flex; align-items: center; gap: var(--space-5); min-width: 0; flex-grow: 1; }
+.pen-title-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.pen-title-text h1 { margin: 0; font-size: var(--app-h1); font-weight: 600; overflow-wrap: anywhere; }
+.pen-meta { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: var(--text-base); color: var(--graphite); }
+
+.pen-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+  align-items: start;
+}
+.pen-col { display: flex; flex-direction: column; gap: var(--space-6); }
+.pen-panel { padding: var(--space-6) 28px; display: flex; flex-direction: column; gap: var(--space-4); }
+.pen-panel .panel-hint { margin: 0; }
+.field-label { font-size: var(--text-md); font-weight: 500; }
+.field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.select-block { width: 100%; }
+
+.pen-default-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding-top: var(--space-1); }
+.pen-default-row .alert { flex-basis: 100%; }
+.pen-default-line { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); color: var(--ink-2); }
+
+/* Voice chip (design 13): off, hover, on, focus */
+.tone-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.tone-chip {
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+.tone-chip:hover { background: var(--mist); }
+.tone-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.tone-chip[aria-pressed="true"]:hover { background: var(--ink-hover); }
+
+/* Bio: written text, so it uses the reading font. */
+.bio-box {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.field .bio-label {
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--graphite);
+}
+.bio-text { font-family: var(--font-read); font-size: var(--text-lg); line-height: 1.7; }
+.text-area.bio-text:focus-visible { padding: 9px 11px; }
+
+.ai-action { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.ai-note { font-size: var(--text-sm); color: var(--graphite); }
+
+/* Books by this pen name */
+.pen-books { list-style: none; margin: 0; padding: 0; }
+.pen-book {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--mist);
+}
+.pen-book-title {
+  flex-grow: 1;
+  min-width: 0;
+  min-height: var(--control-h);
+  display: flex;
+  align-items: center;
+  font-size: var(--text-base);
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.pen-book-title:hover { text-decoration: underline; }
+.pen-book-step { font-size: var(--text-md); color: var(--graphite); white-space: nowrap; }
+.pen-books-empty { padding-top: var(--space-1); }
+
+/* Delete dialog: the books that use the pen name */
+.pen-book-list { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-base); }
+.pen-book-list a { display: inline-flex; align-items: center; min-height: var(--control-h); }
+.delete-icon.neutral { background: var(--mist); color: var(--graphite); }
+.spinner.inline { display: inline-block; vertical-align: -3px; width: 14px; height: 14px; margin-right: var(--space-2); }
+
+@media (max-width: 1100px) {
+  .pen-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pen-detail-grid { grid-template-columns: minmax(0, 1fr); }
 }
