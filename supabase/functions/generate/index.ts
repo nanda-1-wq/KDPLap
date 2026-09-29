@@ -2,7 +2,9 @@
    KDP Lab — Edge Function "generate"
    supabase/functions/generate/index.ts
 
-   POST { stage, penNameId } → { stage, bio, words } or { error: <code> }.
+   POST { stage: "bio", penNameId }             → { stage, bio, words }
+   POST { stage: "amazon_import", topicId, text } → { stage, books }
+   or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
    SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
@@ -13,7 +15,7 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type Store, type UsageRow } from "./handler.ts";
-import type { PenRow } from "./lib.ts";
+import type { PenRow, TopicRow } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -47,6 +49,16 @@ function openStore(authHeader: string): Store {
         .maybeSingle();
       if (error) throw error;
       return data as PenRow | null;
+    },
+
+    async getTopic(id) {
+      const { data, error } = await asUser
+        .from("topics")
+        .select("id, name")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as TopicRow | null;
     },
 
     async getMonthlyLimit() {

@@ -1,7 +1,7 @@
-// deno test supabase/functions/generate/  (no network, no real Anthropic call)
+// deno test --allow-read=supabase/functions/generate/fixtures supabase/functions/generate/  (from the repo root)
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { makeHandler, type Store, type UsageRow } from "./handler.ts";
-import type { PenRow } from "./lib.ts";
+import type { PenRow, TopicRow } from "./lib.ts";
 
 const ID = "3f1c2a9e-8b7d-4c6e-9a5b-1d2e3f4a5b6c";
 const USER = "11111111-2222-4333-8444-555555555555";
@@ -13,10 +13,15 @@ const pen: PenRow = {
   bio_facts: { background: "Leads a free weekly chair yoga class.", credentials: "", personal: "Gardens." },
   voice: { tones: ["warm"] },
 };
+const TOPIC_ID = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
+const topic: TopicRow = { id: TOPIC_ID, name: "Chair yoga for seniors" };
+const PAGE = Deno.readTextFileSync(new URL("./fixtures/amazon-page1.txt", import.meta.url));
+const EXPECTED = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/amazon-page1.expected.json", import.meta.url)));
 
 type Setup = {
   userId?: string | null;
   pen?: PenRow | null;
+  topic?: TopicRow | null;
   limit?: number | null;
   monthTokens?: number;
   recent?: number;
@@ -31,6 +36,7 @@ function setup(s: Setup = {}) {
   const store: Store = {
     getUserId: () => Promise.resolve(s.userId === undefined ? USER : s.userId),
     getPenName: (id) => s.storeThrows ? Promise.reject(new Error("db down")) : Promise.resolve(s.pen === undefined ? (id === ID ? pen : null) : s.pen),
+    getTopic: (id) => Promise.resolve(s.topic === undefined ? (id === TOPIC_ID ? topic : null) : s.topic),
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),
     sumCountedTokensSince: () => Promise.resolve(s.monthTokens ?? 0),
     countCallsSince: () => Promise.resolve(s.recent ?? 0),
@@ -214,11 +220,98 @@ Deno.test("database error: 500 server_error", quiet(async () => {
 Deno.test("a failed usage log still returns the bio", quiet(async () => {
   const h = makeHandler({
     env: () => FAKE_KEY,
-    openStore: () => ({ getUserId: async () => USER, getPenName: async () => pen, getMonthlyLimit: async () => null,
+    openStore: () => ({ getUserId: async () => USER, getPenName: async () => pen, getTopic: async () => topic, getMonthlyLimit: async () => null,
       sumCountedTokensSince: async () => 0, countCallsSince: async () => 0, logUsage: () => Promise.reject({ code: "42501" }) }),
     fetchFn: (() => Promise.resolve(anthropic("end_turn", { result: "ok", bio: "Hi there.", missing: "" }))) as typeof fetch,
     now: () => new Date(),
   });
   const r = await h(post(good));
   assertEquals([r.status, (await json(r)).bio], [200, "Hi there."]);
+}));
+
+/* ── amazon_import ───────────────────────── */
+
+const imp = { stage: "amazon_import", topicId: TOPIC_ID, text: PAGE };
+const importReply = (out: unknown = EXPECTED) => () => Promise.resolve(anthropic("end_turn", out));
+
+Deno.test("import success: 200 books, one counted usage row, escaped page text, 8000 tokens", quiet(async () => {
+  const { handle, calls, logged } = setup({ provider: importReply() });
+  const r = await handle(post(imp));
+  assertEquals(r.status, 200);
+  assertEquals(r.headers.get("access-control-allow-origin"), ORIGIN);
+  const body = await json(r);
+  assertEquals(body.stage, "amazon_import");
+  assertEquals(body.books.length, 15);
+  assertEquals(Object.keys(body).sort(), ["books", "stage"]);   // no counts, no pass/fail from the server
+  assertEquals(logged, [{ user_id: USER, stage: "amazon_import", model: "claude-sonnet-5-5", input_tokens: 520, output_tokens: 190, status: "ok", counted: true }]);
+
+  const sent = JSON.parse(calls[0].init.body as string);
+  assertEquals([sent.model, sent.max_tokens], ["claude-sonnet-5-5", 8000]);
+  assert(sent.messages[0].content.startsWith("<page_text>\n"));
+  assert(sent.messages[0].content.includes("Chair Yoga After 70"));
+  assert(calls[0].init.signal instanceof AbortSignal);
+}));
+
+Deno.test("import: not an Amazon page is 422, logged, not counted", quiet(async () => {
+  const { handle, logged } = setup({ provider: importReply({ is_amazon_page: false, books: [] }) });
+  const r = await handle(post({ ...imp, text: "My grandmother's apple pie recipe. ".repeat(10) }));
+  assertEquals([r.status, await json(r)], [422, { error: "not_amazon_page" }]);
+  assertEquals([logged.length, logged[0].status, logged[0].counted], [1, "ok", false]);
+}));
+
+Deno.test("import: a topic that isn't visible (RLS) is 404, no call", quiet(async () => {
+  const { handle, calls, logged } = setup({ topic: null });
+  const r = await handle(post(imp));
+  assertEquals([r.status, (await json(r)).error], [404, "not_found"]);
+  assertEquals([calls.length, logged.length], [0, 0]);
+}));
+
+Deno.test("import: bad input is 400, no call", quiet(async () => {
+  const bodies = [
+    { ...imp, text: "too short" },
+    { ...imp, text: "a".repeat(60_001) },
+    { ...imp, topicId: "x" },
+    { ...imp, penNameId: ID },
+    { stage: "amazon_import", topicId: TOPIC_ID },
+    { stage: "bio", topicId: TOPIC_ID, text: PAGE },
+  ];
+  for (const b of bodies) {
+    const { handle, calls } = setup({ provider: importReply() });
+    const r = await handle(post(b));
+    assertEquals([r.status, (await json(r)).error], [400, "bad_request"], JSON.stringify(b).slice(0, 80));
+    assertEquals(calls.length, 0);
+  }
+}));
+
+Deno.test("import: a body over 256 KB is 400 (declared or streamed)", quiet(async () => {
+  const { handle, calls } = setup();
+  const big = JSON.stringify({ ...imp, text: "x".repeat(59_000) }) + " ".repeat(262_144);
+  assertEquals((await handle(post(big))).status, 400);
+  const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(big)); c.close(); } });
+  const r = await handle(new Request("http://x", { method: "POST", headers: { authorization: "Bearer a.b.c" }, body: stream }));
+  assertEquals(r.status, 400);
+  assertEquals(calls.length, 0);
+}));
+
+Deno.test("import: limits apply before the call", quiet(async () => {
+  for (const [s, code] of [[{ recent: 10 }, "rate_limited"], [{ limit: 10, monthTokens: 10 }, "monthly_limit"]] as const) {
+    const { handle, calls } = setup(s);
+    const r = await handle(post(imp));
+    assertEquals([r.status, (await json(r)).error], [429, code]);
+    assertEquals(calls.length, 0);
+  }
+}));
+
+Deno.test("import: provider failures are 502, logged, not counted", quiet(async () => {
+  const cases: [() => Promise<Response>, string][] = [
+    [() => Promise.reject(new DOMException("timed out", "TimeoutError")), "ai_unavailable"],
+    [() => Promise.resolve(anthropic("max_tokens", '{"is_amazon_page":true,"books":[')), "ai_stopped"],
+    [() => Promise.resolve(anthropic("end_turn", "not json")), "ai_unavailable"],
+  ];
+  for (const [provider, code] of cases) {
+    const { handle, logged } = setup({ provider });
+    const r = await handle(post(imp));
+    assertEquals([r.status, (await json(r)).error], [502, code]);
+    assertEquals([logged[0].stage, logged[0].counted], ["amazon_import", false]);
+  }
 }));

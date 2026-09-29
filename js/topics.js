@@ -4,7 +4,8 @@
 
    Load AFTER js/supabase.js. The five market checks here mirror the
    generated column topics.checks_passed (supabase/migrations/0001).
-   Keep both in step. A value that is not set counts as not passed.
+   RULES and bookCounts mirror save_topic_import (migration 0006).
+   Keep them in step. A value that is not set counts as not passed.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -49,7 +50,7 @@
     return [
       { key: 'winning', field: 'winning_count', label: 'Winning books', short: 'winning books',
         set: set(t.winning_count), pass: set(t.winning_count) && t.winning_count >= 3 },
-      { key: 'dead', field: 'dead_count', label: 'Dead books', short: 'dead books',
+      { key: 'dead', field: 'dead_count', label: 'Low-traction books', short: 'low-traction books',
         set: set(t.dead_count), pass: set(t.dead_count) && t.dead_count <= 8 },
       { key: 'authority', field: 'authority_count', label: 'Authority books', short: 'authority books',
         set: set(t.authority_count), pass: set(t.authority_count) && t.authority_count <= 4 },
@@ -61,6 +62,62 @@
   }
 
   const passedCount = (t) => checks(t).filter((c) => c.pass).length;
+
+  /**
+   * Book rules for the three counts. Our code applies them, never the AI.
+   * Only used books count. Winning and low-traction need a BSR and a review
+   * count. Authority needs only the review count: BSR does not matter.
+   */
+  const RULES = {
+    winning: { maxBsr: 30000, maxReviews: 250 },
+    dead: { minBsr: 150000, minReviews: 30 },
+    authority: { minReviews: 500 }
+  };
+
+  /** The rule under each count, in Topic detail and the import dialog. */
+  const RULE_TEXT = {
+    winning: 'BSR 30,000 or better, with 250 reviews or fewer. Need 3 or more.',
+    dead: 'BSR 150,000 or worse, with 30+ reviews. Need 8 or fewer.',
+    authority: '500+ reviews. Need 4 or fewer.'
+  };
+
+  const has = (v) => v !== null && v !== undefined;
+
+  /** Which counts one book adds to: [] or some of 'winning', 'dead', 'authority'. */
+  function countsAs(b) {
+    if (!b.included || !has(b.reviews)) return [];
+    const out = [];
+    if (has(b.bsr) && b.bsr <= RULES.winning.maxBsr && b.reviews <= RULES.winning.maxReviews) out.push('winning');
+    if (has(b.bsr) && b.bsr >= RULES.dead.minBsr && b.reviews >= RULES.dead.minReviews) out.push('dead');
+    if (b.reviews >= RULES.authority.minReviews) out.push('authority');
+    return out;
+  }
+
+  /**
+   * Which counts have data to judge: winning and low-traction need a used
+   * book with both numbers; authority needs a used book with a review count.
+   * A count without data shows "No data", because 0 would read as a pass.
+   */
+  function countData(books) {
+    const used = books.filter((b) => b.included);
+    const both = used.some((b) => has(b.bsr) && has(b.reviews));
+    return { winning: both, dead: both, authority: used.some((b) => has(b.reviews)) };
+  }
+
+  /** { winning_count, dead_count, authority_count } from a list of books. */
+  function bookCounts(books) {
+    const n = { winning_count: 0, dead_count: 0, authority_count: 0 };
+    books.forEach((b) => countsAs(b).forEach((k) => { n[`${k}_count`] += 1; }));
+    return n;
+  }
+
+  /** Where a count came from, for the line under it. '' when not set. */
+  function sourceText(t, key) {
+    const src = t[`${key}_source`];
+    const at = t[`${key}_set_at`];
+    if (!src || !at) return '';
+    return src === 'imported' ? `Imported · ${dayText(at)}` : `Manual · edited ${dayText(at)}`;
+  }
   const isScored = (t) => checks(t).some((c) => c.set);
 
   /** Five squares, green for each passed check. Always shown next to the words "N of 5". */
@@ -98,5 +155,8 @@
     return books.length ? books[0].id : null;
   }
 
-  window.kdpTopics = { ICON, STATUS, statusBadge, checks, passedCount, isScored, dots, joinList, esc, dayText, newestBookId, MAX_NAME: 200 };
+  window.kdpTopics = {
+    ICON, STATUS, statusBadge, checks, passedCount, isScored, dots, joinList, esc, dayText, newestBookId,
+    RULES, RULE_TEXT, countsAs, countData, bookCounts, sourceText, MAX_NAME: 200
+  };
 })();

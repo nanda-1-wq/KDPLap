@@ -16,6 +16,9 @@ const GOOGLE_ENABLED = true;
 // Shared client — accessible as window.sb if needed
 window.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Where each topic count came from, and when (migration 0006).
+const TOPIC_SOURCES = 'winning_source, winning_set_at, dead_source, dead_set_at, authority_source, authority_set_at';
+
 window.kdp = {
 
   googleEnabled: GOOGLE_ENABLED,
@@ -198,14 +201,20 @@ window.kdp = {
       .order('updated_at', { ascending: false });
   },
 
-  /** One topic for the detail page. data is null when the id is not the user's (RLS). */
+  /**
+   * One topic for the detail page, with its saved page-1 books in page order.
+   * data is null when the id is not the user's (RLS).
+   */
   async getTopic(id) {
     return window.sb
       .from('topics')
       .select(`id, name, status, winning_count, dead_count, authority_count, monthly_searches,
                results_match, is_specific, excitement, author_fit, notes, checks_passed, updated_at,
-               books ( id, updated_at )`)
+               ${TOPIC_SOURCES},
+               books ( id, updated_at ),
+               topic_page_books ( position, title, author, bsr, reviews, rating, sponsored, included, created_at )`)
       .eq('id', id)
+      .order('position', { referencedTable: 'topic_page_books' })
       .maybeSingle();
   },
 
@@ -229,7 +238,7 @@ window.kdp = {
       .from('topics')
       .update(fields)
       .eq('id', id)
-      .select('id, name, status, checks_passed, updated_at');
+      .select(`id, name, status, checks_passed, updated_at, ${TOPIC_SOURCES}`);
     if (error) return { data: null, error };
     if (!data.length) return { data: null, error: Object.assign(new Error('Topic not found.'), { notFound: true }) };
     return { data: data[0], error: null };
@@ -348,13 +357,14 @@ window.kdp = {
    * Run one AI stage on the server. Only ids go up; prompts live server-side.
    * Returns { data, error }. error.code is a short code from the function
    * (not_enough_facts, monthly_limit, rate_limited, ai_unavailable, ai_stopped,
-   * ai_declined, unauthorized, not_found, bad_request, server_error) or
-   * 'network' when the function could not be reached.
+   * ai_declined, not_amazon_page, unauthorized, not_found, bad_request,
+   * server_error) or 'network' when the function could not be reached.
+   * Input: { stage: 'bio', penNameId } or { stage: 'amazon_import', topicId, text }.
    */
-  async generate({ stage, penNameId }) {
+  async generate(input) {
     let res;
     try {
-      res = await window.sb.functions.invoke('generate', { body: { stage, penNameId } });
+      res = await window.sb.functions.invoke('generate', { body: input });
     } catch (err) {
       return { data: null, error: { code: 'network' } };
     }
@@ -372,6 +382,21 @@ window.kdp = {
       return { data: null, error: { code: 'server_error' } };
     }
     return { data: null, error: { code: 'network' } };
+  },
+
+  /**
+   * Save an import: the page-1 books and the counts our rules make from them,
+   * in one transaction (migration 0006). Manual counts stay unless replaceManual.
+   * books: [{ title, author, bsr, reviews, rating, sponsored, included }] in page order.
+   * Returns { data: the saved topic row, error }. error.code 'P0002' = topic gone.
+   */
+  async saveTopicImport(topicId, books, replaceManual) {
+    const { data, error } = await window.sb.rpc('save_topic_import', {
+      p_topic_id: topicId,
+      p_books: books,
+      p_replace_manual: !!replaceManual
+    });
+    return { data: data || null, error };
   },
 
   /** Tokens used since the 1st of this month, UTC, like the server (counted AI calls only). */

@@ -22,6 +22,7 @@ export type UsageRow = {
 export interface Store {
   getUserId(): Promise<string | null>;
   getPenName(id: string): Promise<L.PenRow | null>;
+  getTopic(id: string): Promise<L.TopicRow | null>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -89,10 +90,18 @@ export function makeHandler(deps: Deps) {
       const input = L.parseInput(raw);
       if (!input) return fail("bad_request");
 
-      // 3. The pen name, read through RLS. Someone else's id reads as missing.
-      const pen = await store.getPenName(input.penNameId);
-      if (!pen) return fail("not_found");
-      if (!L.hasAnyFact(pen.bio_facts)) return fail("not_enough_facts");
+      // 3. The parent row, read through RLS. Someone else's id reads as missing.
+      let job: L.Job;
+      if (input.stage === "bio") {
+        const pen = await store.getPenName(input.penNameId);
+        if (!pen) return fail("not_found");
+        if (!L.hasAnyFact(pen.bio_facts)) return fail("not_enough_facts");
+        job = { stage: "bio", pen };
+      } else {
+        const topic = await store.getTopic(input.topicId);
+        if (!topic) return fail("not_found");
+        job = { stage: "amazon_import", text: input.text };
+      }
 
       // 4. Limits, before any money is spent.
       const now = deps.now();
@@ -109,7 +118,7 @@ export function makeHandler(deps: Deps) {
       if (limitCode) return fail(limitCode);
 
       // 5. The AI call.
-      const request = L.buildRequest(input.stage, pen);
+      const request = L.buildRequest(job);
       let httpOk = false;
       let body: unknown = null;
       try {
@@ -121,7 +130,7 @@ export function makeHandler(deps: Deps) {
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify(request),
-          signal: AbortSignal.timeout(L.TIMEOUT_MS),
+          signal: AbortSignal.timeout(L.TIMEOUT_MS[input.stage]),
         });
         httpOk = res.ok;
         body = await res.json().catch(() => null);
@@ -134,8 +143,8 @@ export function makeHandler(deps: Deps) {
         console.error(`generate: provider call failed: ${(err as Error)?.name ?? "Error"}`);
       }
 
-      const out = L.interpretResponse(httpOk, body);
-      if (httpOk && out.code && out.code !== "not_enough_facts") {
+      const out = L.interpretResponse(input.stage, httpOk, body);
+      if (httpOk && out.code && out.code !== "not_enough_facts" && out.code !== "not_amazon_page") {
         console.error(`generate: provider result ${out.code} stop_reason=${(body as { stop_reason?: string } | null)?.stop_reason ?? "none"}`);
       }
 
@@ -157,6 +166,7 @@ export function makeHandler(deps: Deps) {
 
       if (out.code === "not_enough_facts") return fail("not_enough_facts", { missing: out.missing ?? "" });
       if (out.code) return fail(out.code);
+      if (input.stage === "amazon_import") return reply(200, { stage: input.stage, books: out.books });
       return reply(200, { stage: input.stage, bio: out.bio, words: L.wordCount(out.bio!) });
     } catch (err) {
       // Database and config errors carry no secrets. Provider errors never reach here.

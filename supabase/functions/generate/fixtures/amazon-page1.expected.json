@@ -1,0 +1,21 @@
+{
+  "is_amazon_page": true,
+  "books": [
+    { "title": "Gentle Seated Strength: A 21-Day Chair Program for Active Seniors", "author": "Marla Quinn", "bsr": 4210, "reviews": 1312, "rating": 4.6, "sponsored": true },
+    { "title": "Easy Chair Yoga Cards: 52 Poses for Every Day", "author": "Tilde Park", "bsr": null, "reviews": 88, "rating": 4.3, "sponsored": true },
+    { "title": "Chair Yoga for Seniors Over 60: Simple Illustrated Routines to Improve Balance, Flexibility and Mobility", "author": "Evelyn Hart", "bsr": 1987, "reviews": 2184, "rating": 4.5, "sponsored": false },
+    { "title": "Seated Yoga Made Simple: 10-Minute Chair Workouts for Seniors", "author": "Colin Ward", "bsr": 18450, "reviews": 143, "rating": 4.4, "sponsored": false },
+    { "title": "Chair Yoga for Beginners and Seniors: Large Print Edition", "author": "Ruth Okafor", "bsr": 27905, "reviews": 61, "rating": 4.2, "sponsored": false },
+    { "title": "The Senior's Chair Yoga Handbook", "author": "Dale Morrow", "bsr": 212340, "reviews": 37, "rating": 4.1, "sponsored": false },
+    { "title": "Chair Yoga After 70: Stay Strong, Steady and Independent", "author": "Priya Nand", "bsr": 9812, "reviews": 1106, "rating": 4.7, "sponsored": false },
+    { "title": "Morning Chair Stretches: A Gentle Wake-Up Routine", "author": "Ann Lowell", "bsr": 488120, "reviews": 52, "rating": 3.9, "sponsored": false },
+    { "title": "Wall Pilates and Chair Yoga for Women Over 50", "author": "Kim Soto", "bsr": 6115, "reviews": 3420, "rating": 4.3, "sponsored": false },
+    { "title": "Chair Yoga for Seniors: 30 Illustrated Poses", "author": "Gail Benton", "bsr": 96400, "reviews": 18, "rating": 4.0, "sponsored": false },
+    { "title": "Seated Tai Chi and Chair Yoga for Arthritis", "author": "Owen Blake", "bsr": null, "reviews": 204, "rating": 4.4, "sponsored": false },
+    { "title": "Chair Yoga Journal: A 12-Week Log for Older Adults", "author": "Nell Farrow", "bsr": 1240776, "reviews": 12, "rating": 4.8, "sponsored": false },
+    { "title": "Balance First: Chair Exercises to Prevent Falls", "author": "Hugo Lindqvist", "bsr": 33020, "reviews": 689, "rating": 4.6, "sponsored": false },
+    { "title": "Chair Yoga for Seniors Over 60: Simple Illustrated Routines to Improve Balance, Flexibility and Mobility", "author": "Evelyn Hart", "bsr": 1987, "reviews": 2184, "rating": 4.5, "sponsored": false },
+    { "title": "The Complete Chair Yoga Program for Seniors", "author": "Marcus Reyes", "bsr": 165300, "reviews": 540, "rating": 4.5, "sponsored": false },
+    { "title": "Chair Yoga Quick Start for Seniors", "author": "Lena Voss", "bsr": 702455, "reviews": null, "rating": null, "sponsored": false }
+  ]
+}

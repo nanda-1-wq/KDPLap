@@ -2,7 +2,8 @@
    KDP Lab — Topic detail (designs 09 and 13)
    /js/topic.js
 
-   Load AFTER supabase.js, shell.js, new-book.js, topics.js, add-topic.js.
+   Load AFTER supabase.js, shell.js, new-book.js, topics.js, add-topic.js,
+   topic-import.js.
    URL: app/topic.html?id=<topic id>
 
    Every edit autosaves. Status rules (CLAUDE.md §6, migration 0004):
@@ -10,10 +11,16 @@
    - An edit that makes a check fail moves a validated topic to 'researching'.
    - The first score moves an idea to 'researching'.
    - 'book_started' is set by create_book and reset by a trigger only.
+   Each count shows where it came from (migration 0006): "Imported · date"
+   or "Manual · edited date". The database sets both; editing an imported
+   count makes it Manual. "Import from Amazon page" is js/topic-import.js.
 ═══════════════════════════════════════════════════ */
 
 (async function () {
-  const { ICON, STATUS, statusBadge, checks, passedCount, isScored, joinList, esc, newestBookId, MAX_NAME } = kdpTopics;
+  const {
+    ICON, STATUS, statusBadge, checks, passedCount, isScored, joinList, esc, dayText, newestBookId,
+    RULE_TEXT, countsAs, sourceText, MAX_NAME
+  } = kdpTopics;
 
   const view = document.getElementById('view');
   const topicId = new URLSearchParams(location.search).get('id');
@@ -26,9 +33,9 @@
   const PICKABLE = ['idea', 'researching', 'validated', 'rejected', 'archived'];
 
   const COUNT_ROWS = [
-    { key: 'winning', field: 'winning_count', hint: 'BSR 30,000 or better, with 250 reviews or fewer. Need 3 or more.' },
-    { key: 'dead', field: 'dead_count', hint: 'BSR 150,000 or worse, with 30+ reviews. Need 8 or fewer.' },
-    { key: 'authority', field: 'authority_count', hint: '500+ reviews. Need 4 or fewer.' }
+    { key: 'winning', field: 'winning_count', hint: RULE_TEXT.winning },
+    { key: 'dead', field: 'dead_count', hint: RULE_TEXT.dead },
+    { key: 'authority', field: 'authority_count', hint: RULE_TEXT.authority }
   ];
   const TOGGLE_ROWS = [
     { key: 'match', field: 'results_match', hint: 'Page 1 shows books about this exact topic.' },
@@ -79,11 +86,12 @@
         <div class="check-text">
           <label class="check-label" for="${id}">${label(r.key)}</label>
           <span class="check-hint" id="${id}-hint">${r.hint}</span>
+          <span class="check-source" id="${id}-source" data-source></span>
           <span class="check-note" id="${id}-note" data-note></span>
           <span class="field-error" id="${id}-error" hidden></span>
         </div>
         <input class="text-input count-input" id="${id}" type="number" inputmode="numeric" min="0" max="${MAX_COUNT}" step="1"
-          data-count="${r.field}" aria-describedby="${id}-hint ${id}-note ${id}-error" />
+          data-count="${r.field}" aria-describedby="${id}-hint ${id}-source ${id}-note ${id}-error" />
         <span class="check-result" data-badge></span>
       </div>`;
   }
@@ -130,9 +138,15 @@
       </div>
 
       <div class="detail-grid">
+        <div class="main-col">
         <section class="panel" aria-labelledby="p1">
-          <h2 id="p1" class="panel-title">Amazon page-1 data</h2>
-          <p class="panel-hint" data-search-hint></p>
+          <div class="panel-head">
+            <div>
+              <h2 id="p1" class="panel-title">Amazon page-1 data</h2>
+              <p class="panel-hint" data-search-hint></p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-import>Import from Amazon page</button>
+          </div>
           ${COUNT_ROWS.map((r) => countRow(r)).join('')}
           ${TOGGLE_ROWS.map(toggleRow).join('')}
           <div class="check-row last">
@@ -146,6 +160,8 @@
             <span></span>
           </div>
         </section>
+        <section class="panel page-books" aria-labelledby="pb" data-page-books hidden></section>
+        </div>
 
         <div class="side-col">
           <section class="panel result-card" aria-labelledby="res" data-result></section>
@@ -169,7 +185,8 @@
       menuBtn: view.querySelector('[data-menu-btn]'),
       searchHint: view.querySelector('[data-search-hint]'),
       result: view.querySelector('[data-result]'),
-      notes: view.querySelector('[data-notes]')
+      notes: view.querySelector('[data-notes]'),
+      pageBooks: view.querySelector('[data-page-books]')
     };
 
     // Fill inputs from the model. After this, inputs own their values.
@@ -189,6 +206,7 @@
     renderChecks();
     renderStatus();
     renderResult();
+    renderPageBooks();
     renderSave();
     bindEvents();
   }
@@ -244,6 +262,8 @@
       row.querySelector('[data-badge]').innerHTML = checkBadge(c);
       const note = row.querySelector('[data-note]');
       if (note) note.textContent = countNote(c);
+      const source = row.querySelector('[data-source]');
+      if (source) source.textContent = sourceText(model, c.key);
       const input = row.querySelector('[data-count]');
       // Red border for a failing count, as design 09 shows. A typing error uses aria-invalid instead.
       if (input) input.classList.toggle('is-failing', c.set && !c.pass);
@@ -270,7 +290,7 @@
     const n = model[c.field];
     switch (c.key) {
       case 'winning': return n === 0 ? 'no winning books' : `only ${n} winning book${n === 1 ? '' : 's'}`;
-      case 'dead': return `${n} dead books`;
+      case 'dead': return `${n} low-traction books`;
       case 'authority': return `${n} authority books`;
       case 'match': return 'page 1 does not match the topic';
       default: return 'the topic is too broad';
@@ -355,6 +375,56 @@
     if (hadFocus) els.result.querySelector('#res').focus();
   }
 
+  /** The saved page-1 books of the last import, with "Import again". Hidden before any import. */
+  function renderPageBooks() {
+    const books = model.topic_page_books || [];
+    els.pageBooks.hidden = !books.length;
+    if (!books.length) { els.pageBooks.innerHTML = ''; return; }
+    const used = books.filter((b) => b.included).length;
+    const fmt = (v) => (v === null || v === undefined ? '<span class="muted-text">Not in page</span>' : Number(v).toLocaleString('en-US'));
+    const tags = { winning: 'Winning', dead: 'Low-traction', authority: 'Authority' };
+    const as = (b) => {
+      if (!b.included) return '<span class="muted-text">Not used</span>';
+      const list = countsAs(b);
+      if (list.length) return list.map((k) => `<span class="tag">${tags[k]}</span>`).join(' ');
+      if (b.bsr === null || b.reviews === null) return '<span class="muted-text">Not counted</span>';
+      return '<span class="muted-text">—</span>';
+    };
+    const rows = books.map((b) => `
+      <tr class="${b.included ? '' : 'is-off'}">
+        <td class="book-col">
+          <span class="import-book">${esc(b.title)}</span>
+          <span class="import-author">${b.author ? esc(b.author) : 'Author not in page'}${b.sponsored ? ' <span class="tag">Sponsored</span>' : ''}</span>
+        </td>
+        <td class="num-col">${fmt(b.bsr)}</td>
+        <td class="num-col">${fmt(b.reviews)}</td>
+        <td class="num-col">${b.rating === null ? '—' : Number(b.rating).toFixed(1)}</td>
+        <td>${as(b)}</td>
+      </tr>`).join('');
+    els.pageBooks.innerHTML = `
+      <div class="panel-head">
+        <div>
+          <h2 id="pb" class="panel-title">Page 1 books</h2>
+          <p class="panel-hint">Imported ${esc(dayText(books[0].created_at))}. ${books.length} book${books.length === 1 ? '' : 's'}, ${used} used for the counts.</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-import>Import again</button>
+      </div>
+      <div class="import-table-wrap is-flat" tabindex="0" role="region" aria-label="Saved page 1 books">
+        <table class="import-table">
+          <thead>
+            <tr>
+              <th scope="col">BOOK</th>
+              <th scope="col" class="num-col">BSR</th>
+              <th scope="col" class="num-col">REVIEWS</th>
+              <th scope="col" class="num-col">RATING</th>
+              <th scope="col">COUNTS AS</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
   function renderSave(message) {
     const el = els.save;
     if (saveState === 'saving') el.innerHTML = '<span class="spinner" aria-hidden="true"></span>Saving…';
@@ -372,6 +442,12 @@
   function edit(field, value, delay) {
     model[field] = value;
     dirty.add(field);
+    // The database marks an edited count Manual (0006). Show it now; the save returns the real values.
+    const key = COUNT_ROWS.find((r) => r.field === field)?.key;
+    if (key) {
+      model[`${key}_source`] = value === null ? null : 'manual';
+      model[`${key}_set_at`] = value === null ? null : new Date().toISOString();
+    }
     const passed = passedCount(model);
     if (model.status === 'validated' && passed < 5) {
       model.status = 'researching';
@@ -435,6 +511,13 @@
 
     model.checks_passed = res.data.checks_passed;
     model.updated_at = res.data.updated_at;
+    // Sources and dates come from the database, unless a newer edit of that count is waiting.
+    COUNT_ROWS.forEach((r) => {
+      if (dirty.has(r.field)) return;
+      model[`${r.key}_source`] = res.data[`${r.key}_source`];
+      model[`${r.key}_set_at`] = res.data[`${r.key}_set_at`];
+    });
+    renderChecks();
     if (!dirty.has('status')) model.status = res.data.status;
     saveState = dirty.size ? 'saving' : 'saved';
     renderSave();
@@ -480,6 +563,12 @@
   }
 
   function bindEvents() {
+    // The grid is rebuilt on every renderPage, so this listener is never doubled.
+    view.querySelector('.detail-grid').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-import]');
+      if (b) openImport(b);
+    });
+
     view.querySelectorAll('[data-count]').forEach((input) => {
       input.addEventListener('input', () => {
         const v = readCount(input);
@@ -545,6 +634,28 @@
     renderStatus();
     renderResult();
     schedule(0);
+  }
+
+  /* ── Import from Amazon page ─────────────── */
+
+  function openImport(btn) {
+    kdpTopicImport.open({
+      getTopic: () => model,
+      returnFocus: btn,
+      // Pending autosave first. True when nothing is left unsaved.
+      beforeSave: async () => { await flush(); return dirty.size === 0 && saveState !== 'error'; },
+      onSaved: (row, books) => {
+        const keep = { books: model.books };
+        model = { ...model, ...row, ...keep, topic_page_books: books };
+        dirty.clear();
+        demoted = false;
+        saveState = 'saved';
+        renderPage();
+        const title = view.querySelector('#p1');
+        title.setAttribute('tabindex', '-1');
+        title.focus();
+      }
+    });
   }
 
   /* ── Start book ──────────────────────────── */
