@@ -1611,6 +1611,32 @@ a { color: var(--ink); }
 .ai-action { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
 .ai-note { font-size: var(--text-sm); color: var(--graphite); }
 
+/* Generated bio suggestion (E6): shown next to the bio until Accept or Discard */
+.bio-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-4) 18px;
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.bio-suggest.is-loading { gap: var(--space-2); }
+.bio-suggest-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.bio-suggest-label {
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--graphite);
+}
+.bio-suggest-text { margin: 0; font-family: var(--font-read); font-size: var(--text-lg); line-height: 1.65; white-space: pre-line; }
+.bio-suggest-text:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.bio-suggest .field-hint { margin: 0; }
+.bio-suggest-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.alert-text { margin: 0; }
+.alert-text + .alert-text { margin-top: var(--space-1); }
+
 /* Books by this pen name */
 .pen-books { list-style: none; margin: 0; padding: 0; }
 .pen-book {
@@ -1645,3 +1671,17 @@ a { color: var(--ink); }
   .pen-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pen-detail-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Settings placeholder: AI usage this month (E6; full Settings page in E11) */
+.settings-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+.settings-usage-line { margin: 0; font-size: var(--text-md); color: var(--ink-2); }

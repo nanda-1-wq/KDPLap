@@ -342,10 +342,42 @@ window.kdp = {
     return { data: data[0].default_pen_name_id, error: null };
   },
 
-  /** Tokens used since the 1st of this month (counted AI calls only). */
+  /* ── AI (Edge Function "generate") ────────────── */
+
+  /**
+   * Run one AI stage on the server. Only ids go up; prompts live server-side.
+   * Returns { data, error }. error.code is a short code from the function
+   * (not_enough_facts, monthly_limit, rate_limited, ai_unavailable, ai_stopped,
+   * ai_declined, unauthorized, not_found, bad_request, server_error) or
+   * 'network' when the function could not be reached.
+   */
+  async generate({ stage, penNameId }) {
+    let res;
+    try {
+      res = await window.sb.functions.invoke('generate', { body: { stage, penNameId } });
+    } catch (err) {
+      return { data: null, error: { code: 'network' } };
+    }
+    if (!res.error) return { data: res.data, error: null };
+    // A non-2xx reply carries { error: code } in the Response on error.context.
+    const ctx = res.error.context;
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        const body = await ctx.json();
+        if (body && typeof body.error === 'string') {
+          return { data: null, error: { code: body.error, missing: typeof body.missing === 'string' ? body.missing : '' } };
+        }
+      } catch (err) { /* not JSON */ }
+      if (ctx.status === 401) return { data: null, error: { code: 'unauthorized' } };
+      return { data: null, error: { code: 'server_error' } };
+    }
+    return { data: null, error: { code: 'network' } };
+  },
+
+  /** Tokens used since the 1st of this month, UTC, like the server (counted AI calls only). */
   async getMonthUsage() {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
     const { data, error } = await window.sb
       .from('ai_usage')
       .select('input_tokens, output_tokens')

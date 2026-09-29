@@ -8,7 +8,8 @@
 
    Every edit autosaves (Saving / Saved / Couldn't save + Retry, as in E4).
    bio_text is one column with no versions in v1 (owner decision, E5).
-   "Generate bio" and "Rebuild voice from sample" come with AI in E6.
+   "Generate bio" (E6) shows the AI bio as a suggestion. It replaces the bio
+   only when the user clicks Accept. "Rebuild voice from sample" comes later.
 ═══════════════════════════════════════════════════ */
 
 (async function () {
@@ -128,10 +129,14 @@
             <div class="bio-box">
               <div class="field">
                 <label for="f-bio" class="bio-label">Bio</label>
-                <span class="field-hint" id="f-bio-hint">Write it yourself for now. Use only the facts above.</span>
+                <span class="field-hint" id="f-bio-hint">Write it yourself, or generate one from the facts above.</span>
                 <textarea class="text-area bio-text" id="f-bio" rows="5" maxlength="${P.MAX_BIO}" aria-describedby="f-bio-hint" data-bio></textarea>
               </div>
-              ${aiButton('genBio', 'Generate bio', 'Comes with AI (E6). It will use only your facts.')}
+              <div class="ai-action">
+                <button type="button" class="btn btn-secondary" aria-describedby="genBio-note" data-gen-bio>${ICON.sparkle}Generate bio</button>
+                <span class="ai-note" id="genBio-note">Uses only your facts. Your bio changes only if you accept.</span>
+              </div>
+              <div data-suggest></div>
             </div>
           </section>
         </div>
@@ -159,7 +164,7 @@
               <span class="field-hint" id="f-sample-hint" data-words></span>
               <textarea class="text-area" id="f-sample" rows="4" maxlength="${P.MAX_SAMPLE}" aria-describedby="f-sample-hint" data-sample></textarea>
             </div>
-            ${aiButton('rebuild', 'Rebuild voice from sample', 'Comes with AI (E6).')}
+            ${aiButton('rebuild', 'Rebuild voice from sample', 'Coming in a later task.')}
           </section>
 
           <section class="panel pen-panel" aria-labelledby="pBooks">
@@ -182,7 +187,9 @@
       bio: view.querySelector('[data-bio]'),
       sample: view.querySelector('[data-sample]'),
       words: view.querySelector('[data-words]'),
-      books: view.querySelector('[data-books]')
+      books: view.querySelector('[data-books]'),
+      genBio: view.querySelector('[data-gen-bio]'),
+      suggest: view.querySelector('[data-suggest]')
     };
 
     // Fill inputs from the model. After this, inputs own their values.
@@ -433,10 +440,150 @@
 
     els.save.addEventListener('click', (e) => { if (e.target.closest('[data-retry-save]')) flush(); });
 
+    els.genBio.addEventListener('click', () => generateBio());
+    els.suggest.addEventListener('click', (e) => {
+      if (e.target.closest('[data-accept]')) acceptBio();
+      else if (e.target.closest('[data-discard]')) discardBio();
+      else if (e.target.closest('[data-regen]')) generateBio();
+    });
+
     els.def.addEventListener('click', (e) => {
       const b = e.target.closest('[data-set-default]');
       if (b && !b.disabled) setDefault(b, b.dataset.setDefault === 'on');
     });
+  }
+
+  /* ── Generate bio (E6): a suggestion, never a silent replace ── */
+
+  let suggestion = null;   // the generated bio waiting for Accept or Discard
+  let generating = false;
+
+  const nextMonthUtc = () => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
+      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  };
+
+  /** [kind, text, retry] for an error code from kdp.generate. */
+  function genMessage(code) {
+    switch (code) {
+      case 'not_enough_facts': return ['warning', 'Add a bit more about yourself first. The AI does not invent facts.', false];
+      case 'monthly_limit': return ['warning', `You have used this month’s AI allowance. It resets on ${nextMonthUtc()}.`, false];
+      case 'rate_limited': return ['warning', 'Too many requests. Wait a minute, then try again.', true];
+      case 'save_first': return ['error', 'Your last change is not saved yet. Use Retry next to “Couldn’t save”, then generate.', false];
+      case 'network': return ['error', 'We couldn’t reach KDP Lab. Check your connection, then try again. This try was not counted.', true];
+      default: return ['error', 'The AI is not available right now. This try was not counted.', true];
+    }
+  }
+
+  function setGenBusy(busy) {
+    generating = busy;
+    const b = els.genBio;
+    b.disabled = busy;
+    if (busy) {
+      b.setAttribute('aria-busy', 'true');
+      b.innerHTML = '<span class="spinner" aria-hidden="true"></span>Generating…';
+    } else {
+      b.removeAttribute('aria-busy');
+      b.innerHTML = `${ICON.sparkle}${suggestion ? 'Generate again' : 'Generate bio'}`;
+    }
+  }
+
+  function renderGenLoading() {
+    els.suggest.innerHTML = `<div class="bio-suggest is-loading" role="status">
+        <span class="bio-suggest-label">SUGGESTED BIO</span>
+        <p class="field-hint">Writing a bio from your facts…</p>
+        <div class="skel skel-line"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div>
+      </div>`;
+  }
+
+  function renderGenError(code, missing) {
+    const [kind, text, retry] = genMessage(code);
+    els.suggest.innerHTML = '';
+    const box = document.createElement('div');
+    box.className = `alert alert-${kind}`;
+    box.setAttribute('role', 'alert');
+    box.innerHTML = ICON.warn(18);
+    const body = document.createElement('div');
+    const p = document.createElement('p');
+    p.className = 'alert-text';
+    p.textContent = text;
+    body.append(p);
+    if (missing) {
+      const m = document.createElement('p');
+      m.className = 'alert-text';
+      m.textContent = missing;
+      body.append(m);
+    }
+    if (retry) body.insertAdjacentHTML('beforeend', '<button type="button" class="link-btn" data-regen>Try again</button>');
+    box.append(body);
+    els.suggest.append(box);
+  }
+
+  function renderSuggestion() {
+    const n = P.wordCount(suggestion);
+    els.suggest.innerHTML = `<div class="bio-suggest" role="region" aria-labelledby="sugLabel">
+        <div class="bio-suggest-head">
+          <span class="bio-suggest-label" id="sugLabel">SUGGESTED BIO</span>
+          <span class="badge badge-success">${ICON.check(13)}Uses only your facts</span>
+        </div>
+        <p class="bio-suggest-text" tabindex="-1" data-suggest-text></p>
+        <p class="field-hint">${n} word${n === 1 ? '' : 's'}. Your current bio stays until you accept.</p>
+        <div class="bio-suggest-actions">
+          <button type="button" class="btn btn-primary" data-accept>${ICON.check(16)}Accept</button>
+          <button type="button" class="btn btn-secondary" data-discard>Discard</button>
+        </div>
+      </div>`;
+    els.suggest.querySelector('[data-suggest-text]').textContent = suggestion;
+  }
+
+  async function generateBio() {
+    if (generating) return;
+    setGenBusy(true);
+    // The server reads the saved facts, so save any edits first.
+    if (dirty.size || inFlight) await flush();
+    if (saveState === 'error') {
+      setGenBusy(false);
+      renderGenError('save_first');
+      return;
+    }
+
+    renderGenLoading();
+    let res;
+    try { res = await kdp.generate({ stage: 'bio', penNameId: penId }); } catch (err) { res = { error: { code: 'network' } }; }
+    const code = res.error && res.error.code;
+
+    if (code === 'unauthorized') { location.replace('../login.html'); return; }
+    if (code === 'not_found') { renderProblem('This pen name no longer exists', 'It was deleted, or it is not yours.', false); return; }
+
+    if (code) {
+      setGenBusy(false);
+      renderGenError(code, code === 'not_enough_facts' ? res.error.missing : '');
+      return;
+    }
+    suggestion = res.data.bio;
+    setGenBusy(false);
+    renderSuggestion();
+    els.suggest.querySelector('[data-suggest-text]').focus();
+  }
+
+  function acceptBio() {
+    if (!suggestion) return;
+    model.bio_text = suggestion;
+    els.bio.value = suggestion;
+    suggestion = null;
+    els.suggest.innerHTML = '';
+    setGenBusy(false);
+    renderHead();
+    edit('bio_text', 0);
+    els.bio.focus();
+  }
+
+  function discardBio() {
+    suggestion = null;
+    els.suggest.innerHTML = '';
+    setGenBusy(false);
+    els.genBio.focus();
   }
 
   /* ── Default pen name for new books ──────── */

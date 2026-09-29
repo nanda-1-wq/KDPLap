@@ -267,8 +267,9 @@
       if (settings.error || !settings.data || usage.error) return null;
       const limit = settings.data.monthly_token_limit;
       const pct = limit > 0 ? Math.min(100, Math.round((usage.tokens / limit) * 100)) : 0;
+      // The server counts from the 1st of the month in UTC.
       const now = new Date();
-      const resets = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const resets = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
       return { pct, resets };
     }
 

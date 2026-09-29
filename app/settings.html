@@ -28,7 +28,11 @@
           <div class="state-icon" aria-hidden="true" data-icon="settings"></div>
           <div class="chip-label">COMING IN E11</div>
           <h2>Settings are on their way</h2>
-          <p>This page is built in task E11, with your defaults and AI usage.</p>
+          <p>This page is built in task E11, with your defaults.</p>
+            <div class="settings-usage" aria-live="polite" data-usage>
+              <div class="stat-label">AI USAGE THIS MONTH</div>
+              <div class="skel skel-line"></div>
+            </div>
             <p class="account-line">Signed in as <strong id="accountEmail"></strong></p>
             <div class="state-actions">
               <button type="button" class="btn btn-secondary" id="logoutBtn">Log out</button>
@@ -50,6 +54,24 @@
     if (!user) return;
     document.querySelector('[data-icon]').innerHTML = kdpShell.icon('settings', 26);
     document.getElementById('accountEmail').textContent = user.email || '';
+
+    // AI usage this month (counted calls only, from the 1st in UTC, like the server).
+    const usageEl = document.querySelector('[data-usage]');
+    try {
+      const [settings, usage] = await Promise.all([kdp.ensureUserSettings(user.id), kdp.getMonthUsage()]);
+      if (settings.error || !settings.data || usage.error) throw new Error('usage');
+      const limit = settings.data.monthly_token_limit;
+      const pct = limit > 0 ? Math.min(100, Math.round((usage.tokens / limit) * 100)) : 100;
+      const now = new Date();
+      const resets = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+        .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      const fmt = (n) => n.toLocaleString('en-US');
+      usageEl.innerHTML = `<div class="stat-label">AI USAGE THIS MONTH</div>
+        <p class="settings-usage-line"><strong data-usage-tokens>${fmt(usage.tokens)}</strong> of ${fmt(limit)} tokens · Resets ${resets}</p>
+        <div class="bar" role="img" aria-label="${pct}% of this month's AI allowance used"><span style="width: ${pct}%"></span></div>`;
+    } catch (err) {
+      usageEl.innerHTML = '<div class="stat-label">AI USAGE THIS MONTH</div><p class="settings-usage-line">Not available right now.</p>';
+    }
     const logoutBtn = document.getElementById('logoutBtn');
     logoutBtn.addEventListener('click', async () => {
       logoutBtn.disabled = true;
