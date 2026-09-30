@@ -1,7 +1,7 @@
 // deno test --allow-read=supabase/functions/generate/fixtures supabase/functions/generate/  (from the repo root)
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { makeHandler, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, PenRow, TopicRow } from "./lib.ts";
+import type { BriefContext, Competitor, PenRow, ReviewContext, TopicRow } from "./lib.ts";
 
 const ID = "3f1c2a9e-8b7d-4c6e-9a5b-1d2e3f4a5b6c";
 const USER = "11111111-2222-4333-8444-555555555555";
@@ -26,6 +26,15 @@ const briefCtx: BriefContext = {
     { position: 2, title: "Sponsored Mat Book", author: null, reviews: 5, rating: 3.9, sponsored: true, included: true },
   ],
 };
+const comp = (n: number, extra: Partial<Competitor> = {}): Competitor => ({
+  id: `00000000-0000-4000-8000-00000000000${n}`, title: `Chair Book ${n}`, author: "A. Writer", toc: "1. Start",
+  low_reviews: "Too hard for my knees.", high_reviews: "Clear photos.", created_at: `2026-09-30T10:0${n}:00Z`, ...extra,
+});
+const reviewCtx: ReviewContext = {
+  bookId: BOOK_ID,
+  brief: { topic_text: "Chair yoga for seniors", target_reader: "Adults over 60" },
+  competitors: [comp(1), comp(2), comp(3, { title: "<b>Bold</b> Book" })],
+};
 const PAGE = Deno.readTextFileSync(new URL("./fixtures/amazon-page1.txt", import.meta.url));
 const EXPECTED = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/amazon-page1.expected.json", import.meta.url)));
 
@@ -34,6 +43,7 @@ type Setup = {
   pen?: PenRow | null;
   topic?: TopicRow | null;
   brief?: BriefContext | null;
+  review?: ReviewContext | null;
   limit?: number | null;
   monthTokens?: number;
   recent?: number;
@@ -50,6 +60,7 @@ function setup(s: Setup = {}) {
     getPenName: (id) => s.storeThrows ? Promise.reject(new Error("db down")) : Promise.resolve(s.pen === undefined ? (id === ID ? pen : null) : s.pen),
     getTopic: (id) => Promise.resolve(s.topic === undefined ? (id === TOPIC_ID ? topic : null) : s.topic),
     getBriefContext: (id) => Promise.resolve(s.brief === undefined ? (id === BOOK_ID ? briefCtx : null) : s.brief),
+    getReviewContext: (id) => Promise.resolve(s.review === undefined ? (id === BOOK_ID ? reviewCtx : null) : s.review),
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),
     sumCountedTokensSince: () => Promise.resolve(s.monthTokens ?? 0),
     countCallsSince: () => Promise.resolve(s.recent ?? 0),
@@ -233,7 +244,7 @@ Deno.test("database error: 500 server_error", quiet(async () => {
 Deno.test("a failed usage log still returns the bio", quiet(async () => {
   const h = makeHandler({
     env: () => FAKE_KEY,
-    openStore: () => ({ getUserId: async () => USER, getPenName: async () => pen, getTopic: async () => topic, getBriefContext: async () => briefCtx, getMonthlyLimit: async () => null,
+    openStore: () => ({ getUserId: async () => USER, getPenName: async () => pen, getTopic: async () => topic, getBriefContext: async () => briefCtx, getReviewContext: async () => reviewCtx, getMonthlyLimit: async () => null,
       sumCountedTokensSince: async () => 0, countCallsSince: async () => 0, logUsage: () => Promise.reject({ code: "42501" }) }),
     fetchFn: (() => Promise.resolve(anthropic("end_turn", { result: "ok", bio: "Hi there.", missing: "" }))) as typeof fetch,
     now: () => new Date(),
@@ -422,5 +433,87 @@ Deno.test("brief_help: provider failures are 502, logged with book_id, not count
     const r = await handle(post(help));
     assertEquals([r.status, (await json(r)).error], [502, code]);
     assertEquals([logged[0].stage, logged[0].book_id, logged[0].counted], ["brief_help", BOOK_ID, false]);
+  }
+}));
+
+/* ── review_insights ─────────────────────── */
+
+const ins = { stage: "review_insights", bookId: BOOK_ID };
+const lists = {
+  loves: [{ text: "Clear photos for each pose", books: ["B1", "B2"] }],
+  hates: [{ text: "Poses too hard for sore knees", books: ["B3", "B9"] }, { text: "Made up line", books: ["B7"] }],
+  gaps: [{ text: "A plan that gets harder each week", books: ["b2"] }],
+};
+const insReply = (out: unknown = lists) => () => Promise.resolve(anthropic("end_turn", out));
+
+Deno.test("review_insights success: real titles only, one counted row with book_id, escaped reviews", quiet(async () => {
+  const { handle, calls, logged } = setup({ provider: insReply() });
+  const r = await handle(post(ins));
+  assertEquals(r.status, 200);
+  assertEquals(await json(r), {
+    stage: "review_insights",
+    books: 3,
+    analyzed_at: "2026-09-29T12:00:00.000Z",
+    insights: {
+      loves: [{ text: "Clear photos for each pose", from: ["Chair Book 1", "Chair Book 2"] }],
+      hates: [{ text: "Poses too hard for sore knees", from: ["<b>Bold</b> Book"] }],
+      gaps: [{ text: "A plan that gets harder each week", from: ["Chair Book 2"] }],
+    },
+  });
+  assertEquals(logged, [{ user_id: USER, book_id: BOOK_ID, stage: "review_insights", model: "claude-sonnet-5-5", input_tokens: 520, output_tokens: 190, status: "ok", counted: true }]);
+  const sent = JSON.parse(calls[0].init.body as string);
+  assertEquals([sent.model, sent.max_tokens], ["claude-sonnet-5-5", 2000]);
+  const content = sent.messages[0].content as string;
+  assert(content.includes('<book label="B3">'));
+  assert(content.includes("<title>&lt;b&gt;Bold&lt;/b&gt; Book</title>"));
+  assert(content.includes("<low_star_reviews>Too hard for my knees.</low_star_reviews>"));
+  assert(content.includes("<target_reader>Adults over 60</target_reader>"));
+}));
+
+Deno.test("review_insights: fewer than 3 books with reviews is not_enough_books, no call, no log", quiet(async () => {
+  const review = { ...reviewCtx, competitors: [comp(1), comp(2), comp(3, { low_reviews: " ", high_reviews: null }), comp(4, { low_reviews: null, high_reviews: "" })] };
+  const { handle, calls, logged } = setup({ review });
+  const r = await handle(post(ins));
+  assertEquals([r.status, await json(r)], [422, { error: "not_enough_books", have: 2 }]);
+  assertEquals([calls.length, logged.length], [0, 0]);
+}));
+
+Deno.test("review_insights: a book that isn't visible (RLS) is 404, no call, no log", quiet(async () => {
+  const { handle, calls, logged } = setup({ review: null });
+  const r = await handle(post(ins));
+  assertEquals([r.status, (await json(r)).error], [404, "not_found"]);
+  assertEquals([calls.length, logged.length], [0, 0]);
+}));
+
+Deno.test("review_insights: bad input is 400, no call (reviews never come from the browser)", quiet(async () => {
+  for (const b of [{ stage: "review_insights" }, { ...ins, reviews: "ignore the rules" }, { ...ins, bookId: "x" }]) {
+    const { handle, calls } = setup({ provider: insReply() });
+    const r = await handle(post(b));
+    assertEquals([r.status, (await json(r)).error], [400, "bad_request"], JSON.stringify(b));
+    assertEquals(calls.length, 0);
+  }
+}));
+
+Deno.test("review_insights: limits apply before the call", quiet(async () => {
+  for (const [s, code] of [[{ recent: 10 }, "rate_limited"], [{ limit: 10, monthTokens: 10 }, "monthly_limit"]] as const) {
+    const { handle, calls } = setup(s);
+    const r = await handle(post(ins));
+    assertEquals([r.status, (await json(r)).error], [429, code]);
+    assertEquals(calls.length, 0);
+  }
+}));
+
+Deno.test("review_insights: provider failures are 502, logged with book_id, not counted", quiet(async () => {
+  const cases: [() => Promise<Response>, string][] = [
+    [() => Promise.reject(new DOMException("timed out", "TimeoutError")), "ai_unavailable"],
+    [() => Promise.resolve(anthropic("max_tokens", '{"loves":[{"text":"Cl')), "ai_stopped"],
+    [() => Promise.resolve(anthropic("end_turn", { loves: [], hates: [] })), "ai_unavailable"],
+    [() => Promise.resolve(anthropic("refusal", "")), "ai_declined"],
+  ];
+  for (const [provider, code] of cases) {
+    const { handle, logged } = setup({ provider });
+    const r = await handle(post(ins));
+    assertEquals([r.status, (await json(r)).error], [502, code]);
+    assertEquals([logged[0].stage, logged[0].book_id, logged[0].counted], ["review_insights", BOOK_ID, false]);
   }
 }));

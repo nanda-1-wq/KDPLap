@@ -25,6 +25,7 @@ export interface Store {
   getPenName(id: string): Promise<L.PenRow | null>;
   getTopic(id: string): Promise<L.TopicRow | null>;
   getBriefContext(bookId: string): Promise<L.BriefContext | null>;
+  getReviewContext(bookId: string): Promise<L.ReviewContext | null>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -103,11 +104,18 @@ export function makeHandler(deps: Deps) {
         const topic = await store.getTopic(input.topicId);
         if (!topic) return fail("not_found");
         job = { stage: "amazon_import", text: input.text };
-      } else {
+      } else if (input.stage === "brief_help") {
         const ctx = await store.getBriefContext(input.bookId);
         if (!ctx) return fail("not_found");
         if (!L.hasTopic(ctx)) return fail("not_enough_facts", { missing: "" });
         job = { stage: "brief_help", ctx };
+      } else {
+        // The server reads the pasted reviews itself; the browser sends only the id.
+        const ctx = await store.getReviewContext(input.bookId);
+        if (!ctx) return fail("not_found");
+        const books = L.reviewedBooks(ctx);
+        if (books.length < L.MIN_REVIEWED_BOOKS) return fail("not_enough_books", { have: books.length });
+        job = { stage: "review_insights", ctx, books };
       }
 
       // 4. Limits, before any money is spent.
@@ -150,7 +158,7 @@ export function makeHandler(deps: Deps) {
         console.error(`generate: provider call failed: ${(err as Error)?.name ?? "Error"}`);
       }
 
-      const out = L.interpretResponse(input.stage, httpOk, body);
+      const out = L.interpretResponse(input.stage, httpOk, body, job.stage === "review_insights" ? job.books : []);
       if (httpOk && out.code && out.code !== "not_enough_facts" && out.code !== "not_amazon_page") {
         console.error(`generate: provider result ${out.code} stop_reason=${(body as { stop_reason?: string } | null)?.stop_reason ?? "none"}`);
       }
@@ -159,7 +167,7 @@ export function makeHandler(deps: Deps) {
       try {
         await store.logUsage({
           user_id: userId,
-          ...(input.stage === "brief_help" ? { book_id: input.bookId } : {}),
+          ...("bookId" in input ? { book_id: input.bookId } : {}),
           stage: input.stage,
           model: request.model,
           input_tokens: out.inputTokens,
@@ -176,6 +184,8 @@ export function makeHandler(deps: Deps) {
       if (out.code) return fail(out.code);
       if (input.stage === "amazon_import") return reply(200, { stage: input.stage, books: out.books });
       if (input.stage === "brief_help") return reply(200, { stage: input.stage, suggestions: out.suggestions });
+      // analyzed_at comes from the server clock; the browser saves it with the lines.
+      if (job.stage === "review_insights") return reply(200, { stage: input.stage, insights: out.insights, books: job.books.length, analyzed_at: now.toISOString() });
       return reply(200, { stage: input.stage, bio: out.bio, words: L.wordCount(out.bio!) });
     } catch (err) {
       // Database and config errors carry no secrets. Provider errors never reach here.

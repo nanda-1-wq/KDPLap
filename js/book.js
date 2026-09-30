@@ -7,7 +7,8 @@
    the furthest step reached; Back and the sidebar never write it.
 
    Steps with a screen register in window.kdpBookSteps (E7.1: 01 Brief in
-   js/book-brief.js): init(book, ctx) once, render(root) on each visit,
+   js/book-brief.js; E7.2: 02 Research in js/book-research.js):
+   init(book, ctx) once, render(root) on each visit,
    isDone(book) for the sidebar mark, blockers() for the Next button.
    Other steps show a "Coming in" placeholder.
 ═══════════════════════════════════════════════════ */

@@ -5,6 +5,7 @@
    POST { stage: "bio", penNameId }             → { stage, bio, words }
    POST { stage: "amazon_import", topicId, text } → { stage, books }
    POST { stage: "brief_help", bookId }         → { stage, suggestions }
+   POST { stage: "review_insights", bookId }    → { stage, insights, books, analyzed_at }
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
@@ -16,7 +17,7 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, PenRow, TopicRow } from "./lib.ts";
+import type { BriefContext, Competitor, PenRow, ReviewContext, TopicRow } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -86,6 +87,27 @@ function openStore(authHeader: string): Store {
         pen: one(data.pen_names) as BriefContext["pen"],
         topicName: topic?.name ?? null,
         pageBooks: topic?.topic_page_books ?? [],
+      };
+    },
+
+    // One read: the Brief and the book's competitors with their pasted reviews.
+    // A book that is not the caller's reads as null (RLS).
+    async getReviewContext(bookId) {
+      const { data, error } = await asUser
+        .from("books")
+        .select(`id,
+                 book_briefs ( topic_text, target_reader ),
+                 competitors ( id, title, author, toc, low_reviews, high_reviews, created_at )`)
+        .eq("id", bookId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+      const brief = one(data.book_briefs) as ReviewContext["brief"] | null;
+      return {
+        bookId: data.id as string,
+        brief: brief ?? { topic_text: null, target_reader: null },
+        competitors: (data.competitors ?? []) as Competitor[],
       };
     },
 

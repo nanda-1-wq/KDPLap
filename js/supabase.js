@@ -112,6 +112,8 @@ window.kdp = {
 
   /**
    * One book for the book page, with its Brief, pen name, and source topic.
+   * Also the counts step 02 needs for its done mark: all competitors and the
+   * research rows of kind 'source' (personal notes do not count).
    * data is null when the id is not the user's (RLS).
    */
   async getBook(id) {
@@ -121,8 +123,11 @@ window.kdp = {
                pen_names ( id, name, voice ),
                topics ( id, name, checks_passed ),
                book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type,
-                             trim_size, length_range, chapter_count, options, updated_at )`)
+                             trim_size, length_range, chapter_count, options, updated_at ),
+               competitors ( count ),
+               real_sources:research_sources ( count )`)
       .eq('id', id)
+      .eq('real_sources.kind', 'source')
       .maybeSingle();
   },
 
@@ -234,6 +239,145 @@ window.kdp = {
     if (error) return { error };
     if (!count) return { error: Object.assign(new Error('Book not found.'), { notFound: true }) };
     return { error: null };
+  },
+
+  /* ── Research (step 02) ───────────────────────── */
+
+  /**
+   * Everything step 02 shows: competitors and sources (oldest first) and the
+   * review insights row (null before the first analysis). Three queries.
+   */
+  async listResearch(bookId) {
+    const [comps, sources, insights] = await Promise.all([
+      window.sb
+        .from('competitors')
+        .select('id, title, author, bsr, reviews, rating, toc, low_reviews, high_reviews, is_authority, created_at')
+        .eq('book_id', bookId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true }),
+      window.sb
+        .from('research_sources')
+        .select('id, kind, body, citation, created_at')
+        .eq('book_id', bookId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true }),
+      window.sb
+        .from('research_insights')
+        .select('loves, hates, gaps, analyzed_at, updated_at')
+        .eq('book_id', bookId)
+        .maybeSingle()
+    ]);
+    const error = comps.error || sources.error || insights.error;
+    if (error) return { data: null, error };
+    return { data: { competitors: comps.data, sources: sources.data, insights: insights.data }, error: null };
+  },
+
+  /**
+   * Adds one competitor. The caller trims and checks the limits; the database
+   * checks them too and allows at most 10 per book (migration 0008:
+   * error.code 'P0001', message 'competitor_limit').
+   */
+  async addCompetitor(bookId, fields) {
+    const { data, error } = await window.sb
+      .from('competitors')
+      .insert({ ...fields, book_id: bookId })
+      .select('id, title, author, bsr, reviews, rating, toc, low_reviews, high_reviews, is_authority, created_at')
+      .single();
+    return { data, error };
+  },
+
+  /**
+   * Copies page-1 books from Topic Lab into the book's competitors in ONE
+   * insert (all rows or none). rows: [{ title, author, bsr, reviews, rating }].
+   */
+  async copyCompetitors(bookId, rows) {
+    const { data, error } = await window.sb
+      .from('competitors')
+      .insert(rows.map((r) => ({ ...r, book_id: bookId })))
+      .select('id, title, author, bsr, reviews, rating, toc, low_reviews, high_reviews, is_authority, created_at');
+    return { data, error };
+  },
+
+  /** Saves a competitor. 0 rows (gone, or not the user's) is an error. */
+  async updateCompetitor(id, fields) {
+    const { data, error } = await window.sb
+      .from('competitors')
+      .update(fields)
+      .eq('id', id)
+      .select('id, title, author, bsr, reviews, rating, toc, low_reviews, high_reviews, is_authority, created_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Competitor not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  async deleteCompetitor(id) {
+    const { error, count } = await window.sb
+      .from('competitors')
+      .delete({ count: 'exact' })
+      .eq('id', id);
+    if (error) return { error };
+    if (!count) return { error: Object.assign(new Error('Competitor not found.'), { notFound: true }) };
+    return { error: null };
+  },
+
+  /** Adds a source or a personal note. A source needs a citation (migration 0008). */
+  async addSource(bookId, fields) {
+    const { data, error } = await window.sb
+      .from('research_sources')
+      .insert({ ...fields, book_id: bookId })
+      .select('id, kind, body, citation, created_at')
+      .single();
+    return { data, error };
+  },
+
+  async updateSource(id, fields) {
+    const { data, error } = await window.sb
+      .from('research_sources')
+      .update(fields)
+      .eq('id', id)
+      .select('id, kind, body, citation, created_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Source not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  async deleteSource(id) {
+    const { error, count } = await window.sb
+      .from('research_sources')
+      .delete({ count: 'exact' })
+      .eq('id', id);
+    if (error) return { error };
+    if (!count) return { error: Object.assign(new Error('Source not found.'), { notFound: true }) };
+    return { error: null };
+  },
+
+  /** The included page-1 books of a topic, in page order, for "Copy from Topic Lab". */
+  async listTopicPicks(topicId) {
+    return window.sb
+      .from('topic_page_books')
+      .select('id, position, title, author, bsr, reviews, rating, sponsored')
+      .eq('topic_id', topicId)
+      .eq('included', true)
+      .order('position', { ascending: true });
+  },
+
+  /**
+   * Saves the review insights (one row per book). lists = { loves, hates, gaps },
+   * each [{ text, from: [title], edited }] (shape checked by migration 0008).
+   * With analyzedAt (a new analysis) the row is created or replaced; without
+   * it only the lines change (an edit or a removal).
+   * v3: move the save of a new analysis to the server (generate), so the AI
+   * label is set server-side when other users join.
+   */
+  async saveInsights(bookId, lists, analyzedAt) {
+    const row = { loves: lists.loves, hates: lists.hates, gaps: lists.gaps };
+    const q = analyzedAt
+      ? window.sb.from('research_insights').upsert({ ...row, book_id: bookId, analyzed_at: analyzedAt }, { onConflict: 'book_id' })
+      : window.sb.from('research_insights').update(row).eq('book_id', bookId);
+    const { data, error } = await q.select('loves, hates, gaps, analyzed_at, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Insights not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
   },
 
   /* ── Topics ───────────────────────────────────── */
@@ -414,10 +558,10 @@ window.kdp = {
    * Run one AI stage on the server. Only ids go up; prompts live server-side.
    * Returns { data, error }. error.code is a short code from the function
    * (not_enough_facts, monthly_limit, rate_limited, ai_unavailable, ai_stopped,
-   * ai_declined, not_amazon_page, unauthorized, not_found, bad_request,
-   * server_error) or 'network' when the function could not be reached.
+   * ai_declined, not_amazon_page, not_enough_books, unauthorized, not_found,
+   * bad_request, server_error) or 'network' when the function could not be reached.
    * Input: { stage: 'bio', penNameId }, { stage: 'amazon_import', topicId, text },
-   * or { stage: 'brief_help', bookId }.
+   * { stage: 'brief_help', bookId } or { stage: 'review_insights', bookId }.
    */
   async generate(input) {
     let res;
@@ -433,7 +577,7 @@ window.kdp = {
       try {
         const body = await ctx.json();
         if (body && typeof body.error === 'string') {
-          return { data: null, error: { code: body.error, missing: typeof body.missing === 'string' ? body.missing : '' } };
+          return { data: null, error: { code: body.error, missing: typeof body.missing === 'string' ? body.missing : '', have: Number.isInteger(body.have) ? body.have : null } };
         }
       } catch (err) { /* not JSON */ }
       if (ctx.status === 401) return { data: null, error: { code: 'unauthorized' } };
