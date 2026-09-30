@@ -110,15 +110,72 @@ window.kdp = {
       .order('updated_at', { ascending: false });
   },
 
-  /** One book for the book page. data is null when the id is not the user's (RLS). */
+  /**
+   * One book for the book page, with its Brief, pen name, and source topic.
+   * data is null when the id is not the user's (RLS).
+   */
   async getBook(id) {
     return window.sb
       .from('books')
-      .select(`id, title, status, current_step, updated_at, topic_id,
-               pen_names ( name ),
-               book_briefs ( topic_text )`)
+      .select(`id, title, status, current_step, updated_at, topic_id, pen_name_id, series_name, series_number,
+               pen_names ( id, name, voice ),
+               topics ( id, name, checks_passed ),
+               book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type,
+                             trim_size, length_range, chapter_count, options, updated_at )`)
       .eq('id', id)
       .maybeSingle();
+  },
+
+  /**
+   * Writes the given Brief fields (step 01). The caller trims and sends null
+   * for an empty field; the database checks lengths and options (migration 0007).
+   * RLS hides other users' rows, so an update that matches no row is an error.
+   */
+  async updateBrief(bookId, fields) {
+    const { data, error } = await window.sb
+      .from('book_briefs')
+      .update(fields)
+      .eq('book_id', bookId)
+      .select('book_id, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Writes the given books fields from the Brief (pen_name_id, series_name, series_number).
+   * RLS checks the pen name is the user's own. 0 rows is an error.
+   */
+  async updateBook(id, fields) {
+    const { data, error } = await window.sb
+      .from('books')
+      .update(fields)
+      .eq('id', id)
+      .select('id, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Records the furthest step reached. Only moves forward: a book already at
+   * this step or later is left alone (0 rows is not an error here).
+   */
+  async setCurrentStep(id, step) {
+    const { error } = await window.sb
+      .from('books')
+      .update({ current_step: step })
+      .eq('id', id)
+      .lt('current_step', step);
+    return { error };
+  },
+
+  /** Pen names for the Brief's picker. */
+  async listPenNameOptions() {
+    return window.sb
+      .from('pen_names')
+      .select('id, name, voice')
+      .order('name', { ascending: true });
   },
 
   /** Creates a book and its Brief in one transaction (supabase/migrations/0002). Returns the new id. */
@@ -359,7 +416,8 @@ window.kdp = {
    * (not_enough_facts, monthly_limit, rate_limited, ai_unavailable, ai_stopped,
    * ai_declined, not_amazon_page, unauthorized, not_found, bad_request,
    * server_error) or 'network' when the function could not be reached.
-   * Input: { stage: 'bio', penNameId } or { stage: 'amazon_import', topicId, text }.
+   * Input: { stage: 'bio', penNameId }, { stage: 'amazon_import', topicId, text },
+   * or { stage: 'brief_help', bookId }.
    */
   async generate(input) {
     let res;

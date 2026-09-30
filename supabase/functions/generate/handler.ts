@@ -10,6 +10,7 @@ import * as L from "./lib.ts";
 
 export type UsageRow = {
   user_id: string;
+  book_id?: string;                                  // only for stages that work on a book
   stage: L.Stage;
   model: string;
   input_tokens: number;
@@ -23,6 +24,7 @@ export interface Store {
   getUserId(): Promise<string | null>;
   getPenName(id: string): Promise<L.PenRow | null>;
   getTopic(id: string): Promise<L.TopicRow | null>;
+  getBriefContext(bookId: string): Promise<L.BriefContext | null>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -97,10 +99,15 @@ export function makeHandler(deps: Deps) {
         if (!pen) return fail("not_found");
         if (!L.hasAnyFact(pen.bio_facts)) return fail("not_enough_facts");
         job = { stage: "bio", pen };
-      } else {
+      } else if (input.stage === "amazon_import") {
         const topic = await store.getTopic(input.topicId);
         if (!topic) return fail("not_found");
         job = { stage: "amazon_import", text: input.text };
+      } else {
+        const ctx = await store.getBriefContext(input.bookId);
+        if (!ctx) return fail("not_found");
+        if (!L.hasTopic(ctx)) return fail("not_enough_facts", { missing: "" });
+        job = { stage: "brief_help", ctx };
       }
 
       // 4. Limits, before any money is spent.
@@ -152,6 +159,7 @@ export function makeHandler(deps: Deps) {
       try {
         await store.logUsage({
           user_id: userId,
+          ...(input.stage === "brief_help" ? { book_id: input.bookId } : {}),
           stage: input.stage,
           model: request.model,
           input_tokens: out.inputTokens,
@@ -167,6 +175,7 @@ export function makeHandler(deps: Deps) {
       if (out.code === "not_enough_facts") return fail("not_enough_facts", { missing: out.missing ?? "" });
       if (out.code) return fail(out.code);
       if (input.stage === "amazon_import") return reply(200, { stage: input.stage, books: out.books });
+      if (input.stage === "brief_help") return reply(200, { stage: input.stage, suggestions: out.suggestions });
       return reply(200, { stage: input.stage, bio: out.bio, words: L.wordCount(out.bio!) });
     } catch (err) {
       // Database and config errors carry no secrets. Provider errors never reach here.

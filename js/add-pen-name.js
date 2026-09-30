@@ -4,13 +4,15 @@
 
    Load AFTER js/supabase.js and js/pen-name-common.js on pages in app/.
    Any element with [data-add-pen] opens it, or call kdpAddPen.open().
-   "Add pen name" creates it and opens its detail page.
+   "Add pen name" creates it and opens its detail page. With
+   kdpAddPen.open({ onCreated }) the dialog closes instead and calls
+   onCreated({ id, name }), so the page can use the new pen name (Brief).
 ═══════════════════════════════════════════════════ */
 
 (function () {
   const { ICON, MAX_NAME, MAX_NICHE, nameError } = kdpPens;
 
-  let dialog, els, opener = null, busy = false;
+  let dialog, els, opener = null, busy = false, onCreated = null;
 
   function build() {
     dialog = document.createElement('dialog');
@@ -115,6 +117,13 @@
     let res;
     try { res = await kdp.createPenName(name, niche); } catch (err) { res = { error: err }; }
     if (!res.error && res.data) {
+      if (onCreated) {
+        const done = onCreated;
+        setBusy(false);
+        dialog.close();
+        done({ id: res.data.id, name });
+        return;
+      }
       location.href = `pen-name.html?id=${encodeURIComponent(res.data.id)}`;
       return;
     }
@@ -124,8 +133,9 @@
     els.add.focus();
   }
 
-  function open() {
+  function open(options) {
     if (!dialog) build();
+    onCreated = (options && typeof options.onCreated === 'function') ? options.onCreated : null;
     opener = document.activeElement;
     setBusy(false);
     els.form.reset();
@@ -144,7 +154,7 @@
     const trigger = e.target.closest('[data-add-pen]');
     if (!trigger) return;
     e.preventDefault();
-    open();
+    open();   // no callback: opens the new pen name's page
   });
 
   window.kdpAddPen = { open };

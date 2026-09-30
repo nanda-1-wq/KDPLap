@@ -4,6 +4,7 @@
 
    POST { stage: "bio", penNameId }             → { stage, bio, words }
    POST { stage: "amazon_import", topicId, text } → { stage, books }
+   POST { stage: "brief_help", bookId }         → { stage, suggestions }
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
@@ -15,7 +16,7 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type Store, type UsageRow } from "./handler.ts";
-import type { PenRow, TopicRow } from "./lib.ts";
+import type { BriefContext, PenRow, TopicRow } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -59,6 +60,33 @@ function openStore(authHeader: string): Store {
         .maybeSingle();
       if (error) throw error;
       return data as TopicRow | null;
+    },
+
+    // One read: the Brief, the pen name, and the topic with its page-1 books.
+    // A book that is not the caller's reads as null (RLS).
+    async getBriefContext(bookId) {
+      const { data, error } = await asUser
+        .from("books")
+        .select(`id,
+                 book_briefs ( topic_text, book_type, target_reader, reader_problem, promise_draft ),
+                 pen_names ( niche, voice ),
+                 topics ( name, topic_page_books ( position, title, author, reviews, rating, sponsored, included ) )`)
+        .eq("id", bookId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      // A to-one embed can come back as an object or a one-item array.
+      const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+      const brief = one(data.book_briefs) as BriefContext["brief"] | null;
+      if (!brief) return null;
+      const topic = one(data.topics) as { name: string; topic_page_books: BriefContext["pageBooks"] } | null;
+      return {
+        bookId: data.id as string,
+        brief,
+        pen: one(data.pen_names) as BriefContext["pen"],
+        topicName: topic?.name ?? null,
+        pageBooks: topic?.topic_page_books ?? [],
+      };
     },
 
     async getMonthlyLimit() {

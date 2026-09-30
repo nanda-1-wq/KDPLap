@@ -33,6 +33,8 @@
   --app-menu-w: 232px;        /* card menu (design 07) */
   --app-book-nav-w: 280px;
   --app-book-head-h: 80px;
+  --app-brief-w: 760px;       /* step 01 Brief column (design 14) */
+  --app-series-num-w: 140px;  /* Brief: series book number */
   --app-mini-cover-w: 46px;
   --app-mini-cover-h: 69px;
   --app-mini-cover-text: 6px;
@@ -1823,4 +1825,119 @@ a { color: var(--ink); }
 
 @media (max-width: 900px) {
   .import-cards { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Book page: step marks, Next note (designs 14, 15, 16) ── */
+
+/* Not current, not done: a hollow circle. Done: a check. Current: the ink dot (above). */
+.step-link:not([aria-current="step"]):not(.is-done) .step-mark::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--stone-2);
+}
+.step-link.is-done .step-mark { color: var(--ink); }
+.group-count { font-size: var(--text-xs); color: var(--graphite); }
+
+.book-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+}
+.book-head > [data-back] { justify-self: start; }
+.book-head-next {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.next-note { font-size: var(--text-sm); color: var(--graphite); white-space: nowrap; }
+
+/* Sidebar save line: saving and error states */
+.saved-line { flex-wrap: wrap; }
+.saved-line .spinner { width: 12px; height: 12px; }
+.saved-line .save-error svg { color: var(--danger); }
+.saved-line .link-btn { margin: calc(-1 * var(--space-3)) 0 calc(-1 * var(--space-3)) auto; }
+
+.book-content.has-step { justify-content: center; align-items: flex-start; padding: var(--space-8) var(--space-10); }
+
+/* ── Step 01 Brief (designs 14, 16) ────────────── */
+
+.brief {
+  width: 100%;
+  max-width: var(--app-brief-w);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.brief-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+.brief-intro p { margin: 0; font-size: var(--text-base); line-height: 1.5; color: var(--ink-2); }
+.brief-intro .btn { flex-shrink: 0; }
+
+.brief-card { display: flex; flex-direction: column; gap: 18px; padding: var(--space-6) 28px; }
+.brief-card .panel-title { margin: 0; }
+.brief .field label, .brief .field-label { font-size: var(--text-base); font-weight: 500; }
+.field-optional { font-weight: 400; color: var(--graphite); }
+.brief .text-input, .brief .text-area { font-size: var(--text-base); width: 100%; box-sizing: border-box; }
+.brief .text-area[aria-invalid="true"] { border: 2px solid var(--danger); padding: 9px 11px; }
+
+.brief-source {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--graphite);
+}
+.brief-source .link-btn { font-size: var(--text-sm); }
+
+.brief-pen-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4); }
+.brief-pen-row .select { flex: 1 1 280px; width: auto; }
+.brief-pen-row .link-btn { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+.brief-more { padding: 18px 28px; }
+.brief-more summary {
+  min-height: var(--control-h);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+}
+.brief-more summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--radius-sm); }
+.brief-more-hint { font-weight: 400; color: var(--graphite); }
+.brief-more-body { display: flex; flex-direction: column; gap: 18px; padding-top: var(--space-4); }
+.brief-series { display: grid; grid-template-columns: minmax(0, 1fr) var(--app-series-num-w); gap: var(--space-4); align-items: start; }
+
+/* Help me fill: working card (design 16), notes, per-field suggestions */
+.help-card { display: flex; flex-direction: column; gap: var(--space-2); }
+.help-card .field-hint { margin: var(--space-2) 0 0; }
+.help-working { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-base); }
+.help-note {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+  color: var(--ink-2);
+}
+.brief-suggest { margin-top: var(--space-2); }
+.brief-suggest-text { margin: 0; font-size: var(--text-base); line-height: 1.55; white-space: pre-line; }
+.brief-suggest-text:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.brief [data-suggest]:empty { display: none; }
+.brief [data-help-area]:empty { display: none; }
+/* Step 01 has no Back (design 14). The space stays so the title stays centered. */
+.book-head > [data-back][disabled] { visibility: hidden; }
+
+@media (max-width: 900px) {
+  .brief-series { grid-template-columns: minmax(0, 1fr); }
 }

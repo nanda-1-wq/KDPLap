@@ -3,8 +3,13 @@
    /js/book.js   (used by app/book.html)
 
    URL: book.html?id=<book uuid>&step=<1..6>. The step stays in the URL,
-   so a reload keeps it. Read only in E3.3: moving between steps does not
-   write books.current_step.
+   so a reload keeps it. Next writes books.current_step when it moves past
+   the furthest step reached; Back and the sidebar never write it.
+
+   Steps with a screen register in window.kdpBookSteps (E7.1: 01 Brief in
+   js/book-brief.js): init(book, ctx) once, render(root) on each visit,
+   isDone(book) for the sidebar mark, blockers() for the Next button.
+   Other steps show a "Coming in" placeholder.
 ═══════════════════════════════════════════════════ */
 
 (async function () {
@@ -26,10 +31,14 @@
   const content = document.querySelector('[data-book-content]');
   const backBtn = document.querySelector('[data-back]');
   const nextBtn = document.querySelector('[data-next]');
+  const nextNote = document.querySelector('[data-next-note]');
+  const MODULES = window.kdpBookSteps || {};
+  const PLAN_STEPS = [1, 2, 3, 4];
   const stepLabel = document.querySelector('[data-step-label]');
   const stepTitle = document.querySelector('[data-step-title]');
 
   const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
+  const SAVE_WARN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
   const WARN = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
 
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -40,6 +49,7 @@
   const bookId = params.get('id') || '';
   let step = readStep(params.get('step'));
   let book = null;
+  let saveView = { state: 'idle', message: '', canRetry: false };
 
   function readStep(value) {
     const n = parseInt(value, 10);
@@ -50,6 +60,15 @@
     const brief = one(b.book_briefs);
     return (b.title || (brief && brief.topic_text) || '').trim() || 'Untitled book';
   }
+
+  /** The newest save time: the book row or its Brief. */
+  function lastSaved(b) {
+    const brief = one(b.book_briefs);
+    const times = [b.updated_at, brief && brief.updated_at].filter(Boolean);
+    return times.sort().pop();
+  }
+
+  const isDone = (n) => !!(MODULES[n] && MODULES[n].isDone && MODULES[n].isDone(book));
 
   function savedText(iso) {
     const mins = Math.round((Date.now() - new Date(iso)) / 60000);
@@ -65,8 +84,9 @@
   function stepLink(n) {
     const s = STEPS[n];
     const current = n === step ? ' aria-current="step"' : '';
-    return `<a class="step-link" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
-        <span class="step-mark" aria-hidden="true"></span><span class="step-num">${pad(n)}</span>${s.name}</a>`;
+    const done = isDone(n);
+    return `<a class="step-link${done ? ' is-done' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
+        <span class="step-mark" aria-hidden="true">${done && n !== step ? CHECK : ''}</span><span class="step-num">${pad(n)}</span>${s.name}${done ? '<span class="sr-only">, done</span>' : ''}</a>`;
   }
 
   function renderNav() {
@@ -84,7 +104,7 @@
         </div>
       </div>
       <div class="step-group">
-        <div class="step-group-head"><span class="group-name">PLAN</span></div>
+        <div class="step-group-head"><span class="group-name">PLAN</span><span class="group-count">${PLAN_STEPS.filter(isDone).length} of 4 done</span></div>
         ${[1, 2, 3, 4].map(stepLink).join('')}
       </div>
       <div class="step-group">
@@ -100,24 +120,71 @@
         <div class="group-row"><span class="group-name">RELEASE</span><span class="version-tag">Coming in v3</span></div>
       </div>
       <div class="sidebar-spacer"></div>
-      <div class="saved-line">${CHECK}<span>${savedText(book.updated_at)}</span></div>`;
+      <div class="saved-line" data-saved-line aria-live="polite"></div>`;
+    renderSaveLine();
   }
+
+  /** The sidebar save line: time of the last save, Saving…, or an error with Retry. */
+  function renderSaveLine() {
+    const el = nav.querySelector('[data-saved-line]');
+    if (!el) return;
+    const v = saveView;
+    el.dataset.state = v.state;
+    if (v.state === 'saving') {
+      el.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Saving…</span>';
+    } else if (v.state === 'error') {
+      el.innerHTML = `<span class="save-error">${SAVE_WARN}<span></span></span>${v.canRetry ? '<button type="button" class="link-btn" data-retry-save>Retry</button>' : ''}`;
+      el.querySelector('.save-error span').textContent = v.message || "Couldn't save.";
+      const retry = el.querySelector('[data-retry-save]');
+      if (retry) retry.addEventListener('click', () => MODULES[1] && MODULES[1].retrySave());
+    } else {
+      el.innerHTML = `${CHECK}<span>${savedText(lastSaved(book))}</span>`;
+    }
+  }
+
+  /** Next is blocked while the step has required fields left (design 16). */
+  function setGate() {
+    const m = MODULES[step];
+    const left = m && m.blockers ? m.blockers() : 0;
+    nextBtn.disabled = step === LAST_V1_STEP || left > 0;
+    nextNote.textContent = left ? `${left} required field${left === 1 ? '' : 's'} left` : '';
+    nextNote.hidden = !left;
+  }
+
+  const ctx = {
+    content: () => content,
+    isActive: (n) => n === step,
+    setGate,
+    refresh() {
+      renderNav();
+      setGate();
+      document.title = `${STEPS[step].name} · ${workingTitle(book)} · KDP Lab`;
+    },
+    renderSave(state, message, canRetry) {
+      saveView = { state, message, canRetry };
+      renderSaveLine();
+    },
+    notFound() { renderNotFound(); }
+  };
 
   function renderStep(moveFocus) {
     const s = STEPS[step];
     stepLabel.textContent = `${s.group.toUpperCase()} · STEP ${step} OF ${TOTAL_STEPS}`;
     stepTitle.textContent = s.name;
     backBtn.disabled = step === 1;
-    nextBtn.disabled = step === LAST_V1_STEP;
-    nav.querySelectorAll('[data-step]').forEach((a) => {
-      if (Number(a.dataset.step) === step) a.setAttribute('aria-current', 'step');
-      else a.removeAttribute('aria-current');
-    });
-    content.innerHTML = `
-      <div class="step-placeholder">
-        <div class="chip-label">COMING IN ${s.task}</div>
-        <div>${esc(s.text)}</div>
-      </div>`;
+    renderNav();
+    if (MODULES[step]) {
+      content.classList.add('has-step');
+      MODULES[step].render(content);
+    } else {
+      content.classList.remove('has-step');
+      content.innerHTML = `
+        <div class="step-placeholder">
+          <div class="chip-label">COMING IN ${s.task}</div>
+          <div>${esc(s.text)}</div>
+        </div>`;
+    }
+    setGate();
     document.title = `${s.name} · ${workingTitle(book)} · KDP Lab`;
     if (moveFocus) stepTitle.focus();
   }
@@ -172,7 +239,19 @@
   }
 
   backBtn.addEventListener('click', () => go(step - 1));
-  nextBtn.addEventListener('click', () => go(step + 1));
+  nextBtn.addEventListener('click', () => {
+    if (nextBtn.disabled) return;
+    const n = step + 1;
+    // Edits keep saving in the background; an error shows in the sidebar with Retry.
+    if (MODULES[step] && MODULES[step].flush) MODULES[step].flush();
+    go(n);
+    if (n > book.current_step) {
+      // Only a bookmark for the Books page. If it fails, the next Next tries again.
+      kdp.setCurrentStep(bookId, n)
+        .then((r) => { if (!r.error && n > book.current_step) book.current_step = n; })
+        .catch(() => {});
+    }
+  });
   nav.addEventListener('click', (e) => {
     const link = e.target.closest('a[data-step]');
     if (!link || e.metaKey || e.ctrlKey || e.shiftKey) return;   // let "open in new tab" work
@@ -194,7 +273,7 @@
     if (res.error) { renderError(); return; }
     if (!res.data) { renderNotFound(); return; }
     book = res.data;
-    renderNav();
+    Object.values(MODULES).forEach((m) => m.init && m.init(book, ctx));
     head.hidden = false;
     // Normalise the URL (for example a missing or bad step) without a new history entry.
     history.replaceState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}`);

@@ -32,10 +32,13 @@
           <div class="book-head-label" data-step-label></div>
           <h1 data-step-title tabindex="-1"></h1>
         </div>
-        <button type="button" class="btn btn-primary" data-next>
-          Next
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-        </button>
+        <div class="book-head-next">
+          <span class="next-note" id="nextNote" data-next-note hidden></span>
+          <button type="button" class="btn btn-primary" data-next aria-describedby="nextNote">
+            Next
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </div>
       </header>
       <main class="book-content" data-book-content aria-live="polite"></main>
     </div>
@@ -45,6 +48,10 @@
     integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
     crossorigin="anonymous"></script>
   <script src="../js/supabase.js"></script>
+  <script src="../js/pen-name-common.js"></script>
+  <script src="../js/add-pen-name.js"></script>
+  <script src="../js/autosave.js"></script>
+  <script src="../js/book-brief.js"></script>
   <script src="../js/book.js"></script>
 </body>
 </html>
