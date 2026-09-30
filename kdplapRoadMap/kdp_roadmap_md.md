@@ -13,7 +13,7 @@ Design: ✅ approved (see `design/`)
 - [x] **E5** Pen Names + Pen name detail (bio facts, voice profile)
 - [x] **E6** Edge Function `generate`: auth, usage limits, prompt templates, token logging
 - [x] **E6.5** Import from Amazon page: the user pastes Amazon page 1, AI turns it into a competitor table, counts the 5 market checks, marks each number "Imported", and the user confirms. No scraping.
-- [ ] **E7** Book wizard shell + 01 Brief + 02 Research
+- [x] **E7** Book wizard shell + 01 Brief + 02 Research
 - [ ] **E8** 03 Positioning (drift check, lock) + 04 Title
 - [ ] **E9** 05 Outline
 - [ ] **E10** 06 Write: sections, versions, improve menu, checks
