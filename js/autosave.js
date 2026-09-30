@@ -7,17 +7,22 @@
    request at a time. A failed save keeps the edits for Retry, and leaving
    the page with unsaved edits asks first.
 
-   Used by the Brief (js/book-brief.js). Follow-up after E7: switch
-   js/topic.js and js/pen-name.js to it.
+   Used by the Brief (js/book-brief.js), the topic page (js/topic.js) and
+   the pen name page (js/pen-name.js).
 
    const saver = kdpAutosave.create({
      read(field)         → the value to send, or { error: 'text' } to hold the save
      save(fields)        → Promise<{ data, error }>
      onSaved(res, sent)  → after a good save (sent = the field names)
-     onError(res, sent)  → return true when the page handled it (then the edits are dropped)
+     onError(res, sent)  → return (or resolve to) true when the page handled it
+                           (then the edits are dropped; flush waits for it)
      render(state, message, canRetry)   state: 'idle' | 'saving' | 'saved' | 'error'
    });
    saver.edit(field, delayMs) · saver.flush() · saver.retry() · saver.hasUnsaved() · saver.state
+   saver.isDirty(field) · saver.scheduled() → a save is waiting on its delay
+   saver.drop(field) forgets one edit
+   saver.show(state, message) shows a state, edits kept
+   saver.reset(state, message) drops every edit and shows a state (after a reload)
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -69,7 +74,7 @@
       if (res.error) {
         // Keep the edits unless newer ones replaced them. Retry sends them again.
         sent.forEach((f) => dirty.add(f));
-        if (opts.onError && opts.onError(res, sent)) {
+        if (opts.onError && await opts.onError(res, sent)) {
           dirty.clear();
           clearTimeout(timer);
           timer = null;
@@ -98,6 +103,15 @@
       retry: flush,
       hasUnsaved,
       isDirty: (field) => dirty.has(field),
+      scheduled: () => !!timer,
+      drop: (field) => { dirty.delete(field); },
+      show: set,
+      reset(next, message) {
+        dirty.clear();
+        clearTimeout(timer);
+        timer = null;
+        set(next, message);
+      },
       get state() { return state; }
     };
   }

@@ -229,9 +229,9 @@
   function competitorRow(c) {
     const meta = [
       c.author ? esc(c.author) : '',
-      c.bsr != null ? `BSR ${num(c.bsr)}` : '',
-      c.reviews != null ? plural(num(c.reviews), 'review') : '',
-      c.rating != null ? `${Number(c.rating).toFixed(1)} <span aria-label="stars">${STAR}</span>` : ''
+      c.bsr != null ? `<span class="meta-item">BSR ${num(c.bsr)}</span>` : '',
+      c.reviews != null ? `<span class="meta-item">${plural(num(c.reviews), 'review')}</span>` : '',
+      c.rating != null ? `<span class="meta-item">${Number(c.rating).toFixed(1)} <span aria-label="stars">${STAR}</span></span>` : ''
     ].filter(Boolean).join(' · ');
     const n = reviewsOf(c);
     const tags = [
@@ -242,7 +242,7 @@
     return `<div class="comp-row" data-comp="${esc(c.id)}">
         <div class="comp-spine" aria-hidden="true"></div>
         <div class="comp-body">
-          <div class="comp-title">${esc(c.title)}</div>
+          <div class="comp-title title-clamp" title="${esc(c.title)}">${esc(c.title)}</div>
           ${meta ? `<div class="comp-meta">${meta}</div>` : ''}
           <div class="comp-tags">${tags}</div>
         </div>
@@ -698,19 +698,21 @@
     copy.list.querySelectorAll('.copy-row').forEach((x) => x.remove());
     picks.forEach((p, i) => {
       const added = have.has(bookKey(p.title, p.author));
+      // Only the author may break inside; "BSR 12,400", "184 reviews" and "4.4 ★" stay whole.
       const meta = [
-        p.author || '',
-        p.bsr != null ? `BSR ${num(p.bsr)}` : '',
-        p.reviews != null ? plural(num(p.reviews), 'review') : '',
-        p.rating != null ? `${Number(p.rating).toFixed(1)} ${STAR}` : ''
+        p.author ? esc(p.author) : '',
+        p.bsr != null ? `<span class="meta-item">BSR ${num(p.bsr)}</span>` : '',
+        p.reviews != null ? `<span class="meta-item">${plural(num(p.reviews), 'review')}</span>` : '',
+        p.rating != null ? `<span class="meta-item">${Number(p.rating).toFixed(1)} ${STAR}</span>` : ''
       ].filter(Boolean).join(' · ');
       const row = document.createElement('label');
       row.className = `copy-row${added ? ' is-added' : ''}`;
       row.innerHTML = `<input type="checkbox" class="copy-check" value="${i}"${added ? ' disabled' : ''} />
-        <span class="copy-text"><span class="copy-title"></span><span class="copy-meta"></span></span>
+        <span class="copy-text"><span class="copy-title title-clamp"></span><span class="copy-meta"></span></span>
         <span class="copy-tags">${p.sponsored ? '<span class="tag">Sponsored</span>' : ''}${added ? '<span class="tag">Already added</span>' : ''}</span>`;
       row.querySelector('.copy-title').textContent = p.title;
-      row.querySelector('.copy-meta').textContent = meta;
+      row.querySelector('.copy-title').title = p.title;
+      row.querySelector('.copy-meta').innerHTML = meta;
       copy.list.append(row);
     });
     syncCopy();

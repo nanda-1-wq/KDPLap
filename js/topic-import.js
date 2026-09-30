@@ -264,7 +264,7 @@
         <td class="use-col"><label class="import-use"><input type="checkbox" data-use="${i}"${b.included ? ' checked' : ''}
           aria-label="${esc(`Use “${b.title}”`)}" /></label></td>
         <td class="book-col">
-          <span class="import-book">${esc(b.title)}</span>
+          <span class="import-book title-clamp" title="${esc(b.title)}">${esc(b.title)}</span>
           <span class="import-author">${b.author ? esc(b.author) : 'Author not in page'}${b.sponsored ? ' <span class="tag">Sponsored</span>' : ''}</span>
         </td>
         ${numCell(b, i, 'bsr')}

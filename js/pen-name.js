@@ -23,8 +23,7 @@
   let model = null;       // the pen name as shown, including unsaved edits
   let defaultId = null;
   let els = null;
-  const dirty = new Set();
-  let timer = null, inFlight = null, saveState = 'idle';
+  let saver = null;        // js/autosave.js, created once below
 
   const bookHref = (id) => `book.html?id=${encodeURIComponent(id)}`;
 
@@ -280,10 +279,11 @@
 
   function renderSave(message) {
     const el = els.save;
+    const saveState = saver.state;
     if (saveState === 'saving') el.innerHTML = '<span class="spinner" aria-hidden="true"></span>Saving…';
     else if (saveState === 'saved') el.innerHTML = `<span class="save-ok">${ICON.check(14)}</span>Saved`;
     else if (saveState === 'error') {
-      el.innerHTML = `<span class="save-error">${ICON.warn(14)}<span></span></span>${dirty.size ? '<button type="button" class="link-btn" data-retry-save>Retry</button>' : ''}`;
+      el.innerHTML = `<span class="save-error">${ICON.warn(14)}<span></span></span>${saver.hasUnsaved() ? '<button type="button" class="link-btn" data-retry-save>Retry</button>' : ''}`;
       el.querySelector('.save-error span').textContent = message || "Couldn't save.";
     } else el.textContent = '';
     el.dataset.state = saveState;
@@ -291,15 +291,7 @@
 
   /* ── Autosave ────────────────────────────── */
 
-  function edit(field, delay) {
-    dirty.add(field);
-    schedule(delay);
-  }
-
-  function schedule(delay) {
-    clearTimeout(timer);
-    timer = setTimeout(flush, delay);
-  }
+  const edit = (field, delay) => saver.edit(field, delay);
 
   /** The value to send for a field, or { error } when it breaks a shape rule. */
   function outgoing(field) {
@@ -312,61 +304,30 @@
     }
   }
 
-  /** Save every dirty field in one update. One request at a time. */
-  async function flush() {
-    clearTimeout(timer);
-    timer = null;
-    if (inFlight) { await inFlight; return dirty.size ? flush() : undefined; }
-    if (!dirty.size) return;
-
-    const sent = [...dirty];
-    const fields = {};
-    for (const f of sent) {
-      const out = outgoing(f);
-      if (out.error) { saveState = 'error'; renderSave(`Couldn't save: ${out.error}`); return; }
-      fields[f] = out.value;
-    }
-    dirty.clear();
-    saveState = 'saving';
-    renderSave();
-
-    inFlight = (async () => {
-      try { return await kdp.updatePenName(penId, fields); } catch (err) { return { error: err }; }
-    })();
-    const res = await inFlight;
-    inFlight = null;
-
-    if (res.error) {
-      // Keep the edits. Retry sends them again.
-      sent.forEach((f) => dirty.add(f));
-      saveState = 'error';
+  // Every dirty field goes out in one update, one request at a time (js/autosave.js).
+  saver = kdpAutosave.create({
+    read(field) {
+      const out = outgoing(field);
+      return out.error ? { error: out.error } : out.value;
+    },
+    save: (fields) => kdp.updatePenName(penId, fields),
+    onSaved(res) { model.updated_at = res.data.updated_at; },
+    async onError(res) {
       if (res.error.notFound) {
-        dirty.clear();
+        saver.reset('error');
         renderProblem('This pen name no longer exists', 'It was deleted, or it is not yours.', false);
-        return;
+        return true;
       }
       if (res.error.code === '23514') {
         // The database said no. Show what is really saved.
-        dirty.clear();
         await load('This change breaks a pen name rule, so it was not saved.');
-        return;
+        return true;
       }
-      renderSave("Couldn't save.");
-      return;
-    }
-
-    model.updated_at = res.data.updated_at;
-    saveState = dirty.size ? 'saving' : 'saved';
-    renderSave();
-    if (dirty.size && !timer) return flush();
-  }
-
-  const hasUnsaved = () => dirty.size > 0 || !!inFlight;
-  window.addEventListener('beforeunload', (e) => {
-    if (!hasUnsaved()) return;
-    e.preventDefault();
-    e.returnValue = '';
+      return false;
+    },
+    render: (state, message) => { if (els && els.save.isConnected) renderSave(message); }
   });
+  const flush = () => saver.flush();
 
   /* ── Field events ────────────────────────── */
 
@@ -384,7 +345,7 @@
     }
   }
 
-  const flushOnBlur = (el) => el.addEventListener('blur', () => { if (timer) flush(); });
+  const flushOnBlur = (el) => el.addEventListener('blur', () => { if (saver.scheduled()) flush(); });
 
   function bindEvents() {
     els.nameInput.addEventListener('input', () => {
@@ -541,8 +502,9 @@
     if (generating) return;
     setGenBusy(true);
     // The server reads the saved facts, so save any edits first.
-    if (dirty.size || inFlight) await flush();
-    if (saveState === 'error') {
+    if (saver.hasUnsaved()) await flush();
+    // Only a failed save that left edits behind blocks; a refused save was reloaded from the database.
+    if (saver.state === 'error' && saver.hasUnsaved()) {
       setGenBusy(false);
       renderGenError('save_first');
       return;
@@ -616,16 +578,14 @@
     onRenamed(id, row) {
       model.name = row.name;
       model.updated_at = row.updated_at;
-      dirty.delete('name');
+      saver.drop('name');
       els.nameInput.value = row.name;
       setNameError('');
       renderHead();
-      saveState = dirty.size ? saveState : 'saved';
-      renderSave();
+      saver.show(saver.hasUnsaved() ? saver.state : 'saved');
     },
     onDeleted(id, info) {
-      clearTimeout(timer);
-      dirty.clear();
+      saver.reset('idle');   // nothing left to save, so leaving does not ask
       const text = info.wasDefault
         ? `Deleted “${info.name}”. New books now start with no pen name.`
         : `Deleted “${info.name}”.`;
@@ -651,8 +611,7 @@
       facts: P.readFacts(d.bio_facts), voice: P.readVoice(d.voice), books: d.books || []
     };
     defaultId = def.data;
-    dirty.clear();
-    saveState = message ? 'error' : 'idle';
+    saver.reset(message ? 'error' : 'idle', message);
     renderPage();
     if (message) renderSave(message);
   }

@@ -44,8 +44,8 @@
 
   let model = null;       // the topic as shown, including unsaved edits
   let els = null;
-  const dirty = new Set();
-  let timer = null, inFlight = null, saveState = 'idle', demoted = false;
+  let saver = null;        // js/autosave.js, created once below
+  let demoted = false;
 
   const bookHref = (id) => `book.html?id=${encodeURIComponent(id)}`;
   const label = (key) => checks({}).find((c) => c.key === key).label;
@@ -393,7 +393,7 @@
     const rows = books.map((b) => `
       <tr class="${b.included ? '' : 'is-off'}">
         <td class="book-col">
-          <span class="import-book">${esc(b.title)}</span>
+          <span class="import-book title-clamp" title="${esc(b.title)}">${esc(b.title)}</span>
           <span class="import-author">${b.author ? esc(b.author) : 'Author not in page'}${b.sponsored ? ' <span class="tag">Sponsored</span>' : ''}</span>
         </td>
         <td class="num-col">${fmt(b.bsr)}</td>
@@ -427,10 +427,11 @@
 
   function renderSave(message) {
     const el = els.save;
+    const saveState = saver.state;
     if (saveState === 'saving') el.innerHTML = '<span class="spinner" aria-hidden="true"></span>Saving…';
     else if (saveState === 'saved') el.innerHTML = `<span class="save-ok">${ICON.check(14)}</span>Saved`;
     else if (saveState === 'error') {
-      el.innerHTML = `<span class="save-error">${ICON.warn(14)}<span></span></span>${dirty.size ? '<button type="button" class="link-btn" data-retry-save>Retry</button>' : ''}`;
+      el.innerHTML = `<span class="save-error">${ICON.warn(14)}<span></span></span>${saver.hasUnsaved() ? '<button type="button" class="link-btn" data-retry-save>Retry</button>' : ''}`;
       el.querySelector('.save-error span').textContent = message || "Couldn't save.";
     } else el.textContent = '';
     el.dataset.state = saveState;
@@ -441,7 +442,7 @@
   /** Record an edit, apply the status rules, and schedule a save. */
   function edit(field, value, delay) {
     model[field] = value;
-    dirty.add(field);
+    const marks = [field];
     // The database marks an edited count Manual (0006). Show it now; the save returns the real values.
     const key = COUNT_ROWS.find((r) => r.field === field)?.key;
     if (key) {
@@ -451,87 +452,52 @@
     const passed = passedCount(model);
     if (model.status === 'validated' && passed < 5) {
       model.status = 'researching';
-      dirty.add('status');
+      marks.push('status');
       demoted = true;
     } else if (model.status === 'idea' && SCORE_FIELDS.includes(field) && isScored(model)) {
       model.status = 'researching';
-      dirty.add('status');
+      marks.push('status');
     }
     renderChecks();
     renderStatus();
     renderResult();
-    schedule(delay);
+    marks.forEach((f) => saver.edit(f, delay));
   }
 
-  function schedule(delay) {
-    clearTimeout(timer);
-    timer = setTimeout(flush, delay);
-  }
-
-  /** Save every dirty field in one update. One request at a time. Resolves when all is saved or failed. */
-  async function flush() {
-    clearTimeout(timer);
-    timer = null;
-    if (inFlight) { await inFlight; return dirty.size ? flush() : undefined; }
-    if (!dirty.size) return;
-
-    const sent = [...dirty];
-    const fields = {};
-    sent.forEach((f) => { fields[f] = model[f]; });
-    dirty.clear();
-    saveState = 'saving';
-    renderSave();
-
-    inFlight = (async () => {
-      let res;
-      try { res = await kdp.updateTopic(topicId, fields); } catch (err) { res = { error: err }; }
-      return res;
-    })();
-    const res = await inFlight;
-    inFlight = null;
-
-    if (res.error) {
-      // Keep the edits. Retry sends them again.
-      sent.forEach((f) => dirty.add(f));
-      saveState = 'error';
+  // Every dirty field goes out in one update, one request at a time (js/autosave.js).
+  saver = kdpAutosave.create({
+    read: (field) => model[field],
+    save: (fields) => kdp.updateTopic(topicId, fields),
+    onSaved(res) {
+      model.checks_passed = res.data.checks_passed;
+      model.updated_at = res.data.updated_at;
+      // Sources and dates come from the database, unless a newer edit of that count is waiting.
+      COUNT_ROWS.forEach((r) => {
+        if (saver.isDirty(r.field)) return;
+        model[`${r.key}_source`] = res.data[`${r.key}_source`];
+        model[`${r.key}_set_at`] = res.data[`${r.key}_set_at`];
+      });
+      renderChecks();
+      if (!saver.isDirty('status')) model.status = res.data.status;
+      renderStatus();
+      renderResult();
+    },
+    async onError(res) {
       if (res.error.notFound) {
-        dirty.clear();
+        saver.reset('error');
         renderProblem('This topic no longer exists', 'It was deleted, or it is not yours.', false);
-        return;
+        return true;
       }
       if (res.error.code === '23514') {
         // The database said no, e.g. validated below 5 checks. Show what is really saved.
-        dirty.clear();
         await load("This change breaks a topic rule, so it was not saved. A validated topic needs 5 of 5 market checks.");
-        return;
+        return true;
       }
-      renderSave("Couldn't save.");
-      return;
-    }
-
-    model.checks_passed = res.data.checks_passed;
-    model.updated_at = res.data.updated_at;
-    // Sources and dates come from the database, unless a newer edit of that count is waiting.
-    COUNT_ROWS.forEach((r) => {
-      if (dirty.has(r.field)) return;
-      model[`${r.key}_source`] = res.data[`${r.key}_source`];
-      model[`${r.key}_set_at`] = res.data[`${r.key}_set_at`];
-    });
-    renderChecks();
-    if (!dirty.has('status')) model.status = res.data.status;
-    saveState = dirty.size ? 'saving' : 'saved';
-    renderSave();
-    renderStatus();
-    renderResult();
-    if (dirty.size && !timer) return flush();
-  }
-
-  const hasUnsaved = () => dirty.size > 0 || !!inFlight;
-  window.addEventListener('beforeunload', (e) => {
-    if (!hasUnsaved()) return;
-    e.preventDefault();
-    e.returnValue = '';
+      return false;
+    },
+    render: (state, message) => { if (els && els.save.isConnected) renderSave(message); }
   });
+  const flush = () => saver.flush();
 
   /* ── Field events ────────────────────────── */
 
@@ -574,7 +540,7 @@
         const v = readCount(input);
         if (v !== undefined && v !== model[input.dataset.count]) edit(input.dataset.count, v, 700);
       });
-      input.addEventListener('blur', () => { if (timer) flush(); });
+      input.addEventListener('blur', () => { if (saver.scheduled()) flush(); });
     });
 
     view.querySelectorAll('[data-toggle]').forEach((group) => {
@@ -596,7 +562,7 @@
     });
 
     els.notes.addEventListener('input', () => edit('notes', els.notes.value.trim() ? els.notes.value : null, 800));
-    els.notes.addEventListener('blur', () => { if (timer) flush(); });
+    els.notes.addEventListener('blur', () => { if (saver.scheduled()) flush(); });
 
     els.status.addEventListener('change', (e) => {
       if (!e.target.matches('[data-status-select]')) return;
@@ -629,11 +595,10 @@
     if (status === model.status) return;
     if (status === 'validated' && passedCount(model) < 5) { renderStatus(); return; }
     model.status = status;
-    dirty.add('status');
     demoted = false;
     renderStatus();
     renderResult();
-    schedule(0);
+    saver.edit('status', 0);
   }
 
   /* ── Import from Amazon page ─────────────── */
@@ -643,13 +608,12 @@
       getTopic: () => model,
       returnFocus: btn,
       // Pending autosave first. True when nothing is left unsaved.
-      beforeSave: async () => { await flush(); return dirty.size === 0 && saveState !== 'error'; },
+      beforeSave: async () => { await flush(); return !saver.hasUnsaved() && saver.state !== 'error'; },
       onSaved: (row, books) => {
         const keep = { books: model.books };
         model = { ...model, ...row, ...keep, topic_page_books: books };
-        dirty.clear();
         demoted = false;
-        saveState = 'saved';
+        saver.reset('saved');
         renderPage();
         const title = view.querySelector('#p1');
         title.setAttribute('tabindex', '-1');
@@ -667,7 +631,7 @@
     btn.setAttribute('aria-busy', 'true');
     btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Starting…';
     await flush();   // the book reads the saved topic
-    let res = { error: dirty.size ? new Error('unsaved') : null };
+    let res = { error: saver.hasUnsaved() ? new Error('unsaved') : null };
     if (!res.error) {
       try { res = await kdp.createBook(topicId, null); } catch (err) { res = { error: err }; }
     }
@@ -853,8 +817,7 @@
       model.name = res.data.name;
       model.updated_at = res.data.updated_at;
       renderName();
-      saveState = 'saved';
-      renderSave();
+      saver.show('saved');
       rn.d.close();
       return;
     }
@@ -930,8 +893,7 @@
     del.busy = false;
     setBusy(del.btn, false, 'Deleting…', 'Delete topic');
     if (!res.error) {
-      clearTimeout(timer);
-      dirty.clear();
+      saver.reset('idle');   // nothing left to save, so leaving does not ask
       try { sessionStorage.setItem('kdp.notice', `Deleted “${model.name}”.`); } catch (err) { /* no notice */ }
       location.href = 'topic-lab.html';
       return;
@@ -951,9 +913,8 @@
     if (res.error) { renderProblem("We couldn't load this topic", 'Check your connection, then try again.', true); return; }
     if (!res.data) { renderProblem('This topic does not exist', 'It was deleted, or it is not yours.', false); return; }
     model = res.data;
-    dirty.clear();
     demoted = false;
-    saveState = message ? 'error' : 'idle';
+    saver.reset(message ? 'error' : 'idle', message);
     renderPage();
     if (message) renderSave(message);
   }

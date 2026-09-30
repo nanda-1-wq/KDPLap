@@ -134,7 +134,7 @@
 
   function onError(res, sent) {
     const e = res.error || {};
-    if (e.notFound) { ctx.notFound(); return true; }
+    if (e.notFound) { saver.reset('error'); ctx.notFound(); return true; }
     // 23514 = a check (0007), 42501 = RLS (a pen name that is not the user's), 23503 = gone.
     if (['23514', '42501', '23503'].includes(e.code)) {
       sent.forEach((f) => {
@@ -142,9 +142,10 @@
         else model[f] = saved[f];
       });
       if (ctx.isActive(1)) render(ctx.content());
-      ctx.renderSave('error', sent.includes('pen_name_id')
+      // Error state, edits dropped (they were put back to the saved values), so no Retry.
+      saver.reset('error', sent.includes('pen_name_id')
         ? 'That pen name is not available, so it was not saved.'
-        : 'This change breaks a Brief rule, so it was not saved.', false);
+        : 'This change breaks a Brief rule, so it was not saved.');
       return true;
     }
     return false;
@@ -577,7 +578,8 @@
     // The server reads the saved Brief, so save any edits first.
     if (saver.hasUnsaved()) await saver.flush();
     if (token !== helpToken) return;
-    if (saver.state === 'error') { help = { state: 'error', code: 'save_first' }; renderHelp(); return; }
+    // Only a failed save that left edits behind blocks; a refused save was already put back.
+    if (saver.state === 'error' && saver.hasUnsaved()) { help = { state: 'error', code: 'save_first' }; renderHelp(); return; }
     if (!filled(saved.topic_text)) {
       help = { state: 'error', code: 'no_topic' };
       renderHelp();
@@ -653,6 +655,7 @@
     blockers,
     flush: () => (saver ? saver.flush() : Promise.resolve()),
     retrySave: () => saver && saver.retry(),
-    hasUnsaved: () => !!saver && saver.hasUnsaved()
+    hasUnsaved: () => !!saver && saver.hasUnsaved(),
+    saveState: () => (saver ? saver.state : 'idle')
   };
 })();
