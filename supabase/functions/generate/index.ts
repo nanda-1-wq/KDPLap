@@ -6,18 +6,21 @@
    POST { stage: "amazon_import", topicId, text } → { stage, books }
    POST { stage: "brief_help", bookId }         → { stage, suggestions }
    POST { stage: "review_insights", bookId }    → { stage, insights, books, analyzed_at }
+   POST { stage: "positioning_help", bookId[, field] } → { stage, suggestions, unsourced }
+   POST { stage: "drift_check", bookId }        → { stage, flags, drift_checked_at, updated_at }
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
    SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
 
    Reads use a client built from the caller's Authorization header, so
-   RLS applies as that user. Only the ai_usage insert uses the service role.
+   RLS applies as that user. Only the ai_usage insert and the drift check
+   save use the service role; the save filters by the caller's user id.
 ═══════════════════════════════════════════════════ */
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, PenRow, ReviewContext, TopicRow } from "./lib.ts";
+import type { BriefContext, Competitor, PenRow, PositioningContext, ReviewContext, TopicRow } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -109,6 +112,56 @@ function openStore(authHeader: string): Store {
         brief: brief ?? { topic_text: null, target_reader: null },
         competitors: (data.competitors ?? []) as Competitor[],
       };
+    },
+
+    // One read: the Brief, pen voice, Research (insights, competitors, sources
+    // and notes) and the saved positioning. A book that is not the caller's
+    // reads as null (RLS).
+    async getPositioningContext(bookId) {
+      const { data, error } = await asUser
+        .from("books")
+        .select(`id,
+                 book_briefs ( topic_text, book_type, target_reader, reader_problem, promise_draft, options ),
+                 pen_names ( niche, voice ),
+                 research_insights ( loves, hates, gaps ),
+                 competitors ( title, author, created_at ),
+                 research_sources ( kind, body, citation, created_at ),
+                 positioning ( one_sentence, reader_promise, approach, lacks, selling_points, focus_tags,
+                               drift_flags, drift_checked_at, locked_at, updated_at )`)
+        .eq("id", bookId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+      const brief = one(data.book_briefs) as PositioningContext["brief"] | null;
+      if (!brief) return null;
+      return {
+        bookId: data.id as string,
+        brief,
+        pen: one(data.pen_names) as PositioningContext["pen"],
+        insights: one(data.research_insights) as PositioningContext["insights"],
+        competitors: (data.competitors ?? []) as PositioningContext["competitors"],
+        sources: (data.research_sources ?? []) as PositioningContext["sources"],
+        positioning: one(data.positioning) as PositioningContext["positioning"],
+      };
+    },
+
+    // Service role (bypasses RLS), so it filters by the caller's user id. The
+    // updated_at and locked_at filters make it a no-op when the author edited
+    // or locked the positioning while the check ran. Migration 0010 lets only
+    // this role write drift_checked_at and the flag text.
+    async saveDriftFlags({ bookId, userId, flags, checkedAt, readUpdatedAt }) {
+      const admin = createClient(url, need("SUPABASE_SERVICE_ROLE_KEY"), noSession);
+      const { data, error } = await admin
+        .from("positioning")
+        .update({ drift_flags: flags, drift_checked_at: checkedAt })
+        .eq("book_id", bookId)
+        .eq("user_id", userId)
+        .eq("updated_at", readUpdatedAt)
+        .is("locked_at", null)
+        .select("drift_checked_at, updated_at");
+      if (error) throw error;
+      return data.length ? data[0] as { drift_checked_at: string; updated_at: string } : null;
     },
 
     async getMonthlyLimit() {

@@ -19,6 +19,9 @@ window.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Where each topic count came from, and when (migration 0006).
 const TOPIC_SOURCES = 'winning_source, winning_set_at, dead_source, dead_set_at, authority_source, authority_set_at';
 
+// The step 03 positioning row, as the book page reads it (migration 0010).
+const POSITIONING_COLS = 'one_sentence, reader_promise, approach, lacks, selling_points, focus_tags, drift_flags, drift_checked_at, locked_at, updated_at';
+
 window.kdp = {
 
   googleEnabled: GOOGLE_ENABLED,
@@ -113,19 +116,22 @@ window.kdp = {
   /**
    * One book for the book page, with its Brief, pen name, and source topic.
    * Also the counts step 02 needs for its done mark: all competitors and the
-   * research rows of kind 'source' (personal notes do not count).
+   * research rows of kind 'source' (personal notes do not count), and the
+   * step 03 positioning row (null before the first save).
    * data is null when the id is not the user's (RLS).
    */
   async getBook(id) {
     return window.sb
       .from('books')
       .select(`id, title, status, current_step, updated_at, topic_id, pen_name_id, series_name, series_number,
+               title_needs_review,
                pen_names ( id, name, voice ),
                topics ( id, name, checks_passed ),
                book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type,
                              trim_size, length_range, chapter_count, options, updated_at ),
                competitors ( count ),
-               real_sources:research_sources ( count )`)
+               real_sources:research_sources ( count ),
+               positioning ( ${POSITIONING_COLS} )`)
       .eq('id', id)
       .eq('real_sources.kind', 'source')
       .maybeSingle();
@@ -380,6 +386,98 @@ window.kdp = {
     return { data: data[0], error: null };
   },
 
+  /* ── Positioning (step 03) ────────────────────── */
+
+  /** The positioning row, or null before the first save. */
+  async getPositioning(bookId) {
+    return window.sb
+      .from('positioning')
+      .select(POSITIONING_COLS)
+      .eq('book_id', bookId)
+      .maybeSingle();
+  },
+
+  /**
+   * Saves the given text fields. The first save creates the row (upsert).
+   * The caller trims and checks limits; migration 0010 checks them too.
+   * A locked row refuses edits: error.code 'P0001', message 'positioning_locked'.
+   * Any text change clears drift_checked_at (the returned row shows it).
+   */
+  async savePositioning(bookId, fields) {
+    const { data, error } = await window.sb
+      .from('positioning')
+      .upsert({ ...fields, book_id: bookId }, { onConflict: 'book_id' })
+      .select(POSITIONING_COLS);
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Keeps a drift flag with a reason (or undoes that). Only status and reason
+   * may change; the flags themselves come from the server (migration 0010:
+   * 'drift_flags_server_only').
+   */
+  async saveDriftFlags(bookId, flags) {
+    const { data, error } = await window.sb
+      .from('positioning')
+      .update({ drift_flags: flags })
+      .eq('book_id', bookId)
+      .select(POSITIONING_COLS);
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Positioning not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Approve and lock. The database checks the required fields, a current
+   * drift check and no open flag ('positioning_not_ready', with the reason in
+   * error.details), and sets locked_at from its own clock.
+   * 0 rows = already locked or gone; the caller reloads.
+   */
+  async lockPositioning(bookId) {
+    const { data, error } = await window.sb
+      .from('positioning')
+      .update({ locked_at: new Date().toISOString() })
+      .eq('book_id', bookId)
+      .is('locked_at', null)
+      .select(POSITIONING_COLS);
+    if (error) return { data: null, error };
+    return { data: data[0] || null, error: null };
+  },
+
+  /**
+   * Unlock (migration 0010, one transaction). Marks the title, every chapter
+   * and every written section "Needs review". Nothing is deleted.
+   * Returns { title, chapters, written_chapters }. error.code 'P0002' = not locked.
+   */
+  async unlockPositioning(bookId) {
+    return window.sb.rpc('unlock_positioning', { p_book_id: bookId });
+  },
+
+  /** What an unlock marks, for the confirm dialog: chapters and chapters with writing. */
+  async getUnlockImpact(bookId) {
+    const { data, error } = await window.sb
+      .from('chapters')
+      .select('id, sections ( current_version_id )')
+      .eq('book_id', bookId);
+    if (error) return { data: null, error };
+    const written = data.filter((c) => (c.sections || []).some((s) => s.current_version_id)).length;
+    return { data: { chapters: data.length, written }, error: null };
+  },
+
+  /** The Research gaps (step 02 insights) for "Copy gaps from Research". [] before an analysis. */
+  async getResearchGaps(bookId) {
+    const { data, error } = await window.sb
+      .from('research_insights')
+      .select('gaps')
+      .eq('book_id', bookId)
+      .maybeSingle();
+    if (error) return { data: null, error };
+    const gaps = data && Array.isArray(data.gaps) ? data.gaps : [];
+    return { data: gaps.map((g) => (g && typeof g.text === 'string' ? g.text.trim() : '')).filter(Boolean), error: null };
+  },
+
   /* ── Topics ───────────────────────────────────── */
 
   /** Validated topics for the New Book dialog, most market checks first. */
@@ -558,10 +656,12 @@ window.kdp = {
    * Run one AI stage on the server. Only ids go up; prompts live server-side.
    * Returns { data, error }. error.code is a short code from the function
    * (not_enough_facts, monthly_limit, rate_limited, ai_unavailable, ai_stopped,
-   * ai_declined, not_amazon_page, not_enough_books, unauthorized, not_found,
+   * ai_declined, not_amazon_page, not_enough_books, nothing_to_check,
+   * positioning_locked, positioning_changed, unauthorized, not_found,
    * bad_request, server_error) or 'network' when the function could not be reached.
    * Input: { stage: 'bio', penNameId }, { stage: 'amazon_import', topicId, text },
-   * { stage: 'brief_help', bookId } or { stage: 'review_insights', bookId }.
+   * { stage: 'brief_help', bookId }, { stage: 'review_insights', bookId },
+   * { stage: 'positioning_help', bookId[, field] } or { stage: 'drift_check', bookId }.
    */
   async generate(input) {
     let res;

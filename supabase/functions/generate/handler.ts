@@ -26,11 +26,19 @@ export interface Store {
   getTopic(id: string): Promise<L.TopicRow | null>;
   getBriefContext(bookId: string): Promise<L.BriefContext | null>;
   getReviewContext(bookId: string): Promise<L.ReviewContext | null>;
+  getPositioningContext(bookId: string): Promise<L.PositioningContext | null>;
+  /**
+   * Save a drift check (service role). Writes only when the row is still
+   * unlocked and unchanged since it was read (same updated_at). null = changed.
+   */
+  saveDriftFlags(s: DriftSave): Promise<{ drift_checked_at: string; updated_at: string } | null>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
   logUsage(row: UsageRow): Promise<void>;
 }
+
+export type DriftSave = { bookId: string; userId: string; flags: L.DriftFlag[]; checkedAt: string; readUpdatedAt: string };
 
 export type Deps = {
   env: (name: string) => string | undefined;
@@ -109,6 +117,18 @@ export function makeHandler(deps: Deps) {
         if (!ctx) return fail("not_found");
         if (!L.hasTopic(ctx)) return fail("not_enough_facts", { missing: "" });
         job = { stage: "brief_help", ctx };
+      } else if (input.stage === "positioning_help" || input.stage === "drift_check") {
+        // The server reads the Brief, Research and the SAVED positioning; the browser sends only ids.
+        const ctx = await store.getPositioningContext(input.bookId);
+        if (!ctx) return fail("not_found");
+        if (ctx.positioning?.locked_at) return fail("positioning_locked");
+        if (input.stage === "positioning_help") {
+          if (!L.positioningHasTopic(ctx)) return fail("not_enough_facts", { missing: "" });
+          job = { stage: "positioning_help", ctx, field: input.field };
+        } else {
+          if (!L.hasPositioningText(ctx.positioning)) return fail("nothing_to_check");
+          job = { stage: "drift_check", ctx };
+        }
       } else {
         // The server reads the pasted reviews itself; the browser sends only the id.
         const ctx = await store.getReviewContext(input.bookId);
@@ -158,9 +178,29 @@ export function makeHandler(deps: Deps) {
         console.error(`generate: provider call failed: ${(err as Error)?.name ?? "Error"}`);
       }
 
-      const out = L.interpretResponse(input.stage, httpOk, body, job.stage === "review_insights" ? job.books : []);
+      let out = L.interpretJob(job, httpOk, body);
       if (httpOk && out.code && out.code !== "not_enough_facts" && out.code !== "not_amazon_page") {
         console.error(`generate: provider result ${out.code} stop_reason=${(body as { stop_reason?: string } | null)?.stop_reason ?? "none"}`);
+      }
+
+      // 5b. The drift check saves its own flags (service role), so the browser
+      // cannot write a check result. The user gets nothing when the save does
+      // not happen, so that call is not counted.
+      let saved: { drift_checked_at: string; updated_at: string } | null = null;
+      if (job.stage === "drift_check" && !out.code) {
+        try {
+          saved = await store.saveDriftFlags({
+            bookId: job.ctx.bookId,
+            userId,
+            flags: out.flags!,
+            checkedAt: now.toISOString(),
+            readUpdatedAt: job.ctx.positioning!.updated_at,
+          });
+          if (!saved) out = { ...out, counted: false, code: "positioning_changed" };
+        } catch (err) {
+          console.error(`generate: drift save failed: ${(err as { code?: string })?.code ?? "unknown"}`);
+          out = { ...out, counted: false, code: "server_error" };
+        }
       }
 
       // 6. Log every call that reached the provider.
@@ -184,6 +224,8 @@ export function makeHandler(deps: Deps) {
       if (out.code) return fail(out.code);
       if (input.stage === "amazon_import") return reply(200, { stage: input.stage, books: out.books });
       if (input.stage === "brief_help") return reply(200, { stage: input.stage, suggestions: out.suggestions });
+      if (input.stage === "positioning_help") return reply(200, { stage: input.stage, suggestions: out.positioning, unsourced: out.unsourced });
+      if (input.stage === "drift_check") return reply(200, { stage: input.stage, flags: out.flags, ...saved });
       // analyzed_at comes from the server clock; the browser saves it with the lines.
       if (job.stage === "review_insights") return reply(200, { stage: input.stage, insights: out.insights, books: job.books.length, analyzed_at: now.toISOString() });
       return reply(200, { stage: input.stage, bio: out.bio, words: L.wordCount(out.bio!) });

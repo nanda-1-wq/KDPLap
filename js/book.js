@@ -7,9 +7,13 @@
    the furthest step reached; Back and the sidebar never write it.
 
    Steps with a screen register in window.kdpBookSteps (E7.1: 01 Brief in
-   js/book-brief.js; E7.2: 02 Research in js/book-research.js):
+   js/book-brief.js; E7.2: 02 Research in js/book-research.js; E8.1:
+   03 Positioning in js/book-positioning.js):
    init(book, ctx) once, render(root) on each visit,
-   isDone(book) for the sidebar mark, blockers() for the Next button.
+   isDone(book) for the sidebar mark, blockers() for the Next button,
+   optional doneMark: 'lock' (03 shows a lock instead of a check).
+   A title marked "Needs review" (books.title_needs_review, set by an
+   unlock of 03) shows a warning on 04.
    Other steps show a "Coming in" placeholder.
 ═══════════════════════════════════════════════════ */
 
@@ -40,6 +44,7 @@
 
   const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
   const SAVE_WARN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
+  const LOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
   const WARN = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
 
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -50,7 +55,7 @@
   const bookId = params.get('id') || '';
   let step = readStep(params.get('step'));
   let book = null;
-  let saveView = { state: 'idle', message: '', canRetry: false };
+  let saveView = { state: 'idle', message: '', canRetry: false, owner: 1 };
 
   function readStep(value) {
     const n = parseInt(value, 10);
@@ -62,10 +67,11 @@
     return (b.title || (brief && brief.topic_text) || '').trim() || 'Untitled book';
   }
 
-  /** The newest save time: the book row or its Brief. */
+  /** The newest save time: the book row, its Brief or its positioning. */
   function lastSaved(b) {
     const brief = one(b.book_briefs);
-    const times = [b.updated_at, brief && brief.updated_at].filter(Boolean);
+    const pos = one(b.positioning);
+    const times = [b.updated_at, brief && brief.updated_at, pos && pos.updated_at].filter(Boolean);
     return times.sort().pop();
   }
 
@@ -86,8 +92,12 @@
     const s = STEPS[n];
     const current = n === step ? ' aria-current="step"' : '';
     const done = isDone(n);
-    return `<a class="step-link${done ? ' is-done' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
-        <span class="step-mark" aria-hidden="true">${done && n !== step ? CHECK : ''}</span><span class="step-num">${pad(n)}</span>${s.name}${done ? '<span class="sr-only">, done</span>' : ''}</a>`;
+    const lock = done && MODULES[n].doneMark === 'lock';
+    const review = n === 4 && book.title_needs_review;
+    const mark = lock ? LOCK : (done && n !== step ? CHECK : '');
+    const state = lock ? ', locked' : (done ? ', done' : '');
+    return `<a class="step-link${done ? ' is-done' : ''}${lock ? ' is-locked' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
+        <span class="step-mark" aria-hidden="true">${mark}</span><span class="step-num">${pad(n)}</span>${s.name}${state ? `<span class="sr-only">${state}</span>` : ''}${review ? `<span class="step-flag">${SAVE_WARN}Needs review</span>` : ''}</a>`;
   }
 
   function renderNav() {
@@ -137,7 +147,8 @@
       el.innerHTML = `<span class="save-error">${SAVE_WARN}<span></span></span>${v.canRetry ? '<button type="button" class="link-btn" data-retry-save>Retry</button>' : ''}`;
       el.querySelector('.save-error span').textContent = v.message || "Couldn't save.";
       const retry = el.querySelector('[data-retry-save]');
-      if (retry) retry.addEventListener('click', () => MODULES[1] && MODULES[1].retrySave());
+      // Retry goes to the step whose save failed.
+      if (retry) retry.addEventListener('click', () => MODULES[v.owner] && MODULES[v.owner].retrySave());
     } else {
       el.innerHTML = `${CHECK}<span>${savedText(lastSaved(book))}</span>`;
     }
@@ -161,8 +172,9 @@
       setGate();
       document.title = `${STEPS[step].name} · ${workingTitle(book)} · KDP Lab`;
     },
-    renderSave(state, message, canRetry) {
-      saveView = { state, message, canRetry };
+    /** owner = the step number that saves (default 1, the Brief). */
+    renderSave(state, message, canRetry, owner = 1) {
+      saveView = { state, message, canRetry, owner };
       renderSaveLine();
     },
     notFound() { renderNotFound(); }

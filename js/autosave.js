@@ -7,8 +7,8 @@
    request at a time. A failed save keeps the edits for Retry, and leaving
    the page with unsaved edits asks first.
 
-   Used by the Brief (js/book-brief.js), the topic page (js/topic.js) and
-   the pen name page (js/pen-name.js).
+   Used by the Brief (js/book-brief.js), Positioning (js/book-positioning.js),
+   the topic page (js/topic.js) and the pen name page (js/pen-name.js).
 
    const saver = kdpAutosave.create({
      read(field)         → the value to send, or { error: 'text' } to hold the save
