@@ -57,6 +57,7 @@
   let lock = { state: 'idle' };              // idle | working | error
   let keeping = null;                        // { id, text, state, message } while giving a reason
   let flagError = '';                        // an undo that did not save
+  let driftHadText = false;                  // what the drift panel last showed: any card text
   let gaps = null, gapsState = 'idle';       // Research gaps for "Copy gaps"
 
   /* ── Values ──────────────────────────────── */
@@ -104,7 +105,8 @@
     setPos(res.data);
     ctx.refresh();
     if (!els) return;
-    if (before !== pos.drift_checked_at) renderDrift();
+    // Also when the first card text arrives or the last goes: the button turns on or off.
+    if (before !== pos.drift_checked_at || driftHadText !== FIELDS.some(has)) renderDrift();
     renderLock();
   }
 
@@ -388,6 +390,7 @@
     const checked = !!(pos && pos.drift_checked_at);
     const open = list.filter((f) => f.status === 'open').length;
     const anyText = FIELDS.some(has);
+    driftHadText = anyText;
     let html = '<h2 class="posn-side-label" id="driftTitle" tabindex="-1">DRIFT CHECK</h2>';
     if (drift.state === 'working') {
       html += `<div class="posn-drift-working" role="status"><span class="spinner" aria-hidden="true"></span>Checking against your Brief and Research…</div>
