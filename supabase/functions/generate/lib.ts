@@ -958,7 +958,7 @@ export type Outcome = {
   suggestions?: BriefSuggestions;
   insights?: Insights;
   positioning?: PositioningSuggestions;
-  unsourced?: Partial<Record<PositioningField, string[]>>;
+  unsourced?: Partial<Record<PositioningField | keyof BriefSuggestions, string[]>>;
   flags?: DriftFlag[];
   titles?: TitleIdea[];
 };
@@ -1067,8 +1067,9 @@ export function interpretImport(httpOk: boolean, body: unknown): Outcome {
 /**
  * Map a brief_help reply. All three fields must be there and within the
  * Brief limits (0007); otherwise the call failed and is not counted.
+ * Numbers that `known` does not contain are listed per field in "unsourced".
  */
-export function interpretBriefHelp(httpOk: boolean, body: unknown): Outcome {
+export function interpretBriefHelp(httpOk: boolean, body: unknown, known: string): Outcome {
   const { base, out, fail } = readReply(httpOk, body);
   if (fail || !out) return fail!;
   if (out.result === "not_enough_facts") {
@@ -1082,7 +1083,12 @@ export function interpretBriefHelp(httpOk: boolean, body: unknown): Outcome {
   const fits = (Object.keys(BRIEF_MAX) as (keyof BriefSuggestions)[])
     .every((k) => s[k].length >= 1 && s[k].length <= BRIEF_MAX[k]);
   if (out.result !== "ok" || !fits) return { ...base, status: "failed", counted: false, code: "ai_unavailable" };
-  return { ...base, status: "ok", counted: true, code: null, suggestions: s };
+  const unsourced: Partial<Record<keyof BriefSuggestions, string[]>> = {};
+  for (const k of Object.keys(BRIEF_MAX) as (keyof BriefSuggestions)[]) {
+    const n = unsourcedNumbers(s[k], known);
+    if (n.length) unsourced[k] = n;
+  }
+  return { ...base, status: "ok", counted: true, code: null, suggestions: s, unsourced };
 }
 
 /** Lowercase words only, for the copy check. */
@@ -1179,17 +1185,28 @@ export function numbersIn(s: string): string[] {
   return [...s.matchAll(/\d+(?:[.,]\d+)*/g)].map((m) => m[0].replace(/,(?=\d{3}\b)/g, ""));
 }
 
-/** Every text the author gave: Brief, Research and the current positioning. Numbers found here are sourced. */
+/**
+ * The author's sources: Brief and Research only. Numbers found here are sourced.
+ * The positioning is not a source: an unsourced number accepted there must
+ * not count as sourced in the next suggestion.
+ */
 export function knownText(ctx: PositioningContext): string {
   const b = ctx.brief;
   const o = obj(b.options);
-  const v = positioningValues(ctx.positioning);
   return [
     b.topic_text, b.target_reader, b.reader_problem, b.promise_draft, str(o.stance), str(o.standout), str(o.references),
     ...insightTexts(ctx.insights?.loves), ...insightTexts(ctx.insights?.hates), ...insightTexts(ctx.insights?.gaps),
     ...ctx.competitors.map((c) => c.title),
     ...ctx.sources.flatMap((s) => [s.body, s.citation]),
-    v.one_sentence, v.reader_promise, v.approach, ...v.lacks, ...v.selling_points, ...v.focus_tags,
+  ].map((t) => str(t)).join("\n");
+}
+
+/** What brief_help may take numbers from: the Brief, the topic name and the page-1 books sent to the model. */
+export function briefKnownText(ctx: BriefContext): string {
+  const b = ctx.brief;
+  return [
+    b.topic_text, b.target_reader, b.reader_problem, b.promise_draft, ctx.topicName,
+    ...promptBooks(ctx).flatMap((x) => [x.title, x.author, x.reviews === null ? "" : String(x.reviews), x.rating === null ? "" : String(x.rating)]),
   ].map((t) => str(t)).join("\n");
 }
 
@@ -1371,6 +1388,7 @@ export function interpretTitleIdeas(httpOk: boolean, body: unknown, ctx: TitleCo
 /** Map a reply for a job. The positioning stages need the job's data to check the reply. */
 export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome {
   if (job.stage === "title_ideas") return interpretTitleIdeas(httpOk, body, job.ctx, job.want);
+  if (job.stage === "brief_help") return interpretBriefHelp(httpOk, body, briefKnownText(job.ctx));
   if (job.stage === "positioning_help") return interpretPositioningHelp(httpOk, body, helpFields(job.field), knownText(job.ctx));
   if (job.stage === "drift_check") {
     return interpretDriftCheck(httpOk, body, positioningValues(job.ctx.positioning), job.ctx.positioning?.drift_flags);
@@ -1382,7 +1400,8 @@ export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, 
   if (stage === "bio") return interpretBio(httpOk, body);
   if (stage === "amazon_import") return interpretImport(httpOk, body);
   if (stage === "review_insights") return interpretReviewInsights(httpOk, body, books);
-  return interpretBriefHelp(httpOk, body);
+  // Without the job's data nothing counts as a source. interpretJob passes the Brief.
+  return interpretBriefHelp(httpOk, body, "");
 }
 
 export function wordCount(s: string): number {

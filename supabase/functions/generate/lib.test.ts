@@ -384,7 +384,7 @@ Deno.test("buildRequest: brief_help uses Sonnet 5.5, 800 tokens, the brief schem
 const good3 = { result: "ok", target_reader: "  Adults over 60\nwho sit a lot ", reader_problem: "Floor yoga feels unsafe.", promise_draft: "After this book, the reader can follow a short chair routine.", missing: "" };
 
 Deno.test("interpretBriefHelp: ok is counted; target reader becomes one line", () => {
-  const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify(good3)));
+  const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify(good3)), "");
   assertEquals([o.status, o.counted, o.code], ["ok", true, null]);
   assertEquals(o.suggestions, {
     target_reader: "Adults over 60 who sit a lot",
@@ -394,7 +394,7 @@ Deno.test("interpretBriefHelp: ok is counted; target reader becomes one line", (
 });
 
 Deno.test("interpretBriefHelp: not_enough_facts is ok and counted", () => {
-  const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify({ result: "not_enough_facts", target_reader: "", reader_problem: "", promise_draft: "", missing: "Say who it is for." })));
+  const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify({ result: "not_enough_facts", target_reader: "", reader_problem: "", promise_draft: "", missing: "Say who it is for." })), "");
   assertEquals([o.status, o.counted, o.code, o.missing], ["ok", true, "not_enough_facts", "Say who it is for."]);
 });
 
@@ -407,15 +407,15 @@ Deno.test("interpretBriefHelp: empty, too long or broken replies are failed and 
     { ...good3, result: "maybe" },
   ];
   for (const b of bad) {
-    const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify(b)));
+    const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify(b)), "");
     assertEquals([o.status, o.counted, o.code], ["failed", false, "ai_unavailable"], JSON.stringify(b).slice(0, 80));
   }
-  const stopped = L.interpretBriefHelp(true, msg("max_tokens", '{"result":"ok","target'));
+  const stopped = L.interpretBriefHelp(true, msg("max_tokens", '{"result":"ok","target'), "");
   assertEquals([stopped.status, stopped.counted, stopped.code], ["stopped", false, "ai_stopped"]);
-  const refused = L.interpretBriefHelp(true, msg("refusal", ""));
+  const refused = L.interpretBriefHelp(true, msg("refusal", ""), "");
   assertEquals([refused.status, refused.counted, refused.code], ["failed", false, "ai_declined"]);
   // Exactly at the limits is fine.
-  const edge = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify({ ...good3, target_reader: "a".repeat(300), reader_problem: "b".repeat(1000), promise_draft: "c".repeat(1000) })));
+  const edge = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify({ ...good3, target_reader: "a".repeat(300), reader_problem: "b".repeat(1000), promise_draft: "c".repeat(1000) })), "");
   assertEquals(edge.code, null);
 });
 
@@ -505,6 +505,46 @@ Deno.test("numbersIn and unsourcedNumbers: commas, decimals, words around number
   assertEquals(L.numbersIn("A 4-week plan, 1,200 words, 2.5 hours, 15-minute"), ["4", "1200", "2.5", "15"]);
   assertEquals(L.unsourcedNumbers("15 minutes, 20 minutes, 1,200", "a 15-minute plan with 1200 words"), ["20"]);
   assertEquals(L.unsourcedNumbers("no numbers", ""), []);
+});
+
+Deno.test("knownText: Brief and Research are sources; the current positioning is not", () => {
+  const ctx: L.PositioningContext = {
+    bookId: "b", brief: { topic_text: "Chair yoga over 60", book_type: null, target_reader: null, reader_problem: null, promise_draft: null, options: { stance: "", standout: "", references: "" } },
+    pen: null, insights: null, competitors: [],
+    sources: [{ kind: "source", body: "CDC: balance work 3 days a week.", citation: "CDC 2024", created_at: "2026-09-30T10:00:00Z" }],
+    positioning: {
+      one_sentence: "A 30-day plan.", reader_promise: "Lose 12 pounds.", approach: null, lacks: ["7 poses"], selling_points: ["99 photos"], focus_tags: [],
+      drift_flags: [], drift_checked_at: null, locked_at: null, updated_at: "2026-09-30T10:00:00Z",
+    },
+  };
+  const known = L.knownText(ctx);
+  assertEquals(L.unsourcedNumbers("Over 60, 3 days a week, since 2024", known), []);
+  assertEquals(L.unsourcedNumbers("A 30-day plan to lose 12 pounds with 7 poses and 99 photos", known), ["30", "12", "7", "99"]);
+});
+
+Deno.test("brief_help: numbers not in the Brief, topic or page-1 books are unsourced", () => {
+  const ctx: L.BriefContext = {
+    bookId: "b",
+    brief: { topic_text: "Chair yoga", book_type: null, target_reader: "Adults over 60", reader_problem: null, promise_draft: null },
+    pen: { niche: "Fitness after 50", voice: null },
+    topicName: "Yoga for 2 people",
+    pageBooks: [
+      { position: 1, title: "Gentle Chair Yoga in 28 Days", author: null, reviews: 1840, rating: 4.4, sponsored: false, included: true },
+      { position: 2, title: "Mat Book", author: null, reviews: 77, rating: 3.9, sponsored: true, included: true },
+      { position: 3, title: "Old Book", author: null, reviews: 66, rating: null, sponsored: false, included: false },
+    ],
+  };
+  const known = L.briefKnownText(ctx);
+  const o = L.interpretJob({ stage: "brief_help", ctx }, true, msg("end_turn", JSON.stringify({
+    result: "ok",
+    target_reader: "Adults over 60 who read 28-day plans",
+    reader_problem: "Books with 1,840 reviews and 4.4 stars still skip 2 people.",
+    promise_draft: "In 15 minutes a day, with 77 or 66 poses, after 50.",
+  })));
+  assertEquals(o.code, null);
+  assertEquals(o.unsourced, { promise_draft: ["15", "77", "66", "50"] });   // sponsored, unused and pen niche are not sources
+  assertEquals(L.unsourcedNumbers("60 28 1840 4.4 2", known), []);
+  assertEquals(L.interpretJob({ stage: "brief_help", ctx }, true, msg("end_turn", JSON.stringify(good3))).unsourced, {});
 });
 
 Deno.test("interpretPositioningHelp: not_enough_facts is counted; bad result fails", () => {

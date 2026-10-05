@@ -420,6 +420,7 @@ Deno.test("brief_help success: 200 suggestions only, one counted row with book_i
   assertEquals(await json(r), {
     stage: "brief_help",
     suggestions: { target_reader: three.target_reader, reader_problem: three.reader_problem, promise_draft: three.promise_draft },
+    unsourced: {},   // 60 is in the Brief
   });
   assertEquals(logged, [{ user_id: USER, book_id: BOOK_ID, stage: "brief_help", model: "claude-sonnet-5-5", input_tokens: 520, output_tokens: 190, status: "ok", counted: true }]);
 
@@ -431,6 +432,14 @@ Deno.test("brief_help success: 200 suggestions only, one counted row with book_i
   assert(content.includes("Gentle Chair Yoga"));
   assert(!content.includes("Sponsored Mat Book"), "sponsored books are left out");
   assert(calls[0].init.signal instanceof AbortSignal);
+}));
+
+Deno.test("brief_help: numbers without a source come back in unsourced", quiet(async () => {
+  const out = { ...three, reader_problem: "Most books have 184 reviews but skip 30 minutes of warm-up.", promise_draft: "A plan for 5 days." };
+  const { handle } = setup({ provider: helpReply(out) });
+  const j = await json(await handle(post(help)));
+  // 184 is a page-1 book; 30 is nowhere; 5 is only in a sponsored book, which the model never sees.
+  assertEquals(j.unsourced, { reader_problem: ["30"], promise_draft: ["5"] });
 }));
 
 Deno.test("brief_help from the 5501 dev origin gets CORS", quiet(async () => {
@@ -607,8 +616,9 @@ Deno.test("positioning_help: all six fields, one counted row with book_id, unsou
   assertEquals(j.stage, "positioning_help");
   assertEquals(j.suggestions.lacks, ["Poses too hard for knee or hip pain", "No plan that grows week by week"]);
   assertEquals(j.suggestions.reader_promise, "After finishing this book, you can follow a safe 20-minute chair routine at home, every day.");
-  // 20 is nowhere in the Brief, Research or positioning; 15, 4 and 5 are; 3 is in a source; 500 is not.
-  assertEquals(j.unsourced, { reader_promise: ["20"], selling_points: ["500"] });
+  // 15 is in the Brief and 3 in a source. 20 and 500 are nowhere. 4 and 5 are only in the
+  // current positioning, which is not a source (Batch A), so they are flagged too.
+  assertEquals(j.unsourced, { reader_promise: ["20"], approach: ["4", "5"], selling_points: ["500"] });
   assertEquals(logged, [{ user_id: USER, book_id: BOOK_ID, stage: "positioning_help", model: "claude-sonnet-5-5", input_tokens: 520, output_tokens: 190, status: "ok", counted: true }]);
   assertEquals(saves.length, 0);
   const sent = JSON.parse(calls[0].init.body as string);
@@ -625,7 +635,7 @@ Deno.test("positioning_help with a field: only that card comes back", quiet(asyn
   const r = await handle(post({ ...ph, field: "approach" }));
   const j = await json(r);
   assertEquals([r.status, Object.keys(j.suggestions)], [200, ["approach"]]);
-  assertEquals(j.unsourced, {});
+  assertEquals(j.unsourced, { approach: ["4", "5"] });   // only in the positioning
   assert((JSON.parse(calls[0].init.body as string).messages[0].content as string).endsWith("Write only these fields: approach. Follow the rules."));
 }));
 

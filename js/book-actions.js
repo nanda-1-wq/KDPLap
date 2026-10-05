@@ -267,7 +267,7 @@
           <span class="delete-icon">${ICON.trash(20)}</span>
           <h2 id="delTitle"></h2>
         </div>
-        <p class="delete-text" id="delDesc" aria-live="polite"></p>
+        <div class="delete-text" id="delDesc" aria-live="polite"></div>
         <div class="field">
           <label for="delInput">Type ${CONFIRM_WORD} to confirm</label>
           <input class="text-input" id="delInput" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" />
@@ -305,27 +305,40 @@
 
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-  /** "All 8 chapters, 23 versions, and 4 research notes will be deleted." Only non-zero parts. */
-  function countsSentence(c) {
-    if (!c) return 'All chapters, versions, and research notes in this book will be deleted.';
-    const parts = [];
-    if (c.chapters) parts.push(plural(c.chapters, 'chapter'));
-    if (c.versions) parts.push(plural(c.versions, 'version'));
-    if (c.research) parts.push(plural(c.research, 'research note'));
-    if (!parts.length) return 'This book and its Brief will be deleted.';
-    const list = parts.length === 1 ? parts[0]
-      : parts.length === 2 ? `${parts[0]} and ${parts[1]}`
-        : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
-    // "All 1 chapter" reads wrong: say "All" only when every count is more than one.
-    const all = [c.chapters, c.versions, c.research].every((n) => n !== 1);
-    return `${all ? 'All ' : ''}${list} will be deleted.`.replace(/^./, (ch) => ch.toUpperCase());
+  /**
+   * Everything the delete removes, one line each. With counts, only the parts
+   * that exist; without them (counts failed), every part with no numbers.
+   */
+  function deleteList(c) {
+    if (!c) {
+      return ['The Brief', 'Competitors', 'Research notes', 'Review insights', 'Positioning', 'Title ideas', 'Chapters and their versions'];
+    }
+    const lines = ['The Brief'];
+    if (c.competitors) lines.push(plural(c.competitors, 'competitor'));
+    if (c.research) lines.push(plural(c.research, 'research note'));
+    if (c.insights) lines.push('Review insights');
+    if (c.positioning) lines.push('Positioning');
+    if (c.titles) lines.push(plural(c.titles, 'title idea'));
+    if (c.chapters) lines.push(c.versions ? `${plural(c.chapters, 'chapter')} and ${plural(c.versions, 'version')}` : plural(c.chapters, 'chapter'));
+    return lines;
   }
 
-  function setText(sentence) {
-    del.text.textContent = `${sentence} `;
+  function setText(lines) {
+    const intro = document.createElement('p');
+    intro.textContent = 'This deletes the book and:';
+    const list = document.createElement('ul');
+    list.className = 'delete-list';
+    lines.forEach((t) => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      list.append(li);
+    });
+    const kept = document.createElement('p');
+    kept.textContent = 'Your topic and pen name are kept. ';
     const strong = document.createElement('strong');
     strong.textContent = 'This cannot be undone.';
-    del.text.append(strong);
+    kept.append(strong);
+    del.text.replaceChildren(intro, list, kept);
   }
 
   async function loadCounts(id) {
@@ -334,7 +347,7 @@
     let res;
     try { res = await kdp.getBookCounts(id); } catch (err) { res = { error: err }; }
     if (ticket !== del.load || !del.d.open) return;
-    setText(countsSentence(res.error ? null : res.data));
+    setText(deleteList(res.error ? null : res.data));
   }
 
   function openDelete(id, opener) {

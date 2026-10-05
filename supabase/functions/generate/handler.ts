@@ -249,7 +249,7 @@ export function makeHandler(deps: Deps) {
       if (out.code === "not_enough_facts") return fail("not_enough_facts", { missing: out.missing ?? "" });
       if (out.code) return fail(out.code);
       if (input.stage === "amazon_import") return reply(200, { stage: input.stage, books: out.books });
-      if (input.stage === "brief_help") return reply(200, { stage: input.stage, suggestions: out.suggestions });
+      if (input.stage === "brief_help") return reply(200, { stage: input.stage, suggestions: out.suggestions, unsourced: out.unsourced });
       if (input.stage === "positioning_help") return reply(200, { stage: input.stage, suggestions: out.positioning, unsourced: out.unsourced });
       if (input.stage === "drift_check") return reply(200, { stage: input.stage, flags: out.flags, ...saved });
       if (input.stage === "title_ideas") return reply(200, { stage: input.stage, options });

@@ -53,10 +53,12 @@
   let help = { state: 'idle' };                // idle | working | done | error | stopped
   let helpToken = 0;
   let suggestions = {};                        // field → suggested text
+  let unsourced = {};                          // field → numbers without a source
 
   /* ── Values ──────────────────────────────── */
 
   const str = (v) => (typeof v === 'string' ? v : '');
+  const joinWords = (parts) => (parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
   const filled = (v) => str(v).trim().length > 0;
 
   function fromBook(b) {
@@ -558,11 +560,13 @@
     const text = suggestions[k];
     if (!text) { box.innerHTML = ''; return; }
     const replaces = filled(model[k]) ? 'Accept replaces your text.' : 'Accept puts it in the field.';
+    const nums = unsourced[k] || [];
     box.innerHTML = `<div class="bio-suggest brief-suggest" role="region" aria-labelledby="sug-${k}">
         <div class="bio-suggest-head">
           <span class="bio-suggest-label" id="sug-${k}">AI SUGGESTION</span>
         </div>
         <p class="brief-suggest-text" tabindex="-1" data-suggest-text></p>
+        ${nums.length ? `<p class="posn-verify">${ICON.warn(14)}<span>Verify: no source for ${esc(joinWords(nums))}. Your Brief and the page-1 books do not have ${nums.length === 1 ? 'this number' : 'these numbers'}.</span></p>` : ''}
         <p class="field-hint">${replaces}</p>
         <div class="bio-suggest-actions">
           <button type="button" class="btn btn-primary" data-accept="${k}">${ICON.check(16)}Accept</button>
@@ -603,10 +607,13 @@
     }
 
     const s = (res.data && res.data.suggestions) || {};
+    const u = (res.data && res.data.unsourced) || {};
     suggestions = {};
+    unsourced = {};
     AI_FIELDS.forEach(([k]) => {
       const t = str(s[k]).trim();
       if (t && t.length <= MAX[k] && t !== model[k].trim()) suggestions[k] = t;
+      if (suggestions[k] && Array.isArray(u[k]) && u[k].length) unsourced[k] = u[k].map(String);
     });
     help = { state: 'done' };
     if (!ctx.isActive(1)) return;      // shown when the Brief opens again
@@ -625,6 +632,7 @@
 
   function afterChoice(k) {
     delete suggestions[k];
+    delete unsourced[k];
     renderSuggestion(k);
     // The note names the fields still waiting; with none left it goes away.
     if (!AI_FIELDS.some(([f]) => suggestions[f])) help = { state: 'idle' };

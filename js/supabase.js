@@ -216,23 +216,40 @@ window.kdp = {
   },
 
   /** What a delete removes: chapters, section versions, research notes. Two queries. */
+  /**
+   * What a delete removes, for the Delete dialog. Counts for lists, true/false
+   * for one-row parts. The Brief always exists, so it is not counted.
+   */
   async getBookCounts(id) {
-    const [chapters, research] = await Promise.all([
+    const count = (table) => window.sb.from(table).select('book_id', { count: 'exact', head: true }).eq('book_id', id);
+    const [chapters, research, competitors, titles, insights, positioning] = await Promise.all([
       // sections and section_versions have two links (section_id, current_version_id); name the one to follow.
       window.sb
         .from('chapters')
         .select('id, sections ( section_versions!section_versions_section_id_fkey ( count ) )')
         .eq('book_id', id),
-      window.sb
-        .from('research_sources')
-        .select('id', { count: 'exact', head: true })
-        .eq('book_id', id)
+      count('research_sources'),
+      count('competitors'),
+      count('title_options'),
+      count('research_insights'),
+      count('positioning')
     ]);
-    const error = chapters.error || research.error;
+    const error = [chapters, research, competitors, titles, insights, positioning].map((r) => r.error).find(Boolean);
     if (error) return { data: null, error };
     const versions = chapters.data.reduce((sum, c) =>
       sum + (c.sections || []).reduce((s, sec) => s + ((sec.section_versions && sec.section_versions[0] && sec.section_versions[0].count) || 0), 0), 0);
-    return { data: { chapters: chapters.data.length, versions, research: research.count || 0 }, error: null };
+    return {
+      data: {
+        chapters: chapters.data.length,
+        versions,
+        research: research.count || 0,
+        competitors: competitors.count || 0,
+        titles: titles.count || 0,
+        insights: (insights.count || 0) > 0,
+        positioning: (positioning.count || 0) > 0
+      },
+      error: null
+    };
   },
 
   /**
