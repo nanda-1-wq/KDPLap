@@ -21,6 +21,7 @@ const TOPIC_SOURCES = 'winning_source, winning_set_at, dead_source, dead_set_at,
 
 // The step 03 positioning row, as the book page reads it (migration 0010).
 const POSITIONING_COLS = 'one_sentence, reader_promise, approach, lacks, selling_points, focus_tags, drift_flags, drift_checked_at, locked_at, updated_at';
+const TITLE_OPTION_COLS = 'id, title, subtitle, reason, keywords, unsourced, shortlisted, created_at';
 
 window.kdp = {
 
@@ -117,14 +118,15 @@ window.kdp = {
    * One book for the book page, with its Brief, pen name, and source topic.
    * Also the counts step 02 needs for its done mark: all competitors and the
    * research rows of kind 'source' (personal notes do not count), and the
-   * step 03 positioning row (null before the first save).
+   * step 03 positioning row (null before the first save), and the step 04
+   * title fields.
    * data is null when the id is not the user's (RLS).
    */
   async getBook(id) {
     return window.sb
       .from('books')
-      .select(`id, title, status, current_step, updated_at, topic_id, pen_name_id, series_name, series_number,
-               title_needs_review,
+      .select(`id, title, subtitle, status, current_step, updated_at, topic_id, pen_name_id, series_name, series_number,
+               title_needs_review, title_examples,
                pen_names ( id, name, voice ),
                topics ( id, name, checks_passed ),
                book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type,
@@ -466,6 +468,65 @@ window.kdp = {
     return { data: { chapters: data.length, written }, error: null };
   },
 
+  /* ── Title (step 04) ──────────────────────────── */
+
+  /**
+   * What step 04 needs besides the book row: the saved title options (oldest
+   * first) and the step 02 competitors for the title checks.
+   */
+  async getTitleData(bookId) {
+    const [options, competitors] = await Promise.all([
+      window.sb.from('title_options').select(TITLE_OPTION_COLS).eq('book_id', bookId).order('created_at').order('id'),
+      window.sb.from('competitors').select('title, author').eq('book_id', bookId)
+    ]);
+    const error = options.error || competitors.error;
+    if (error) return { data: null, error };
+    return { data: { options: options.data, competitors: competitors.data }, error: null };
+  },
+
+  /** Star or unstar a title option. Only this field may change (migration 0011). */
+  async setShortlisted(id, on) {
+    const { data, error } = await window.sb
+      .from('title_options')
+      .update({ shortlisted: !!on })
+      .eq('id', id)
+      .select(TITLE_OPTION_COLS);
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Option not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /** Remove one option. A starred option is never removed: unstar it first. */
+  async removeTitleOption(id) {
+    const { error, count } = await window.sb
+      .from('title_options')
+      .delete({ count: 'exact' })
+      .eq('id', id)
+      .eq('shortlisted', false);
+    if (error) return { error };
+    if (!count) return { error: Object.assign(new Error('Option not found or starred.'), { notFound: true }) };
+    return { error: null };
+  },
+
+  /**
+   * "Use this title": writes books.title and books.subtitle. clearReview also
+   * clears "Needs review"; the database allows that only while the
+   * positioning is locked (0011: 'positioning_not_locked'). Combined limit
+   * 200 characters (title + ": " + subtitle).
+   */
+  async useTitle(bookId, title, subtitle, clearReview) {
+    const fields = { title, subtitle };
+    if (clearReview) fields.title_needs_review = false;
+    const { data, error } = await window.sb
+      .from('books')
+      .update(fields)
+      .eq('id', bookId)
+      .select('id, title, subtitle, title_needs_review, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
+    return { data: data[0], error: null };
+  },
+
   /** The Research gaps (step 02 insights) for "Copy gaps from Research". [] before an analysis. */
   async getResearchGaps(bookId) {
     const { data, error } = await window.sb
@@ -657,11 +718,13 @@ window.kdp = {
    * Returns { data, error }. error.code is a short code from the function
    * (not_enough_facts, monthly_limit, rate_limited, ai_unavailable, ai_stopped,
    * ai_declined, not_amazon_page, not_enough_books, nothing_to_check,
-   * positioning_locked, positioning_changed, unauthorized, not_found,
+   * positioning_locked, positioning_changed, positioning_not_locked,
+   * options_full, unauthorized, not_found,
    * bad_request, server_error) or 'network' when the function could not be reached.
    * Input: { stage: 'bio', penNameId }, { stage: 'amazon_import', topicId, text },
    * { stage: 'brief_help', bookId }, { stage: 'review_insights', bookId },
-   * { stage: 'positioning_help', bookId[, field] } or { stage: 'drift_check', bookId }.
+   * { stage: 'positioning_help', bookId[, field] }, { stage: 'drift_check', bookId }
+   * or { stage: 'title_ideas', bookId } (the server saves the options and returns them).
    */
   async generate(input) {
     let res;

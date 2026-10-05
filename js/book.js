@@ -8,7 +8,8 @@
 
    Steps with a screen register in window.kdpBookSteps (E7.1: 01 Brief in
    js/book-brief.js; E7.2: 02 Research in js/book-research.js; E8.1:
-   03 Positioning in js/book-positioning.js):
+   03 Positioning in js/book-positioning.js; E8.2: 04 Title in
+   js/book-title.js):
    init(book, ctx) once, render(root) on each visit,
    isDone(book) for the sidebar mark, blockers() for the Next button,
    optional doneMark: 'lock' (03 shows a lock instead of a check).

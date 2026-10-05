@@ -32,11 +32,16 @@ export interface Store {
    * unlocked and unchanged since it was read (same updated_at). null = changed.
    */
   saveDriftFlags(s: DriftSave): Promise<{ drift_checked_at: string; updated_at: string } | null>;
+  getTitleContext(bookId: string): Promise<L.TitleContext | null>;
+  /** Insert title options as the user (RLS). 0011 caps them at 40 per book: that error has code "options_full". */
+  saveTitleOptions(bookId: string, ideas: L.TitleIdea[]): Promise<SavedTitleOption[]>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
   logUsage(row: UsageRow): Promise<void>;
 }
+
+export type SavedTitleOption = L.TitleIdea & { id: string; shortlisted: boolean; created_at: string };
 
 export type DriftSave = { bookId: string; userId: string; flags: L.DriftFlag[]; checkedAt: string; readUpdatedAt: string };
 
@@ -117,6 +122,14 @@ export function makeHandler(deps: Deps) {
         if (!ctx) return fail("not_found");
         if (!L.hasTopic(ctx)) return fail("not_enough_facts", { missing: "" });
         job = { stage: "brief_help", ctx };
+      } else if (input.stage === "title_ideas") {
+        // The server reads the locked positioning, Brief, Research, examples and saved options.
+        const ctx = await store.getTitleContext(input.bookId);
+        if (!ctx) return fail("not_found");
+        if (!ctx.positioning?.locked_at) return fail("positioning_not_locked");
+        const want = L.titleIdeasWanted(ctx.options.length);
+        if (!want) return fail("options_full");
+        job = { stage: "title_ideas", ctx, want };
       } else if (input.stage === "positioning_help" || input.stage === "drift_check") {
         // The server reads the Brief, Research and the SAVED positioning; the browser sends only ids.
         const ctx = await store.getPositioningContext(input.bookId);
@@ -203,6 +216,19 @@ export function makeHandler(deps: Deps) {
         }
       }
 
+      // 5c. Title options are saved by the server, so "More ideas" only adds.
+      // When the save fails the author gets nothing, so the call is not counted.
+      let options: SavedTitleOption[] = [];
+      if (job.stage === "title_ideas" && !out.code) {
+        try {
+          options = await store.saveTitleOptions(job.ctx.bookId, out.titles!);
+        } catch (err) {
+          const full = (err as { code?: string })?.code === "options_full";
+          if (!full) console.error(`generate: title save failed: ${(err as { code?: string })?.code ?? "unknown"}`);
+          out = { ...out, counted: false, code: full ? "options_full" : "server_error" };
+        }
+      }
+
       // 6. Log every call that reached the provider.
       try {
         await store.logUsage({
@@ -226,6 +252,7 @@ export function makeHandler(deps: Deps) {
       if (input.stage === "brief_help") return reply(200, { stage: input.stage, suggestions: out.suggestions });
       if (input.stage === "positioning_help") return reply(200, { stage: input.stage, suggestions: out.positioning, unsourced: out.unsourced });
       if (input.stage === "drift_check") return reply(200, { stage: input.stage, flags: out.flags, ...saved });
+      if (input.stage === "title_ideas") return reply(200, { stage: input.stage, options });
       // analyzed_at comes from the server clock; the browser saves it with the lines.
       if (job.stage === "review_insights") return reply(200, { stage: input.stage, insights: out.insights, books: job.books.length, analyzed_at: now.toISOString() });
       return reply(200, { stage: input.stage, bio: out.bio, words: L.wordCount(out.bio!) });

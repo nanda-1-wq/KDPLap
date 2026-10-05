@@ -137,15 +137,17 @@
     if (e.notFound) { saver.reset('error'); ctx.notFound(); return true; }
     // 23514 = a check (0007), 42501 = RLS (a pen name that is not the user's), 23503 = gone.
     if (['23514', '42501', '23503'].includes(e.code)) {
+      // Error state, edits dropped (they are put back to the saved values), so no Retry.
+      // Drop the edits BEFORE re-rendering: removing a focused field fires
+      // focusout, which would otherwise send the refused save again.
+      saver.reset('error', sent.includes('pen_name_id')
+        ? 'That pen name is not available, so it was not saved.'
+        : 'This change breaks a Brief rule, so it was not saved.');
       sent.forEach((f) => {
         if (f === 'options') OPTION_KEYS.forEach((o) => { model[o] = saved[o]; });
         else model[f] = saved[f];
       });
       if (ctx.isActive(1)) render(ctx.content());
-      // Error state, edits dropped (they were put back to the saved values), so no Retry.
-      saver.reset('error', sent.includes('pen_name_id')
-        ? 'That pen name is not available, so it was not saved.'
-        : 'This change breaks a Brief rule, so it was not saved.');
       return true;
     }
     return false;

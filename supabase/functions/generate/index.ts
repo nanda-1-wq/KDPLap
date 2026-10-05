@@ -8,19 +8,21 @@
    POST { stage: "review_insights", bookId }    → { stage, insights, books, analyzed_at }
    POST { stage: "positioning_help", bookId[, field] } → { stage, suggestions, unsourced }
    POST { stage: "drift_check", bookId }        → { stage, flags, drift_checked_at, updated_at }
+   POST { stage: "title_ideas", bookId }        → { stage, options }   (the saved title_options rows)
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
    SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
 
    Reads use a client built from the caller's Authorization header, so
-   RLS applies as that user. Only the ai_usage insert and the drift check
-   save use the service role; the save filters by the caller's user id.
+   RLS applies as that user, and so does the title options insert. Only the
+   ai_usage insert and the drift check save use the service role; the save
+   filters by the caller's user id.
 ═══════════════════════════════════════════════════ */
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import { makeHandler, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, PenRow, PositioningContext, ReviewContext, TopicRow } from "./lib.ts";
+import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
+import type { BriefContext, Competitor, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -28,6 +30,34 @@ function need(name: string): string {
   const v = Deno.env.get(name);
   if (!v) throw new Error(`missing env ${name}`);
   return v;
+}
+
+// A to-one embed can come back as an object or a one-item array.
+const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+
+// What both positioning stages and title_ideas read about a book.
+const POSITIONING_SELECT = `id,
+  book_briefs ( topic_text, book_type, target_reader, reader_problem, promise_draft, options ),
+  pen_names ( niche, voice ),
+  research_insights ( loves, hates, gaps ),
+  competitors ( title, author, created_at ),
+  research_sources ( kind, body, citation, created_at ),
+  positioning ( one_sentence, reader_promise, approach, lacks, selling_points, focus_tags,
+                drift_flags, drift_checked_at, locked_at, updated_at )`;
+
+// deno-lint-ignore no-explicit-any
+function positioningContext(data: any): PositioningContext | null {
+  const brief = one(data.book_briefs) as PositioningContext["brief"] | null;
+  if (!brief) return null;
+  return {
+    bookId: data.id as string,
+    brief,
+    pen: one(data.pen_names) as PositioningContext["pen"],
+    insights: one(data.research_insights) as PositioningContext["insights"],
+    competitors: (data.competitors ?? []) as PositioningContext["competitors"],
+    sources: (data.research_sources ?? []) as PositioningContext["sources"],
+    positioning: one(data.positioning) as PositioningContext["positioning"],
+  };
 }
 
 const noSession = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
@@ -39,6 +69,14 @@ function openStore(authHeader: string): Store {
     global: { headers: { Authorization: authHeader } },
   });
   const jwt = authHeader.slice("Bearer ".length);
+
+  /** One book with the given embeds, through RLS. Someone else's book reads as null. */
+  async function readBook(bookId: string, select: string) {
+    const { data, error } = await asUser.from("books").select(select).eq("id", bookId).maybeSingle();
+    if (error) throw error;
+    // deno-lint-ignore no-explicit-any
+    return data as any;
+  }
 
   return {
     async getUserId() {
@@ -118,32 +156,31 @@ function openStore(authHeader: string): Store {
     // and notes) and the saved positioning. A book that is not the caller's
     // reads as null (RLS).
     async getPositioningContext(bookId) {
-      const { data, error } = await asUser
-        .from("books")
-        .select(`id,
-                 book_briefs ( topic_text, book_type, target_reader, reader_problem, promise_draft, options ),
-                 pen_names ( niche, voice ),
-                 research_insights ( loves, hates, gaps ),
-                 competitors ( title, author, created_at ),
-                 research_sources ( kind, body, citation, created_at ),
-                 positioning ( one_sentence, reader_promise, approach, lacks, selling_points, focus_tags,
-                               drift_flags, drift_checked_at, locked_at, updated_at )`)
-        .eq("id", bookId)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? null);
-      const brief = one(data.book_briefs) as PositioningContext["brief"] | null;
-      if (!brief) return null;
+      const data = await readBook(bookId, POSITIONING_SELECT);
+      return data && positioningContext(data);
+    },
+
+    // The same read, plus the title examples and the saved title options.
+    async getTitleContext(bookId) {
+      const data = await readBook(bookId, `${POSITIONING_SELECT}, title_examples, title_options ( title, subtitle )`);
+      const ctx = data && positioningContext(data);
+      if (!ctx) return null;
       return {
-        bookId: data.id as string,
-        brief,
-        pen: one(data.pen_names) as PositioningContext["pen"],
-        insights: one(data.research_insights) as PositioningContext["insights"],
-        competitors: (data.competitors ?? []) as PositioningContext["competitors"],
-        sources: (data.research_sources ?? []) as PositioningContext["sources"],
-        positioning: one(data.positioning) as PositioningContext["positioning"],
+        ...ctx,
+        examples: (data.title_examples ?? []) as string[],
+        options: (data.title_options ?? []) as TitleContext["options"],
       };
+    },
+
+    // As the user (RLS): the insert policy checks the book is theirs, and the
+    // 0011 trigger caps the options at 40 per book (P0001 "title_options_full").
+    async saveTitleOptions(bookId, ideas) {
+      const { data, error } = await asUser
+        .from("title_options")
+        .insert(ideas.map((t) => ({ book_id: bookId, ...t })))
+        .select("id, title, subtitle, reason, keywords, unsourced, shortlisted, created_at");
+      if (error) throw error.message === "title_options_full" ? { code: "options_full" } : error;
+      return data as SavedTitleOption[];
     },
 
     // Service role (bypasses RLS), so it filters by the caller's user id. The
