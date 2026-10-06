@@ -13,6 +13,9 @@
    Insights are saved by the browser after the AI answers (v1). Each line
    keeps the competitor titles it came from and an "edited" flag. Analyze
    again asks before it replaces edited lines.
+   Each analysis saves a fingerprint of the competitors it read (0014). When
+   the competitors with reviews give another fingerprint now, the panel says
+   "Out of date". An analysis from before 0014 has none: nothing is shown.
    v3: move that save to the server so the AI label is set server-side.
 ═══════════════════════════════════════════════════ */
 
@@ -89,9 +92,42 @@
     return !!l && LISTS.some(([k]) => l[k].some((x) => x.edited));
   };
 
+  /**
+   * A short fingerprint (16 hex, a plain hash, not a security feature) of what
+   * Analyze reads: every competitor with pasted reviews, by id, with title,
+   * author, contents and reviews. Same order whatever the list order is.
+   */
+  function inputsKey() {
+    const text = data.competitors.filter(hasReviews)
+      .map((c) => [c.id, c.title, c.author, c.toc, c.low_reviews, c.high_reviews].map(str).join('\u0001'))
+      .sort().join('\u0002');
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    const hex = (n) => (n >>> 0).toString(16).padStart(8, '0');
+    return hex(h1) + hex(h2);
+  }
+
+  /** The saved analysis no longer matches the competitors (unknown before 0014: false). */
+  const isStale = () => !!(data && data.insights && data.insights.inputs_key && data.insights.inputs_key !== inputsKey());
+
   /* ── Step API for js/book.js ─────────────── */
 
   const isDone = () => counts.competitors >= NEED_COMPETITORS && counts.sources >= 1;
+
+  /** What step 02 still needs: "Needs 2 more competitors and 1 source", or ''. */
+  function missing() {
+    const c = Math.max(0, NEED_COMPETITORS - counts.competitors);
+    const parts = [];
+    if (c) parts.push(counts.competitors ? `${c} more competitor${c === 1 ? '' : 's'}` : plural(c, 'competitor'));
+    if (counts.sources < 1) parts.push('1 source');
+    return parts.length ? `Needs ${parts.join(' and ')}` : '';
+  }
 
   function init(b, c) {
     ctx = c;
@@ -811,6 +847,9 @@
         <h2 class="research-side-title" id="rsGaps" tabindex="-1">What competitors miss</h2>
         <p class="research-side-sub">${esc(sub)}</p>
       </div>`;
+    const stale = loadState === 'ready' && l && isStale()
+      ? `<p class="posn-stale" data-insights-stale>${ICON.warn(14)}<span>Out of date. Competitors or their reviews changed after this analysis.</span></p>`
+      : '';
 
     if (loadState !== 'ready') {
       box.innerHTML = head + (loadState === 'loading'
@@ -874,7 +913,7 @@
       action = `<button type="button" class="btn btn-secondary btn-block" data-analyze>${SPARKLE}${l ? 'Analyze again' : 'Analyze reviews'}</button>`;
     }
 
-    box.innerHTML = head + notice + body + action;
+    box.innerHTML = head + stale + notice + body + action;
     if (lineEdit) fillLineEdit();
   }
 
@@ -939,6 +978,7 @@
       return;
     }
     const token = ++analysisToken;
+    const key = inputsKey();             // what this analysis reads (edits during the call make it out of date)
     analysis = { state: 'working', books: reviewedCount() };
     lineEdit = null;
     lineError = '';
@@ -962,14 +1002,14 @@
     }
     const got = (res.data && res.data.insights) || {};
     const mark = (list) => (Array.isArray(list) ? list : []).map((x) => ({ text: str(x.text), from: Array.isArray(x.from) ? x.from.map(str) : [], edited: false }));
-    pending = { lists: { loves: mark(got.loves), hates: mark(got.hates), gaps: mark(got.gaps) }, analyzedAt: res.data.analyzed_at || new Date().toISOString() };
+    pending = { lists: { loves: mark(got.loves), hates: mark(got.hates), gaps: mark(got.gaps) }, analyzedAt: res.data.analyzed_at || new Date().toISOString(), key };
     await savePending(token);
   }
 
   async function savePending(token) {
     if (!pending) return;
     let res;
-    try { res = await kdp.saveInsights(book.id, pending.lists, pending.analyzedAt); } catch (err) { res = { error: err }; }
+    try { res = await kdp.saveInsights(book.id, pending.lists, pending.analyzedAt, pending.key); } catch (err) { res = { error: err }; }
     if (token !== analysisToken) return;
     if (res.error) {
       analysis = { state: 'error', code: 'save_failed' };
@@ -1149,6 +1189,7 @@
     init,
     render,
     isDone,
+    missing,
     blockers: () => 0
   };
 })();

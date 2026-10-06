@@ -11,7 +11,9 @@
    js/autosave.js. Limits match migration 0010.
    - "Help me draft" (stage positioning_help) drafts every card; the redraft
      button on a card drafts only that card. Each suggestion waits for
-     Accept or Discard. Nothing is replaced silently.
+     Accept or Discard. Nothing is replaced silently. "Accept all" takes
+     every suggestion without a "Verify" flag, each as a normal edit; the
+     flagged ones keep waiting.
    - Drift check (stage drift_check) runs on the SAVED text. The server saves
      the flags; the browser may only keep a flag with a reason (or undo it).
      Any text edit makes the check out of date.
@@ -147,6 +149,18 @@
   /* ── Step API for js/book.js ─────────────── */
 
   const isDone = (b) => { const p = one(b.positioning); return !!(p && p.locked_at); };
+
+  /** What step 03 still needs before it is locked, or ''. Same order as the lock panel. */
+  function missing() {
+    if (!model || isLocked()) return '';
+    const left = NEEDED.filter(([k]) => !has(k)).map(([, t]) => t);
+    if (left.length > 2) return `Add ${left.length} required cards`;
+    if (left.length) return `Add ${joinWords(left)}`;
+    if (!pos || !pos.drift_checked_at) return 'Run the drift check';
+    const open = flags().filter((f) => f.status === 'open').length;
+    if (open) return `Resolve ${open} drift flag${open === 1 ? '' : 's'}`;
+    return 'Approve and lock';
+  }
 
   function init(b, c) {
     ctx = c;
@@ -506,10 +520,19 @@
     } else if (ai.state === 'error') {
       area.innerHTML = alertHtml(ai.code, 'data-help-retry', ai.missing);
     } else if (ai.state === 'done') {
-      const names = FIELDS.filter((k) => suggestions[k] !== undefined).map((k) => CARDS[k].title.toLowerCase());
-      area.innerHTML = `<p class="help-note" role="status">${names.length
+      const waiting = FIELDS.filter((k) => suggestions[k] !== undefined);
+      const names = waiting.map((k) => CARDS[k].title.toLowerCase());
+      if (ai.accepted && waiting.length) {
+        area.innerHTML = `<p class="help-note" role="status">${ICON.warn(14)}Accepted ${ai.accepted} suggestion${ai.accepted === 1 ? '' : 's'}. ${waiting.length} with a Verify flag ${waiting.length === 1 ? 'is' : 'are'} still waiting on ${waiting.length === 1 ? 'its card' : 'their cards'}.</p>`;
+        return;
+      }
+      const canAll = ai.field === null && waiting.length >= 2 && waiting.some((k) => !(unsourced[k] || []).length);
+      const note = `<p class="help-note" role="status">${names.length
         ? `${ICON.sparkle}${ai.field === null ? `Suggestions are ready under ${esc(joinWords(names))}.` : 'A suggestion is ready below.'} Nothing changes until you accept.`
         : 'The AI suggests what you already have. Nothing to change.'}</p>`;
+      area.innerHTML = canAll
+        ? `<div class="help-card">${note}<div class="bio-suggest-actions"><button type="button" class="btn btn-secondary" data-accept-all>Accept all</button></div></div>`
+        : note;
     } else area.innerHTML = '';
   }
 
@@ -572,6 +595,7 @@
       else if (on('[data-help-all]')) runHelp(null);
       else if (on('[data-help-stop]')) stopHelp();
       else if (on('[data-help-retry]')) runHelp(ai.field);
+      else if (on('[data-accept-all]')) acceptAll();
       else if ((b = on('[data-accept]'))) accept(b.dataset.accept);
       else if ((b = on('[data-discard]'))) discard(b.dataset.discard);
       else if (on('[data-run-drift]') || on('[data-drift-retry]')) runDrift();
@@ -737,6 +761,7 @@
   }
 
   function afterChoice(k) {
+    if (ai.accepted) ai = { ...ai, accepted: 0 };   // the "Accepted N" note is over: back to the usual one
     delete suggestions[k];
     delete unsourced[k];
     if (!FIELDS.some((f) => suggestions[f] !== undefined) && ai.state === 'done') {
@@ -762,6 +787,34 @@
     afterChoice(k);
     renderSuggestion(k);
     focusCard(k);
+  }
+
+  /**
+   * Accept every waiting suggestion that has no "Verify: no source" flag.
+   * Each is the same edit as its own Accept; the autosave sends them together.
+   * A flagged one keeps waiting, so its flag is seen before it is taken.
+   */
+  function acceptAll() {
+    if (ai.state !== 'done') return;
+    const ready = FIELDS.filter((k) => suggestions[k] !== undefined && !(unsourced[k] || []).length);
+    if (!ready.length) return;
+    ready.forEach((k) => {
+      const s = suggestions[k];
+      model[k] = Array.isArray(s) ? [...s] : s;
+      editing.delete(k);
+      saver.edit(k, 0);
+      delete suggestions[k];
+      delete unsourced[k];
+    });
+    const left = FIELDS.some((k) => suggestions[k] !== undefined);
+    if (left) ai = { ...ai, accepted: ready.length };
+    else { ai = { state: 'idle', field: null }; clearAiNote(); }
+    ready.forEach(renderCard);
+    renderLock();
+    renderAiNote();
+    const k = ready[0];
+    const edit = els.main.querySelector(`[data-card="${k}"] [data-edit]`);
+    (edit || els.main.querySelector(`[data-card="${k}"] h2`)).focus();
   }
 
   /* ── Drift check (stage drift_check) ───────── */
@@ -1044,6 +1097,7 @@
     render,
     isDone,
     doneMark: 'lock',
+    missing,
     blockers: () => 0,
     flush: () => (saver ? saver.flush() : Promise.resolve()),
     retrySave: () => saver && saver.retry(),

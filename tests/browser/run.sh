@@ -3,7 +3,8 @@
 # port 5500 and playwright-cli. Every Supabase call is answered by the mock.
 #   tests/browser/run.sh <suite> <test.js>
 #   tests/browser/run.sh title t1.js
-# Suites: positioning (step 03), title (step 04), delete (Delete book dialog).
+# Suites: brief (step 01), research (step 02), positioning (step 03),
+# title (step 04), delete (Delete book dialog).
 # A suite's mock.js defines setup(page); each test file defines test(page).
 set -euo pipefail
 HERE=${0:A:h}

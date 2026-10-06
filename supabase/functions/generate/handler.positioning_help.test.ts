@@ -26,6 +26,19 @@ Deno.test("positioning_help: all six fields, one counted row with book_id, unsou
   assert(content.endsWith("Write only these fields: one_sentence, reader_promise, lacks, approach, selling_points, focus_tags. Follow the rules."));
 }));
 
+Deno.test("positioning_help: figures of speech are not unsourced, real numbers still are", quiet(async () => {
+  const { handle } = setup({
+    provider: phReply({
+      ...draft,
+      reader_promise: "After finishing this book, you can keep a 9-to-5 job and still move every day, with 1-on-1 style cues.",
+      approach: "Short seated routines you can do 24/7, at home. A plan for 45 minutes a week.",
+      selling_points: ["A 50/50 mix of strength and balance", "Safe for stiff knees"],
+    }),
+  });
+  const j = await json(await handle(post(ph)));
+  assertEquals(j.unsourced, { approach: ["45"] });
+}));
+
 Deno.test("positioning_help with a field: only that card comes back", quiet(async () => {
   const { handle, calls } = setup({ provider: phReply() });
   const r = await handle(post({ ...ph, field: "approach" }));

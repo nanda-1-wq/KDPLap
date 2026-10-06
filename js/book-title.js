@@ -570,6 +570,14 @@
 
   const isDone = (b) => !!(str(b.title).trim() && str(b.subtitle).trim() && !b.title_needs_review);
 
+  /** What step 04 still needs, or ''. "Needs review" has its own flag in the sidebar. */
+  function missing() {
+    if (!book || book.title_needs_review) return '';
+    if (!str(book.title).trim()) return 'Pick a title';
+    if (!str(book.subtitle).trim()) return 'Add a subtitle';
+    return '';
+  }
+
   function init(b, c) {
     ctx = c;
     book = b;
@@ -588,6 +596,7 @@
     init,
     render,
     isDone,
+    missing,
     blockers: () => 0,
     flush: () => (saver ? saver.flush() : Promise.resolve()),
     retrySave: () => saver && saver.retry(),

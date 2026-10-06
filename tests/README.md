@@ -28,7 +28,8 @@ deno test --allow-read tests/limits-parity.test.js
 
 - `limits-parity.test.js`: the same limits in the browser files,
   `generate/lib/limits.ts` and the migrations (title 200, Brief lengths,
-  positioning sizes, competitor caps, insight and title-option caps). It fails
+  positioning sizes, competitor caps, insight and title-option caps, Brief
+  chapters 3 to 30 and custom word target 2,000 to 150,000). It fails
   when a value disagrees or can no longer be found.
 
 ## Database (local Postgres 18)
@@ -43,6 +44,7 @@ A throwaway cluster on `127.0.0.1:55432` (data in `$TMPDIR/kdplab-pg`).
 It never uses port 5432. `stub.sql` adds the parts of Supabase the
 migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0010` positioning, `t0011` title, `t0012` safety, `t0013` guard function,
+`t0014` custom word target and insights fingerprint,
 `rls_cross_user` (user B against user A's rows in every table).
 
 ## Browser (mocked, playwright-cli)
@@ -53,8 +55,10 @@ tests/browser/run.sh title t1.js
 
 Needs the static server on port 5500. Every Supabase call is answered by
 the suite's `mock.js` with a fake session, so no account or real data is
-used. Suites: `positioning` (t1, t2, t-drift), `title` (t1, t-note,
-t-hyphen), `delete` (t-dialog). The runner caches supabase-js (checked
+used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all),
+`research` (t-stale, t-missing), `positioning` (t1, t2, t-drift,
+t-accept-all, t-missing), `title` (t1, t-note, t-hyphen, t-missing),
+`delete` (t-dialog). The runner caches supabase-js (checked
 against the app's SRI hash) and two old file versions from git in
 `tests/browser/.cache/`. Screenshots go to `tests/browser/shots/`. Both
 folders are ignored by git.

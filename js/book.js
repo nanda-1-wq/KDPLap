@@ -12,7 +12,10 @@
    js/book-title.js):
    init(book, ctx) once, render(root) on each visit,
    isDone(book) for the sidebar mark, blockers() for the Next button,
+   missing() for what is still needed (one short sentence, '' when done),
    optional doneMark: 'lock' (03 shows a lock instead of a check).
+   The reason shows under each step in the sidebar and next to Next. Only
+   01 Brief blocks Next; on 02 to 04 the note only informs.
    A title marked "Needs review" (books.title_needs_review, set by an
    unlock of 03) shows a warning on 04.
    Other steps show a "Coming in" placeholder.
@@ -77,6 +80,9 @@
   }
 
   const isDone = (n) => !!(MODULES[n] && MODULES[n].isDone && MODULES[n].isDone(book));
+  /** What step n still needs, or '' (done, or no reason to show). */
+  const missing = (n) => (!isDone(n) && MODULES[n] && MODULES[n].missing ? MODULES[n].missing() : '');
+  const lowerFirst = (t) => t.charAt(0).toLowerCase() + t.slice(1);
 
   function savedText(iso) {
     const mins = Math.round((Date.now() - new Date(iso)) / 60000);
@@ -97,8 +103,12 @@
     const review = n === 4 && book.title_needs_review;
     const mark = lock ? LOCK : (done && n !== step ? CHECK : '');
     const state = lock ? ', locked' : (done ? ', done' : '');
-    return `<a class="step-link${done ? ' is-done' : ''}${lock ? ' is-locked' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
-        <span class="step-mark" aria-hidden="true">${mark}</span><span class="step-num">${pad(n)}</span>${s.name}${state ? `<span class="sr-only">${state}</span>` : ''}${review ? `<span class="step-flag">${SAVE_WARN}Needs review</span>` : ''}</a>`;
+    const need = missing(n);
+    const name = need
+      ? `<span class="step-name">${s.name}<span class="sr-only">, </span><span class="step-missing" data-step-missing>${esc(need)}</span></span>`
+      : s.name;
+    return `<a class="step-link${done ? ' is-done' : ''}${lock ? ' is-locked' : ''}${need ? ' has-missing' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
+        <span class="step-mark" aria-hidden="true">${mark}</span><span class="step-num">${pad(n)}</span>${name}${state ? `<span class="sr-only">${state}</span>` : ''}${review ? `<span class="step-flag">${SAVE_WARN}Needs review</span>` : ''}</a>`;
   }
 
   function renderNav() {
@@ -155,13 +165,21 @@
     }
   }
 
-  /** Next is blocked while the step has required fields left (design 16). */
+  /**
+   * Next is blocked while the step has required fields left (design 16; only
+   * 01 Brief has them). The note says what is missing: on a blocking step the
+   * reason itself, otherwise "Not done yet: …" (Next stays on).
+   */
   function setGate() {
     const m = MODULES[step];
     const left = m && m.blockers ? m.blockers() : 0;
     nextBtn.disabled = step === LAST_V1_STEP || left > 0;
-    nextNote.textContent = left ? `${left} required field${left === 1 ? '' : 's'} left` : '';
-    nextNote.hidden = !left;
+    const need = m && m.missing ? m.missing() : '';
+    let note = '';
+    if (left) note = need || `${left} required field${left === 1 ? '' : 's'} left`;
+    else if (need && !isDone(step)) note = `Not done yet: ${lowerFirst(need)}.`;
+    nextNote.textContent = note;
+    nextNote.hidden = !note;
   }
 
   const ctx = {

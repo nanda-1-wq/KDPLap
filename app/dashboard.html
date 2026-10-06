@@ -86,12 +86,13 @@
       return `${s[0]} · ${s[1]}`;
     }
 
-    /** Words planned: sum of chapter targets, else the brief's length range. */
+    /** Words planned: sum of chapter targets, else the brief's custom target or length range. */
     function wordsText(book) {
       const written = 0;   // counted from sections in E10
       const planned = (book.chapters || []).reduce((sum, c) => sum + (c.word_target || 0), 0);
       if (planned > 0) return { text: `${num(written)} of ${num(planned)} words`, pct: written / planned };
       const brief = one(book.book_briefs);
+      if (brief && brief.target_words) return { text: `Target ${num(brief.target_words)} words`, pct: 0 };
       const range = brief && LENGTH_RANGES[brief.length_range];
       if (range) {
         const text = range[1] ? `Target ${num(range[0])} to ${num(range[1])} words` : `Target ${num(range[0])}+ words`;

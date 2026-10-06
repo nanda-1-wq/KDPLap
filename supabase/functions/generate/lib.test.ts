@@ -507,6 +507,29 @@ Deno.test("numbersIn and unsourcedNumbers: commas, decimals, words around number
   assertEquals(L.unsourcedNumbers("no numbers", ""), []);
 });
 
+Deno.test("unsourcedNumbers: figures of speech are not flagged", () => {
+  for (const t of ["a 9-to-5 job", "a 9 to 5 job", "A 9-TO-5 desk", "help 24/7", "open 24/7/365", "support 24-7", "1-on-1 coaching",
+    "a 50/50 split", "20/20 hindsight", "(24/7)", "9-to-5, 24/7.", "\"1-on-1\""]) {
+    assertEquals(L.unsourcedNumbers(t, ""), [], t);
+  }
+  assertEquals(L.withoutFigures("a 9-to-5 job").includes("9"), false);
+});
+
+Deno.test("unsourcedNumbers: numbers next to or inside a figure of speech are still flagged", () => {
+  assertEquals(L.unsourcedNumbers("from 19-to-50 years", ""), ["19", "50"]);
+  assertEquals(L.unsourcedNumbers("9 to 50 minutes", ""), ["9", "50"]);
+  assertEquals(L.unsourcedNumbers("9-to-5.5 hours", ""), ["9", "5.5"]);
+  assertEquals(L.unsourcedNumbers("24 hours a day", ""), ["24"]);
+  assertEquals(L.unsourcedNumbers("1-on-10 groups", ""), ["1", "10"]);
+  assertEquals(L.unsourcedNumbers("a 250/50 ratio", ""), ["250", "50"]);
+  assertEquals(L.unsourcedNumbers("24/70 rule", ""), ["24", "70"]);
+  assertEquals(L.unsourcedNumbers("1.50/50", ""), ["1.50", "50"]);
+  assertEquals(L.unsourcedNumbers("lose 12 pounds with 24/7 support", ""), ["12"]);
+  assertEquals(L.unsourcedNumbers("a 9-to-5 job and 3 kids", "3 kids"), []);
+  // The author's own text is read as before: a "24/7" there still counts as 24 and 7.
+  assertEquals(L.unsourcedNumbers("24 hours, 7 days", "help 24/7"), []);
+});
+
 Deno.test("knownText: Brief and Research are sources; the current positioning is not", () => {
   const ctx: L.PositioningContext = {
     bookId: "b", brief: { topic_text: "Chair yoga over 60", book_type: null, target_reader: null, reader_problem: null, promise_draft: null, options: { stance: "", standout: "", references: "" } },

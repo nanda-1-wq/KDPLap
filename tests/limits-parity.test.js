@@ -102,3 +102,14 @@ Deno.test("title options: browser, server and 0011", () => {
   assertEquals(one(f, String.raw`text_items_ok\(keywords, (\d+), (\d+)\)`), [L.MAX_TITLE_KEYWORDS.items, L.MAX_TITLE_KEYWORDS.chars]);
   assertEquals(one(f, String.raw`text_items_ok\(unsourced, (\d+), \d+\)`), L.MAX_UNSOURCED);
 });
+
+Deno.test("Brief chapters 3 to 30 and custom word target 2000 to 150000: browser and SQL", () => {
+  const src = read(BRIEF);
+  const pick = (k) => {
+    const m = src.match(new RegExp(`${k}: \\{ min: (\\d+), max: (\\d+),`));
+    if (!m) throw new Error(`${BRIEF}: no OTHER.${k}`);
+    return [Number(m[1]), Number(m[2])];
+  };
+  assertEquals(pick("chapter_count"), one(M("0001_v1_data_model.sql"), String.raw`chapter_count\s+smallint check \(chapter_count between (\d+) and (\d+)\)`));
+  assertEquals(pick("target_words"), one(M("0014_brief_target_and_insights_key.sql"), String.raw`target_words between (\d+) and (\d+)`));
+});

@@ -100,10 +100,20 @@ export function numbersIn(s: string): string[] {
   return [...s.matchAll(/\d+(?:[.,]\d+)*/g)].map((m) => m[0].replace(/,(?=\d{3}\b)/g, ""));
 }
 
+/**
+ * Figures of speech written with digits. They are not facts, so the number
+ * check skips them: "9-to-5", "9 to 5", "24/7", "24/7/365", "24-7", "1-on-1",
+ * "50/50", "20/20". ("one-on-one" has no digits, so it is never flagged.)
+ * Only whole phrases count: "19-to-50", "9 to 50", "1-on-10" and "250/50"
+ * are still read as numbers.
+ */
+const FIGURES_OF_SPEECH = /(?<![\d.,/])(?:9(?:-to-| to )5|24\/7\/365|24\/7|24-7|1-on-1|50\/50|20\/20)(?![\d/]|[.,]\d)/gi;
+export const withoutFigures = (s: string) => s.replace(FIGURES_OF_SPEECH, " ");
+
 /** Numbers in a suggestion that appear nowhere in the author's data. The UI shows "Verify: no source". */
 export function unsourcedNumbers(text: string, known: string): string[] {
   const have = new Set(numbersIn(known));
-  return [...new Set(numbersIn(text).filter((n) => !have.has(n)))];
+  return [...new Set(numbersIn(withoutFigures(text)).filter((n) => !have.has(n)))];
 }
 
 /**

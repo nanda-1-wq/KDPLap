@@ -123,7 +123,7 @@ window.kdp = {
       .from('books')
       .select(`id, title, subtitle, status, current_step, updated_at, topic_id,
                pen_names ( name ),
-               book_briefs ( length_range, topic_text ),
+               book_briefs ( length_range, target_words, topic_text ),
                chapters ( word_target, needs_review )`)
       .order('updated_at', { ascending: false });
   },
@@ -144,7 +144,7 @@ window.kdp = {
                pen_names ( id, name, voice ),
                topics ( id, name, checks_passed ),
                book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type,
-                             trim_size, length_range, chapter_count, options, updated_at ),
+                             trim_size, length_range, target_words, chapter_count, options, updated_at ),
                competitors ( count ),
                real_sources:research_sources ( count ),
                positioning ( ${POSITIONING_COLS} )`)
@@ -294,7 +294,7 @@ window.kdp = {
         .order('id', { ascending: true }),
       window.sb
         .from('research_insights')
-        .select('loves, hates, gaps, analyzed_at, updated_at')
+        .select('loves, hates, gaps, analyzed_at, inputs_key, updated_at')
         .eq('book_id', bookId)
         .maybeSingle()
     ]);
@@ -387,17 +387,19 @@ window.kdp = {
   /**
    * Saves the review insights (one row per book). lists = { loves, hates, gaps },
    * each [{ text, from: [title], edited }] (shape checked by migration 0008).
-   * With analyzedAt (a new analysis) the row is created or replaced; without
-   * it only the lines change (an edit or a removal).
+   * With analyzedAt (a new analysis) the row is created or replaced, with
+   * inputsKey: the fingerprint of the reviewed competitors it read (0014,
+   * for "Out of date"). Without analyzedAt only the lines change (an edit or
+   * a removal) and the fingerprint stays.
    * v3: move the save of a new analysis to the server (generate), so the AI
    * label is set server-side when other users join.
    */
-  async saveInsights(bookId, lists, analyzedAt) {
+  async saveInsights(bookId, lists, analyzedAt, inputsKey) {
     const row = { loves: lists.loves, hates: lists.hates, gaps: lists.gaps };
     const q = analyzedAt
-      ? window.sb.from('research_insights').upsert({ ...row, book_id: bookId, analyzed_at: analyzedAt }, { onConflict: 'book_id' })
+      ? window.sb.from('research_insights').upsert({ ...row, book_id: bookId, analyzed_at: analyzedAt, inputs_key: inputsKey || null }, { onConflict: 'book_id' })
       : window.sb.from('research_insights').update(row).eq('book_id', bookId);
-    const { data, error } = await q.select('loves, hates, gaps, analyzed_at, updated_at');
+    const { data, error } = await q.select('loves, hates, gaps, analyzed_at, inputs_key, updated_at');
     return oneRow(data, error, 'Insights not found.');
   },
 

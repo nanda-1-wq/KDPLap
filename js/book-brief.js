@@ -8,8 +8,12 @@
 
    Writes book_briefs (topic, reader, promise, type, trim, length, chapters,
    options) and books (pen_name_id, series). Limits match migration 0007.
+   Length is a range chip OR a custom word target (target_words, 0014),
+   never both: the two columns always save together. Chapters: a chip, or
+   "Other" with a number from 3 to 30 (0001).
    "Help me fill" (generate stage brief_help) only makes suggestions: each
-   one waits for Accept or Discard. Nothing is replaced silently.
+   one waits for Accept or Discard. Nothing is replaced silently. "Accept
+   all" takes every suggestion without a "Verify" flag.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -21,9 +25,9 @@
     stance: 500, standout: 500, references: 2000, series_name: 200
   };
   const REQUIRED = [
-    ['topic_text', 'Enter a topic to continue.'],
-    ['target_reader', 'Describe who this book is for to continue.'],
-    ['reader_problem', 'Describe the reader’s problem to continue.']
+    ['topic_text', 'Enter a topic to continue.', 'the topic'],
+    ['target_reader', 'Describe who this book is for to continue.', 'the target reader'],
+    ['reader_problem', 'Describe the reader’s problem to continue.', 'the reader problem']
   ];
   const AI_FIELDS = [
     ['target_reader', 'Target reader'],
@@ -43,6 +47,11 @@
     ['30k+', '30K+', 30000, null]
   ];
   const CHAPTERS = [5, 6, 7, 8, 9, 10, 12];
+  // "Other" ranges: chapters as in 0001, the custom word target as in 0014.
+  const OTHER = {
+    chapter_count: { min: 3, max: 30, chip: 'Other', label: 'Number of chapters', hint: 'From 3 to 30.', error: 'Use a whole number from 3 to 30.' },
+    target_words: { min: 2000, max: 150000, chip: 'Custom', label: 'Target words', hint: 'One number, for example 15000. From 2,000 to 150,000.', error: 'Use a whole number from 2,000 to 150,000.' }
+  };
   const OPTION_KEYS = ['stance', 'standout', 'references'];
   const BOOK_FIELDS = ['pen_name_id', 'series_name', 'series_number'];
   const HELP_CAPTION = 'Suggestions appear under each field. Nothing changes until you accept.';
@@ -50,6 +59,7 @@
   let ctx = null, book = null, model = null, saved = null, saver = null, els = null;
   let pens = null, pensState = 'loading';     // 'loading' | 'ready' | 'error'
   let moreOpen = false;
+  const otherOpen = { chapter_count: false, target_words: false };   // "Other" / "Custom" input shown
   const shownErrors = new Set();               // required fields that show their message
   let help = { state: 'idle' };                // idle | working | done | error | stopped
   let helpToken = 0;
@@ -70,6 +80,7 @@
       reader_problem: str(br.reader_problem), promise_draft: str(br.promise_draft),
       book_type: br.book_type || '', trim_size: br.trim_size || '6x9',
       length_range: br.length_range || '', chapter_count: br.chapter_count || null,
+      target_words: br.target_words == null ? '' : String(br.target_words),
       stance: str(o.stance), standout: str(o.standout), references: str(o.references),
       pen_name_id: b.pen_name_id || '', series_name: str(b.series_name),
       series_number: b.series_number == null ? '' : String(b.series_number)
@@ -95,6 +106,7 @@
       }
       case 'book_type': case 'length_range': case 'pen_name_id': return model[field] || null;
       case 'trim_size': case 'chapter_count': return model[field];
+      case 'target_words': return model.target_words === '' ? null : Number(model.target_words);
       case 'series_number': return model.series_number === '' ? null : Number(model.series_number);
       default: return text(field);
     }
@@ -121,7 +133,7 @@
     const br = one(book.book_briefs) || {};
     Object.keys(fields).forEach((k) => {
       if (k === 'options') OPTION_KEYS.forEach((o) => { saved[o] = str(fields.options[o]); });
-      else saved[k] = fields[k] == null ? (k === 'chapter_count' ? null : '') : (k === 'series_number' ? String(fields[k]) : fields[k]);
+      else saved[k] = fields[k] == null ? (k === 'chapter_count' ? null : '') : (['series_number', 'target_words'].includes(k) ? String(fields[k]) : fields[k]);
       if (BOOK_FIELDS.includes(k)) book[k] = fields[k];
       else br[k] = fields[k];
     });
@@ -150,6 +162,7 @@
         if (f === 'options') OPTION_KEYS.forEach((o) => { model[o] = saved[o]; });
         else model[f] = saved[f];
       });
+      openOthersFromModel();
       if (ctx.isActive(1)) render(ctx.content());
       return true;
     }
@@ -164,11 +177,26 @@
   };
   const blockers = () => REQUIRED.filter(([k]) => !filled(model[k])).length;
 
+  /** What step 01 still needs: "Fill the reader problem", or ''. */
+  function missing() {
+    if (!model) return '';
+    const left = REQUIRED.filter(([k]) => !filled(model[k])).map(([, , words]) => words);
+    if (left.length > 2) return `Fill ${left.length} required fields`;
+    return left.length ? `Fill ${joinWords(left)}` : '';
+  }
+
+  /** "Other" is open for a chapter count that is not a chip, "Custom" for a saved word target. */
+  function openOthersFromModel() {
+    otherOpen.chapter_count = model.chapter_count != null && !CHAPTERS.includes(model.chapter_count);
+    otherOpen.target_words = model.target_words !== '';
+  }
+
   function init(b, c) {
     ctx = c;
     book = b;
     model = fromBook(b);
     saved = fromBook(b);
+    openOthersFromModel();
     saver = kdpAutosave.create({ read, save, onSaved, onError, render: ctx.renderSave });
     loadPens();
   }
@@ -188,21 +216,126 @@
 
   const trimText = (t) => `${t.replace('x', ' × ')} in`;
 
+  /** A whole number in the "Other" range, or null. */
+  function otherValue(k, raw) {
+    const t = String(raw).trim();
+    if (!/^\d+$/.test(t)) return null;
+    const n = Number(t);
+    return n >= OTHER[k].min && n <= OTHER[k].max ? n : null;
+  }
+
   function pagesHint() {
-    const len = LENGTHS.find(([k]) => k === model.length_range);
-    if (!len) return 'Pick a range to see an estimate of pages.';
     // About 133 words a page at 6 × 9 in (headings, lists, white space), scaled by page area.
     const [w, h] = model.trim_size.split('x').map(Number);
     const perPage = 133 * (w * h) / 54;
     const pages = (words) => Math.max(10, Math.round(words / perPage / 10) * 10);
+    if (otherOpen.target_words) {
+      // While typing, the estimate follows a valid number in the field.
+      const input = els && els.root.querySelector('#bf-target_words');
+      const n = otherValue('target_words', input ? input.value : model.target_words);
+      return n ? `About ${pages(n)} pages at ${trimText(model.trim_size)}` : 'Enter a word target to see an estimate of pages.';
+    }
+    const len = LENGTHS.find(([k]) => k === model.length_range);
+    if (!len) return 'Pick a range to see an estimate of pages.';
     const range = len[3] ? `${pages(len[2])} to ${pages(len[3])}` : `${pages(len[2])}+`;
     return `About ${range} pages at ${trimText(model.trim_size)}`;
   }
 
-  function chips(field, list, labelId) {
+  /** Chips; with other = 'chapter_count' or 'target_words', an "Other"/"Custom" chip at the end. */
+  function chips(field, list, labelId, other) {
+    const open = other ? otherOpen[other] : false;
     return `<div class="tone-chips" role="group" aria-labelledby="${labelId}" data-chips="${field}">
-      ${list.map(([value, text]) => `<button type="button" class="tone-chip" data-value="${esc(value)}" aria-pressed="${String(model[field]) === String(value)}">${esc(text)}</button>`).join('')}
-    </div>`;
+      ${list.map(([value, text]) => `<button type="button" class="tone-chip" data-value="${esc(value)}" aria-pressed="${!open && String(model[field]) === String(value)}">${esc(text)}</button>`).join('')}
+      ${other ? `<button type="button" class="tone-chip" data-other="${other}" aria-pressed="${open}" aria-expanded="${open}" aria-controls="bo-${other}">${OTHER[other].chip}</button>` : ''}
+    </div>
+    ${other ? `<div id="bo-${other}" data-other-box="${other}"></div>` : ''}`;
+  }
+
+  function syncChips(group, k, other) {
+    const open = other ? otherOpen[other] : false;
+    group.querySelectorAll('button[data-value]').forEach((x) => {
+      x.setAttribute('aria-pressed', String(!open && String(model[k]) === x.dataset.value));
+    });
+    const o = group.querySelector('[data-other]');
+    if (o) { o.setAttribute('aria-pressed', String(open)); o.setAttribute('aria-expanded', String(open)); }
+  }
+
+  /** The number field under "Other" / "Custom" (or nothing when closed). */
+  function renderOther(k) {
+    const box = els && els.root.querySelector(`[data-other-box="${k}"]`);
+    if (!box) return;
+    if (!otherOpen[k]) { box.innerHTML = ''; return; }
+    const o = OTHER[k];
+    box.innerHTML = `<div class="field">
+        <label for="bf-${k}">${o.label}</label>
+        <span class="field-hint" id="bf-${k}-hint">${o.hint}</span>
+        <input class="text-input brief-num" id="bf-${k}" type="number" min="${o.min}" max="${o.max}" step="1" inputmode="numeric" aria-describedby="bf-${k}-hint bf-${k}-error" />
+        <span class="field-error" id="bf-${k}-error" hidden></span>
+      </div>`;
+    const input = box.querySelector('input');
+    input.value = model[k] == null ? '' : String(model[k]);
+    input.addEventListener('input', () => onOtherInput(k, input, false));
+    input.addEventListener('blur', () => {
+      onOtherInput(k, input, true);
+      if (saver.isDirty(k)) saver.flush();
+    });
+  }
+
+  /**
+   * Typing in an "Other" field: a valid number (or empty) saves after the
+   * usual delay; anything else is not saved. The error shows when the field
+   * is left (so "1" on the way to "12" is not an error).
+   */
+  function onOtherInput(k, input, leaving) {
+    const raw = input.value.trim();
+    const n = otherValue(k, raw);
+    const bad = input.validity.badInput || (raw !== '' && n === null);
+    if (bad) {
+      if (leaving) setFieldError(k, OTHER[k].error);
+      if (k === 'target_words') els.pages.textContent = pagesHint();
+      return;
+    }
+    setFieldError(k, '');
+    if (k === 'chapter_count') {
+      if (model.chapter_count === n) return;
+      model.chapter_count = n;
+      saver.edit('chapter_count', 800);
+    } else {
+      const next = n === null ? '' : String(n);
+      els.pages.textContent = pagesHint();
+      if (model.target_words === next) return;
+      model.target_words = next;
+      model.length_range = '';
+      saver.edit('target_words', 800);
+      saver.edit('length_range', 800);   // always together (0014: one value at a time)
+    }
+  }
+
+  /** Pressing "Other" / "Custom": open it, or close it and clear the value. */
+  function toggleOther(k, group) {
+    if (otherOpen[k]) {
+      otherOpen[k] = false;
+      if (k === 'chapter_count') {
+        if (model.chapter_count != null) { model.chapter_count = null; saver.edit('chapter_count', 0); }
+      } else if (model.target_words !== '') {
+        model.target_words = '';
+        saver.edit('target_words', 0);
+        saver.edit('length_range', 0);
+      }
+    } else {
+      otherOpen[k] = true;
+      // Custom replaces the range now (one value at a time). Other keeps the count it shows.
+      if (k === 'target_words' && model.length_range) {
+        model.length_range = '';
+        saver.edit('length_range', 0);
+        saver.edit('target_words', 0);
+      }
+    }
+    syncChips(group, group.dataset.chips, k);
+    renderOther(k);
+    if (k === 'target_words') els.pages.textContent = pagesHint();
+    const input = otherOpen[k] && els.root.querySelector(`#bf-${k}`);
+    if (input) input.focus();
   }
 
   function textField({ key, label, required, hint, area, rows = 2 }) {
@@ -278,11 +411,11 @@
           <div class="field">
             <span class="field-label" id="bl-length">Length</span>
             <span class="field-hint" data-pages></span>
-            ${chips('length_range', LENGTHS.map(([k, t]) => [k, t]), 'bl-length')}
+            ${chips('length_range', LENGTHS.map(([k, t]) => [k, t]), 'bl-length', 'target_words')}
           </div>
           <div class="field">
             <span class="field-label" id="bl-chapters">Chapters</span>
-            ${chips('chapter_count', (CHAPTERS.includes(model.chapter_count) || !model.chapter_count ? CHAPTERS : [...CHAPTERS, model.chapter_count].sort((a, b) => a - b)).map((n) => [n, String(n)]), 'bl-chapters')}
+            ${chips('chapter_count', CHAPTERS.map((n) => [n, String(n)]), 'bl-chapters', 'chapter_count')}
           </div>
           <div class="field" data-pen-field></div>
         </section>
@@ -317,6 +450,8 @@
       const k = el.dataset.field;
       el.value = model[k] == null ? '' : model[k];
     });
+    renderOther('chapter_count');
+    renderOther('target_words');
     els.pages.textContent = pagesHint();
     shownErrors.forEach((k) => showRequired(k));
     renderPen();
@@ -445,27 +580,39 @@
     });
     root.querySelectorAll('[data-chips]').forEach((group) => {
       const k = group.dataset.chips;
+      const other = k === 'chapter_count' ? 'chapter_count' : (k === 'length_range' ? 'target_words' : null);
       group.addEventListener('click', (e) => {
+        const o = e.target.closest('button[data-other]');
+        if (o) { toggleOther(o.dataset.other, group); return; }
         const b = e.target.closest('button[data-value]');
         if (!b) return;
         const raw = b.dataset.value;
         const value = k === 'chapter_count' ? Number(raw) : raw;
-        // Trim size always has a value. Length and chapters can be cleared by pressing the chip again.
-        if (String(model[k]) === String(value)) {
+        if (other && otherOpen[other]) {
+          // A chip closes "Other" / "Custom" and takes its place.
+          otherOpen[other] = false;
+          renderOther(other);
+          model[k] = value;
+        } else if (String(model[k]) === String(value)) {
+          // Trim size always has a value. Length and chapters can be cleared by pressing the chip again.
           if (k === 'trim_size') return;
           model[k] = k === 'chapter_count' ? null : '';
         } else model[k] = value;
-        group.querySelectorAll('button[data-value]').forEach((x) => {
-          x.setAttribute('aria-pressed', String(String(model[k]) === x.dataset.value));
-        });
-        if (k === 'trim_size' || k === 'length_range') els.pages.textContent = pagesHint();
+        syncChips(group, k, other);
         saver.edit(k, 0);
+        if (k === 'length_range') {
+          // A range replaces a custom target (one value at a time).
+          model.target_words = '';
+          saver.edit('target_words', 0);
+        }
+        if (k === 'trim_size' || k === 'length_range') els.pages.textContent = pagesHint();
       });
     });
     els.more.addEventListener('toggle', () => { moreOpen = els.more.open; });
     els.help.addEventListener('click', runHelp);
     els.helpArea.addEventListener('click', (e) => {
-      if (e.target.closest('[data-help-stop]')) stopHelp();
+      if (e.target.closest('[data-accept-all]')) acceptAll();
+      else if (e.target.closest('[data-help-stop]')) stopHelp();
       else if (e.target.closest('[data-help-retry]')) runHelp();
     });
     // On .brief, not root: root is the shared step area and outlives this render.
@@ -545,10 +692,19 @@
       box.append(body);
       area.append(box);
     } else if (help.state === 'done') {
-      const names = AI_FIELDS.filter(([k]) => suggestions[k]).map(([, t]) => t);
-      area.innerHTML = `<p class="help-note" role="status">${names.length
+      const waiting = AI_FIELDS.filter(([k]) => suggestions[k]);
+      const names = waiting.map(([, t]) => t);
+      if (help.accepted && waiting.length) {
+        area.innerHTML = `<p class="help-note" role="status">${ICON.warn(14)}Accepted ${help.accepted} suggestion${help.accepted === 1 ? '' : 's'}. ${waiting.length} with a Verify flag ${waiting.length === 1 ? 'is' : 'are'} still waiting below.</p>`;
+        return;
+      }
+      const canAll = waiting.length >= 2 && waiting.some(([k]) => !(unsourced[k] || []).length);
+      const note = `<p class="help-note" role="status">${names.length
         ? `${ICON.sparkle}Suggestions are ready under ${esc(kdpList(names))}. Nothing changes until you accept.`
         : 'The AI suggests what you already have. Nothing to change.'}</p>`;
+      area.innerHTML = canAll
+        ? `<div class="help-card">${note}<div class="bio-suggest-actions"><button type="button" class="btn btn-secondary" data-accept-all>Accept all</button></div></div>`
+        : note;
     } else area.innerHTML = '';
   }
 
@@ -632,6 +788,7 @@
   }
 
   function afterChoice(k) {
+    if (help.accepted) help = { ...help, accepted: 0 };   // back to the usual note
     delete suggestions[k];
     delete unsourced[k];
     renderSuggestion(k);
@@ -658,11 +815,37 @@
     els.root.querySelector(`#bf-${k}`).focus();
   }
 
+  /**
+   * Accept every waiting suggestion without a "Verify: no source" flag, each
+   * the same edit as its own Accept (the autosave sends them together). A
+   * flagged one keeps waiting, so its flag is seen before it is taken.
+   */
+  function acceptAll() {
+    if (help.state !== 'done') return;
+    const ready = AI_FIELDS.map(([k]) => k).filter((k) => suggestions[k] && !(unsourced[k] || []).length);
+    if (!ready.length) return;
+    ready.forEach((k) => {
+      model[k] = suggestions[k];
+      els.root.querySelector(`#bf-${k}`).value = model[k];
+      shownErrors.delete(k);
+      showRequired(k);
+      saver.edit(k, 0);
+      delete suggestions[k];
+      delete unsourced[k];
+      renderSuggestion(k);
+    });
+    ctx.setGate();
+    help = AI_FIELDS.some(([k]) => suggestions[k]) ? { state: 'done', accepted: ready.length } : { state: 'idle' };
+    renderHelp();
+    els.root.querySelector(`#bf-${ready[0]}`).focus();
+  }
+
   window.kdpBookSteps = window.kdpBookSteps || {};
   window.kdpBookSteps[1] = {
     init,
     render,
     isDone,
+    missing,
     blockers,
     flush: () => (saver ? saver.flush() : Promise.resolve()),
     retrySave: () => saver && saver.retry(),
