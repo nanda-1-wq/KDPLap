@@ -6,7 +6,8 @@
 ═══════════════════════════════════════════════════ */
 
 (async function () {
-  const { ICON, STATUS, statusBadge, isScored, dots, esc, dayText, newestBookId } = kdpTopics;
+  const { ICON, esc } = kdpUi;
+  const { STATUS, statusBadge, isScored, dots, dayText, newestBookId } = kdpTopics;
 
   const view = document.getElementById('view');
   const notice = document.getElementById('notice');

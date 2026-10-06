@@ -2,7 +2,7 @@
    KDP Lab — Pen name helpers shared by the list, detail, and dialogs
    /js/pen-name-common.js
 
-   Load AFTER js/supabase.js. The JSON shapes of pen_names.bio_facts and
+   Load AFTER js/supabase.js and js/ui.js. The JSON shapes of pen_names.bio_facts and
    pen_names.voice live here. The database checks structure only
    (supabase/migrations/0005): keys, types, max lengths, at most 6 tones.
    The ALLOWED VALUES are only here, so a new value needs no migration.
@@ -14,20 +14,7 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const svg = (size, stroke, body) =>
-    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
-
-  const ICON = {
-    check: (s = 13) => svg(s, 2.4, '<path d="M5 12l5 5 9-10"/>'),
-    x: (s = 13) => svg(s, 2.4, '<path d="M6 6l12 12M18 6L6 18"/>'),
-    warn: (s = 13) => svg(s, 2.2, '<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/>'),
-    close: svg(20, 2, '<path d="M6 6l12 12M18 6L6 18"/>'),
-    plus: svg(18, 2, '<path d="M12 5v14M5 12h14"/>'),
-    sparkle: svg(16, 2, '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.5 6.5l2 2M15.5 15.5l2 2M6.5 17.5l2-2M15.5 8.5l2-2"/>'),
-    more: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
-    rename: svg(16, 2, '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13 7l4 4"/>'),
-    trash: (s = 16) => svg(s, 2, '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>')
-  };
+  const { ICON } = kdpUi;
 
   const MAX_NAME = 100;     // database: 1 to 100 after trim (0001, 0005)
   const MAX_NICHE = 200;    // browser only
@@ -51,7 +38,6 @@
   const STEP_NAMES = ['Brief', 'Research', 'Positioning', 'Title', 'Outline', 'Write',
     'Quality Control', 'Format', 'Cover', 'Metadata', 'Publish'];
 
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const str = (v) => (typeof v === 'string' ? v : '');
   const allowed = (list, v) => list.some(([k]) => k === v);
 
@@ -149,9 +135,9 @@
   const defaultChip = '<span class="pill pen-default">Default</span>';
 
   window.kdpPens = {
-    ICON, MAX_NAME, MAX_NICHE, MAX_BIO, FACT_MAX, MAX_SAMPLE, MAX_TONES, SAMPLE_ENOUGH,
+    MAX_NAME, MAX_NICHE, MAX_BIO, FACT_MAX, MAX_SAMPLE, MAX_TONES, SAMPLE_ENOUGH,
     TONES, CHOICES, CHOICE_KEYS,
-    esc, readFacts, readVoice, cleanFacts, cleanVoice, nameError, voiceSummary,
+    readFacts, readVoice, cleanFacts, cleanVoice, nameError, voiceSummary,
     wordCount, bioReady, initial, one, bookTitle, stepLabel, bioBadge, defaultChip
   };
 })();

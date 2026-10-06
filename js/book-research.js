@@ -17,7 +17,7 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, esc } = kdpPens;
+  const { ICON, esc } = kdpUi;
 
   // Same limits as migration 0008 and supabase/functions/generate/lib.ts.
   const MAX = { title: 300, author: 200, toc: 2000, low_reviews: 4000, high_reviews: 4000, body: 2000, citation: 500, line: 160 };

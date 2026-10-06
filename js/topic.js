@@ -17,8 +17,9 @@
 ═══════════════════════════════════════════════════ */
 
 (async function () {
+  const { ICON, esc } = kdpUi;
   const {
-    ICON, STATUS, statusBadge, checks, passedCount, isScored, joinList, esc, dayText, newestBookId,
+    STATUS, statusBadge, checks, passedCount, isScored, joinList, dayText, newestBookId,
     RULE_TEXT, countsAs, sourceText, MAX_NAME
   } = kdpTopics;
 

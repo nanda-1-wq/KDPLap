@@ -22,9 +22,15 @@ const test = async page => {
     return { before, off: await page.$eval('[data-run-drift]', (b) => b.disabled), note: await txt('#driftNote'), lock: await txt('#lockNote') };
   }
 
+  // The old file from git reads ICON and esc from kdpPens. Production code takes
+  // them from kdpUi, so add them back for this one run only.
+  const shimPens = (r) => r.fetch().then(async (res) => r.fulfill({ response: res,
+    body: (await res.text()) + '\nkdpPens.ICON = kdpUi.ICON; kdpPens.esc = kdpUi.esc;\n' }));
+  await page.context().route('**/js/pen-name-common.js', shimPens);
   await page.context().route('**/js/book-positioning.js', (r) => r.fulfill({ path: `${CACHE}/old-book-positioning.js`, contentType: 'application/javascript' }));
   const old = await run();
   await page.context().unroute('**/js/book-positioning.js');
+  await page.context().unroute('**/js/pen-name-common.js', shimPens);
   ok(old.off && old.note === 'Write at least one card first.', `old code (HEAD) shows the bug: button off, "${old.note}"`);
 
   const now = await run();

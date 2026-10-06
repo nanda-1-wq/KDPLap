@@ -7,7 +7,8 @@
 ═══════════════════════════════════════════════════ */
 
 (async function () {
-  const { ICON, esc, voiceSummary, bioReady, initial, bioBadge, defaultChip } = kdpPens;
+  const { ICON, esc } = kdpUi;
+  const { voiceSummary, bioReady, initial, bioBadge, defaultChip } = kdpPens;
 
   const view = document.getElementById('view');
   const notice = document.getElementById('notice');

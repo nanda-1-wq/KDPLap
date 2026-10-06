@@ -10,7 +10,8 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, MAX_NAME, MAX_NICHE, nameError } = kdpPens;
+  const { ICON } = kdpUi;
+  const { MAX_NAME, MAX_NICHE, nameError } = kdpPens;
 
   let dialog, els, opener = null, busy = false, onCreated = null;
 

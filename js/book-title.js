@@ -21,7 +21,7 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, esc } = kdpPens;
+  const { ICON, esc } = kdpUi;
   const C = kdpTitleChecks;
 
   // Same limits as migration 0011 and supabase/functions/generate/lib.ts.

@@ -13,7 +13,8 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, RULE_TEXT, checks, countsAs, countData, bookCounts, sourceText, esc } = kdpTopics;
+  const { ICON, esc } = kdpUi;
+  const { RULE_TEXT, checks, countsAs, countData, bookCounts, sourceText } = kdpTopics;
 
   const MIN_CHARS = 200;
   const MAX_CHARS = 60000;       // same caps as the Edge Function

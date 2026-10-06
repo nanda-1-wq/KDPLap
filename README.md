@@ -87,6 +87,19 @@ See [`kdplapRoadMap/`](./kdplapRoadMap/) for the full roadmap.
 
 ---
 
+## How to run the tests
+
+From the repo root. No test touches the live project.
+
+```sh
+deno test --allow-read=supabase/functions/generate supabase/functions/generate/   # Edge Function
+deno test --allow-read tests/                                                      # browser helpers, limits parity
+supabase/tests/sql/run.sh                                                          # database (local Postgres)
+tests/browser/run.sh title t1.js                                                   # browser (mocked, port 5500)
+```
+
+Details, suites, and setup: [tests/README.md](tests/README.md).
+
 ## Status
 
 Beta — all features free, no credit card required.  

@@ -14,7 +14,7 @@
 
 (async function () {
   const P = kdpPens;
-  const { ICON, esc } = P;
+  const { ICON, esc } = kdpUi;
 
   const view = document.getElementById('view');
   const penId = new URLSearchParams(location.search).get('id');

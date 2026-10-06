@@ -38,6 +38,7 @@
     integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT"
     crossorigin="anonymous"></script>
   <script src="../js/supabase.js"></script>
+  <script src="../js/ui.js"></script>
   <script src="../js/shell.js"></script>
   <script src="../js/new-book.js"></script>
   <script src="../js/book-actions.js"></script>
@@ -67,7 +68,7 @@
 
     /* ── Helpers ─────────────────────────────── */
 
-    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const { esc } = kdpUi;
     const num = (n) => n.toLocaleString('en-US');
     const one = (rel) => (Array.isArray(rel) ? rel[0] : rel) || null;   // to-one embeds may come as object or array
 

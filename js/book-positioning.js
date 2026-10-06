@@ -22,7 +22,7 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, esc } = kdpPens;
+  const { ICON, esc } = kdpUi;
 
   // Same limits as migration 0010 and supabase/functions/generate/lib.ts.
   const MAX = { one_sentence: 400, reader_promise: 600, approach: 1200 };

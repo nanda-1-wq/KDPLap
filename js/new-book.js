@@ -2,7 +2,7 @@
    KDP Lab — New Book dialog (designs 03 and 04)
    /js/new-book.js
 
-   Load AFTER js/supabase.js and js/shell.js on every app page.
+   Load AFTER js/supabase.js, js/ui.js, and js/shell.js on every app page.
    Any element with [data-new-book] opens it:
      data-new-book=""      pick a validated topic (default)
      data-new-book="none"  start without a validated topic
@@ -109,7 +109,7 @@
 
   /* ── Topics ─────────────────────────────────── */
 
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const { esc } = kdpUi;
 
   function topicCard(t, checked) {
     const passed = Math.max(0, Math.min(5, t.checks_passed || 0));

@@ -9,7 +9,8 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, MAX_NAME } = kdpTopics;
+  const { ICON } = kdpUi;
+  const { MAX_NAME } = kdpTopics;
   const MAX_NOTES = 5000;
 
   let dialog, els, opener = null, busy = false;

@@ -2,7 +2,7 @@
    KDP Lab — Book card menu, Rename and Delete (designs 06 and 07)
    /js/book-actions.js
 
-   Load AFTER js/supabase.js. The page calls kdpBookActions.init({...})
+   Load AFTER js/supabase.js and js/ui.js. The page calls kdpBookActions.init({...})
    and renders a menu button inside each card:
      <button data-book-menu="<book id>" aria-haspopup="menu" aria-expanded="false">
    The button must sit outside the card's link (no nested interactive elements).
@@ -25,7 +25,7 @@
 
   let opts = null;
 
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const { esc } = kdpUi;
   const menuButton = (id) => document.querySelector(`[data-book-menu="${CSS.escape(id)}"]`);
   const titleOf = (id) => opts.getTitle(id) || 'Untitled book';
 

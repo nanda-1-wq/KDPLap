@@ -23,7 +23,13 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
 
 ```sh
 deno test tests/title-checks.test.js
+deno test --allow-read tests/limits-parity.test.js
 ```
+
+- `limits-parity.test.js`: the same limits in the browser files,
+  `generate/lib/limits.ts` and the migrations (title 200, Brief lengths,
+  positioning sizes, competitor caps, insight and title-option caps). It fails
+  when a value disagrees or can no longer be found.
 
 ## Database (local Postgres 18)
 

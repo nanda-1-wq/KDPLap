@@ -13,7 +13,8 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, esc, one, voiceSummary } = kdpPens;
+  const { ICON, esc } = kdpUi;
+  const { one, voiceSummary } = kdpPens;
 
   const MAX = {
     topic_text: 200, target_reader: 300, reader_problem: 1000, promise_draft: 1000,

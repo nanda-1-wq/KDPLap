@@ -17,7 +17,8 @@
 ═══════════════════════════════════════════════════ */
 
 (function () {
-  const { ICON, MAX_NAME, esc, nameError, bookTitle } = kdpPens;
+  const { ICON, esc } = kdpUi;
+  const { MAX_NAME, nameError, bookTitle } = kdpPens;
 
   let opts = null;
 

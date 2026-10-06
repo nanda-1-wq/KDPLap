@@ -23,6 +23,20 @@ const TOPIC_SOURCES = 'winning_source, winning_set_at, dead_source, dead_set_at,
 const POSITIONING_COLS = 'one_sentence, reader_promise, approach, lacks, selling_points, focus_tags, drift_flags, drift_checked_at, locked_at, updated_at';
 const TITLE_OPTION_COLS = 'id, title, subtitle, reason, keywords, unsourced, shortlisted, created_at';
 
+// "0 rows = not found": an update or select that must hit one row, and a
+// delete with count: 'exact'. Both put notFound: true on the error.
+const notFound = (msg) => Object.assign(new Error(msg), { notFound: true });
+function oneRow(data, error, msg) {
+  if (error) return { data: null, error };
+  if (!data.length) return { data: null, error: notFound(msg) };
+  return { data: data[0], error: null };
+}
+function counted(error, count, msg) {
+  if (error) return { error };
+  if (!count) return { error: notFound(msg) };
+  return { error: null };
+}
+
 window.kdp = {
 
   googleEnabled: GOOGLE_ENABLED,
@@ -150,9 +164,7 @@ window.kdp = {
       .update(fields)
       .eq('book_id', bookId)
       .select('book_id, updated_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Book not found.');
   },
 
   /**
@@ -165,9 +177,7 @@ window.kdp = {
       .update(fields)
       .eq('id', id)
       .select('id, updated_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Book not found.');
   },
 
   /**
@@ -210,9 +220,7 @@ window.kdp = {
       .update({ title })
       .eq('id', id)
       .select('id, title, updated_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Book not found.');
   },
 
   /** What a delete removes: chapters, section versions, research notes. Two queries. */
@@ -261,9 +269,7 @@ window.kdp = {
       .from('books')
       .delete({ count: 'exact' })
       .eq('id', id);
-    if (error) return { error };
-    if (!count) return { error: Object.assign(new Error('Book not found.'), { notFound: true }) };
-    return { error: null };
+    return counted(error, count, 'Book not found.');
   },
 
   /* ── Research (step 02) ───────────────────────── */
@@ -330,9 +336,7 @@ window.kdp = {
       .update(fields)
       .eq('id', id)
       .select('id, title, author, bsr, reviews, rating, toc, low_reviews, high_reviews, is_authority, created_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Competitor not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Competitor not found.');
   },
 
   async deleteCompetitor(id) {
@@ -340,9 +344,7 @@ window.kdp = {
       .from('competitors')
       .delete({ count: 'exact' })
       .eq('id', id);
-    if (error) return { error };
-    if (!count) return { error: Object.assign(new Error('Competitor not found.'), { notFound: true }) };
-    return { error: null };
+    return counted(error, count, 'Competitor not found.');
   },
 
   /** Adds a source or a personal note. A source needs a citation (migration 0008). */
@@ -361,9 +363,7 @@ window.kdp = {
       .update(fields)
       .eq('id', id)
       .select('id, kind, body, citation, created_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Source not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Source not found.');
   },
 
   async deleteSource(id) {
@@ -371,9 +371,7 @@ window.kdp = {
       .from('research_sources')
       .delete({ count: 'exact' })
       .eq('id', id);
-    if (error) return { error };
-    if (!count) return { error: Object.assign(new Error('Source not found.'), { notFound: true }) };
-    return { error: null };
+    return counted(error, count, 'Source not found.');
   },
 
   /** The included page-1 books of a topic, in page order, for "Copy from Topic Lab". */
@@ -400,9 +398,7 @@ window.kdp = {
       ? window.sb.from('research_insights').upsert({ ...row, book_id: bookId, analyzed_at: analyzedAt }, { onConflict: 'book_id' })
       : window.sb.from('research_insights').update(row).eq('book_id', bookId);
     const { data, error } = await q.select('loves, hates, gaps, analyzed_at, updated_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Insights not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Insights not found.');
   },
 
   /* ── Positioning (step 03) ────────────────────── */
@@ -427,9 +423,7 @@ window.kdp = {
       .from('positioning')
       .upsert({ ...fields, book_id: bookId }, { onConflict: 'book_id' })
       .select(POSITIONING_COLS);
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Book not found.');
   },
 
   /**
@@ -443,9 +437,7 @@ window.kdp = {
       .update({ drift_flags: flags })
       .eq('book_id', bookId)
       .select(POSITIONING_COLS);
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Positioning not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Positioning not found.');
   },
 
   /**
@@ -508,9 +500,7 @@ window.kdp = {
       .update({ shortlisted: !!on })
       .eq('id', id)
       .select(TITLE_OPTION_COLS);
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Option not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Option not found.');
   },
 
   /** Remove one option. A starred option is never removed: unstar it first. */
@@ -520,9 +510,7 @@ window.kdp = {
       .delete({ count: 'exact' })
       .eq('id', id)
       .eq('shortlisted', false);
-    if (error) return { error };
-    if (!count) return { error: Object.assign(new Error('Option not found or starred.'), { notFound: true }) };
-    return { error: null };
+    return counted(error, count, 'Option not found or starred.');
   },
 
   /**
@@ -539,9 +527,7 @@ window.kdp = {
       .update(fields)
       .eq('id', bookId)
       .select('id, title, subtitle, title_needs_review, updated_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Book not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Book not found.');
   },
 
   /** The Research gaps (step 02 insights) for "Copy gaps from Research". [] before an analysis. */
@@ -616,9 +602,7 @@ window.kdp = {
       .update(fields)
       .eq('id', id)
       .select(`id, name, status, checks_passed, updated_at, ${TOPIC_SOURCES}`);
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Topic not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Topic not found.');
   },
 
   /**
@@ -630,9 +614,7 @@ window.kdp = {
       .from('topics')
       .delete({ count: 'exact' })
       .eq('id', id);
-    if (error) return { error };
-    if (!count) return { error: Object.assign(new Error('Topic not found.'), { notFound: true }) };
-    return { error: null };
+    return counted(error, count, 'Topic not found.');
   },
 
   /* ── Pen names ────────────────────────────────── */
@@ -685,9 +667,7 @@ window.kdp = {
       .update(fields)
       .eq('id', id)
       .select('id, name, updated_at');
-    if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Pen name not found.'), { notFound: true }) };
-    return { data: data[0], error: null };
+    return oneRow(data, error, 'Pen name not found.');
   },
 
   /**
@@ -700,9 +680,7 @@ window.kdp = {
       .from('pen_names')
       .delete({ count: 'exact' })
       .eq('id', id);
-    if (error) return { error };
-    if (!count) return { error: Object.assign(new Error('Pen name not found.'), { notFound: true }) };
-    return { error: null };
+    return counted(error, count, 'Pen name not found.');
   },
 
   /** The default pen name id for new books, or null. Reads only; no row means no default. */
@@ -724,7 +702,7 @@ window.kdp = {
       .eq('user_id', userId)
       .select('default_pen_name_id');
     if (error) return { data: null, error };
-    if (!data.length) return { data: null, error: Object.assign(new Error('Settings not found.'), { notFound: true }) };
+    if (!data.length) return { data: null, error: notFound('Settings not found.') };
     return { data: data[0].default_pen_name_id, error: null };
   },
 

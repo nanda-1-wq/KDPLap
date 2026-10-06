@@ -24,9 +24,15 @@ const test = async page => {
     M.briefError = false;
     return { sent: briefWrites() - before, line: await txt('[data-saved-line]') };
   }
+  // The old file from git reads ICON and esc from kdpPens. Production code takes
+  // them from kdpUi, so add them back for this one run only.
+  const shimPens = (r) => r.fetch().then(async (res) => r.fulfill({ response: res,
+    body: (await res.text()) + '\nkdpPens.ICON = kdpUi.ICON; kdpPens.esc = kdpUi.esc;\n' }));
+  await page.context().route('**/js/pen-name-common.js', shimPens);
   await page.context().route('**/js/book-brief.js', (r) => r.fulfill({ path: `${CACHE}/old-book-brief.js`, contentType: 'application/javascript' }));
   const old = await briefRun();
   await page.context().unroute('**/js/book-brief.js');
+  await page.context().unroute('**/js/pen-name-common.js', shimPens);
   const now = await briefRun();
   ok(old.sent === 2, `old Brief code sends the refused save twice (${old.sent})`);
   ok(now.sent === 1 && now.line.includes('This change breaks a Brief rule, so it was not saved.'), `fixed: sent once (${now.sent}), message shown`);
