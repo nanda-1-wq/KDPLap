@@ -19,3 +19,6 @@ KDP-Lab-Project-Brief.md
 # Browser test cache and screenshots (tests/browser/run.sh)
 tests/browser/.cache/
 tests/browser/shots/
+
+# Supabase CLI link data (project ref, CLI version)
+supabase/.temp/
