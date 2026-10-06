@@ -36,6 +36,7 @@ Keep them working. Do not change them unless asked.
 - Prompt templates live server-side. The browser sends `{ stage, bookId, ... }`, never raw prompts.
 - Validate and limit every Edge Function input. Return clear errors.
 - Log input and output tokens for every AI call in an `ai_usage` table.
+- Never run the Supabase CLI. Claude chat deploys after the owner says deploy.
 
 ## 5. AI rules
 - One section or one step per AI call. Never a full book in one call.

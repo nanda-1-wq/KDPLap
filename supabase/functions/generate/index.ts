@@ -117,8 +117,6 @@ function openStore(authHeader: string): Store {
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
-      // A to-one embed can come back as an object or a one-item array.
-      const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? null);
       const brief = one(data.book_briefs) as BriefContext["brief"] | null;
       if (!brief) return null;
       const topic = one(data.topics) as { name: string; topic_page_books: BriefContext["pageBooks"] } | null;
@@ -143,7 +141,6 @@ function openStore(authHeader: string): Store {
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
-      const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? null);
       const brief = one(data.book_briefs) as ReviewContext["brief"] | null;
       return {
         bookId: data.id as string,

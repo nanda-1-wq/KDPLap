@@ -15,3 +15,7 @@ KDP referance/
 # Private notes and local tooling
 KDP-Lab-Project-Brief.md
 .claude/skills/
+
+# Browser test cache and screenshots (tests/browser/run.sh)
+tests/browser/.cache/
+tests/browser/shots/

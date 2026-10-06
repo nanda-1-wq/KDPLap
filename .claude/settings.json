@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(supabase:*)",
+      "Bash(npx supabase:*)",
+      "Bash(bunx supabase:*)",
+      "Bash(pnpm dlx supabase:*)",
+      "Bash(yarn supabase:*)",
+      "Bash(/opt/homebrew/bin/supabase:*)",
+      "Read(~/.supabase/**)"
+    ]
+  }
+}

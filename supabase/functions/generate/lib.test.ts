@@ -1,4 +1,4 @@
-// deno test --allow-read=supabase/functions/generate/fixtures supabase/functions/generate/  (from the repo root)
+// deno test --allow-read=supabase/functions/generate supabase/functions/generate/  (from the repo root)
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import * as L from "./lib.ts";
 
