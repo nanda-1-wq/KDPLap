@@ -1,6 +1,6 @@
 # Batch C plan: features (i1 to i5, i10)
 
-Date: 2026-10-06. Status: built; 0014 applied and generate v10 deployed by the owner; live check passed 2026-10-06. Waiting for "commit and push".
+Date: 2026-10-06. Status: done. 0014 applied, generate v10 deployed, live check passed, committed and pushed as 631d48d (2026-10-06).
 
 Owner decisions: A. custom target 2,000 to 150,000 words. B. the note next to
 Next shows on 02 to 04 too, neutral style, for example "Not done yet: needs 1
