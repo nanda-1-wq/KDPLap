@@ -134,25 +134,17 @@
     }
   }
 
-  const nextMonthUtc = () => {
-    const t = new Date();
-    return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 1))
-      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  };
-
   /** Message HTML for an error code from kdp.generate. */
   function analyzeMessage(code) {
     switch (code) {
       case 'not_amazon_page':
         return alertBox('warning', 'This does not look like an Amazon search page with books. Copy page 1 of the search results, then paste it again. This try was not counted.');
-      case 'monthly_limit':
-        return alertBox('warning', `You have used this month’s AI allowance. It resets on ${nextMonthUtc()}.`);
-      case 'rate_limited':
-        return alertBox('warning', 'Too many requests. Wait a minute, then try again.');
+      case 'monthly_limit': case 'rate_limited': case 'network': {
+        const [kind, text] = kdpUi.aiMessage(code);
+        return alertBox(kind, text);
+      }
       case 'bad_request':
         return alertBox('error', `Paste between ${fmt(MIN_CHARS)} and ${fmt(MAX_CHARS)} characters, then try again.`);
-      case 'network':
-        return alertBox('error', 'We couldn’t reach KDP Lab. Check your connection, then try again. This try was not counted.');
       default:
         return alertBox('error', 'The AI is not available right now. Try again in a moment. This try was not counted.');
     }

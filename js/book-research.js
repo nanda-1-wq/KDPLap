@@ -812,21 +812,12 @@
 
   /* ── Research gaps (stage review_insights) ── */
 
-  const nextMonthUtc = () => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
-      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  };
-
   /** [kind, text, retry] for an error code. */
   function analysisMessage(code, have) {
     switch (code) {
       case 'not_enough_books': return ['warning', `Gaps need at least ${NEED_REVIEWED} competitors with pasted reviews. ${have == null ? reviewedCount() : have} of ${NEED_REVIEWED} added.`, false];
-      case 'monthly_limit': return ['warning', `You have used this month’s AI allowance. It resets on ${nextMonthUtc()}.`, false];
-      case 'rate_limited': return ['warning', 'Too many requests. Wait a minute, then try again.', true];
       case 'save_failed': return ['error', 'The analysis is done, but we couldn’t save it. Check your connection, then save again.', true];
-      case 'network': return ['error', 'We couldn’t reach KDP Lab. Check your connection, then try again. This try was not counted.', true];
-      default: return ['error', 'The AI is not available right now. This try was not counted.', true];
+      default: return kdpUi.aiMessage(code);
     }
   }
 

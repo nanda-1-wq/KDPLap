@@ -178,22 +178,12 @@
       ${note}<div data-gen-status>${status}</div>`;
   }
 
-  function nextMonthUtc() {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
-      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  }
-
   /** [kind, text, retry] for an error code. */
   function aiMessage(code) {
     switch (code) {
       case 'positioning_not_locked': return ['warning', 'Lock your positioning in 03 first. Title ideas follow it.', false];
       case 'options_full': return ['warning', `You have ${MAX_OPTIONS} options, the limit. Remove some to get more ideas.`, false];
-      case 'monthly_limit': return ['warning', `You have used this month’s AI allowance. It resets on ${nextMonthUtc()}.`, false];
-      case 'rate_limited': return ['warning', 'Too many requests. Wait a minute, then try again.', true];
-      case 'save_first': return ['error', 'Your last change is not saved yet. Use Retry next to “Couldn’t save”, then try again.', false];
-      case 'network': return ['error', 'We couldn’t reach KDP Lab. Check your connection, then try again. This try was not counted.', true];
-      default: return ['error', 'The AI is not available right now. This try was not counted.', true];
+      default: return kdpUi.aiMessage(code);
     }
   }
 
