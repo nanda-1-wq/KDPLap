@@ -55,9 +55,9 @@ tests/browser/run.sh title t1.js
 
 Needs the static server on port 5500. Every Supabase call is answered by
 the suite's `mock.js` with a fake session, so no account or real data is
-used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all),
+used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial),
 `research` (t-stale, t-missing), `positioning` (t1, t2, t-drift,
-t-accept-all, t-missing), `title` (t1, t-note, t-hyphen, t-missing),
+t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog). The runner caches supabase-js (checked
 against the app's SRI hash) and two old file versions from git in
 `tests/browser/.cache/`. Screenshots go to `tests/browser/shots/`. Both
