@@ -1,6 +1,6 @@
 # Batch C2 plan: notes from the real book walk-through (i13 to i17)
 
-Date: 2026-10-07. Status: **live and checked, waiting for "commit and push"**. 0015 applied, generate v12 deployed, live check passed (see the end). Not committed yet.
+Date: 2026-10-07. Status: **done**. 0015 applied, generate v12 deployed, live check passed (see the end), committed and pushed as ed1c9fa (2026-10-07).
 
 Owner answers (2026-10-07): A. the list as proposed, plus Other. B. fill only empty
 fields, then one line such as "Filled 5 fields. Kept 2 you typed." C. at most 5

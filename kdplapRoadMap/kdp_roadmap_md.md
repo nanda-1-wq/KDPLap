@@ -15,7 +15,8 @@ Design: ✅ approved (see `design/`)
 - [x] **E6.5** Import from Amazon page: the user pastes Amazon page 1, AI turns it into a competitor table, counts the 5 market checks, marks each number "Imported", and the user confirms. No scraping.
 - [x] **E7** Book wizard shell + 01 Brief + 02 Research
 - [x] **E8** 03 Positioning (drift check, lock) + 04 Title
-- [ ] **E9** 05 Outline
+- [x] **PLAN review gate** (after E8): Batches A, B1, B2, C, the ultrareview fixes and C2. Plans and results in `docs/reviews/`.
+- [ ] **E9** 05 Outline ← next
 - [ ] **E10** 06 Write: sections, versions, improve menu, checks
 - [ ] **E11** Export DOCX + Markdown · Settings + AI usage
 - [ ] **E12** Real test: write one full book, fix what hurts
