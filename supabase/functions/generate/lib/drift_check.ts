@@ -68,15 +68,16 @@ export type DriftFlag = {
 /** For matching a quote: lower case, one kind of quote mark, single spaces. */
 const norm = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
-/** The text of one field, as the model saw it. Lists: one line per item. */
-function fieldText(v: PositioningValues, f: PositioningField): string {
-  return isListField(f) ? v[f].join("\n") : v[f];
+/** The parts a quote may come from: each list item, or the one text field. */
+function fieldParts(v: PositioningValues, f: PositioningField): string[] {
+  return isListField(f) ? v[f] : [v[f]];
 }
 
 /**
  * Map a drift_check reply. Our code, not the model, decides what is kept:
  * - the field must be one of the six, and the quote must really be in it
- *   (case and spacing aside); otherwise the flag is dropped;
+ *   (case and spacing aside), inside one list item or the one text field;
+ *   otherwise the flag is dropped;
  * - quote and why are one line within their limits; repeats are dropped;
  * - at most MAX_FLAGS; ids d1, d2, … in order;
  * - a flag the author already kept (same field and quote) stays kept, with
@@ -103,7 +104,7 @@ export function interpretDriftCheck(httpOk: boolean, body: unknown, values: Posi
     const quote = oneLine(r.quote, Infinity).replace(/^["“'‘]+|["”'’]+$/g, "").trim();
     const why = cutWords(cleanLine(r.why), MAX_FLAG_WHY);
     if (!quote || quote.length > MAX_FLAG_QUOTE || !why) continue;
-    if (!norm(fieldText(values, field)).includes(norm(quote))) continue;
+    if (!fieldParts(values, field).some((p) => norm(p).includes(norm(quote)))) continue;
     const key = `${field}\u0000${norm(quote)}`;
     if (seen.has(key)) continue;
     seen.add(key);

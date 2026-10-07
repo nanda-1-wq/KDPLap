@@ -70,6 +70,10 @@ function openStore(authHeader: string): Store {
   });
   const jwt = authHeader.slice("Bearer ".length);
 
+  /** The service-role client (bypasses RLS), built once and only when needed. */
+  let adminClient: SupabaseClient | null = null;
+  const admin = () => (adminClient ??= createClient(url, need("SUPABASE_SERVICE_ROLE_KEY"), noSession));
+
   /** One book with the given embeds, through RLS. Someone else's book reads as null. */
   async function readBook(bookId: string, select: string) {
     const { data, error } = await asUser.from("books").select(select).eq("id", bookId).maybeSingle();
@@ -185,8 +189,7 @@ function openStore(authHeader: string): Store {
     // or locked the positioning while the check ran. Migration 0010 lets only
     // this role write drift_checked_at and the flag text.
     async saveDriftFlags({ bookId, userId, flags, checkedAt, readUpdatedAt }) {
-      const admin = createClient(url, need("SUPABASE_SERVICE_ROLE_KEY"), noSession);
-      const { data, error } = await admin
+      const { data, error } = await admin()
         .from("positioning")
         .update({ drift_flags: flags, drift_checked_at: checkedAt })
         .eq("book_id", bookId)
@@ -232,8 +235,7 @@ function openStore(authHeader: string): Store {
     },
 
     async logUsage(row: UsageRow) {
-      const admin = createClient(url, need("SUPABASE_SERVICE_ROLE_KEY"), noSession);
-      const { error } = await admin.from("ai_usage").insert(row);
+      const { error } = await admin().from("ai_usage").insert(row);
       if (error) throw error;
     },
   };

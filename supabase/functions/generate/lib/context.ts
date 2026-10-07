@@ -67,7 +67,7 @@ export function positioningValues(row: PositioningRow | null): PositioningValues
 /** True when at least one of the six fields has text. Checked before a drift check. */
 export function hasPositioningText(row: PositioningRow | null): boolean {
   const v = positioningValues(row);
-  return POSITIONING_FIELDS.some((f) => (isListField(f) ? v[f].length > 0 : v[f].length > 0));
+  return POSITIONING_FIELDS.some((f) => v[f].length > 0);
 }
 
 /** True when the Brief has a topic. Checked before positioning_help. */
