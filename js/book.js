@@ -47,11 +47,11 @@
   const stepTitle = document.querySelector('[data-step-title]');
 
   const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
-  const SAVE_WARN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
   const LOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
   const WARN = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
 
-  const { esc } = kdpUi;
+  const { esc, ICON } = kdpUi;
+  const SAVE_WARN = ICON.warn(16);
   const one = (rel) => (Array.isArray(rel) ? rel[0] : rel) || null;
   const pad = (n) => String(n).padStart(2, '0');
 
@@ -59,7 +59,8 @@
   const bookId = params.get('id') || '';
   let step = readStep(params.get('step'));
   let book = null;
-  let saveView = { state: 'idle', message: '', canRetry: false, owner: 1 };
+  const saves = {};   // step number → its last save state { state, message, canRetry, at }
+  let saveSeq = 0;
 
   function readStep(value) {
     const n = parseInt(value, 10);
@@ -146,11 +147,25 @@
     renderSaveLine();
   }
 
+  /**
+   * What the shared save line shows. An error with Retry (edits still unsaved)
+   * stays until its own step saves, so a save on another step cannot hide it;
+   * the newest such error wins. Otherwise Saving… while any step saves, else
+   * the newest state.
+   */
+  function saveView() {
+    const all = Object.keys(saves).map((k) => ({ ...saves[k], owner: Number(k) })).sort((a, b) => b.at - a.at);
+    return all.find((v) => v.state === 'error' && v.canRetry)
+      || all.find((v) => v.state === 'saving')
+      || all[0]
+      || { state: 'idle', message: '', canRetry: false, owner: 1 };
+  }
+
   /** The sidebar save line: time of the last save, Saving…, or an error with Retry. */
   function renderSaveLine() {
     const el = nav.querySelector('[data-saved-line]');
     if (!el) return;
-    const v = saveView;
+    const v = saveView();
     el.dataset.state = v.state;
     if (v.state === 'saving') {
       el.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Saving…</span>';
@@ -193,7 +208,7 @@
     },
     /** owner = the step number that saves (default 1, the Brief). */
     renderSave(state, message, canRetry, owner = 1) {
-      saveView = { state, message, canRetry, owner };
+      saves[owner] = { state, message, canRetry, at: ++saveSeq };
       renderSaveLine();
     },
     notFound() { renderNotFound(); }

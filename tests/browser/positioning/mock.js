@@ -116,6 +116,15 @@ const setup = async page => {
       return json(r, 200, b ? [view(b)] : []);
     }
     if (path === '/rest/v1/books' && method === 'PATCH') { store.writes.push({ table: 'books', body: body() }); return json(r, 200, []); }
+    // Brief saves from step 01; __modes.briefError makes them fail (500).
+    if (path === '/rest/v1/book_briefs' && method === 'PATCH') {
+      const b = store.books[eq('book_id')];
+      store.writes.push({ table: 'book_briefs', body: body(), failed: !!mode('briefError') });
+      if (mode('briefError')) return json(r, 500, { message: 'mock' });
+      if (!b) return json(r, 200, []);
+      b.brief = { ...b.brief, ...body(), updated_at: new Date().toISOString() };
+      return json(r, 200, [{ book_id: b.id, updated_at: b.brief.updated_at }]);
+    }
 
     if (path === '/rest/v1/positioning') {
       const b = store.books[eq('book_id')] || store.books[(body() || {}).book_id];
