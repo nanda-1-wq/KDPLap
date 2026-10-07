@@ -112,19 +112,27 @@
     }
   }
 
+  /**
+   * Two writes, each tried on its own: the Brief row and the book row. When
+   * one fails, res.saved holds the part that did save, so onError keeps it.
+   */
   async function save(fields) {
     const brief = {}, bookFields = {};
     Object.keys(fields).forEach((k) => { (BOOK_FIELDS.includes(k) ? bookFields : brief)[k] = fields[k]; });
-    let briefRes = null, bookRes = null;
-    if (Object.keys(brief).length) {
-      briefRes = await kdp.updateBrief(book.id, brief);
-      if (briefRes.error) return briefRes;
-    }
-    if (Object.keys(bookFields).length) {
-      bookRes = await kdp.updateBook(book.id, bookFields);
-      if (bookRes.error) return bookRes;
-    }
-    return { data: { fields, brief: briefRes && briefRes.data, book: bookRes && bookRes.data }, error: null };
+    const write = async (part, fn) => {
+      if (!Object.keys(part).length) return null;
+      try { return await fn(); } catch (err) { return { error: err }; }
+    };
+    const briefRes = await write(brief, () => kdp.updateBrief(book.id, brief));
+    const bookRes = await write(bookFields, () => kdp.updateBook(book.id, bookFields));
+    const ok = (r) => r && !r.error;
+    const failed = [briefRes, bookRes].find((r) => r && r.error);
+    if (!failed) return { data: { fields, brief: briefRes && briefRes.data, book: bookRes && bookRes.data }, error: null };
+    const savedFields = { ...(ok(briefRes) ? brief : {}), ...(ok(bookRes) ? bookFields : {}) };
+    return {
+      error: failed.error,
+      saved: { fields: savedFields, brief: ok(briefRes) ? briefRes.data : null, book: ok(bookRes) ? bookRes.data : null }
+    };
   }
 
   /** After a good save: the saved copy, and the book object the sidebar reads. */
@@ -150,15 +158,23 @@
   function onError(res, sent) {
     const e = res.error || {};
     if (e.notFound) { saver.reset('error'); ctx.notFound(); return true; }
+    // One write of the two saved: keep that part, and do not send it again
+    // unless it was edited while the save ran.
+    const done = res.saved ? Object.keys(res.saved.fields) : [];
+    if (done.length) {
+      onSaved({ data: res.saved });
+      done.forEach((f) => { if (JSON.stringify(read(f)) === JSON.stringify(res.saved.fields[f])) saver.drop(f); });
+    }
+    const failed = sent.filter((f) => !done.includes(f));
     // 23514 = a check (0007), 42501 = RLS (a pen name that is not the user's), 23503 = gone.
     if (['23514', '42501', '23503'].includes(e.code)) {
-      // Error state, edits dropped (they are put back to the saved values), so no Retry.
-      // Drop the edits BEFORE re-rendering: removing a focused field fires
-      // focusout, which would otherwise send the refused save again.
-      saver.reset('error', sent.includes('pen_name_id')
+      // Error state, edits dropped (the failed fields are put back to the saved
+      // values), so no Retry. Drop the edits BEFORE re-rendering: removing a
+      // focused field fires focusout, which would otherwise send the refused save again.
+      saver.reset('error', failed.includes('pen_name_id')
         ? 'That pen name is not available, so it was not saved.'
         : 'This change breaks a Brief rule, so it was not saved.');
-      sent.forEach((f) => {
+      failed.forEach((f) => {
         if (f === 'options') OPTION_KEYS.forEach((o) => { model[o] = saved[o]; });
         else model[f] = saved[f];
       });
@@ -636,22 +652,12 @@
 
   /* ── Help me fill (stage brief_help) ─────── */
 
-  const nextMonthUtc = () => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
-      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  };
-
   /** [kind, text, retry] for an error code. */
   function helpMessage(code) {
     switch (code) {
       case 'no_topic': return ['warning', 'Add a topic first. The AI drafts from it.', false];
       case 'not_enough_facts': return ['warning', 'The topic is too vague to draft from. Make it more specific, then try again.', false];
-      case 'monthly_limit': return ['warning', `You have used this month’s AI allowance. It resets on ${nextMonthUtc()}.`, false];
-      case 'rate_limited': return ['warning', 'Too many requests. Wait a minute, then try again.', true];
-      case 'save_first': return ['error', 'Your last change is not saved yet. Use Retry next to “Couldn’t save”, then try again.', false];
-      case 'network': return ['error', 'We couldn’t reach KDP Lab. Check your connection, then try again. This try was not counted.', true];
-      default: return ['error', 'The AI is not available right now. This try was not counted.', true];
+      default: return kdpUi.aiMessage(code);
     }
   }
 

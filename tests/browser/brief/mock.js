@@ -68,6 +68,12 @@ const setup = async page => {
       const rows = b ? [view(b)] : [];
       return json(r, 200, one ? (rows[0] || null) : rows);
     }
+    // __modes.bookFail / briefFail = { status, code }: that write fails, the other still works.
+    const fail = { books: mode('bookFail'), book_briefs: mode('briefFail') }[path.slice('/rest/v1/'.length)];
+    if (fail && method === 'PATCH') {
+      store.writes.push({ table: path.slice('/rest/v1/'.length), body: body(), failed: fail.code });
+      return json(r, fail.status, { code: fail.code, message: 'mock: write refused' });
+    }
     if (path === '/rest/v1/books' && method === 'PATCH') {
       store.writes.push({ table: 'books', body: body() });
       const b = store.books[eq('id')];
