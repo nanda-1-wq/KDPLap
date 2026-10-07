@@ -10,18 +10,19 @@ Deno.test("brief_help success: 200 suggestions only, one counted row with book_i
   assertEquals(r.headers.get("access-control-allow-origin"), ORIGIN);
   assertEquals(await json(r), {
     stage: "brief_help",
-    suggestions: { target_reader: three.target_reader, reader_problem: three.reader_problem, promise_draft: three.promise_draft },
+    suggestions: { target_reader: three.target_reader, reader_problem: three.reader_problem, promise_draft: three.promise_draft, stance: three.stance, standout: three.standout },
     unsourced: {},   // 60 is in the Brief
   });
   assertEquals(logged, [{ user_id: USER, book_id: BOOK_ID, stage: "brief_help", model: "claude-sonnet-5-5", input_tokens: 520, output_tokens: 190, status: "ok", counted: true }]);
 
   const sent = JSON.parse(calls[0].init.body as string);
-  assertEquals([sent.model, sent.max_tokens], ["claude-sonnet-5-5", 800]);
+  assertEquals([sent.model, sent.max_tokens], ["claude-sonnet-5-5", 1200]);
   const content = sent.messages[0].content as string;
   assert(content.includes("<topic>Chair yoga for seniors</topic>"));
   assert(content.includes("<target_reader>Adults over 60</target_reader>"));
   assert(content.includes("Gentle Chair Yoga"));
   assert(!content.includes("Sponsored Mat Book"), "sponsored books are left out");
+  assert(content.includes("<stance>(not given)</stance>"));
   assert(calls[0].init.signal instanceof AbortSignal);
 }));
 
@@ -100,4 +101,22 @@ Deno.test("brief_help: provider failures are 502, logged with book_id, not count
     assertEquals([r.status, (await json(r)).error], [502, code]);
     assertEquals([logged[0].stage, logged[0].book_id, logged[0].counted], ["brief_help", BOOK_ID, false]);
   }
+}));
+
+Deno.test("brief_help: an old three-field reply is failed and not counted (Batch C2)", quiet(async () => {
+  const { stance: _s, standout: _o, ...old } = three;
+  const { handle, logged } = setup({ provider: helpReply(old) });
+  const r = await handle(post(help));
+  assertEquals([r.status, (await json(r)).error], [502, "ai_unavailable"]);
+  assertEquals([logged[0].status, logged[0].counted], ["failed", false]);
+}));
+
+Deno.test("brief_help: an Other book type label reaches the prompt as escaped data", quiet(async () => {
+  const brief = { ...briefCtx, brief: { ...briefCtx.brief, book_type: "other", book_type_label: "Garden <guide>", options: { stance: "Small steps.", standout: "", references: "Keep out" } } };
+  const { handle, calls } = setup({ brief, provider: helpReply() });
+  assertEquals((await handle(post(help))).status, 200);
+  const content = JSON.parse(calls[0].init.body as string).messages[0].content as string;
+  assert(content.includes("<book_type>Garden &lt;guide&gt;</book_type>"));
+  assert(content.includes("<stance>Small steps.</stance>"));
+  assert(!content.includes("Keep out"), "references are not sent");
 }));

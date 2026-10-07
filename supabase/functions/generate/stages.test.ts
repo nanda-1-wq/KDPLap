@@ -24,15 +24,15 @@ Deno.test("stage table: an unknown stage fails clearly", () => {
 
 Deno.test("interpretResponse: the stages that need their job throw instead of using the Brief parser", async () => {
   // This reply is a valid Brief answer. Before B1 these three stages fell into the Brief parser.
-  const brief = await anthropic("end_turn", { result: "ok", target_reader: "A", reader_problem: "B", promise_draft: "C", missing: "" }).json();
-  for (const s of ["positioning_help", "drift_check", "title_ideas"] as const) {
+  const brief = await anthropic("end_turn", { result: "ok", target_reader: "A", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
+  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import"] as const) {
     assertThrows(() => L.interpretResponse(s, true, brief), Error, `generate: ${s} needs its job, use interpretJob`);
   }
   assertEquals(L.interpretResponse("brief_help", true, brief).code, null);
 });
 
 Deno.test("interpretResponse: brief_help without the job treats every number as unsourced", async () => {
-  const body = await anthropic("end_turn", { result: "ok", target_reader: "Adults over 60", reader_problem: "B", promise_draft: "C", missing: "" }).json();
+  const body = await anthropic("end_turn", { result: "ok", target_reader: "Adults over 60", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
   assertEquals(L.interpretResponse("brief_help", true, body).unsourced, { target_reader: ["60"] });
 });
 

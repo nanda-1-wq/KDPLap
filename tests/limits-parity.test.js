@@ -4,6 +4,7 @@
 // and fails if any value disagrees, or if a value can no longer be found.
 import { assertEquals } from "jsr:@std/assert@1";
 import * as L from "../supabase/functions/generate/lib/limits.ts";
+import * as G from "../supabase/functions/generate/lib/common.ts";
 import "../js/title-checks.js";
 
 const read = (p) => Deno.readTextFileSync(new URL(`../${p}`, import.meta.url));
@@ -48,7 +49,31 @@ Deno.test("Brief lengths: browser, server and 0007", () => {
   const text = read(M("0007_brief_rules.sql"));
   for (const m of text.matchAll(/check \((\w+) is null or char_length\(btrim\(\1\)\) between 1 and (\d+)\)/g)) sql[m[1]] = Number(m[2]);
   for (const m of text.matchAll(/char_length\(j ->> '(\w+)'\)\s+<= (\d+)/g)) sql[m[1]] = Number(m[2]);
-  assertEquals(sql, B);
+  const { book_type_label: label, ...rest } = B;   // the "Other" label is checked below (0015)
+  assertEquals(sql, rest);
+  assertEquals(label, L.MAX_TYPE_LABEL);
+});
+
+Deno.test("Brief book types and the Other label: browser, server and 0015", () => {
+  const src = read(BRIEF);
+  const list = src.match(/const BOOK_TYPES = \[([\s\S]*?)\];/);
+  if (!list) throw new Error(`${BRIEF}: no BOOK_TYPES`);
+  const browser = [...list[1].matchAll(/\['(\w+)', '([^']+)'\]/g)].map((m) => [m[1], m[2]]);
+  // The browser list = the server words, plus "other" last (its text is the author's label).
+  assertEquals(browser.slice(0, -1), Object.entries(G.BOOK_TYPES));
+  assertEquals(browser.at(-1), ["other", "Other"]);
+  const f = read(M("0015_book_type_other.sql"));
+  const check = f.match(/check \(book_type in \(([^)]*)\)\)/);
+  assertEquals([...check[1].matchAll(/'(\w+)'/g)].map((m) => m[1]), browser.map(([k]) => k));
+  assertEquals(one(M("0015_book_type_other.sql"), String.raw`char_length\(btrim\(book_type_label\)\) between 1 and (\d+)`), L.MAX_TYPE_LABEL);
+});
+
+Deno.test("competitor import: page text and reviews per box, browser and server", () => {
+  const src = read(RESEARCH);
+  const m = src.match(/const MIN_PAGE = (\d+), MAX_PAGE = (\d+);/);
+  if (!m) throw new Error(`${RESEARCH}: no MIN_PAGE / MAX_PAGE`);
+  assertEquals([Number(m[1]), Number(m[2])], [L.MIN_PAGE_CHARS, L.MAX_PAGE_CHARS]);
+  assertEquals(L.MAX_IMPORT_REVIEWS, 5);   // owner decision, Batch C2
 });
 
 Deno.test("positioning sizes: browser, server and 0010", () => {

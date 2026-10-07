@@ -84,7 +84,7 @@ Deno.test("database error: 500 server_error", quiet(async () => {
 Deno.test("a failed usage log still returns the bio", quiet(async () => {
   const h = makeHandler({
     env: () => FAKE_KEY,
-    openStore: () => ({ getUserId: async () => USER, getPenName: async () => pen, getTopic: async () => topic, getBriefContext: async () => briefCtx, getReviewContext: async () => reviewCtx,
+    openStore: () => ({ getUserId: async () => USER, getPenName: async () => pen, getTopic: async () => topic, getBriefContext: async () => briefCtx, getBook: async () => null, getReviewContext: async () => reviewCtx,
       getPositioningContext: async () => posCtx(), saveDriftFlags: async () => null,
       getTitleContext: async () => null, saveTitleOptions: async () => [], getMonthlyLimit: async () => null,
       sumCountedTokensSince: async () => 0, countCallsSince: async () => 0, logUsage: () => Promise.reject({ code: "42501" }) }),

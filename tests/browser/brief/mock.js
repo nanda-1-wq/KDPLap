@@ -2,6 +2,7 @@ const U = '00000000-0000-4000-8000-000000000001';
 const B1 = 'd1d1d1d1-0000-4000-8000-000000000001';   // chapter count 11 (not a chip), custom target 15000
 const B2 = 'd2d2d2d2-0000-4000-8000-000000000002';   // chapters 8 (a chip), range 8-12k
 const B3 = 'd3d3d3d3-0000-4000-8000-000000000003';   // only a topic: reader fields empty
+const B4 = 'd4d4d4d4-0000-4000-8000-000000000004';   // C2: type "other" with a label, saved stance and references
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 
 // Real-length Brief text (near the 300 / 1000 limits)
@@ -12,13 +13,15 @@ const setup = async page => {
   const ctx = page.context();
   await ctx.unrouteAll();
   const ago = (d) => new Date(Date.now() - d * 86400e3).toISOString();
-  const brief = (o) => ({ topic_text: 'Chair yoga for seniors with stiff joints', target_reader: READER, reader_problem: PROBLEM, promise_draft: null, book_type: 'beginner_guide',
+  const brief = (o) => ({ topic_text: 'Chair yoga for seniors with stiff joints', target_reader: READER, reader_problem: PROBLEM, promise_draft: null, book_type: 'beginner_guide', book_type_label: null,
     trim_size: '6x9', length_range: null, target_words: null, chapter_count: null, options: {}, updated_at: ago(3), ...o });
   const store = globalThis.__store = {
     books: {
       [B1]: { id: B1, title: null, current_step: 1, updated_at: ago(2), brief: brief({ chapter_count: 11, target_words: 15000 }) },
       [B2]: { id: B2, title: null, current_step: 1, updated_at: ago(3), brief: brief({ chapter_count: 8, length_range: '8-12k' }) },
-      [B3]: { id: B3, title: null, current_step: 1, updated_at: ago(4), brief: brief({ target_reader: null, reader_problem: null }) }
+      [B3]: { id: B3, title: null, current_step: 1, updated_at: ago(4), brief: brief({ target_reader: null, reader_problem: null }) },
+      [B4]: { id: B4, title: null, current_step: 1, updated_at: ago(5), brief: brief({ book_type: 'other', book_type_label: 'Gardening guide',
+        options: { stance: 'Small daily steps beat big weekly efforts.', references: 'Smith, J. Gentle Movement After 60. Sage Press, 2021.\nCDC, Physical Activity Guidelines for Older Adults, 2023' } }) }
     },
     calls: [], writes: [], gens: []
   };
@@ -33,7 +36,9 @@ const setup = async page => {
     competitors: [{ count: 0 }], real_sources: [{ count: 0 }], positioning: null, chapters: []
   });
 
-  // 0001 + 0007 + 0014, as the mock sees them.
+  // 0001 + 0007 + 0014 + 0015, as the mock sees them.
+  const TYPES = ['beginner_guide', 'how_to', 'workbook', 'self_help', 'cookbook', 'health_wellness', 'business_money', 'parenting_family', 'hobby_craft', 'reference', 'memoir', 'other'];
+  const OPT = { stance: 500, standout: 500, references: 2000 };
   const LEN = { topic_text: 200, target_reader: 300, reader_problem: 1000, promise_draft: 1000 };
   function check(row) {
     for (const k of Object.keys(LEN)) { const v = row[k]; if (v != null && (!v.trim() || v.length > LEN[k])) return 'book_briefs_' + k + '_length_check'; }
@@ -41,6 +46,10 @@ const setup = async page => {
     if (row.length_range != null && !['5-8k', '8-12k', '12-20k', '20-30k', '30k+'].includes(row.length_range)) return 'book_briefs_length_range_check';
     if (row.target_words != null && (!Number.isInteger(row.target_words) || row.target_words < 2000 || row.target_words > 150000)) return 'book_briefs_target_words_range_check';
     if (row.length_range != null && row.target_words != null) return 'book_briefs_length_one_value_check';
+    if (row.book_type != null && !TYPES.includes(row.book_type)) return 'book_briefs_book_type_check';
+    if (row.book_type_label != null && (row.book_type !== 'other' || !row.book_type_label.trim() || row.book_type_label.trim().length > 40)) return 'book_briefs_book_type_label_check';
+    const o = row.options || {};
+    if (Object.keys(o).some((k) => !OPT[k] || typeof o[k] !== 'string' || o[k].length > OPT[k])) return 'book_briefs_options_shape_check';
     return null;
   }
 
@@ -90,6 +99,11 @@ const setup = async page => {
       next.updated_at = new Date().toISOString();
       b.brief = next;
       return json(r, 200, [{ book_id: b.id, updated_at: next.updated_at }]);
+    }
+    // C2: "Copy from 02 Research" reads the citations of sources. __modes.cites = [text], citesFail = true.
+    if (path === '/rest/v1/research_sources' && method === 'GET') {
+      if (mode('citesFail')) return json(r, 500, { message: 'mock: down' });
+      return json(r, 200, (mode('cites') || []).map((citation) => ({ citation })));
     }
     if (path === '/rest/v1/pen_names' && method === 'GET') return json(r, 200, [{ id: PA, name: 'Nora Hale', voice: {} }]);
 

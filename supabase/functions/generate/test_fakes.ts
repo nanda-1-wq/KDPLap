@@ -79,6 +79,7 @@ export const titleCtx = (extra: Partial<TitleContext> = {}): TitleContext => ({
   options: [],
   ...extra,
 });
+export const PRODUCT = Deno.readTextFileSync(new URL("./fixtures/amazon-product1.txt", import.meta.url));
 export const PAGE = Deno.readTextFileSync(new URL("./fixtures/amazon-page1.txt", import.meta.url));
 export const EXPECTED = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/amazon-page1.expected.json", import.meta.url)));
 
@@ -87,6 +88,7 @@ export type Setup = {
   pen?: PenRow | null;
   topic?: TopicRow | null;
   brief?: BriefContext | null;
+  book?: { id: string } | null;
   review?: ReviewContext | null;
   pos?: PositioningContext | null;
   saveResult?: { drift_checked_at: string; updated_at: string } | null;
@@ -112,6 +114,7 @@ export function setup(s: Setup = {}) {
     getPenName: (id) => s.storeThrows ? Promise.reject(new Error("db down")) : Promise.resolve(s.pen === undefined ? (id === ID ? pen : null) : s.pen),
     getTopic: (id) => Promise.resolve(s.topic === undefined ? (id === TOPIC_ID ? topic : null) : s.topic),
     getBriefContext: (id) => Promise.resolve(s.brief === undefined ? (id === BOOK_ID ? briefCtx : null) : s.brief),
+    getBook: (id) => Promise.resolve(s.book === undefined ? (id === BOOK_ID ? { id } : null) : s.book),
     getReviewContext: (id) => Promise.resolve(s.review === undefined ? (id === BOOK_ID ? reviewCtx : null) : s.review),
     getPositioningContext: (id) => Promise.resolve(s.pos === undefined ? (id === BOOK_ID ? posCtx() : null) : s.pos),
     saveDriftFlags: (save) => {
@@ -173,8 +176,21 @@ export const quiet = <T>(fn: () => Promise<T>) => async () => {
 export const imp = { stage: "amazon_import", topicId: TOPIC_ID, text: PAGE };
 export const importReply = (out: unknown = EXPECTED) => () => Promise.resolve(anthropic("end_turn", out));
 
+export const cimp = { stage: "competitor_import", bookId: BOOK_ID, text: PRODUCT };
+export const PRODUCT_OUT = {
+  is_product_page: true,
+  title: "Chair Yoga for Seniors Over 60: Gentle Seated Routines for Stiff Joints, Better Balance, and Daily Calm",
+  author: "Dana Whitfield", bsr: 45210, reviews: 1284, rating: 4.4,
+  low_reviews: ["Most of the poses are just stretches I already knew. I wanted harder progressions after the first month and there are none."],
+  high_reviews: ["The ten minute morning routine is now part of my day. I wish the breathing chapter were longer.", "A review the model made up."],
+};
+export const cimpReply = (out: unknown = PRODUCT_OUT) => () => Promise.resolve(anthropic("end_turn", out));
+
 export const help = { stage: "brief_help", bookId: BOOK_ID };
-export const three = { result: "ok", target_reader: "Adults over 60 with stiff joints", reader_problem: "Floor yoga feels unsafe.", promise_draft: "After this book, the reader can follow a safe chair routine.", missing: "" };
+export const three = {
+  result: "ok", target_reader: "Adults over 60 with stiff joints", reader_problem: "Floor yoga feels unsafe.", promise_draft: "After this book, the reader can follow a safe chair routine.",
+  stance: "Gentle daily movement does more than hard weekly workouts.", standout: "Every pose is done sitting down, with no mat.", missing: "",
+};
 export const helpReply = (out: unknown = three) => () => Promise.resolve(anthropic("end_turn", out));
 
 export const ins = { stage: "review_insights", bookId: BOOK_ID };

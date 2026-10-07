@@ -5,8 +5,8 @@
 import { assertSnapshot } from "jsr:@std/testing@1/snapshot";
 import * as L from "./lib.ts";
 import {
-  BOOK_ID, briefCtx, comp, dc, dcReply, draft, good, help, helpReply, IDEA, imp, importReply, ins, insReply,
-  LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
+  BOOK_ID, briefCtx, cimp, cimpReply, comp, dc, dcReply, draft, good, help, helpReply, IDEA, imp, importReply, ins, insReply,
+  LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, PRODUCT, PRODUCT_OUT, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -20,6 +20,7 @@ const jobs: [string, L.Job][] = [
   ["positioning_help (field approach)", { stage: "positioning_help", ctx: posCtx(), field: "approach" }],
   ["drift_check", { stage: "drift_check", ctx: posCtx() }],
   ["title_ideas", { stage: "title_ideas", ctx: titleCtx(), want: 10 }],
+  ["competitor_import", { stage: "competitor_import", text: PRODUCT }],
 ];
 
 Deno.test("snapshot: buildRequest for every stage", async (t) => {
@@ -164,6 +165,14 @@ const cases: [string, Setup, () => Request][] = [
   ["title_ideas not visible", { title: null }, () => post(tid)],
   ["title_ideas empty reply", { provider: titleReply([]) }, () => post(tid)],
   ["title_ideas refusal", { provider: reply("refusal", "") }, () => post(tid)],
+
+  // competitor_import (Batch C2)
+  ["competitor_import success", { provider: cimpReply() }, () => post(cimp)],
+  ["competitor_import numbers not in page", { provider: cimpReply({ ...PRODUCT_OUT, bsr: 999, reviews: 4321, rating: 4.9 }) }, () => post(cimp)],
+  ["competitor_import not a product page", { provider: cimpReply({ ...PRODUCT_OUT, is_product_page: false }) }, () => post(cimp)],
+  ["competitor_import not visible", { book: null }, () => post(cimp)],
+  ["competitor_import text too short", {}, () => post({ ...cimp, text: "too short" })],
+  ["competitor_import max_tokens", { provider: reply("max_tokens", '{"is_product_page":true,"ti') }, () => post(cimp)],
 ];
 
 Deno.test("snapshot: replies and errors for every stage", async (t) => {

@@ -13,6 +13,7 @@ import { type Outcome, wordCount } from "./common.ts";
 import { type ErrorCode, type GenerateInput, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MAX_TOKENS, type PositioningField, type Stage } from "./limits.ts";
 import { BIO_SCHEMA, BIO_SYSTEM, bioUserMessage, hasAnyFact, interpretBio, type PenRow } from "./bio.ts";
 import { IMPORT_SCHEMA, IMPORT_SYSTEM, importUserMessage, interpretImport, type TopicRow } from "./amazon_import.ts";
+import { COMPETITOR_SCHEMA, COMPETITOR_SYSTEM, competitorUserMessage, interpretCompetitorImport } from "./competitor_import.ts";
 import { BRIEF_SCHEMA, BRIEF_SYSTEM, type BriefContext, briefKnownText, briefUserMessage, hasTopic, interpretBriefHelp } from "./brief_help.ts";
 import { type Competitor, interpretReviewInsights, REVIEW_SCHEMA, REVIEW_SYSTEM, type ReviewContext, reviewedBooks, reviewUserMessage } from "./review_insights.ts";
 import { hasPositioningText, knownText, type PositioningContext, positioningHasTopic, positioningValues } from "./context.ts";
@@ -28,7 +29,8 @@ export type Job =
   | { stage: "review_insights"; ctx: ReviewContext; books: Competitor[] }
   | { stage: "positioning_help"; ctx: PositioningContext; field: PositioningField | null }
   | { stage: "drift_check"; ctx: PositioningContext }
-  | { stage: "title_ideas"; ctx: TitleContext; want: number };
+  | { stage: "title_ideas"; ctx: TitleContext; want: number }
+  | { stage: "competitor_import"; text: string };
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -173,6 +175,17 @@ const titleIdeas: StageDef<"title_ideas", TitleContext> = {
   reply: (_job, _out, saved) => ({ stage: "title_ideas", options: saved ?? [] }),
 };
 
+// One book's product page (Batch C2). The book is read through RLS; nothing is
+// saved: the browser fills the Add competitor form. The reply check needs the
+// page text, so there is no interpretAlone.
+const competitorImport: StageDef<"competitor_import", { id: string }> = {
+  read: (store, input) => store.getBook(input.bookId),
+  check: (input) => ({ stage: "competitor_import", text: input.text }),
+  prompt: (job) => [COMPETITOR_SYSTEM, COMPETITOR_SCHEMA, competitorUserMessage(job.text)],
+  interpret: (job, httpOk, body) => interpretCompetitorImport(httpOk, body, job.text),
+  reply: (_job, out) => ({ stage: "competitor_import", competitor: out.competitor }),
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -182,6 +195,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   positioning_help: positioningHelp,
   drift_check: driftCheck,
   title_ideas: titleIdeas,
+  competitor_import: competitorImport,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -218,8 +232,8 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
- * sources) and review_insights. positioning_help, drift_check and title_ideas
- * need their job's data: they throw (use interpretJob).
+ * sources) and review_insights. positioning_help, drift_check, title_ideas and
+ * competitor_import need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);

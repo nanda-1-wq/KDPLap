@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -20,17 +20,18 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   positioning_help: MODELS.sonnet,
   drift_check: MODELS.sonnet,
   title_ideas: MODELS.sonnet,
+  competitor_import: MODELS.sonnet,
 };
 
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 800, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -42,9 +43,12 @@ export const MAX_AUTHOR_CHARS = 200;
 export const MAX_BSR = 100_000_000;
 export const MAX_REVIEWS = 10_000_000;
 
-// Brief help: field limits (same as js/book-brief.js and migration 0007) and
-// how many of the topic's page-1 books go into the prompt.
-export const BRIEF_MAX = { target_reader: 300, reader_problem: 1000, promise_draft: 1000 } as const;
+// Brief help: field limits (same as js/book-brief.js and migration 0007; stance
+// and stand-out live in book_briefs.options) and how many of the topic's
+// page-1 books go into the prompt.
+export const BRIEF_MAX = { target_reader: 300, reader_problem: 1000, promise_draft: 1000, stance: 500, standout: 500 } as const;
+// The "Other" book type label (same as js/book-brief.js and migration 0015).
+export const MAX_TYPE_LABEL = 40;
 export const MAX_PROMPT_BOOKS = 20;
 
 // Review insights: competitor limits (same as js/book-research.js and migration 0008).
@@ -54,7 +58,10 @@ export const MAX_REVIEW_BOX = 4000;
 export const MAX_TOC = 2000;
 export const MAX_INSIGHTS = 6;           // per list
 export const MAX_INSIGHT_CHARS = 160;
-export const COPY_MIN_CHARS = 30;        // a line this long found word for word in the reviews is dropped
+export const COPY_MIN_CHARS = 30;
+// Competitor import (one product page): reviews kept per box.
+export const MAX_IMPORT_REVIEWS = 5;
+export const MIN_IMPORT_REVIEW_CHARS = 10;   // a shorter "review" is a fragment, not a review        // a line this long found word for word in the reviews is dropped
 
 // Positioning: field limits (same as js/book-positioning.js and migration 0010).
 export const POSITIONING_FIELDS = ["one_sentence", "reader_promise", "lacks", "approach", "selling_points", "focus_tags"] as const;
@@ -94,6 +101,7 @@ export const ERROR_STATUS = {
   method_not_allowed: 405,
   not_enough_facts: 422,
   not_amazon_page: 422,
+  not_product_page: 422,
   not_enough_books: 422,
   nothing_to_check: 422,
   positioning_locked: 409,
@@ -142,7 +150,8 @@ export type GenerateInput =
   | { stage: "review_insights"; bookId: string }
   | { stage: "positioning_help"; bookId: string; field: PositioningField | null }
   | { stage: "drift_check"; bookId: string }
-  | { stage: "title_ideas"; bookId: string };
+  | { stage: "title_ideas"; bookId: string }
+  | { stage: "competitor_import"; bookId: string; text: string };
 
 const sameKeys = (o: Record<string, unknown>, want: string[]) =>
   JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...want].sort());
@@ -157,6 +166,7 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *                    (field = one of POSITIONING_FIELDS: redraft one card)
  *   drift_check:     { stage, bookId }             at most 2 KB
  *   title_ideas:     { stage, bookId }             at most 2 KB
+ *   competitor_import: { stage, bookId, text }     at most 256 KB, text 200 to 60,000 characters
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -190,12 +200,17 @@ export function parseInput(raw: string): GenerateInput | null {
     return { stage, bookId: o.bookId.toLowerCase() };
   }
 
-  if (!sameKeys(o, ["stage", "topicId", "text"])) return null;
-  if (typeof o.topicId !== "string" || !UUID_RE.test(o.topicId)) return null;
+  // amazon_import (a topic's search page) and competitor_import (one book's page): pasted text.
+  const idKey = stage === "competitor_import" ? "bookId" : "topicId";
+  if (!sameKeys(o, ["stage", idKey, "text"])) return null;
+  const id = o[idKey];
+  if (typeof id !== "string" || !UUID_RE.test(id)) return null;
   if (typeof o.text !== "string") return null;
   const len = o.text.trim().length;
   if (len < MIN_PAGE_CHARS || o.text.length > MAX_PAGE_CHARS) return null;
-  return { stage, topicId: o.topicId.toLowerCase(), text: o.text };
+  return stage === "competitor_import"
+    ? { stage, bookId: id.toLowerCase(), text: o.text }
+    : { stage, topicId: id.toLowerCase(), text: o.text };
 }
 
 /* ── Limits ──────────────────────────────── */

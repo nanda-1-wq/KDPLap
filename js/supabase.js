@@ -143,7 +143,7 @@ window.kdp = {
                title_needs_review, title_examples,
                pen_names ( id, name, voice ),
                topics ( id, name, checks_passed ),
-               book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type,
+               book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type, book_type_label,
                              trim_size, length_range, target_words, chapter_count, options, updated_at ),
                competitors ( count ),
                real_sources:research_sources ( count ),
@@ -273,6 +273,21 @@ window.kdp = {
   },
 
   /* ── Research (step 02) ───────────────────────── */
+
+  /**
+   * The citations of the book's sources (kind 'source', oldest first), for
+   * the Brief "Copy from 02 Research" button. Notes are left out.
+   */
+  async listSourceCitations(bookId) {
+    const { data, error } = await window.sb
+      .from('research_sources')
+      .select('citation')
+      .eq('book_id', bookId)
+      .eq('kind', 'source')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
+    return { data: error ? null : (data || []).map((r) => r.citation).filter((c) => typeof c === 'string' && c.trim()), error };
+  },
 
   /**
    * Everything step 02 shows: competitors and sources (oldest first) and the

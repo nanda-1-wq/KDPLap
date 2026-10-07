@@ -124,7 +124,7 @@ export function makeHandler(deps: Deps) {
       }
 
       let out = L.interpretJob(job, httpOk, body);
-      if (httpOk && out.code && out.code !== "not_enough_facts" && out.code !== "not_amazon_page") {
+      if (httpOk && out.code && out.code !== "not_enough_facts" && out.code !== "not_amazon_page" && out.code !== "not_product_page") {
         console.error(`generate: provider result ${out.code} stop_reason=${(body as { stop_reason?: string } | null)?.stop_reason ?? "none"}`);
       }
 

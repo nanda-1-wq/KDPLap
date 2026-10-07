@@ -3,8 +3,9 @@
 
 import { type PageBook } from "./amazon_import.ts";
 import { type BriefSuggestions } from "./brief_help.ts";
+import { type ImportedCompetitor } from "./competitor_import.ts";
 import { type DriftFlag } from "./drift_check.ts";
-import { type ErrorCode, type PositioningField } from "./limits.ts";
+import { type ErrorCode, MAX_TYPE_LABEL, type PositioningField } from "./limits.ts";
 import { type PositioningSuggestions } from "./positioning_help.ts";
 import { type Insights } from "./review_insights.ts";
 import { type TitleIdea } from "./title_ideas.ts";
@@ -34,11 +35,24 @@ export function asData(s: string): string {
   return t ? t.replace(/</g, "&lt;").replace(/>/g, "&gt;") : "(not given)";
 }
 
-// Same keys and words as js/book-brief.js. Unknown values are left out.
+// Same keys and words as js/book-brief.js and migration 0015 ("other" is the
+// author's own label, see bookTypeText). Unknown values are left out.
 export const BOOK_TYPES: Record<string, string> = {
   beginner_guide: "Beginner guide", how_to: "How-to guide", workbook: "Workbook",
-  self_help: "Self-help", cookbook: "Cookbook",
+  self_help: "Self-help", cookbook: "Cookbook", health_wellness: "Health and wellness guide",
+  business_money: "Business and money guide", parenting_family: "Parenting and family guide",
+  hobby_craft: "Hobby and craft guide", reference: "Reference guide", memoir: "Memoir or personal story",
 };
+
+/**
+ * The book type as prompt text: the list words, or for "other" the author's
+ * label as one line (at most 40 characters). '' when unknown or empty.
+ * Callers put it through asData like every other field.
+ */
+export function bookTypeText(type: string | null | undefined, label: string | null | undefined): string {
+  if (type === "other") return oneLine(label, MAX_TYPE_LABEL);
+  return type && Object.hasOwn(BOOK_TYPES, type) ? BOOK_TYPES[type] : "";
+}
 
 export const STRING_LIST = { type: "array", items: { type: "string" } };
 
@@ -57,6 +71,7 @@ export type Outcome = {
   unsourced?: Partial<Record<PositioningField | keyof BriefSuggestions, string[]>>;
   flags?: DriftFlag[];
   titles?: TitleIdea[];
+  competitor?: ImportedCompetitor;
 };
 
 

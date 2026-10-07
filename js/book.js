@@ -211,7 +211,9 @@
       saves[owner] = { state, message, canRetry, at: ++saveSeq };
       renderSaveLine();
     },
-    notFound() { renderNotFound(); }
+    notFound() { renderNotFound(); },
+    /** Open another step, as a sidebar link does (Brief "Open 02 Research"). */
+    go: (n) => go(n)
   };
 
   function renderStep(moveFocus) {

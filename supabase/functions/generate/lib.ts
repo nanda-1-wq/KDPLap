@@ -7,18 +7,21 @@
      lib/limits.ts     stages, models, limits, error codes, CORS, parseInput
      lib/common.ts     small shared helpers (text, prompt data, reply reading)
      lib/context.ts    the positioning context shared by three stages
-     lib/<stage>.ts    one file per stage: prompt and reply
+     lib/<stage>.ts    one file per stage: prompt and reply (competitor_import: Batch C2)
      lib/stages.ts     the stage table, buildRequest, interpretJob
      lib/types.ts      the Store types (re-exported by handler.ts)
    Tests: lib.test.ts, handler*.test.ts, snapshot.test.ts.
 ═══════════════════════════════════════════════════ */
 
 export {
-  ALLOWED_ORIGINS, BODY_BYTES, BRIEF_MAX, CALLS_PER_MINUTE, COPY_MIN_CHARS, corsHeaders, DEFAULT_MONTHLY_LIMIT, ERROR_STATUS, type ErrorCode, type GenerateInput, limitError, MAX_AUTHOR_CHARS, MAX_BIO_CHARS, MAX_BODY_BYTES, MAX_BOOKS, MAX_BSR, MAX_COMPETITORS, MAX_EXAMPLE_CHARS, MAX_FLAG_QUOTE, MAX_FLAG_WHY, MAX_FLAGS, MAX_INSIGHT_CHARS, MAX_INSIGHTS, MAX_KEPT_REASON, MAX_PAGE_CHARS, MAX_PROMPT_BOOKS, MAX_PROMPT_SOURCE_CHARS, MAX_PROMPT_SOURCES, MAX_REVIEW_BOX, MAX_REVIEWS, MAX_SOURCE_BODY, MAX_TITLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, MAX_TOC, MAX_TOKENS, MAX_UNSOURCED, MIN_PAGE_CHARS, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MODELS, monthStartUtc, parseInput, POS_LIST_MAX, POS_TEXT_MAX, POSITIONING_FIELDS, type PositioningField, type Stage, STAGES, TIMEOUT_MS, TITLE_IDEAS_PER_CALL, TITLE_MAX,
+  ALLOWED_ORIGINS, BODY_BYTES, BRIEF_MAX, CALLS_PER_MINUTE, COPY_MIN_CHARS, corsHeaders, DEFAULT_MONTHLY_LIMIT, ERROR_STATUS, type ErrorCode, type GenerateInput, limitError, MAX_AUTHOR_CHARS, MAX_BIO_CHARS, MAX_BODY_BYTES, MAX_BOOKS, MAX_BSR, MAX_COMPETITORS, MAX_EXAMPLE_CHARS, MAX_FLAG_QUOTE, MAX_FLAG_WHY, MAX_FLAGS, MAX_INSIGHT_CHARS, MAX_INSIGHTS, MAX_KEPT_REASON, MAX_PAGE_CHARS, MAX_PROMPT_BOOKS, MAX_PROMPT_SOURCE_CHARS, MAX_PROMPT_SOURCES, MAX_REVIEW_BOX, MAX_REVIEWS, MAX_SOURCE_BODY, MAX_TITLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, MAX_TOC, MAX_TOKENS, MAX_TYPE_LABEL, MAX_UNSOURCED, MAX_IMPORT_REVIEWS, MIN_PAGE_CHARS, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MODELS, monthStartUtc, parseInput, POS_LIST_MAX, POS_TEXT_MAX, POSITIONING_FIELDS, type PositioningField, type Stage, STAGES, TIMEOUT_MS, TITLE_IDEAS_PER_CALL, TITLE_MAX,
 } from "./lib/limits.ts";
 export {
-  asData, numbersIn, type Outcome, readVoice, unsourcedNumbers, withoutFigures, wordCount,
+  asData, BOOK_TYPES, bookTypeText, numbersIn, type Outcome, readVoice, unsourcedNumbers, withoutFigures, wordCount,
 } from "./lib/common.ts";
+export {
+  COMPETITOR_SCHEMA, COMPETITOR_SYSTEM, competitorUserMessage, type ImportedCompetitor, interpretCompetitorImport,
+} from "./lib/competitor_import.ts";
 export {
   BIO_SCHEMA, BIO_SYSTEM, bioUserMessage, hasAnyFact, interpretBio, type PenRow, readFacts,
 } from "./lib/bio.ts";

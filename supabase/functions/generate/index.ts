@@ -37,7 +37,7 @@ const one = (v: unknown): unknown => (Array.isArray(v) ? v[0] ?? null : v ?? nul
 
 // What both positioning stages and title_ideas read about a book.
 const POSITIONING_SELECT = `id,
-  book_briefs ( topic_text, book_type, target_reader, reader_problem, promise_draft, options ),
+  book_briefs ( topic_text, book_type, book_type_label, target_reader, reader_problem, promise_draft, options ),
   pen_names ( niche, voice ),
   research_insights ( loves, hates, gaps ),
   competitors ( title, author, created_at ),
@@ -114,7 +114,7 @@ function openStore(authHeader: string): Store {
       const { data, error } = await asUser
         .from("books")
         .select(`id,
-                 book_briefs ( topic_text, book_type, target_reader, reader_problem, promise_draft ),
+                 book_briefs ( topic_text, book_type, book_type_label, target_reader, reader_problem, promise_draft, options ),
                  pen_names ( niche, voice ),
                  topics ( name, topic_page_books ( position, title, author, reviews, rating, sponsored, included ) )`)
         .eq("id", bookId)
@@ -131,6 +131,13 @@ function openStore(authHeader: string): Store {
         topicName: topic?.name ?? null,
         pageBooks: topic?.topic_page_books ?? [],
       };
+    },
+
+    // The book row only (competitor_import). A book that is not the caller's reads as null (RLS).
+    async getBook(bookId) {
+      const { data, error } = await asUser.from("books").select("id").eq("id", bookId).maybeSingle();
+      if (error) throw error;
+      return data ? { id: data.id as string } : null;
     },
 
     // One read: the Brief and the book's competitors with their pasted reviews.

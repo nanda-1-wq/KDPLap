@@ -27,6 +27,8 @@ export interface Store {
   getPenName(id: string): Promise<PenRow | null>;
   getTopic(id: string): Promise<TopicRow | null>;
   getBriefContext(bookId: string): Promise<BriefContext | null>;
+  /** The book row (id only), through RLS. competitor_import reads nothing else. */
+  getBook(bookId: string): Promise<{ id: string } | null>;
   getReviewContext(bookId: string): Promise<ReviewContext | null>;
   getPositioningContext(bookId: string): Promise<PositioningContext | null>;
   /**

@@ -1,7 +1,7 @@
 /* generate lib: The positioning context shared by positioning_help, drift_check and title_ideas.
    Moved from lib.ts in Batch B1 without changes. lib.ts re-exports the public names. */
 
-import { asData, BOOK_TYPES, obj, readVoice, str } from "./common.ts";
+import { asData, bookTypeText, obj, readVoice, str } from "./common.ts";
 import { MAX_COMPETITORS, MAX_PROMPT_SOURCE_CHARS, MAX_PROMPT_SOURCES, MAX_SOURCE_BODY, POSITIONING_FIELDS, type PositioningField } from "./limits.ts";
 
 /** The saved positioning row, as read through RLS. */
@@ -24,6 +24,7 @@ export type PositioningContext = {
   brief: {
     topic_text: string | null;
     book_type: string | null;
+    book_type_label?: string | null;   // 0015: only with book_type "other"
     target_reader: string | null;
     reader_problem: string | null;
     promise_draft: string | null;
@@ -120,7 +121,7 @@ export function briefAndResearch(ctx: PositioningContext): string[] {
   return [
     "<brief>",
     `<topic>${asData(b.topic_text ?? "")}</topic>`,
-    `<book_type>${asData((b.book_type && BOOK_TYPES[b.book_type]) || "")}</book_type>`,
+    `<book_type>${asData(bookTypeText(b.book_type, b.book_type_label))}</book_type>`,
     `<target_reader>${asData(b.target_reader ?? "")}</target_reader>`,
     `<reader_problem>${asData(b.reader_problem ?? "")}</reader_problem>`,
     `<promise_draft>${asData(b.promise_draft ?? "")}</promise_draft>`,

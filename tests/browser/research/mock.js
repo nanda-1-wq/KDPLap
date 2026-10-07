@@ -1,6 +1,11 @@
 const U = '00000000-0000-4000-8000-000000000001';
 const R1 = 'c1c1c1c1-0000-4000-8000-000000000001';   // 3 reviewed competitors, 1 source, an insights row from before 0014 (no key)
 const R2 = 'c2c2c2c2-0000-4000-8000-000000000002';   // 1 competitor, no source, no insights
+const R3 = 'c3c3c3c3-0000-4000-8000-000000000003';   // C2: insights "From" long titles (up to 300 characters)
+// Real-length Amazon titles (long subtitles, one at the 300 limit).
+const LONG1 = 'Chair Yoga for Seniors Over 60: Gentle Seated Routines for Stiff Joints, Better Balance, and Daily Calm, with 30 Illustrated Poses and a 4-Week Plan';
+const LONG2 = ('Sit and Stretch: The Complete Large Print Guide to Seated Exercise for Older Adults With Arthritis, Limited Mobility, or Recovering From Surgery, Including Breathing, Balance, Strength, and Flexibility Routines You Can Do at Home Without Equipment ' + 'and Without a Class, a Teacher, or a Gym Ever Again!').slice(0, 300);
+const SHORT = 'Sit and Stretch';
 
 // Real-length reviews: several paragraphs (one review per paragraph).
 const LOW = (t) => [
@@ -30,7 +35,12 @@ const setup = async page => {
         sources: [{ id: 's1', kind: 'source', body: 'Adults 65 and older should do balance activities 3 days a week.', citation: 'CDC, Physical Activity Guidelines, 2024', created_at: ago(2) }],
         insights: { loves: [{ text: 'Every pose has a seated version', from: ['Chair Yoga for Seniors'], edited: false }], hates: [{ text: 'Floor poses that older readers cannot do', from: ['Gentle Yoga After 60'], edited: false }], gaps: [{ text: 'A plan that grows week by week', from: ['Sit and Stretch'], edited: false }],
           analyzed_at: ago(1), inputs_key: null, updated_at: ago(1) } },
-      [R2]: { id: R2, current_step: 2, updated_at: ago(2), competitors: [comp(1, 'Chair Yoga for Seniors', { low_reviews: null, high_reviews: null })], sources: [], insights: null }
+      [R2]: { id: R2, current_step: 2, updated_at: ago(2), competitors: [comp(1, 'Chair Yoga for Seniors', { low_reviews: null, high_reviews: null })], sources: [], insights: null },
+      [R3]: { id: R3, current_step: 2, updated_at: ago(2),
+        competitors: [comp(1, LONG1), comp(2, LONG2), comp(3, SHORT)],
+        sources: [],
+        insights: { loves: [{ text: 'Large photos for every pose', from: [LONG1, LONG2, SHORT], edited: false }], hates: [{ text: 'The plan jumps from easy to hard', from: [LONG2], edited: true }], gaps: [],
+          analyzed_at: ago(1), inputs_key: null, updated_at: ago(1) } }
     },
     calls: [], writes: [], gens: []
   };
@@ -138,6 +148,14 @@ const setup = async page => {
           loves: [{ text: 'Every pose has a seated version and a clear photo', from: [t[0], t[1]] }],
           hates: [{ text: 'Floor poses that readers with bad knees cannot do', from: [t[0]] }],
           gaps: [{ text: 'A plan that grows slowly, week by week', from: [t[1], t[2]] }] } });
+      }
+      // C2: __modes.cimp = the competitor to return, cimpCode = an error code, cimpDelay = ms.
+      if (g.stage === 'competitor_import') {
+        if (mode('cimpDelay')) await page.waitForTimeout(mode('cimpDelay'));   // no setTimeout in run-code
+        if (!b) return json(r, 404, { error: 'not_found' });
+        const code = mode('cimpCode');
+        if (code) return json(r, { not_product_page: 422, rate_limited: 429, monthly_limit: 429, bad_request: 400 }[code] || 502, { error: code });
+        return json(r, 200, { stage: 'competitor_import', competitor: mode('cimp') });
       }
       return json(r, 400, { error: 'bad_request' });
     }

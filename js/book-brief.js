@@ -11,9 +11,13 @@
    Length is a range chip OR a custom word target (target_words, 0014),
    never both: the two columns always save together. Chapters: a chip, or
    "Other" with a number from 3 to 30 (0001).
-   "Help me fill" (generate stage brief_help) only makes suggestions: each
-   one waits for Accept or Discard. Nothing is replaced silently. "Accept
-   all" takes every suggestion without a "Verify" flag.
+   Book type: a list key, or "other" with the author's own label
+   (book_type_label, 1 to 40 characters, 0015). The two save together.
+   "Help me fill" (generate stage brief_help) only makes suggestions for the
+   reader fields, stance and stand-out idea: each one waits for Accept or
+   Discard. Nothing is replaced silently. "Accept all" takes every suggestion
+   without a "Verify" flag. Series and references stay manual; "Copy from 02
+   Research" adds the citations of saved sources to References (no AI).
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -22,7 +26,7 @@
 
   const MAX = {
     topic_text: 200, target_reader: 300, reader_problem: 1000, promise_draft: 1000,
-    stance: 500, standout: 500, references: 2000, series_name: 200
+    stance: 500, standout: 500, references: 2000, series_name: 200, book_type_label: 40
   };
   const REQUIRED = [
     ['topic_text', 'Enter a topic to continue.', 'the topic'],
@@ -32,12 +36,17 @@
   const AI_FIELDS = [
     ['target_reader', 'Target reader'],
     ['reader_problem', 'Reader problem'],
-    ['promise_draft', 'Reader promise']
+    ['promise_draft', 'Reader promise'],
+    ['stance', 'Your stance'],
+    ['standout', 'Stand-out idea']
   ];
-  // Same keys as the book_type check (0001) and lib.ts BOOK_TYPES.
+  // Same keys as the book_type check (0015) and generate lib/common.ts BOOK_TYPES. "other" is last.
   const BOOK_TYPES = [
     ['beginner_guide', 'Beginner guide'], ['how_to', 'How-to guide'], ['workbook', 'Workbook'],
-    ['self_help', 'Self-help'], ['cookbook', 'Cookbook']
+    ['self_help', 'Self-help'], ['cookbook', 'Cookbook'], ['health_wellness', 'Health and wellness guide'],
+    ['business_money', 'Business and money guide'], ['parenting_family', 'Parenting and family guide'],
+    ['hobby_craft', 'Hobby and craft guide'], ['reference', 'Reference guide'], ['memoir', 'Memoir or personal story'],
+    ['other', 'Other']
   ];
   const TRIMS = ['5x8', '5.5x8.5', '6x9', '7x10', '8.5x11'];
   // [key, chip text, low words, high words or null]
@@ -65,6 +74,7 @@
   let helpToken = 0;
   let suggestions = {};                        // field → suggested text
   let unsourced = {};                          // field → numbers without a source
+  let refsCopy = { state: 'idle' };            // "Copy from 02 Research": idle | working | done | none | error
 
   /* ── Values ──────────────────────────────── */
 
@@ -78,7 +88,7 @@
     return {
       topic_text: str(br.topic_text), target_reader: str(br.target_reader),
       reader_problem: str(br.reader_problem), promise_draft: str(br.promise_draft),
-      book_type: br.book_type || '', trim_size: br.trim_size || '6x9',
+      book_type: br.book_type || '', book_type_label: str(br.book_type_label), trim_size: br.trim_size || '6x9',
       length_range: br.length_range || '', chapter_count: br.chapter_count || null,
       target_words: br.target_words == null ? '' : String(br.target_words),
       stance: str(o.stance), standout: str(o.standout), references: str(o.references),
@@ -105,6 +115,7 @@
         return o;
       }
       case 'book_type': case 'length_range': case 'pen_name_id': return model[field] || null;
+      case 'book_type_label': return model.book_type === 'other' ? text(field) : null;
       case 'trim_size': case 'chapter_count': return model[field];
       case 'target_words': return model.target_words === '' ? null : Number(model.target_words);
       case 'series_number': return model.series_number === '' ? null : Number(model.series_number);
@@ -354,6 +365,104 @@
     if (input) input.focus();
   }
 
+  /** The "Your book type" field under the select, shown only for "Other". */
+  function renderTypeOther() {
+    const box = els && els.typeOther;
+    if (!box) return;
+    if (model.book_type !== 'other') { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="field">
+        <label for="bf-book_type_label">Your book type</label>
+        <span class="field-hint" id="bf-book_type_label-hint">A short name, for example Gardening guide. Up to ${MAX.book_type_label} characters.</span>
+        <input class="text-input" id="bf-book_type_label" type="text" maxlength="${MAX.book_type_label}" autocomplete="off" aria-describedby="bf-book_type_label-hint" />
+      </div>`;
+    const input = box.querySelector('input');
+    input.value = model.book_type_label;
+    input.addEventListener('input', () => {
+      model.book_type_label = input.value;
+      saver.edit('book_type', 800);
+      saver.edit('book_type_label', 800);   // always together (0015)
+    });
+    input.addEventListener('blur', () => {
+      if (saver.isDirty('book_type_label')) saver.flush();
+    });
+  }
+
+  /* ── Copy from 02 Research (References, no AI) ── */
+
+  function renderRefsCopy() {
+    const box = els && els.refsCopy;
+    if (!box) return;
+    const busy = refsCopy.state === 'working';
+    const btn = `<div><button type="button" class="btn btn-secondary" data-refs-copy-btn${busy ? ' disabled aria-busy="true"' : ''}>${busy ? '<span class="spinner" aria-hidden="true"></span>Copying…' : 'Copy from 02 Research'}</button></div>`;
+    let status = '';
+    if (refsCopy.state === 'done') status = `<p class="field-hint" role="status">${esc(refsCopy.text)}</p>`;
+    else if (refsCopy.state === 'none') {
+      status = `<p class="field-hint" role="status">No sources in 02 Research yet. Add a source with where it comes from.
+        <button type="button" class="link-btn" data-refs-open>Open 02 Research</button></p>`;
+    } else if (refsCopy.state === 'error') {
+      status = `<div class="alert alert-error" role="alert">${ICON.warn(18)}<div><p class="alert-text">We couldn’t load your sources.</p>
+        <button type="button" class="link-btn" data-refs-retry>Try again</button></div></div>`;
+    }
+    box.innerHTML = btn + status;
+  }
+
+  const citations = (n) => `${n} citation${n === 1 ? '' : 's'}`;
+
+  /**
+   * Add the citations of the saved sources to References, one per line at the
+   * end. A citation already on a line of the field (any case) is skipped, and
+   * the author's text is never changed. Only what fits in the limit is added.
+   */
+  async function copyRefs() {
+    if (refsCopy.state === 'working') return;
+    refsCopy = { state: 'working' };
+    renderRefsCopy();
+    let res;
+    try { res = await kdp.listSourceCitations(book.id); } catch (err) { res = { error: err }; }
+    if (res.error) {
+      refsCopy = { state: 'error' };
+      renderRefsCopy();
+      return;
+    }
+    const unique = [];
+    const seen = new Set();
+    (res.data || []).forEach((c) => {
+      const t = c.replace(/\s+/g, ' ').trim();
+      if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); unique.push(t); }
+    });
+    if (!unique.length) {
+      refsCopy = { state: 'none' };
+      renderRefsCopy();
+      return;
+    }
+    const have = new Set(model.references.split('\n').map((l) => l.trim().toLowerCase()).filter(Boolean));
+    let text = model.references.replace(/\s+$/, '');
+    let added = 0, noRoom = 0;
+    unique.forEach((t) => {
+      if (have.has(t.toLowerCase())) return;
+      const next = text.trim() ? `${text}\n${t}` : t;
+      if (next.trim().length > MAX.references) { noRoom++; return; }
+      text = next;
+      added++;
+    });
+    let msg;
+    if (added && noRoom) msg = `Added ${citations(added)}. ${noRoom} did not fit in ${MAX.references.toLocaleString('en-US')} characters.`;
+    else if (added) msg = `Added ${citations(added)} from 02 Research.`;
+    else if (noRoom) msg = `No room: ${citations(noRoom)} did not fit in ${MAX.references.toLocaleString('en-US')} characters.`;
+    else msg = unique.length === 1 ? 'The citation is already in the field.' : `All ${unique.length} citations are already in the field.`;
+    if (added) {
+      model.references = text;
+      const ta = els.root.querySelector('#bf-references');
+      if (ta) ta.value = text;
+      saver.edit('options', 0);
+    }
+    refsCopy = { state: 'done', text: msg };
+    if (!ctx.isActive(1)) return;
+    renderRefsCopy();
+    const b = els.refsCopy.querySelector('[data-refs-copy-btn]');
+    if (b) b.focus();
+  }
+
   function textField({ key, label, required, hint, area, rows = 2 }) {
     const req = required ? ' <span class="field-optional">(required)</span>' : '';
     const hintHtml = hint ? `<span class="field-hint" id="bf-${key}-hint">${hint}</span>` : '';
@@ -408,6 +517,7 @@
               ${BOOK_TYPES.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}
             </select>
           </div>
+          <div data-type-other></div>
         </section>
 
         <section class="panel brief-card" aria-labelledby="bcReader">
@@ -450,6 +560,7 @@
               </div>
             </div>
             ${textField({ key: 'references', label: 'References', hint: 'Books, people, or methods you want to mention. Facts still come from 02 Research.', area: true, rows: 3 })}
+            <div class="help-card" data-refs-copy></div>
           </div>
         </details>
       </div>`;
@@ -460,7 +571,9 @@
       helpArea: root.querySelector('[data-help-area]'),
       pages: root.querySelector('[data-pages]'),
       pen: root.querySelector('[data-pen-field]'),
-      more: root.querySelector('.brief-more')
+      more: root.querySelector('.brief-more'),
+      typeOther: root.querySelector('[data-type-other]'),
+      refsCopy: root.querySelector('[data-refs-copy]')
     };
     root.querySelectorAll('[data-field]').forEach((el) => {
       const k = el.dataset.field;
@@ -468,6 +581,8 @@
     });
     renderOther('chapter_count');
     renderOther('target_words');
+    renderTypeOther();
+    renderRefsCopy();
     els.pages.textContent = pagesHint();
     shownErrors.forEach((k) => showRequired(k));
     renderPen();
@@ -592,7 +707,13 @@
     });
     root.querySelector('#bf-book_type').addEventListener('change', (e) => {
       model.book_type = e.target.value;
+      // A list type clears the "Other" label (0015: a label only with "other").
+      if (model.book_type !== 'other') model.book_type_label = '';
       saver.edit('book_type', 0);
+      saver.edit('book_type_label', 0);   // always together
+      renderTypeOther();
+      const input = model.book_type === 'other' && els.typeOther.querySelector('input');
+      if (input) input.focus();
     });
     root.querySelectorAll('[data-chips]').forEach((group) => {
       const k = group.dataset.chips;
@@ -630,6 +751,10 @@
       if (e.target.closest('[data-accept-all]')) acceptAll();
       else if (e.target.closest('[data-help-stop]')) stopHelp();
       else if (e.target.closest('[data-help-retry]')) runHelp();
+    });
+    els.refsCopy.addEventListener('click', (e) => {
+      if (e.target.closest('[data-refs-copy-btn], [data-refs-retry]')) copyRefs();
+      else if (e.target.closest('[data-refs-open]')) ctx.go(2);
     });
     // On .brief, not root: root is the shared step area and outlives this render.
     root.querySelector('.brief').addEventListener('click', (e) => {
@@ -779,7 +904,10 @@
       if (suggestions[k] && Array.isArray(u[k]) && u[k].length) unsourced[k] = u[k].map(String);
     });
     help = { state: 'done' };
+    // Stance and stand-out live in More options: open it so their suggestions are seen.
+    if (suggestions.stance || suggestions.standout) moreOpen = true;
     if (!ctx.isActive(1)) return;      // shown when the Brief opens again
+    if (moreOpen) els.more.open = true;
     renderHelp();
     AI_FIELDS.forEach(([k]) => renderSuggestion(k));
     const first = AI_FIELDS.find(([k]) => suggestions[k]);
@@ -810,7 +938,7 @@
     input.value = model[k];
     shownErrors.delete(k);
     showRequired(k);
-    saver.edit(k, 0);
+    saver.edit(saveKey(k), 0);
     ctx.setGate();
     afterChoice(k);
     input.focus();
@@ -835,7 +963,7 @@
       els.root.querySelector(`#bf-${k}`).value = model[k];
       shownErrors.delete(k);
       showRequired(k);
-      saver.edit(k, 0);
+      saver.edit(saveKey(k), 0);
       delete suggestions[k];
       delete unsourced[k];
       renderSuggestion(k);

@@ -13,6 +13,11 @@
    Insights are saved by the browser after the AI answers (v1). Each line
    keeps the competitor titles it came from and an "edited" flag. Analyze
    again asks before it replaces edited lines.
+   "From" lines show short titles (about 40 characters); the full title is in
+   a tooltip and read by screen readers.
+   "Import from Amazon page" (generate stage competitor_import) only fills
+   the empty fields of the Add competitor form; nothing is saved until Add
+   competitor.
    Each analysis saves a fingerprint of the competitors it read (0014). When
    the competitors with reviews give another fingerprint now, the panel says
    "Out of date". An analysis from before 0014 has none: nothing is shown.
@@ -29,6 +34,8 @@
   const NEED_REVIEWED = 3;
   const MAX_BSR = 100000000;
   const MAX_REVIEWS = 10000000;
+  const MIN_PAGE = 200, MAX_PAGE = 60000;   // pasted page text, same as generate lib/limits.ts
+  const SHORT_TITLE = 40;                   // "From" titles in the insights
   const LISTS = [
     ['loves', 'READERS LOVE', 'love'],
     ['hates', 'READERS HATE', 'hate'],
@@ -48,7 +55,7 @@
   let lineEdit = null;                 // { list, index, text, error }
   let lineBusy = false;
   let lineError = '';
-  let del = null, copy = null;         // dialogs, built on first use
+  let del = null, copy = null, imp = null;   // dialogs, built on first use
 
   /* ── Values ──────────────────────────────── */
 
@@ -318,8 +325,15 @@
 
   function competitorForm() {
     const title = form.id ? 'EDIT COMPETITOR' : 'ADD COMPETITOR';
+    const head = form.id
+      ? `<span class="chip-label" id="rfHead">${title}</span>`
+      : `<div class="research-card-head">
+          <div><span class="chip-label" id="rfHead">${title}</span></div>
+          <button type="button" class="btn btn-secondary" data-import>Import from Amazon page</button>
+        </div>`;
     return `<form class="research-form" data-form novalidate aria-labelledby="rfHead">
-        <span class="chip-label" id="rfHead">${title}</span>
+        ${head}
+        ${form.importNote ? importNoteHtml(form.importNote) : ''}
         <div class="research-grid">
           ${field({ key: 'title', label: 'Title', required: true })}
           ${field({ key: 'author', label: 'Author' })}
@@ -810,6 +824,188 @@
     announce(`${plural(res.data.length, 'book')} copied from Topic Lab.`);
   }
 
+  /* ── Import from Amazon page (stage competitor_import) ── */
+
+  function buildImport() {
+    const d = document.createElement('dialog');
+    d.className = 'dialog dialog-lg';
+    d.setAttribute('aria-labelledby', 'ciTitle');
+    d.innerHTML = `
+      <form class="dialog-inner" novalidate>
+        <div class="dialog-head">
+          <div>
+            <h2 id="ciTitle">Import from Amazon page</h2>
+            <p>Paste one book’s Amazon page. We fill the form for you. Nothing is saved until you click Add competitor.</p>
+          </div>
+          <button type="button" class="icon-btn" data-close aria-label="Close">${ICON.close}</button>
+        </div>
+        <ol class="import-steps">
+          <li>Open the book’s page on Amazon.</li>
+          <li>Scroll down so the reviews show.</li>
+          <li>Select the whole page with Cmd+A, then copy it with Cmd+C. On Windows, use Ctrl+A and Ctrl+C.</li>
+        </ol>
+        <div class="field">
+          <label for="ciText">Page text</label>
+          <textarea class="text-area import-paste" id="ciText" rows="8" spellcheck="false"
+            placeholder="Paste the page here" aria-describedby="ciCount ciText-error"></textarea>
+          <div class="import-paste-meta">
+            <span class="field-hint" id="ciCount" data-count></span>
+            <span class="field-error" id="ciText-error" hidden></span>
+          </div>
+        </div>
+        <ul class="import-notes">
+          <li>Nothing is fetched from Amazon. Only the text you paste is read.</li>
+          <li>Uses about $0.01 to $0.04 of AI. It counts only if it works.</li>
+        </ul>
+        <p class="import-wait" data-wait role="status" hidden><span class="spinner inline" aria-hidden="true"></span>Reading the page. This can take up to a minute.</p>
+        <div data-msg></div>
+        <div class="dialog-foot">
+          <button type="button" class="btn btn-secondary" data-close>Cancel</button>
+          <button type="submit" class="btn btn-primary" data-confirm>Read page</button>
+        </div>
+      </form>`;
+    document.body.append(d);
+    imp = { d, ta: d.querySelector('#ciText'), count: d.querySelector('[data-count]'), err: d.querySelector('#ciText-error'), wait: d.querySelector('[data-wait]'), msg: d.querySelector('[data-msg]'), btn: d.querySelector('[data-confirm]'), run: 0, busy: false, text: '' };
+    // Cancel works during the call too: the reply is then dropped.
+    const close = () => { imp.run++; setImportBusy(false); d.close(); };
+    d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', close));
+    d.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+    d.addEventListener('close', () => {
+      if (imp.filled) return;
+      const b = active() && els.root.querySelector('[data-import]');
+      if (b) b.focus();
+    });
+    imp.ta.addEventListener('input', () => { imp.text = imp.ta.value; importCount(); importError(''); });
+    d.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); readPage(); });
+  }
+
+  function importCount() {
+    imp.count.textContent = `${num(imp.ta.value.length)} / ${num(MAX_PAGE)} characters`;
+  }
+
+  function importError(text) {
+    if (text) {
+      imp.ta.setAttribute('aria-invalid', 'true');
+      imp.err.innerHTML = ICON.x();
+      imp.err.append(text);
+      imp.err.hidden = false;
+    } else {
+      imp.ta.removeAttribute('aria-invalid');
+      imp.err.hidden = true;
+    }
+  }
+
+  function setImportBusy(on) {
+    imp.busy = on;
+    imp.btn.disabled = on;
+    imp.ta.readOnly = on;
+    imp.wait.hidden = !on;
+    if (on) { imp.btn.setAttribute('aria-busy', 'true'); imp.btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Reading…'; }
+    else { imp.btn.removeAttribute('aria-busy'); imp.btn.textContent = 'Read page'; }
+  }
+
+  function openImport() {
+    if (!form || form.type !== 'competitor' || form.id || form.busy) return;
+    if (!imp) buildImport();
+    imp.filled = false;
+    imp.msg.innerHTML = '';
+    imp.ta.value = imp.text;
+    importError('');
+    setImportBusy(false);
+    importCount();
+    imp.d.showModal();
+    imp.ta.focus();
+  }
+
+  /** [kind, text] for an error code from the import call. */
+  function importMessage(code) {
+    switch (code) {
+      case 'not_product_page': return ['warning', 'This does not look like one book’s Amazon page. Open the book’s page, copy it, and paste it again. This try was not counted.'];
+      case 'bad_request': return ['error', `Paste between ${num(MIN_PAGE)} and ${num(MAX_PAGE)} characters, then try again.`];
+      default: { const [kind, text] = kdpUi.aiMessage(code); return [kind, text]; }
+    }
+  }
+
+  async function readPage() {
+    if (imp.busy) return;
+    const text = imp.ta.value;
+    imp.msg.innerHTML = '';
+    if (text.trim().length < MIN_PAGE) { importError('Paste the whole page. This text is too short to be an Amazon page.'); imp.ta.focus(); return; }
+    if (text.length > MAX_PAGE) { importError(`This is too long. Paste one book’s page only, up to ${num(MAX_PAGE)} characters.`); imp.ta.focus(); return; }
+    importError('');
+    setImportBusy(true);
+    const mine = ++imp.run;
+    let res;
+    try { res = await kdp.generate({ stage: 'competitor_import', bookId: book.id, text }); } catch (err) { res = { error: { code: 'network' } }; }
+    if (mine !== imp.run) return;      // cancelled meanwhile
+    setImportBusy(false);
+    const code = res.error ? res.error.code : null;
+    if (code === 'unauthorized') { location.replace('../login.html'); return; }
+    if (code === 'not_found') { imp.d.close(); ctx.notFound(); return; }
+    const c = !code && res.data && res.data.competitor;
+    if (!c || typeof c.title !== 'string') {
+      const [kind, msg] = importMessage(code || 'ai_unavailable');
+      imp.msg.innerHTML = alertHtml(kind, msg, false);
+      imp.btn.focus();
+      return;
+    }
+    if (!form || form.type !== 'competitor' || form.id) { imp.d.close(); return; }   // the form closed meanwhile
+    imp.filled = true;
+    imp.text = '';
+    imp.d.close();
+    fillFromImport(c);
+  }
+
+  /**
+   * Put the imported values into the EMPTY fields of the open Add form only.
+   * A field with the author's text keeps it. Missing numbers stay empty.
+   * Nothing is saved: the author checks the form, then clicks Add competitor.
+   */
+  function fillFromImport(c) {
+    const v = form.values;
+    const whole = (n) => (Number.isInteger(n) ? String(n) : '');
+    const reviews = (list) => (Array.isArray(list) ? list.filter((r) => typeof r === 'string' && r.trim()).join('\n\n') : '');
+    const got = {
+      title: str(c.title).trim(),
+      author: str(c.author).trim(),
+      bsr: whole(c.bsr),
+      reviews: whole(c.reviews),
+      rating: typeof c.rating === 'number' ? c.rating.toFixed(1) : '',
+      low_reviews: reviews(c.low_reviews),
+      high_reviews: reviews(c.high_reviews)
+    };
+    const NAMES = { author: 'author', bsr: 'BSR', reviews: 'review count', rating: 'rating' };
+    let filled = 0, kept = 0;
+    const notOnPage = [];
+    Object.keys(got).forEach((k) => {
+      // Missing on the page: worth saying only while the field is still empty.
+      if (!got[k]) { if (NAMES[k] && !v[k].trim()) notOnPage.push(NAMES[k]); return; }
+      if (v[k].trim()) { if (v[k].trim() !== got[k]) kept++; return; }
+      v[k] = got[k];
+      delete form.errors[k];
+      filled++;
+    });
+    form.dirty = Object.keys(form.values).some((x) => form.values[x] !== form.saved[x]);
+    const lines = [];
+    if (filled) lines.push(`Filled ${filled} field${filled === 1 ? '' : 's'}.${kept ? ` Kept ${kept} you typed.` : ''} Check each field, then click Add competitor.`);
+    else lines.push(`Nothing new to fill.${kept ? ` Kept ${kept} you typed.` : ''}`);
+    if (notOnPage.length) lines.push(`Not on the page: ${notOnPage.join(', ')}.`);
+    if (!got.low_reviews && !got.high_reviews && !v.low_reviews.trim() && !v.high_reviews.trim()) lines.push('No reviews on the page. Paste them from the reviews page.');
+    const key = bookKey(v.title, v.author);
+    form.importNote = { lines, dup: data.competitors.some((x) => bookKey(x.title, x.author) === key) };
+    renderCompetitors();
+    announce(lines[0]);
+    const t = els.root.querySelector('#rf-title');
+    if (t) t.focus();
+  }
+
+  function importNoteHtml(note) {
+    return `<div class="help-card" data-import-note>
+        ${note.lines.map((l) => `<p class="help-note">${esc(l)}</p>`).join('')}
+        ${note.dup ? `<p class="help-note">${ICON.warn(14)}This book is already in your list.</p>` : ''}
+      </div>`;
+  }
+
   /* ── Research gaps (stage review_insights) ── */
 
   /** [kind, text, retry] for an error code. */
@@ -912,6 +1108,21 @@
     return `<div class="alert alert-${kind}" role="alert">${ICON.warn(18)}<div><p class="alert-text">${esc(text)}</p>${retryLabel ? `<button type="button" class="link-btn" data-analyze-retry>${retryLabel}</button>` : ''}</div></div>`;
   }
 
+  /** A title cut at a word to about SHORT_TITLE characters, with "…". */
+  function shortTitle(t) {
+    if (t.length <= SHORT_TITLE) return t;
+    const cut = t.slice(0, SHORT_TITLE + 1);
+    const at = cut.lastIndexOf(' ');
+    return `${(at > SHORT_TITLE / 2 ? cut.slice(0, at) : t.slice(0, SHORT_TITLE)).replace(/[\s,;:.-]+$/, '')}…`;
+  }
+
+  /** One "From" title: short on screen, the full title in a tooltip and for screen readers. */
+  function fromTitle(t) {
+    const s = shortTitle(str(t));
+    if (s === t) return esc(t);
+    return `<span class="insight-from" title="${esc(t)}"><span aria-hidden="true">${esc(s)}</span><span class="sr-only">${esc(t)}</span></span>`;
+  }
+
   function listBlock(k, label, kind, items) {
     const lines = items.map((x, i) => {
       if (lineEdit && lineEdit.list === k && lineEdit.index === i) {
@@ -925,7 +1136,7 @@
             </div>
           </li>`;
       }
-      const from = (x.from || []).map((t) => esc(t)).join(', ');
+      const from = (x.from || []).map(fromTitle).join(', ');
       const busy = lineBusy || !!lineEdit || analysis.state === 'working' ? ' disabled' : '';
       return `<li class="insight">
           <span class="insight-icon is-${kind}">${ICONS[kind]}</span>
@@ -1122,6 +1333,7 @@
       else if ('addSrc' in d) openSource(null, 'add');
       else if ('editSrc' in d) openSource(data.sources.find((s) => s.id === d.editSrc), 'edit');
       else if ('copy' in d) openCopy();
+      else if ('import' in d) openImport();
       else if ('formCancel' in d) cancelForm();
       else if ('formDelete' in d) openDelete();
       else if ('kind' in d) setKind(d.kind);
