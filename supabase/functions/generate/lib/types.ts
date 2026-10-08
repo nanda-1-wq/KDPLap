@@ -9,6 +9,7 @@ import type { ReviewContext } from "./review_insights.ts";
 import type { PositioningContext } from "./context.ts";
 import type { DriftFlag } from "./drift_check.ts";
 import type { TitleContext, TitleIdea } from "./title_ideas.ts";
+import type { OutlineContext, OutlineDraft } from "./outline_ideas.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -39,6 +40,13 @@ export interface Store {
   getTitleContext(bookId: string): Promise<TitleContext | null>;
   /** Insert title options as the user (RLS). 0011 caps them at 40 per book: that error has code "options_full". */
   saveTitleOptions(bookId: string, ideas: TitleIdea[]): Promise<SavedTitleOption[]>;
+  getOutlineContext(bookId: string): Promise<OutlineContext | null>;
+  /**
+   * Replace the book's outline as the user (RLS), one transaction (0016
+   * replace_outline). Returns the saved chapters with their sections, in
+   * order. Refusals throw { code: "has_writing" | "positioning_not_locked" }.
+   */
+  replaceOutline(bookId: string, outline: OutlineDraft): Promise<unknown[]>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;

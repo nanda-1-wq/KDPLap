@@ -133,23 +133,27 @@ window.kdp = {
    * Also the counts step 02 needs for its done mark: all competitors and the
    * research rows of kind 'source' (personal notes do not count), and the
    * step 03 positioning row (null before the first save), and the step 04
-   * title fields.
+   * title fields. Step 05: the outline approval, how many chapters there are
+   * and how many are marked "Needs review" (unlock of 03).
    * data is null when the id is not the user's (RLS).
    */
   async getBook(id) {
     return window.sb
       .from('books')
       .select(`id, title, subtitle, status, current_step, updated_at, topic_id, pen_name_id, series_name, series_number,
-               title_needs_review, title_examples,
+               title_needs_review, title_examples, outline_approved_at,
                pen_names ( id, name, voice ),
                topics ( id, name, checks_passed ),
                book_briefs ( topic_text, target_reader, reader_problem, promise_draft, book_type, book_type_label,
                              trim_size, length_range, target_words, chapter_count, options, updated_at ),
                competitors ( count ),
                real_sources:research_sources ( count ),
+               chapters ( count ),
+               review_chapters:chapters ( count ),
                positioning ( ${POSITIONING_COLS} )`)
       .eq('id', id)
       .eq('real_sources.kind', 'source')
+      .eq('review_chapters.needs_review', true)
       .maybeSingle();
   },
 
@@ -547,6 +551,77 @@ window.kdp = {
     return oneRow(data, error, 'Book not found.');
   },
 
+  /* ── Outline (step 05) ────────────────────────── */
+
+  /**
+   * The book's outline: chapters in order (Introduction first, Conclusion
+   * last), each with its sections in order. One call (migration 0016
+   * outline_json, under RLS). [] before the first chapter.
+   */
+  async getOutline(bookId) {
+    const { data, error } = await window.sb.rpc('outline_json', { p_book_id: bookId });
+    return { data: error ? null : (data || []), error };
+  },
+
+  /** Writes chapter fields (title, objective, include_examples, include_exercise). 0 rows is an error. */
+  async updateChapter(id, fields) {
+    const { data, error } = await window.sb
+      .from('chapters')
+      .update(fields)
+      .eq('id', id)
+      .select('id, updated_at');
+    return oneRow(data, error, 'Chapter not found.');
+  },
+
+  /** Writes section fields (title, word_target). 0 rows is an error. */
+  async updateSection(id, fields) {
+    const { data, error } = await window.sb
+      .from('sections')
+      .update(fields)
+      .eq('id', id)
+      .select('id, updated_at');
+    return oneRow(data, error, 'Section not found.');
+  },
+
+  /**
+   * Adds an untitled chapter with one section before the Conclusion (0016;
+   * on an empty book also the Introduction and the Conclusion). Returns the
+   * new chapter id. error.message 'outline_full' = 30 chapters.
+   */
+  async addChapter(bookId) {
+    return window.sb.rpc('add_chapter', { p_book_id: bookId });
+  },
+
+  /** Adds an empty section at the end of a chapter. error.message 'sections_full' = 12 already. */
+  async addSection(chapterId, position) {
+    const { data, error } = await window.sb
+      .from('sections')
+      .insert({ chapter_id: chapterId, position })
+      .select('id, position, title, word_target, status, needs_review, current_version_id');
+    return oneRow(data, error, 'Chapter not found.');
+  },
+
+  /** Deletes a chapter and its sections. error.message 'has_writing' when a section has writing. */
+  async deleteChapter(id) {
+    const { error, count } = await window.sb.from('chapters').delete({ count: 'exact' }).eq('id', id);
+    return counted(error, count, 'Chapter not found.');
+  },
+
+  /** Deletes one section. error.message 'has_writing' when it has writing. */
+  async deleteSection(id) {
+    const { error, count } = await window.sb.from('sections').delete({ count: 'exact' }).eq('id', id);
+    return counted(error, count, 'Section not found.');
+  },
+
+  /**
+   * Saves the order of the chapters (ids of kind 'chapter', in the new
+   * order). The Introduction stays first, the Conclusion last (0016).
+   * error.message 'outline_changed' when the chapters changed meanwhile.
+   */
+  async reorderChapters(bookId, ids) {
+    return window.sb.rpc('reorder_chapters', { p_book_id: bookId, p_ids: ids });
+  },
+
   /** The Research gaps (step 02 insights) for "Copy gaps from Research". [] before an analysis. */
   async getResearchGaps(bookId) {
     const { data, error } = await window.sb
@@ -731,12 +806,13 @@ window.kdp = {
    * (not_enough_facts, monthly_limit, rate_limited, ai_unavailable, ai_stopped,
    * ai_declined, not_amazon_page, not_enough_books, nothing_to_check,
    * positioning_locked, positioning_changed, positioning_not_locked,
-   * options_full, unauthorized, not_found,
+   * options_full, has_writing, unauthorized, not_found,
    * bad_request, server_error) or 'network' when the function could not be reached.
    * Input: { stage: 'bio', penNameId }, { stage: 'amazon_import', topicId, text },
    * { stage: 'brief_help', bookId }, { stage: 'review_insights', bookId },
    * { stage: 'positioning_help', bookId[, field] }, { stage: 'drift_check', bookId }
-   * or { stage: 'title_ideas', bookId } (the server saves the options and returns them).
+   * or { stage: 'title_ideas', bookId } (the server saves the options and returns them),
+   * or { stage: 'outline_ideas', bookId, sectionsPerChapter } (the server saves the outline and returns it).
    */
   async generate(input) {
     let res;

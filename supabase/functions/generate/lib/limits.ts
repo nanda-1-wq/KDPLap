@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -21,17 +21,18 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   drift_check: MODELS.sonnet,
   title_ideas: MODELS.sonnet,
   competitor_import: MODELS.sonnet,
+  outline_ideas: MODELS.sonnet,
 };
 
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -92,6 +93,22 @@ export const MAX_TITLE_REASON = 300;
 export const MAX_TITLE_KEYWORDS = { items: 5, chars: 60 } as const;
 export const MAX_UNSOURCED = 10;
 
+// Outline (step 05): limits (same as js/book-outline.js and migration 0016).
+// 30 chapters (as the Brief's chapter count, 0001), 12 sections each; the
+// Introduction and the Conclusion hold one section with their words.
+export const OUTLINE_MAX = { chapters: 30, sections: 12, chapterTitle: 150, objective: 300, sectionTitle: 150, sectionWords: 10000 } as const;
+// "Sections per chapter" in the Generate dialog (owner, E9).
+export const SECTIONS_PER_CHAPTER = { min: 1, max: 6, default: 3 } as const;
+// Competitor tables of contents in an outline prompt, all together (each is at most MAX_TOC).
+export const MAX_PROMPT_TOC_CHARS = 12_000;
+// Brief length ranges in words (same keys as js/book-brief.js and 0001; js/word-budget.js has the same numbers).
+export const LENGTH_RANGES: Record<string, readonly [number, number | null]> = {
+  "5-8k": [5000, 8000], "8-12k": [8000, 12000], "12-20k": [12000, 20000], "20-30k": [20000, 30000], "30k+": [30000, null],
+};
+// With no length in the Brief the outline aims here, and with no chapter count the AI picks 6 to 10.
+export const DEFAULT_OUTLINE_WORDS = [8000, 12000] as const;
+export const DEFAULT_CHAPTERS = [6, 10] as const;
+
 /* ── Error codes (the UI maps these to messages) ── */
 
 export const ERROR_STATUS = {
@@ -108,6 +125,7 @@ export const ERROR_STATUS = {
   positioning_changed: 409,
   positioning_not_locked: 409,
   options_full: 409,
+  has_writing: 409,
   monthly_limit: 429,
   rate_limited: 429,
   server_error: 500,
@@ -151,7 +169,8 @@ export type GenerateInput =
   | { stage: "positioning_help"; bookId: string; field: PositioningField | null }
   | { stage: "drift_check"; bookId: string }
   | { stage: "title_ideas"; bookId: string }
-  | { stage: "competitor_import"; bookId: string; text: string };
+  | { stage: "competitor_import"; bookId: string; text: string }
+  | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number };
 
 const sameKeys = (o: Record<string, unknown>, want: string[]) =>
   JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...want].sort());
@@ -167,6 +186,7 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *   drift_check:     { stage, bookId }             at most 2 KB
  *   title_ideas:     { stage, bookId }             at most 2 KB
  *   competitor_import: { stage, bookId, text }     at most 256 KB, text 200 to 60,000 characters
+ *   outline_ideas:   { stage, bookId, sectionsPerChapter }   at most 2 KB, a whole number from 1 to 6
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -192,6 +212,14 @@ export function parseInput(raw: string): GenerateInput | null {
     if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
     if (hasField && (typeof o.field !== "string" || !(POSITIONING_FIELDS as readonly string[]).includes(o.field))) return null;
     return { stage, bookId: o.bookId.toLowerCase(), field: hasField ? o.field as PositioningField : null };
+  }
+
+  if (stage === "outline_ideas") {
+    if (!sameKeys(o, ["stage", "bookId", "sectionsPerChapter"])) return null;
+    if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
+    const n = o.sectionsPerChapter;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < SECTIONS_PER_CHAPTER.min || n > SECTIONS_PER_CHAPTER.max) return null;
+    return { stage, bookId: o.bookId.toLowerCase(), sectionsPerChapter: n };
   }
 
   if (stage === "brief_help" || stage === "review_insights" || stage === "drift_check" || stage === "title_ideas") {

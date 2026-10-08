@@ -9,20 +9,24 @@
    POST { stage: "positioning_help", bookId[, field] } → { stage, suggestions, unsourced }
    POST { stage: "drift_check", bookId }        → { stage, flags, drift_checked_at, updated_at }
    POST { stage: "title_ideas", bookId }        → { stage, options }   (the saved title_options rows)
+   POST { stage: "competitor_import", bookId, text } → { stage, competitor }
+   POST { stage: "outline_ideas", bookId, sectionsPerChapter } → { stage, chapters, rescaled, target, aiPickedChapters }
+                                                  (chapters = the saved outline, as replace_outline returns it)
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
    SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
 
    Reads use a client built from the caller's Authorization header, so
-   RLS applies as that user, and so does the title options insert. Only the
+   RLS applies as that user, and so do the title options insert and the
+   outline save (replace_outline, 0016). Only the
    ai_usage insert and the drift check save use the service role; the save
    filters by the caller's user id.
 ═══════════════════════════════════════════════════ */
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow } from "./lib.ts";
+import type { BriefContext, Competitor, OutlineContext, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -206,6 +210,38 @@ function openStore(authHeader: string): Store {
         .select("drift_checked_at, updated_at");
       if (error) throw error;
       return data.length ? data[0] as { drift_checked_at: string; updated_at: string } : null;
+    },
+
+    // The positioning read, plus what the outline needs: the book title, the
+    // Brief's length and chapter count, the competitors' tables of contents
+    // (a second, aliased embed) and whether any section has a version.
+    async getOutlineContext(bookId) {
+      const data = await readBook(bookId, `${POSITIONING_SELECT}, title, subtitle,
+        plan:book_briefs ( length_range, target_words, chapter_count ),
+        tocs:competitors ( title, toc, created_at ),
+        chapters ( sections ( section_versions!section_versions_section_id_fkey ( count ) ) )`);
+      const ctx = data && positioningContext(data);
+      if (!ctx) return null;
+      const plan = one(data.plan) as OutlineContext["plan"] | null;
+      // deno-lint-ignore no-explicit-any
+      const versions = (data.chapters ?? []).flatMap((c: any) => c.sections ?? []).reduce((n: number, s: any) => n + (s.section_versions?.[0]?.count ?? 0), 0);
+      return {
+        ...ctx,
+        book: { title: data.title ?? null, subtitle: data.subtitle ?? null },
+        plan: plan ?? { length_range: null, target_words: null, chapter_count: null },
+        tocs: (data.tocs ?? []) as OutlineContext["tocs"],
+        hasWriting: versions > 0,
+      };
+    },
+
+    // As the user (RLS), one transaction (0016). The function raises
+    // "has_writing" or "positioning_not_locked" (P0001) when it refuses.
+    async replaceOutline(bookId, outline) {
+      const { data, error } = await asUser.rpc("replace_outline", { p_book_id: bookId, p_outline: outline });
+      if (error) {
+        throw error.message === "has_writing" || error.message === "positioning_not_locked" ? { code: error.message } : error;
+      }
+      return (data ?? []) as unknown[];
     },
 
     async getMonthlyLimit() {

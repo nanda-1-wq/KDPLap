@@ -4,6 +4,7 @@
 import { type PageBook } from "./amazon_import.ts";
 import { type BriefSuggestions } from "./brief_help.ts";
 import { type ImportedCompetitor } from "./competitor_import.ts";
+import { type OutlineDraft } from "./outline_ideas.ts";
 import { type DriftFlag } from "./drift_check.ts";
 import { type ErrorCode, MAX_TYPE_LABEL, type PositioningField } from "./limits.ts";
 import { type PositioningSuggestions } from "./positioning_help.ts";
@@ -72,6 +73,8 @@ export type Outcome = {
   flags?: DriftFlag[];
   titles?: TitleIdea[];
   competitor?: ImportedCompetitor;
+  outline?: OutlineDraft;
+  rescaled?: boolean;   // outline_ideas: the words were scaled to the target
 };
 
 

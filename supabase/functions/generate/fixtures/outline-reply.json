@@ -1,0 +1,78 @@
+{
+  "intro_words": 1000,
+  "chapters": [
+    {
+      "title": "Why Chair Yoga Works After 60",
+      "objective": "Reader can explain why seated yoga is safe for stiff joints",
+      "sections": [
+        { "title": "What changes in our joints after 60", "words": 400 },
+        { "title": "Why a chair makes yoga safer", "words": 350 },
+        { "title": "What 15 minutes a day can do", "words": 350 }
+      ]
+    },
+    {
+      "title": "Setting Up: Your Chair, Space, and Safety Checks",
+      "objective": "Reader can set up a safe spot in under 5 minutes",
+      "sections": [
+        { "title": "Choosing a sturdy chair with no wheels", "words": 350 },
+        { "title": "Clearing a safe space at home", "words": 300 },
+        { "title": "Five safety checks before every session", "words": 350 }
+      ]
+    },
+    {
+      "title": "Breathing and Posture Basics",
+      "objective": "Reader can sit tall and breathe with each move",
+      "sections": [
+        { "title": "Sitting tall without strain", "words": 400 },
+        { "title": "Breathing in time with a move", "words": 400 },
+        { "title": "A two-minute check-in to start", "words": 300 }
+      ]
+    },
+    {
+      "title": "Upper Body: Neck, Shoulders, and Arms",
+      "objective": "Reader can do 6 upper-body moves, none overhead",
+      "sections": [
+        { "title": "Gentle neck turns and tilts", "words": 450 },
+        { "title": "Shoulder rolls and seated wings", "words": 450 },
+        { "title": "Arm moves that stay below the shoulders", "words": 500 }
+      ]
+    },
+    {
+      "title": "Lower Body: Hips, Knees, and Ankles",
+      "objective": "Reader can do 6 lower-body moves without pain",
+      "sections": [
+        { "title": "Seated hip openers", "words": 450 },
+        { "title": "Knee lifts and slow leg extensions", "words": 500 },
+        { "title": "Ankle circles and toe taps", "words": 450 }
+      ]
+    },
+    {
+      "title": "Breathing for Calm and Better Sleep",
+      "objective": "Reader can use 3 breathing patterns before bed",
+      "sections": [
+        { "title": "The long out-breath", "words": 350 },
+        { "title": "Box breathing in a chair", "words": 350 },
+        { "title": "A wind-down routine for the evening", "words": 300 }
+      ]
+    },
+    {
+      "title": "Your 4-Week Plan: From 5 to 15 Minutes",
+      "objective": "Reader can follow the plan day by day",
+      "sections": [
+        { "title": "Week 1 and 2: five gentle minutes", "words": 500 },
+        { "title": "Week 3: ten minutes with new moves", "words": 500 },
+        { "title": "Week 4: your full 15-minute routine", "words": 500 }
+      ]
+    },
+    {
+      "title": "Staying With It",
+      "objective": "",
+      "sections": [
+        { "title": "What to do on a stiff or tired day", "words": 300 },
+        { "title": "Tracking how you feel each week", "words": 300 },
+        { "title": "Moving with a friend or a group", "words": 300 }
+      ]
+    }
+  ],
+  "conclusion_words": 700
+}

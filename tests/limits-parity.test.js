@@ -138,3 +138,43 @@ Deno.test("Brief chapters 3 to 30 and custom word target 2000 to 150000: browser
   assertEquals(pick("chapter_count"), one(M("0001_v1_data_model.sql"), String.raw`chapter_count\s+smallint check \(chapter_count between (\d+) and (\d+)\)`));
   assertEquals(pick("target_words"), one(M("0014_brief_target_and_insights_key.sql"), String.raw`target_words between (\d+) and (\d+)`));
 });
+
+Deno.test("outline limits: browser, server and 0016", () => {
+  const OUT = "js/book-outline.js", f = M("0016_outline_rules.sql");
+  assertEquals(jsConst(OUT, "MAX"), { chapterTitle: L.OUTLINE_MAX.chapterTitle, objective: L.OUTLINE_MAX.objective, sectionTitle: L.OUTLINE_MAX.sectionTitle, sectionWords: L.OUTLINE_MAX.sectionWords });
+  assertEquals([jsConst(OUT, "MAX_CHAPTERS"), jsConst(OUT, "MAX_SECTIONS")], [L.OUTLINE_MAX.chapters, L.OUTLINE_MAX.sections]);
+  assertEquals(jsConst(OUT, "PER_CHAPTER"), { ...L.SECTIONS_PER_CHAPTER });
+  assertEquals(one(f, String.raw`chapters_title_length_check\s+check \(title is null or \(char_length\(title\) <= (\d+)`), L.OUTLINE_MAX.chapterTitle);
+  assertEquals(one(f, String.raw`chapters_objective_length_check\s+check \(objective is null or \(char_length\(objective\) <= (\d+)`), L.OUTLINE_MAX.objective);
+  assertEquals(one(f, String.raw`sections_title_length_check\s+check \(title is null or \(char_length\(title\) <= (\d+)`), L.OUTLINE_MAX.sectionTitle);
+  assertEquals(one(f, String.raw`word_target is null or word_target <= (\d+)`), L.OUTLINE_MAX.sectionWords);
+  assertEquals(one(f, String.raw`c\.kind = 'chapter' and c\.id <> new\.id\) >= (\d+)`), L.OUTLINE_MAX.chapters);
+  assertEquals(one(f, String.raw`v_cap := case when v_kind = 'chapter' then (\d+) else 1 end`), L.OUTLINE_MAX.sections);
+  assertEquals(one(f, String.raw`if v_n not between 1 and (\d+)`), L.OUTLINE_MAX.chapters);
+  assertEquals(one(f, String.raw`jsonb_array_length\(e -> 'sections'\) not between 1 and (\d+)`), L.OUTLINE_MAX.sections);
+  assertEquals(one(f, String.raw`text_items_ok\(unsourced, (\d+), (\d+)\)`), [L.MAX_UNSOURCED, 20]);
+  // 30 chapters = the Brief's chapter count range (0001).
+  assertEquals(one(M("0001_v1_data_model.sql"), String.raw`chapter_count\s+smallint check \(chapter_count between \d+ and (\d+)\)`), L.OUTLINE_MAX.chapters);
+});
+
+Deno.test("Brief length ranges: one list in the browser, the server and 0001", async () => {
+  await import("../js/word-budget.js");
+  const W = globalThis.kdpWords;
+  assertEquals(JSON.parse(JSON.stringify(W.RANGES)), JSON.parse(JSON.stringify(L.LENGTH_RANGES)));
+  const brief = read(BRIEF).match(/const LENGTHS = \[([\s\S]*?)\];/);
+  if (!brief) throw new Error(`${BRIEF}: no LENGTHS`);
+  assertEquals([...brief[1].matchAll(/\['([^']+)', '[^']+'\]/g)].map((m) => m[1]), Object.keys(L.LENGTH_RANGES));
+  const sql = read(M("0001_v1_data_model.sql")).match(/check \(length_range in \(([^)]*)\)\)/);
+  assertEquals([...sql[1].matchAll(/'([^']+)'/g)].map((m) => m[1]), Object.keys(L.LENGTH_RANGES));
+});
+
+Deno.test("pages: one helper, about 250 words a page, used by the Brief and the Outline (owner, E9)", async () => {
+  await import("../js/word-budget.js");
+  assertEquals(globalThis.kdpWords.WORDS_PER_PAGE, 250);
+  assertEquals(one("js/word-budget.js", String.raw`const WORDS_PER_PAGE = (\d+);`), 250);
+  for (const f of [BRIEF, "js/book-outline.js"]) {
+    const src = read(f);
+    assertEquals(/kdpWords\.pages\(|W\.pages\(/.test(src), true, `${f} uses the shared helper`);
+    assertEquals(/perPage|words a page|\b133\b/.test(src), false, `${f} has no page math of its own`);
+  }
+});

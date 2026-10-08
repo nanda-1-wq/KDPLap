@@ -7,6 +7,7 @@ import * as L from "./lib.ts";
 import {
   BOOK_ID, briefCtx, cimp, cimpReply, comp, dc, dcReply, draft, good, help, helpReply, IDEA, imp, importReply, ins, insReply,
   LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, PRODUCT, PRODUCT_OUT, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
+  OUTLINE_OUT, oid, outlineCtx, outlineReply,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -21,6 +22,8 @@ const jobs: [string, L.Job][] = [
   ["drift_check", { stage: "drift_check", ctx: posCtx() }],
   ["title_ideas", { stage: "title_ideas", ctx: titleCtx(), want: 10 }],
   ["competitor_import", { stage: "competitor_import", text: PRODUCT }],
+  ["outline_ideas", { stage: "outline_ideas", ctx: outlineCtx(), per: 3, target: L.outlineTarget(outlineCtx().plan), chapters: 8 }],
+  ["outline_ideas (AI picks, 1 section)", { stage: "outline_ideas", ctx: outlineCtx({ plan: { length_range: null, target_words: null, chapter_count: null } }), per: 1, target: L.outlineTarget({ length_range: null, target_words: null, chapter_count: null }), chapters: null }],
 ];
 
 Deno.test("snapshot: buildRequest for every stage", async (t) => {
@@ -55,6 +58,8 @@ async function run(s: Setup, req: Request) {
       usage: f.logged,
       driftSaves: f.saves,
       titleSaves: f.titleSaves,
+      // E9.1: only when there is one, so the older snapshots stay as they were.
+      ...(f.outlineSaves.length ? { outlineSaves: f.outlineSaves } : {}),
       provider: await Promise.all(f.calls.map(async (c) => ({
         url: c.url,
         headers: c.init.headers,
@@ -173,6 +178,18 @@ const cases: [string, Setup, () => Request][] = [
   ["competitor_import not visible", { book: null }, () => post(cimp)],
   ["competitor_import text too short", {}, () => post({ ...cimp, text: "too short" })],
   ["competitor_import max_tokens", { provider: reply("max_tokens", '{"is_product_page":true,"ti') }, () => post(cimp)],
+
+  // outline_ideas (E9.1)
+  ["outline_ideas success", { provider: outlineReply() }, () => post(oid)],
+  ["outline_ideas rescaled", { outline: outlineCtx({ plan: { length_range: null, target_words: 15000, chapter_count: 8 } }), provider: outlineReply() }, () => post(oid)],
+  ["outline_ideas not locked", { outline: outlineCtx({ positioning: posRow() }) }, () => post(oid)],
+  ["outline_ideas has writing", { outline: outlineCtx({ hasWriting: true }) }, () => post(oid)],
+  ["outline_ideas not visible", { outline: null }, () => post(oid)],
+  ["outline_ideas bad sections per chapter", {}, () => post({ ...oid, sectionsPerChapter: 7 })],
+  ["outline_ideas wrong chapter count", { provider: outlineReply({ ...OUTLINE_OUT, chapters: OUTLINE_OUT.chapters.slice(0, 7) }) }, () => post(oid)],
+  ["outline_ideas save has writing", { provider: outlineReply(), outlineSaveError: { code: "has_writing" } }, () => post(oid)],
+  ["outline_ideas save fails", { provider: outlineReply(), outlineSaveError: { code: "22023" } }, () => post(oid)],
+  ["outline_ideas max_tokens", { provider: reply("max_tokens", '{"intro_words":1000,"chapters":[{"ti') }, () => post(oid)],
 ];
 
 Deno.test("snapshot: replies and errors for every stage", async (t) => {

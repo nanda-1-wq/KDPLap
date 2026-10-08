@@ -1,7 +1,7 @@
 /* Shared fixtures and fakes for the generate tests (handler.*.test.ts, snapshot.test.ts). */
 import { assert } from "jsr:@std/assert@1";
 import { type DriftSave, makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, PenRow, PositioningContext, PositioningRow, ReviewContext, TitleContext, TitleIdea, TopicRow } from "./lib.ts";
+import type { BriefContext, Competitor, OutlineContext, OutlineDraft, PenRow, PositioningContext, PositioningRow, ReviewContext, TitleContext, TitleIdea, TopicRow } from "./lib.ts";
 export const ID = "3f1c2a9e-8b7d-4c6e-9a5b-1d2e3f4a5b6c";
 export const USER = "11111111-2222-4333-8444-555555555555";
 export const ORIGIN = "http://127.0.0.1:5500";
@@ -79,6 +79,26 @@ export const titleCtx = (extra: Partial<TitleContext> = {}): TitleContext => ({
   options: [],
   ...extra,
 });
+/** Real tables of contents of three competitor books (step 02 Research). */
+export const TOCS = ["toc-gentle-chair-yoga.txt", "toc-seated-strength.txt", "toc-yoga-for-stiff-joints.txt"]
+  .map((f) => Deno.readTextFileSync(new URL(`./fixtures/${f}`, import.meta.url)));
+export const outlineCtx = (extra: Partial<OutlineContext> = {}): OutlineContext => ({
+  ...posCtx(LOCKED),
+  book: { title: "Chair Yoga for Seniors Over 60", subtitle: "Gentle 15-Minute Routines to Improve Balance, Flexibility, and Confidence at Home" },
+  plan: { length_range: "8-12k", target_words: null, chapter_count: 8 },
+  tocs: [
+    { title: "Gentle Chair Yoga for Beginners", toc: TOCS[0], created_at: "2026-09-30T09:00:00Z" },
+    { title: "Seated Strength After 50", toc: TOCS[1], created_at: "2026-09-30T09:05:00Z" },
+    { title: "Yoga for Stiff Joints", toc: TOCS[2], created_at: "2026-09-30T09:10:00Z" },
+  ],
+  hasWriting: false,
+  ...extra,
+});
+/** A real-length outline_ideas reply: 8 chapters of 3 sections, 11,100 words in all (design 20). */
+export const OUTLINE_OUT = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/outline-reply.json", import.meta.url)));
+export const outlineReply = (out: unknown = OUTLINE_OUT) => () => Promise.resolve(anthropic("end_turn", out));
+export const oid = { stage: "outline_ideas", bookId: BOOK_ID, sectionsPerChapter: 3 };
+
 export const PRODUCT = Deno.readTextFileSync(new URL("./fixtures/amazon-product1.txt", import.meta.url));
 export const PAGE = Deno.readTextFileSync(new URL("./fixtures/amazon-page1.txt", import.meta.url));
 export const EXPECTED = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/amazon-page1.expected.json", import.meta.url)));
@@ -95,6 +115,8 @@ export type Setup = {
   saveThrows?: boolean;
   title?: TitleContext | null;
   titleSaveError?: { code: string };
+  outline?: OutlineContext | null;
+  outlineSaveError?: { code: string };
   limit?: number | null;
   monthTokens?: number;
   recent?: number;
@@ -108,6 +130,7 @@ export function setup(s: Setup = {}) {
   const logged: UsageRow[] = [];
   const saves: DriftSave[] = [];
   const titleSaves: TitleIdea[][] = [];
+  const outlineSaves: OutlineDraft[] = [];
   const calls: { url: string; init: RequestInit }[] = [];
   const store: Store = {
     getUserId: () => Promise.resolve(s.userId === undefined ? USER : s.userId),
@@ -128,6 +151,20 @@ export function setup(s: Setup = {}) {
       if (s.titleSaveError) return Promise.reject(s.titleSaveError);
       return Promise.resolve(ideas.map((t, i): SavedTitleOption => ({ ...t, id: `0000000${i}-0000-4000-8000-000000000000`, shortlisted: false, created_at: "2026-10-01T10:00:00Z" })));
     },
+    getOutlineContext: (id) => Promise.resolve(s.outline === undefined ? (id === BOOK_ID ? outlineCtx() : null) : s.outline),
+    replaceOutline: (_id, outline) => {
+      outlineSaves.push(outline);
+      if (s.outlineSaveError) return Promise.reject(s.outlineSaveError);
+      // What replace_outline returns: Introduction, the chapters, the Conclusion, with ids.
+      const sec = (title: string | null, words: number, i: number, j: number) => ({ id: `5${i}${j}`, position: j + 1, title, word_target: words, status: "not_started", needs_review: false, current_version_id: null });
+      const row = (i: number, kind: string, title: string | null, objective: string | null, unsourced: string[], sections: unknown[]) =>
+        ({ id: `c${i}`, position: i, kind, title, objective, include_examples: true, include_exercise: true, needs_review: false, unsourced, sections });
+      return Promise.resolve([
+        row(0, "intro", null, null, [], [sec(null, outline.intro_words, 0, 0)]),
+        ...outline.chapters.map((c, i) => row(i + 1, "chapter", c.title, c.objective, c.unsourced, c.sections.map((x, j) => sec(x.title, x.words, i + 1, j)))),
+        row(outline.chapters.length + 1, "conclusion", null, null, [], [sec(null, outline.conclusion_words, 99, 0)]),
+      ]);
+    },
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),
     sumCountedTokensSince: () => Promise.resolve(s.monthTokens ?? 0),
     countCallsSince: () => Promise.resolve(s.recent ?? 0),
@@ -143,7 +180,7 @@ export function setup(s: Setup = {}) {
     }) as typeof fetch,
     now: () => new Date("2026-09-29T12:00:00Z"),
   });
-  return { handle, logged, calls, saves, titleSaves };
+  return { handle, logged, calls, saves, titleSaves, outlineSaves };
 }
 
 export function anthropic(stop: string, out: unknown, status = 200) {

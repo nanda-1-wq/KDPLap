@@ -86,7 +86,7 @@ Deno.test("a failed usage log still returns the bio", quiet(async () => {
     env: () => FAKE_KEY,
     openStore: () => ({ getUserId: async () => USER, getPenName: async () => pen, getTopic: async () => topic, getBriefContext: async () => briefCtx, getBook: async () => null, getReviewContext: async () => reviewCtx,
       getPositioningContext: async () => posCtx(), saveDriftFlags: async () => null,
-      getTitleContext: async () => null, saveTitleOptions: async () => [], getMonthlyLimit: async () => null,
+      getTitleContext: async () => null, saveTitleOptions: async () => [], getOutlineContext: async () => null, replaceOutline: async () => [], getMonthlyLimit: async () => null,
       sumCountedTokensSince: async () => 0, countCallsSince: async () => 0, logUsage: () => Promise.reject({ code: "42501" }) }),
     fetchFn: (() => Promise.resolve(anthropic("end_turn", { result: "ok", bio: "Hi there.", missing: "" }))) as typeof fetch,
     now: () => new Date(),

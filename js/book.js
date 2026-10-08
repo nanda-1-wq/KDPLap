@@ -9,15 +9,17 @@
    Steps with a screen register in window.kdpBookSteps (E7.1: 01 Brief in
    js/book-brief.js; E7.2: 02 Research in js/book-research.js; E8.1:
    03 Positioning in js/book-positioning.js; E8.2: 04 Title in
-   js/book-title.js):
+   js/book-title.js; E9.1: 05 Outline in js/book-outline.js):
    init(book, ctx) once, render(root) on each visit,
    isDone(book) for the sidebar mark, blockers() for the Next button,
    missing() for what is still needed (one short sentence, '' when done),
-   optional doneMark: 'lock' (03 shows a lock instead of a check).
+   optional doneMark: 'lock' (03 shows a lock instead of a check),
+   optional needsReview(book) for the "Needs review" flag.
    The reason shows under each step in the sidebar and next to Next. Only
    01 Brief blocks Next; on 02 to 04 the note only informs.
    A title marked "Needs review" (books.title_needs_review, set by an
-   unlock of 03) shows a warning on 04.
+   unlock of 03) shows a warning on 04, chapters marked "Needs review"
+   (chapters.needs_review, same unlock) one on 05.
    Other steps show a "Coming in" placeholder.
 ═══════════════════════════════════════════════════ */
 
@@ -101,7 +103,7 @@
     const current = n === step ? ' aria-current="step"' : '';
     const done = isDone(n);
     const lock = done && MODULES[n].doneMark === 'lock';
-    const review = n === 4 && book.title_needs_review;
+    const review = (n === 4 && book.title_needs_review) || !!(MODULES[n] && MODULES[n].needsReview && MODULES[n].needsReview(book));
     const mark = lock ? LOCK : (done && n !== step ? CHECK : '');
     const state = lock ? ', locked' : (done ? ', done' : '');
     const need = missing(n);

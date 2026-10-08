@@ -5,7 +5,7 @@
      check      pre-checks before any money is spent; the Job, or an error code
      prompt     [system, schema, user message]
      interpret  the provider reply as an Outcome
-     save       optional: drift_check and title_ideas save their own results
+     save       optional: drift_check, title_ideas and outline_ideas save their own results
      reply      the 200 body
    A stage with no entry throws "generate: unknown stage". */
 
@@ -20,6 +20,7 @@ import { hasPositioningText, knownText, type PositioningContext, positioningHasT
 import { helpFields, interpretPositioningHelp, POSITIONING_SCHEMA, POSITIONING_SYSTEM, positioningUserMessage } from "./positioning_help.ts";
 import { DRIFT_SCHEMA, DRIFT_SYSTEM, driftUserMessage, interpretDriftCheck } from "./drift_check.ts";
 import { interpretTitleIdeas, type TitleContext, titleIdeasWanted, TITLE_SCHEMA, TITLE_SYSTEM, titleUserMessage } from "./title_ideas.ts";
+import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineTarget, outlineTarget, outlineUserMessage } from "./outline_ideas.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -30,7 +31,8 @@ export type Job =
   | { stage: "positioning_help"; ctx: PositioningContext; field: PositioningField | null }
   | { stage: "drift_check"; ctx: PositioningContext }
   | { stage: "title_ideas"; ctx: TitleContext; want: number }
-  | { stage: "competitor_import"; text: string };
+  | { stage: "competitor_import"; text: string }
+  | { stage: "outline_ideas"; ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null };
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -186,6 +188,43 @@ const competitorImport: StageDef<"competitor_import", { id: string }> = {
   reply: (_job, out) => ({ stage: "competitor_import", competitor: out.competitor }),
 };
 
+// Step 05 (E9.1). The server reads the locked positioning, Brief, Research,
+// the book title and the competitors' tables of contents; the browser sends
+// only the id and the sections per chapter. The server saves the outline
+// itself (replace_outline, as the user), so a stopped call in the browser
+// still leaves a whole outline, never half of one.
+const outlineIdeas: StageDef<"outline_ideas", OutlineContext> = {
+  read: (store, input) => store.getOutlineContext(input.bookId),
+  check: (input, ctx) => {
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    if (!positioningHasTopic(ctx)) return { fail: "not_enough_facts", extra: { missing: "" } };
+    if (ctx.hasWriting) return { fail: "has_writing" };
+    return { stage: "outline_ideas", ctx, per: input.sectionsPerChapter, target: outlineTarget(ctx.plan), chapters: ctx.plan.chapter_count };
+  },
+  prompt: (job) => [OUTLINE_SYSTEM, OUTLINE_SCHEMA, outlineUserMessage(job.ctx, job.per, job.target, job.chapters)],
+  interpret: (job, httpOk, body) => interpretOutline(httpOk, body, job, knownText(job.ctx)),
+  // When the save does not happen the author gets nothing, so the call is not counted.
+  save: async (store, job, out) => {
+    let saved: unknown[] = [];
+    try {
+      saved = await store.replaceOutline(job.ctx.bookId, out.outline!);
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      const known = code === "has_writing" || code === "positioning_not_locked";
+      if (!known) console.error(`generate: outline save failed: ${code ?? "unknown"}`);
+      out = { ...out, counted: false, code: known ? code as "has_writing" | "positioning_not_locked" : "server_error" };
+    }
+    return { out, saved };
+  },
+  reply: (job, out, saved) => ({
+    stage: "outline_ideas",
+    chapters: saved ?? [],
+    rescaled: !!out.rescaled,
+    target: job.target,
+    aiPickedChapters: job.chapters === null,
+  }),
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -196,6 +235,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   drift_check: driftCheck,
   title_ideas: titleIdeas,
   competitor_import: competitorImport,
+  outline_ideas: outlineIdeas,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -232,8 +272,8 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
- * sources) and review_insights. positioning_help, drift_check, title_ideas and
- * competitor_import need their job's data: they throw (use interpretJob).
+ * sources) and review_insights. positioning_help, drift_check, title_ideas,
+ * competitor_import and outline_ideas need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);

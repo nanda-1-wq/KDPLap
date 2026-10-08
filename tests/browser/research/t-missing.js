@@ -21,7 +21,8 @@ const test = async page => {
   ok((await reason(1)) === '', 'Brief is done: no reason on 01');
   ok(/Add 5 required cards/.test(await reason(3)), `sidebar 03: "${await reason(3)}"`);
   ok((await reason(4)) === 'Pick a title', `sidebar 04: "${await reason(4)}"`);
-  ok((await reason(5)) === '' && (await reason(6)) === '', 'no reason on 05 and 06');
+  // E9.1: step 05 has a screen now and says what it needs; 06 has none yet.
+  ok((await reason(5)) === 'Make an outline' && (await reason(6)) === '', `05 "${await reason(5)}", no reason on 06`);
   const linkText = await page.$eval('a[data-step="2"]', (a) => a.textContent.replace(/\s+/g, ' ').trim());
   ok(/Research, Needs 2 more competitors and 1 source$/.test(linkText), `the link text reads the reason with the step ("${linkText}")`);
   const h = await page.$eval('a[data-step="2"]', (a) => a.getBoundingClientRect().height);

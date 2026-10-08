@@ -1072,6 +1072,7 @@
     }
     const r = res.data || {};
     if (r.title) book.title_needs_review = true;
+    if (r.chapters) book.review_chapters = [{ count: r.chapters }];   // the step 05 flag
     setPos({ ...pos, locked_at: null });
     ul.done = true;
     ul.d.close();

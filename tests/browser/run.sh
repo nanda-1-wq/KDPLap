@@ -4,7 +4,7 @@
 #   tests/browser/run.sh <suite> <test.js>
 #   tests/browser/run.sh title t1.js
 # Suites: brief (step 01), research (step 02), positioning (step 03),
-# title (step 04), delete (Delete book dialog).
+# title (step 04), outline (step 05), delete (Delete book dialog).
 # A suite's mock.js defines setup(page); each test file defines test(page).
 set -euo pipefail
 HERE=${0:A:h}

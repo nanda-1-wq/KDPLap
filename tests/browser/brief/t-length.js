@@ -18,16 +18,17 @@ const test = async page => {
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   // 1. A saved custom target: Custom pressed, the number shown, one-number estimate.
+  // Estimates use the shared helper js/word-budget.js: about 250 words a page at 6 × 9 (owner, E9).
   await open(B1);
   ok((await pressed()) === 'Custom', `Custom pressed (${await pressed()})`);
   ok((await page.inputValue('#bf-target_words')) === '15000', 'field shows 15000');
-  ok((await hint()) === 'About 110 pages at 6 × 9 in', `estimate: "${await hint()}"`);
+  ok((await hint()) === 'About 60 pages at 6 × 9 in', `estimate: "${await hint()}"`);
   ok((await page.innerText('#bf-target_words-hint')) === 'One number, for example 15000. From 2,000 to 150,000.', 'hint text');
   ok((await page.$eval('label[for="bf-target_words"]', (l) => l.textContent)) === 'Target words', 'label');
 
   // 2. A range book. Custom clears the range now (one value at a time).
   await open(B2);
-  ok((await pressed()) === '8K to 12K' && (await hint()) === 'About 60 to 90 pages at 6 × 9 in', `range: ${await pressed()} / ${await hint()}`);
+  ok((await pressed()) === '8K to 12K' && (await hint()) === 'About 30 to 50 pages at 6 × 9 in', `range: ${await pressed()} / ${await hint()}`);
   await page.click('[data-other="target_words"]');
   await settle();
   ok(last() === '{"length_range":null,"target_words":null}', `Custom: range cleared with the target (${last()})`);
@@ -35,14 +36,14 @@ const test = async page => {
 
   // 3. Typing: the estimate follows a valid number; the save sends both columns.
   await page.type('#bf-target_words', '15000');
-  ok((await hint()) === 'About 110 pages at 6 × 9 in', `estimate while typing: "${await hint()}"`);
+  ok((await hint()) === 'About 60 pages at 6 × 9 in', `estimate while typing: "${await hint()}"`);
   await settle();
   ok(last() === '{"length_range":null,"target_words":15000}', `15000 saved with range null (${last()})`);
   ok(st.books[B2].brief.target_words === 15000 && st.books[B2].brief.length_range === null, 'mock row: target 15000, range null');
 
   // 4. Trim size changes the estimate.
   await page.click('[data-chips="trim_size"] [data-value="8.5x11"]');
-  ok(/^About \d+ pages at 8\.5 × 11 in$/.test(await hint()) && (await hint()) !== 'About 110 pages at 8.5 × 11 in', `estimate at 8.5 × 11: "${await hint()}"`);
+  ok(/^About \d+ pages at 8\.5 × 11 in$/.test(await hint()) && (await hint()) !== 'About 60 pages at 8.5 × 11 in', `estimate at 8.5 × 11: "${await hint()}"`);
   await page.click('[data-chips="trim_size"] [data-value="6x9"]');
   await settle();
 
@@ -62,7 +63,7 @@ const test = async page => {
   await page.fill('#bf-target_words', '150000');
   await settle();
   ok(last() === '{"length_range":null,"target_words":150000}', '150000 saved');
-  ok((await hint()) === 'About 1130 pages at 6 × 9 in', `150000 estimate: "${await hint()}"`);
+  ok((await hint()) === 'About 600 pages at 6 × 9 in', `150000 estimate: "${await hint()}"`);
 
   // 7. A range chip replaces the custom target.
   await page.click('[data-chips="length_range"] [data-value="12-20k"]');

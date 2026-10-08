@@ -49,11 +49,11 @@
     ['other', 'Other']
   ];
   const TRIMS = ['5x8', '5.5x8.5', '6x9', '7x10', '8.5x11'];
-  // [key, chip text, low words, high words or null]
+  // [key, chip text]. The words of each range live in js/word-budget.js (kdpWords.RANGES).
   const LENGTHS = [
-    ['5-8k', '5K to 8K words', 5000, 8000], ['8-12k', '8K to 12K', 8000, 12000],
-    ['12-20k', '12K to 20K', 12000, 20000], ['20-30k', '20K to 30K', 20000, 30000],
-    ['30k+', '30K+', 30000, null]
+    ['5-8k', '5K to 8K words'], ['8-12k', '8K to 12K'],
+    ['12-20k', '12K to 20K'], ['20-30k', '20K to 30K'],
+    ['30k+', '30K+']
   ];
   const CHAPTERS = [5, 6, 7, 8, 9, 10, 12];
   // "Other" ranges: chapters as in 0001, the custom word target as in 0014.
@@ -252,19 +252,17 @@
   }
 
   function pagesHint() {
-    // About 133 words a page at 6 × 9 in (headings, lists, white space), scaled by page area.
-    const [w, h] = model.trim_size.split('x').map(Number);
-    const perPage = 133 * (w * h) / 54;
-    const pages = (words) => Math.max(10, Math.round(words / perPage / 10) * 10);
+    // The same estimate as the step 05 word budget (js/word-budget.js).
+    const pages = (words) => kdpWords.pages(words, model.trim_size);
     if (otherOpen.target_words) {
       // While typing, the estimate follows a valid number in the field.
       const input = els && els.root.querySelector('#bf-target_words');
       const n = otherValue('target_words', input ? input.value : model.target_words);
       return n ? `About ${pages(n)} pages at ${trimText(model.trim_size)}` : 'Enter a word target to see an estimate of pages.';
     }
-    const len = LENGTHS.find(([k]) => k === model.length_range);
+    const len = kdpWords.RANGES[model.length_range];
     if (!len) return 'Pick a range to see an estimate of pages.';
-    const range = len[3] ? `${pages(len[2])} to ${pages(len[3])}` : `${pages(len[2])}+`;
+    const range = len[1] ? `${pages(len[0])} to ${pages(len[1])}` : `${pages(len[0])}+`;
     return `About ${range} pages at ${trimText(model.trim_size)}`;
   }
 
