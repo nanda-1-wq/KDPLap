@@ -16,8 +16,8 @@ Design: ✅ approved (see `design/`)
 - [x] **E7** Book wizard shell + 01 Brief + 02 Research
 - [x] **E8** 03 Positioning (drift check, lock) + 04 Title
 - [x] **PLAN review gate** (after E8): Batches A, B1, B2, C, the ultrareview fixes and C2. Plans and results in `docs/reviews/`.
-- [ ] **E9** 05 Outline ← next
-- [ ] **E10** 06 Write: sections, versions, improve menu, checks
+- [x] **E9** 05 Outline (E9.1 structure and generate, E9.2 AI check and approve). Plan and results in `docs/reviews/2026-10-07-e9-plan.md`.
+- [ ] **E10** 06 Write: sections, versions, improve menu, checks ← next
 - [ ] **E11** Export DOCX + Markdown · Settings + AI usage
 - [ ] **E12** Real test: write one full book, fix what hurts
 
