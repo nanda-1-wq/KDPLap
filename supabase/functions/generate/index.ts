@@ -12,6 +12,7 @@
    POST { stage: "competitor_import", bookId, text } → { stage, competitor }
    POST { stage: "outline_ideas", bookId, sectionsPerChapter } → { stage, chapters, rescaled, target, aiPickedChapters }
                                                   (chapters = the saved outline, as replace_outline returns it)
+   POST { stage: "outline_check", bookId }      → { stage, findings, checked_at, inputs_key }
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
@@ -20,13 +21,13 @@
    Reads use a client built from the caller's Authorization header, so
    RLS applies as that user, and so do the title options insert and the
    outline save (replace_outline, 0016). Only the
-   ai_usage insert and the drift check save use the service role; the save
-   filters by the caller's user id.
+   ai_usage insert, the drift check save and the outline check save (0017)
+   use the service role; the saves filter by, or write, the caller's user id.
 ═══════════════════════════════════════════════════ */
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, OutlineContext, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow } from "./lib.ts";
+import type { BriefContext, Competitor, OutlineContext, OutlineRow, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -242,6 +243,30 @@ function openStore(authHeader: string): Store {
         throw error.message === "has_writing" || error.message === "positioning_not_locked" ? { code: error.message } : error;
       }
       return (data ?? []) as unknown[];
+    },
+
+    // The positioning read, plus the saved outline in order (0016
+    // outline_json, as the user). A book that is not the caller's reads as null.
+    async getOutlineCheckContext(bookId) {
+      const data = await readBook(bookId, POSITIONING_SELECT);
+      const ctx = data && positioningContext(data);
+      if (!ctx) return null;
+      const { data: outline, error } = await asUser.rpc("outline_json", { p_book_id: bookId });
+      if (error) throw error;
+      return { ...ctx, outline: (outline ?? []) as OutlineRow[] };
+    },
+
+    // Service role (0017 lets only this role write outline_checks). The book
+    // was read through RLS as the caller first, and the 0017 trigger checks
+    // that user_id owns the book. One row per book: a new check replaces it.
+    async saveOutlineCheck({ bookId, userId, findings, inputsKey, checkedAt }) {
+      const { data, error } = await admin()
+        .from("outline_checks")
+        .upsert({ book_id: bookId, user_id: userId, findings, inputs_key: inputsKey, checked_at: checkedAt }, { onConflict: "book_id" })
+        .select("checked_at, inputs_key")
+        .single();
+      if (error) throw error;
+      return data as { checked_at: string; inputs_key: string };
     },
 
     async getMonthlyLimit() {

@@ -102,7 +102,10 @@ select pg_temp.chk('replace: returns the outline, in order, with sections',
      from (select public.replace_outline('b0000000-0000-4000-8000-000000000001', pg_temp.outline(8)) o) x));
 select pg_temp.chk('replace again: the old outline is replaced, not added to', pg_temp.nch('b0000000-0000-4000-8000-000000000001') = 10);
 reset role;
+-- 0017: the approval is set only through approve_outline(); this test sets it directly.
+select set_config('kdp.outline_approve', 'on', false) is not null;
 update public.books set outline_approved_at = now() where id = 'b0000000-0000-4000-8000-000000000001';
+select set_config('kdp.outline_approve', '', false) is not null;
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';
 select public.replace_outline('b0000000-0000-4000-8000-000000000001', pg_temp.outline(3)) is not null;

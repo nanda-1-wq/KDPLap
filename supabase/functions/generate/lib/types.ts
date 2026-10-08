@@ -10,6 +10,7 @@ import type { PositioningContext } from "./context.ts";
 import type { DriftFlag } from "./drift_check.ts";
 import type { TitleContext, TitleIdea } from "./title_ideas.ts";
 import type { OutlineContext, OutlineDraft } from "./outline_ideas.ts";
+import type { OutlineCheckContext, OutlineFinding } from "./outline_check.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -47,6 +48,13 @@ export interface Store {
    * order. Refusals throw { code: "has_writing" | "positioning_not_locked" }.
    */
   replaceOutline(bookId: string, outline: OutlineDraft): Promise<unknown[]>;
+  /** The positioning context and the saved outline (0016 outline_json), through RLS. */
+  getOutlineCheckContext(bookId: string): Promise<OutlineCheckContext | null>;
+  /**
+   * Save an outline check (service role, 0017: only that role writes
+   * outline_checks). One row per book: a new check replaces the last one.
+   */
+  saveOutlineCheck(s: OutlineCheckSave): Promise<{ checked_at: string; inputs_key: string }>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -54,5 +62,7 @@ export interface Store {
 }
 
 export type SavedTitleOption = TitleIdea & { id: string; shortlisted: boolean; created_at: string };
+
+export type OutlineCheckSave = { bookId: string; userId: string; findings: OutlineFinding[]; inputsKey: string; checkedAt: string };
 
 export type DriftSave = { bookId: string; userId: string; flags: DriftFlag[]; checkedAt: string; readUpdatedAt: string };

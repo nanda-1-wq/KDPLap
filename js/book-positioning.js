@@ -1073,6 +1073,7 @@
     const r = res.data || {};
     if (r.title) book.title_needs_review = true;
     if (r.chapters) book.review_chapters = [{ count: r.chapters }];   // the step 05 flag
+    book.outline_approved_at = null;   // 0017: unlock removes the outline approval (step 05 not done)
     setPos({ ...pos, locked_at: null });
     ul.done = true;
     ul.d.close();

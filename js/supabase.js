@@ -622,6 +622,40 @@ window.kdp = {
     return window.sb.rpc('reorder_chapters', { p_book_id: bookId, p_ids: ids });
   },
 
+  /**
+   * The last AI outline check (0017 outline_checks, written by the generate
+   * function only): { findings, inputs_key, checked_at }, or null before the first.
+   */
+  async getOutlineCheck(bookId) {
+    const { data, error } = await window.sb
+      .from('outline_checks')
+      .select('findings, inputs_key, checked_at')
+      .eq('book_id', bookId)
+      .maybeSingle();
+    return { data: error ? null : data, error };
+  },
+
+  /** The outline approval time (null = not approved). Read again after an edit that may have changed nothing. */
+  async getOutlineApproval(bookId) {
+    const { data, error } = await window.sb
+      .from('books')
+      .select('outline_approved_at')
+      .eq('id', bookId)
+      .maybeSingle();
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: { notFound: true, message: 'Book not found.' } };
+    return { data: data.outline_approved_at, error: null };
+  },
+
+  /**
+   * Approve the outline (0017 approve_outline): step 05 done. Returns the time.
+   * error.message: 'positioning_not_locked', 'outline_empty', 'chapter_untitled'
+   * (error.details names the chapter) or 'book_not_found'.
+   */
+  async approveOutline(bookId) {
+    return window.sb.rpc('approve_outline', { p_book_id: bookId });
+  },
+
   /** The Research gaps (step 02 insights) for "Copy gaps from Research". [] before an analysis. */
   async getResearchGaps(bookId) {
     const { data, error } = await window.sb
@@ -812,7 +846,8 @@ window.kdp = {
    * { stage: 'brief_help', bookId }, { stage: 'review_insights', bookId },
    * { stage: 'positioning_help', bookId[, field] }, { stage: 'drift_check', bookId }
    * or { stage: 'title_ideas', bookId } (the server saves the options and returns them),
-   * or { stage: 'outline_ideas', bookId, sectionsPerChapter } (the server saves the outline and returns it).
+   * or { stage: 'outline_ideas', bookId, sectionsPerChapter } (the server saves the outline and returns it),
+   * or { stage: 'outline_check', bookId } (the server saves the check and returns { findings, inputs_key, checked_at }).
    */
   async generate(input) {
     let res;

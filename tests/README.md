@@ -11,6 +11,9 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
 
 - `lib.test.ts`: prompts, parsing, limits. `lib.outline.test.ts`: the
   outline_ideas number rule, word target, contents budget and reply cleaning.
+  `lib.outline_check.test.ts`: which AI outline findings are kept (real
+  chapters, a quote really in the reader promise), the prompt, and the outline
+  fingerprint (inputs_key).
 - `handler.test.ts`: the shared request flow. `handler.<stage>.test.ts`: one file per stage.
 - `stages.test.ts`: the stage table.
 - `snapshot.test.ts`: the exact provider request for every stage, and every
@@ -26,6 +29,7 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
 deno test tests/title-checks.test.js
 deno test tests/outline-checks.test.js
 deno test --allow-read tests/limits-parity.test.js
+deno test --allow-read tests/outline-key.test.js
 ```
 
 - `outline-checks.test.js`: the step 05 code checks and the shared words and
@@ -37,6 +41,10 @@ deno test --allow-read tests/limits-parity.test.js
   the 40-character Other label, competitor import page text, outline limits
   (0016), the Brief length ranges, and one page estimate helper). It fails
   when a value disagrees or can no longer be found.
+- `outline-key.test.js`: the outline fingerprint in the browser
+  (`js/outline-key.js`) and in the function (`lib/outline_check.ts`) give the
+  same key (real-length outline, quotes, emoji), a pinned value, and the AI
+  check caps against 0017.
 
 ## Database (local Postgres 18)
 
@@ -52,6 +60,7 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0010` positioning, `t0011` title, `t0012` safety, `t0013` guard function,
 `t0014` custom word target and insights fingerprint, `t0015` book types and Other label,
 `t0016` outline rules (limits, caps, the "has writing" guard, replace_outline, add_chapter, reorder_chapters),
+`t0017` outline approve (approve_outline, the approval guard, every edit that clears it and the writing that does not, unlock, outline_checks shape, owner and RLS),
 `rls_cross_user` (user B against user A's rows in every table).
 
 ## Browser (mocked, playwright-cli)
@@ -65,7 +74,7 @@ the suite's `mock.js` with a fake session, so no account or real data is
 used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial,
 t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from, t-import), `positioning` (t1, t2, t-drift,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
-`delete` (t-dialog), `outline` (t1, t-struct, t-generate). The runner caches supabase-js (checked
+`delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve). The runner caches supabase-js (checked
 against the app's SRI hash) and two old file versions from git in
 `tests/browser/.cache/`. Screenshots go to `tests/browser/shots/`. Both
 folders are ignored by git.

@@ -1,0 +1,16 @@
+{
+  "findings": [
+    { "kind": "overlap", "chapters": [3, 6], "quote": "", "why": "Both chapters teach seated breathing, so the reader meets the same moves twice and the book feels padded." },
+    { "kind": "drift", "chapters": [8], "quote": "", "why": "Moving with a friend or a group is a new angle. The Brief and the research are about safe routines at home." },
+    { "kind": "promise_gap", "chapters": [], "quote": "“without help”", "why": "No chapter shows how to start and adjust the routine alone, which the reader promise says the reader can do." },
+    { "kind": "overlap", "chapters": [6, 3], "quote": "", "why": "The first finding again, with the chapters the other way round." },
+    { "kind": "overlap", "chapters": [4, 4], "quote": "", "why": "The same chapter twice is not an overlap." },
+    { "kind": "overlap", "chapters": [5], "quote": "", "why": "An overlap needs two chapters." },
+    { "kind": "drift", "chapters": [9], "quote": "", "why": "There is no chapter 9 in this outline." },
+    { "kind": "drift", "chapters": [0], "quote": "", "why": "Number 0 would be the Introduction, which is not checked." },
+    { "kind": "promise_gap", "chapters": [], "quote": "lose weight fast", "why": "These words are not in the reader promise." },
+    { "kind": "promise_gap", "chapters": [2], "quote": "every day", "why": "A promise gap names no chapter." },
+    { "kind": "style", "chapters": [1], "quote": "", "why": "Not a kind of problem we check." },
+    { "kind": "drift", "chapters": [5], "quote": "", "why": "Studies show 40% of seniors quit — this chapter promises more than the research supports." }
+  ]
+}

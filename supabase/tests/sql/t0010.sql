@@ -146,7 +146,7 @@ select count(*) as n from public.section_versions \gset rows_
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';
 select public.unlock_positioning('b0000000-0000-4000-8000-000000000001')::text as x \gset unlock_
-select pg_temp.chk('unlock returns what was marked', :'unlock_x' = '{"title": true, "chapters": 2, "written_chapters": 1}', :'unlock_x');
+select pg_temp.chk('unlock returns what was marked', :'unlock_x' = '{"title": true, "outline": false, "chapters": 2, "written_chapters": 1}', :'unlock_x');
 reset role;
 select pg_temp.chk('unlock clears locked_at', (pg_temp.pos('b0000000-0000-4000-8000-000000000001')).locked_at is null);
 select pg_temp.chk('unlock keeps the drift check (text did not change)', (pg_temp.pos('b0000000-0000-4000-8000-000000000001')).drift_checked_at is not null);
@@ -179,7 +179,7 @@ set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';
 update public.positioning set locked_at = now() where book_id = 'b0000000-0000-4000-8000-000000000002';
 select public.unlock_positioning('b0000000-0000-4000-8000-000000000002')::text as x \gset unlock2_
-select pg_temp.chk('no title: unlock marks nothing', :'unlock2_x' = '{"title": false, "chapters": 0, "written_chapters": 0}', :'unlock2_x');
+select pg_temp.chk('no title: unlock marks nothing', :'unlock2_x' = '{"title": false, "outline": false, "chapters": 0, "written_chapters": 0}', :'unlock2_x');
 reset role;
 select pg_temp.chk('no title: title_needs_review stays false', not (select title_needs_review from public.books where id = 'b0000000-0000-4000-8000-000000000002'));
 

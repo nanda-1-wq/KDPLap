@@ -7,7 +7,7 @@ import * as L from "./lib.ts";
 import {
   BOOK_ID, briefCtx, cimp, cimpReply, comp, dc, dcReply, draft, good, help, helpReply, IDEA, imp, importReply, ins, insReply,
   LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, PRODUCT, PRODUCT_OUT, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
-  OUTLINE_OUT, oid, outlineCtx, outlineReply,
+  OUTLINE_OUT, oid, outlineCtx, outlineReply, checkReply, ocid, outlineCheckCtx, outlineRows,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -23,6 +23,7 @@ const jobs: [string, L.Job][] = [
   ["title_ideas", { stage: "title_ideas", ctx: titleCtx(), want: 10 }],
   ["competitor_import", { stage: "competitor_import", text: PRODUCT }],
   ["outline_ideas", { stage: "outline_ideas", ctx: outlineCtx(), per: 3, target: L.outlineTarget(outlineCtx().plan), chapters: 8 }],
+  ["outline_check", { stage: "outline_check", ctx: outlineCheckCtx(), chapters: outlineRows().filter((c) => c.kind === "chapter"), key: L.outlineKey(outlineRows(), LOCKED.locked_at) }],
   ["outline_ideas (AI picks, 1 section)", { stage: "outline_ideas", ctx: outlineCtx({ plan: { length_range: null, target_words: null, chapter_count: null } }), per: 1, target: L.outlineTarget({ length_range: null, target_words: null, chapter_count: null }), chapters: null }],
 ];
 
@@ -60,6 +61,8 @@ async function run(s: Setup, req: Request) {
       titleSaves: f.titleSaves,
       // E9.1: only when there is one, so the older snapshots stay as they were.
       ...(f.outlineSaves.length ? { outlineSaves: f.outlineSaves } : {}),
+      // E9.2: the same, for the outline check saves.
+      ...(f.checkSaves.length ? { checkSaves: f.checkSaves } : {}),
       provider: await Promise.all(f.calls.map(async (c) => ({
         url: c.url,
         headers: c.init.headers,
@@ -190,6 +193,17 @@ const cases: [string, Setup, () => Request][] = [
   ["outline_ideas save has writing", { provider: outlineReply(), outlineSaveError: { code: "has_writing" } }, () => post(oid)],
   ["outline_ideas save fails", { provider: outlineReply(), outlineSaveError: { code: "22023" } }, () => post(oid)],
   ["outline_ideas max_tokens", { provider: reply("max_tokens", '{"intro_words":1000,"chapters":[{"ti') }, () => post(oid)],
+
+  // outline_check (E9.2)
+  ["outline_check success", { provider: checkReply() }, () => post(ocid)],
+  ["outline_check no problems", { provider: checkReply({ findings: [] }) }, () => post(ocid)],
+  ["outline_check not locked", { check: outlineCheckCtx({ positioning: posRow() }) }, () => post(ocid)],
+  ["outline_check nothing to check", { check: outlineCheckCtx({ outline: [] }) }, () => post(ocid)],
+  ["outline_check not visible", { check: null }, () => post(ocid)],
+  ["outline_check extra key", {}, () => post({ ...ocid, sectionsPerChapter: 3 })],
+  ["outline_check save fails", { provider: checkReply(), checkSaveThrows: true }, () => post(ocid)],
+  ["outline_check max_tokens", { provider: reply("max_tokens", '{"findings":[{"kind":"ove') }, () => post(ocid)],
+  ["outline_check refusal", { provider: reply("refusal", "") }, () => post(ocid)],
 ];
 
 Deno.test("snapshot: replies and errors for every stage", async (t) => {

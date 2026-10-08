@@ -18,6 +18,27 @@ const DESIGN = [
   ['Your 4-Week Plan: From 5 to 15 Minutes', 'Reader can follow the plan day by day', [['Week 1 and 2: five gentle minutes', 500], ['Week 3: ten minutes with new moves', 500], ['Week 4: your full 15-minute routine', 500]]],
   ['Staying With It', null, [['What to do on a stiff or tired day', 300], ['Tracking how you feel each week', 300], ['Moving with a friend or a group', 300]]]
 ];
+// The outline fingerprint, copied from js/outline-key.js (tests/outline-key.test.js
+// proves the browser and the server agree; the mock plays the server here).
+const keyOf = (rows, lockedAt) => {
+  const text = (v) => (typeof v === 'string' ? v.trim() : '');
+  const parts = [text(lockedAt)];
+  for (const c of rows) if (c.kind === 'chapter') parts.push([c.id, text(c.title), text(c.objective), ...(c.sections || []).map((s) => `${s.id}\u0003${text(s.title)}`)].join('\u0001'));
+  const s = parts.join('\u0002');
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) { const ch = s.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const hex = (n) => (n >>> 0).toString(16).padStart(8, '0');
+  return hex(h1) + hex(h2);
+};
+// A real-length AI outline check (E9.2) for the design 20 outline: [kind, chapter numbers, quote, why].
+const CHECK = [
+  ['overlap', [3, 6], '', 'Both chapters teach seated breathing, so the reader meets the same moves twice and the book feels padded.'],
+  ['promise_gap', [], 'without help', 'No chapter shows how to start and adjust the routine alone, which the reader promise says the reader can do.'],
+  ['drift', [8], '', 'Moving with a friend or a group is a new angle. The Brief and the research are about safe routines at home.']
+];
+
 // What the AI "writes" in the mock: the same plan, new words.
 const AI_DESIGN = DESIGN.map(([t, o, s], i) => [t, o || 'Reader can keep going on hard days', s.map(([st, w]) => [st, w + (i % 2 ? 50 : 0)])]);
 
@@ -29,7 +50,7 @@ const setup = async page => {
   const uid = (p) => `${p}${String(++seq).padStart(7, '0')}-0000-4000-8000-000000000000`;
   const brief = (o) => ({ topic_text: 'Chair yoga for seniors with stiff joints', target_reader: 'Adults over 60 with stiff knees, hips or shoulders', reader_problem: 'Floor poses hurt and classes move too fast.', promise_draft: 'After this book, the reader can follow a safe 15-minute chair routine at home.', book_type: 'beginner_guide',
     trim_size: '6x9', length_range: '8-12k', target_words: null, chapter_count: 8, options: {}, updated_at: ago(3), ...o });
-  const pos = (locked) => ({ one_sentence: 'A chair yoga guide for adults over 60.', reader_promise: 'After finishing this book, you can follow a safe routine.', approach: 'Seated poses.', lacks: ['Too hard'], selling_points: ['Safe'], focus_tags: [], drift_flags: [], drift_checked_at: ago(1), locked_at: locked ? ago(1) : null, updated_at: ago(1) });
+  const pos = (locked) => ({ one_sentence: 'A chair yoga guide for adults over 60.', reader_promise: 'After finishing this book, you can follow a safe 15-minute chair routine at home, every day, without help.', approach: 'Seated poses.', lacks: ['Too hard'], selling_points: ['Safe'], focus_tags: [], drift_flags: [], drift_checked_at: ago(1), locked_at: locked ? ago(1) : null, updated_at: ago(1) });
   const sec = (title, words, extra = {}) => ({ id: uid('5'), position: 0, title, word_target: words, status: 'not_started', needs_review: false, current_version_id: null, ...extra });
   const chap = (kind, title, objective, sections, extra = {}) => ({ id: uid('c'), position: 0, kind, title, objective, include_examples: true, include_exercise: true, needs_review: false, unsourced: [], sections, ...extra });
   const outline = (plan, extra = {}) => {
@@ -54,7 +75,8 @@ const setup = async page => {
       [B6]: book(B6, { brief: brief({ length_range: null, chapter_count: null }), pos: pos(true) })
     },
     outline: { [B1]: outline(DESIGN), [B2]: [], [B3]: [], [B4]: outline(DESIGN).map((c) => ({ ...c, needs_review: true })) /* unlock marks every row, Introduction and Conclusion too */, [B5]: written, [B6]: [] },
-    calls: [], writes: [], gens: []
+    checks: {},   // book id → the saved outline check row (0017, written by the "server" only)
+    calls: [], writes: [], gens: [], approves: []
   };
   globalThis.__modes = globalThis.__modes || {};
   const mode = (k) => globalThis.__modes[k];
@@ -76,6 +98,8 @@ const setup = async page => {
   const chapterOf = (id) => { for (const bid of Object.keys(store.outline)) { const c = store.outline[bid].find((x) => x.id === id); if (c) return { bid, c }; } return null; };
   const sectionOf = (id) => { for (const bid of Object.keys(store.outline)) for (const c of store.outline[bid]) { const s = c.sections.find((x) => x.id === id); if (s) return { bid, c, s }; } return null; };
   const hasVersion = (c) => c.sections.some((s) => s.current_version_id);
+  // 0017: an outline edit clears the approval (the mock plays the trigger).
+  const unapprove = (bid) => { if (bid && store.books[bid]) store.books[bid].outline_approved_at = null; };
 
   await ctx.route('https://hmtxnbgfzwqawfulwwrg.supabase.co/**', async (r) => {
     try { return await handle(r); } catch (e) { store.calls.push('ERR ' + e.stack); return r.fulfill({ status: 599, body: String(e.stack) }); }
@@ -110,6 +134,7 @@ const setup = async page => {
       if (!hit) return json(r, 200, []);
       if ((p.title != null && (p.title.length > 150 || !p.title.trim())) || (p.objective != null && p.objective.length > 300)) return json(r, 400, { code: '23514', message: 'violates check constraint' });
       if (('title' in p && p.title !== hit.c.title) || ('objective' in p && p.objective !== hit.c.objective)) hit.c.unsourced = [];
+      if (['title', 'objective', 'include_examples', 'include_exercise'].some((k) => k in p && p[k] !== hit.c[k])) unapprove(hit.bid);
       Object.assign(hit.c, p, { updated_at: now() });
       return json(r, 200, [{ id: hit.c.id, updated_at: hit.c.updated_at }]);
     }
@@ -121,6 +146,7 @@ const setup = async page => {
       const hit = sectionOf(eq('id'));
       if (!hit) return json(r, 200, []);
       if (p.word_target != null && (p.word_target < 0 || p.word_target > 10000)) return json(r, 400, { code: '23514', message: 'violates check constraint' });
+      if (['title', 'word_target'].some((k) => k in p && p[k] !== hit.s[k])) unapprove(hit.bid);
       Object.assign(hit.s, p, { updated_at: now() });
       return json(r, 200, [{ id: hit.s.id, updated_at: hit.s.updated_at }]);
     }
@@ -132,6 +158,7 @@ const setup = async page => {
       if (hit.c.sections.length >= (hit.c.kind === 'chapter' ? 12 : 1)) return json(r, 400, { code: 'P0001', message: 'sections_full' });
       const s = sec(null, null, { position: p.position });
       hit.c.sections.push(s);
+      unapprove(hit.bid);
       return json(r, 201, [copy(s)]);
     }
     if ((path === '/rest/v1/chapters' || path === '/rest/v1/sections') && method === 'DELETE') {
@@ -141,12 +168,12 @@ const setup = async page => {
       if (path.endsWith('chapters')) {
         const hit = chapterOf(id);
         if (hit && hasVersion(hit.c)) return json(r, 400, { code: 'P0001', message: 'has_writing' });
-        if (hit) store.outline[hit.bid] = store.outline[hit.bid].filter((c) => c.id !== id);
+        if (hit) { store.outline[hit.bid] = store.outline[hit.bid].filter((c) => c.id !== id); unapprove(hit.bid); }
         return json(r, 204, undefined, { 'content-range': `*/${hit ? 1 : 0}` });
       }
       const hit = sectionOf(id);
       if (hit && hit.s.current_version_id) return json(r, 400, { code: 'P0001', message: 'has_writing' });
-      if (hit) hit.c.sections = hit.c.sections.filter((s) => s.id !== id);
+      if (hit) { hit.c.sections = hit.c.sections.filter((s) => s.id !== id); unapprove(hit.bid); }
       return json(r, 204, undefined, { 'content-range': `*/${hit ? 1 : 0}` });
     }
     if (path === '/rest/v1/rpc/add_chapter') {
@@ -163,6 +190,7 @@ const setup = async page => {
       if (end) end.position += 1;
       const c = chap('chapter', null, null, [sec(null, null, { position: 1 })], { position: at });
       list.push(c);
+      unapprove(bid);
       return json(r, 200, c.id);
     }
     if (path === '/rest/v1/rpc/reorder_chapters') {
@@ -170,8 +198,32 @@ const setup = async page => {
       store.writes.push({ table: 'rpc', fn: 'reorder_chapters', ids: p.p_ids });
       if (mode('reorderError')) return json(r, 500, { message: 'mock' });
       const list = ordered(p.p_book_id);
+      const before = list.map((c) => c.position).join();
       list.forEach((c) => { c.position = c.kind === 'intro' ? 0 : c.kind === 'conclusion' ? p.p_ids.length + 1 : p.p_ids.indexOf(c.id) + 1; });
+      if (before !== list.map((c) => c.position).join()) unapprove(p.p_book_id);
       return json(r, 200, null);
+    }
+    if (path === '/rest/v1/outline_checks' && method === 'GET') {
+      if (mode('checkLoadError')) return json(r, 500, { message: 'mock' });
+      const row = store.checks[eq('book_id')];
+      return json(r, 200, row ? [copy(row)] : []);
+    }
+    if (path === '/rest/v1/rpc/approve_outline') {
+      const bid = body().p_book_id;
+      store.approves.push(bid);
+      if (mode('approveDelay')) await delay(mode('approveDelay'));
+      if (mode('approveError') === 'network') return r.abort('failed');
+      if (mode('approveError')) return json(r, 400, { code: 'P0001', message: mode('approveError'), details: 'Chapter 9 has no title.' });
+      const bk = store.books[bid];
+      if (!bk) return json(r, 400, { code: 'P0002', message: 'book_not_found' });
+      if (!bk.pos || !bk.pos.locked_at) return json(r, 400, { code: 'P0001', message: 'positioning_not_locked' });
+      const chs = ordered(bid).filter((c) => c.kind === 'chapter');
+      if (!chs.length) return json(r, 400, { code: 'P0001', message: 'outline_empty' });
+      const n = chs.findIndex((c) => !c.title || !c.title.trim());
+      if (n >= 0) return json(r, 400, { code: 'P0001', message: 'chapter_untitled', details: `Chapter ${n + 1} has no title.` });
+      store.outline[bid].forEach((c) => { c.needs_review = false; });
+      bk.outline_approved_at = now();
+      return json(r, 200, bk.outline_approved_at);
     }
     if (path === '/rest/v1/pen_names' && method === 'GET') return json(r, 200, [{ id: PA, name: 'Nora Hale', voice: {} }]);
 
@@ -183,6 +235,20 @@ const setup = async page => {
       if (g === 'network') return r.abort('failed');
       if (g !== 'ok') return json(r, { has_writing: 409, positioning_not_locked: 409, rate_limited: 429, ai_unavailable: 502 }[g] || 500, { error: g });
       const bk = store.books[b.bookId];
+      if (b.stage === 'outline_check') {
+        if (!bk.pos || !bk.pos.locked_at) return json(r, 409, { error: 'positioning_not_locked' });
+        const rows = ordered(b.bookId);
+        const chs = rows.filter((c) => c.kind === 'chapter');
+        if (!chs.some((c) => c.title && c.title.trim())) return json(r, 422, { error: 'nothing_to_check' });
+        // The key of the outline the "server" read when the call started.
+        const key = keyOf(rows, bk.pos.locked_at);
+        if (mode('checkDelay')) await delay(mode('checkDelay'));
+        const plan = mode('checkOut') === 'none' ? [] : CHECK;
+        const findings = plan.filter(([, n]) => n.every((x) => x <= chs.length))
+          .map(([kind, n, quote, why]) => ({ kind, chapters: n.map((x) => chs[x - 1].id), quote, why, unsourced: mode('checkUnsourced') && kind === 'drift' ? ['40'] : [] }));
+        store.checks[b.bookId] = { findings, inputs_key: key, checked_at: now() };
+        return json(r, 200, { stage: 'outline_check', findings: copy(findings), ...copy(store.checks[b.bookId]) });
+      }
       if (b.stage === 'outline_ideas') {
         if (!bk.pos || !bk.pos.locked_at) return json(r, 409, { error: 'positioning_not_locked' });
         if (store.outline[b.bookId].some(hasVersion)) return json(r, 409, { error: 'has_writing' });

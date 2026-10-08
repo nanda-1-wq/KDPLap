@@ -1,7 +1,7 @@
 /* Shared fixtures and fakes for the generate tests (handler.*.test.ts, snapshot.test.ts). */
 import { assert } from "jsr:@std/assert@1";
-import { type DriftSave, makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, OutlineContext, OutlineDraft, PenRow, PositioningContext, PositioningRow, ReviewContext, TitleContext, TitleIdea, TopicRow } from "./lib.ts";
+import { type DriftSave, makeHandler, type OutlineCheckSave, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
+import type { BriefContext, Competitor, OutlineCheckContext, OutlineContext, OutlineDraft, OutlineRow, PenRow, PositioningContext, PositioningRow, ReviewContext, TitleContext, TitleIdea, TopicRow } from "./lib.ts";
 export const ID = "3f1c2a9e-8b7d-4c6e-9a5b-1d2e3f4a5b6c";
 export const USER = "11111111-2222-4333-8444-555555555555";
 export const ORIGIN = "http://127.0.0.1:5500";
@@ -99,6 +99,28 @@ export const OUTLINE_OUT = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/
 export const outlineReply = (out: unknown = OUTLINE_OUT) => () => Promise.resolve(anthropic("end_turn", out));
 export const oid = { stage: "outline_ideas", bookId: BOOK_ID, sectionsPerChapter: 3 };
 
+/** A chapter id: chapter n of the saved outline (0 = Introduction, 9 = Conclusion). */
+export const cid = (n: number) => `c${String(n).padStart(7, "0")}-0000-4000-8000-000000000000`;
+/**
+ * The saved outline (outline_json shape, E9.2) of the real-length reply above:
+ * Introduction, 8 chapters of 3 sections (design 20), Conclusion.
+ */
+export const outlineRows = (): OutlineRow[] => {
+  const sec = (n: number, j: number, title: string | null, words: number) =>
+    ({ id: `5${String(n).padStart(6, "0")}${j}-0000-4000-8000-000000000000`, position: j + 1, title, word_target: words, status: "not_started", needs_review: false, current_version_id: null });
+  const row = (n: number, kind: OutlineRow["kind"], title: string | null, objective: string | null, sections: OutlineRow["sections"]): OutlineRow =>
+    ({ id: cid(n), position: n, kind, title, objective, include_examples: true, include_exercise: true, needs_review: false, unsourced: [], sections });
+  // deno-lint-ignore no-explicit-any
+  const chapters = OUTLINE_OUT.chapters.map((c: any, i: number) =>
+    row(i + 1, "chapter", c.title, c.objective || null, c.sections.map((x: { title: string; words: number }, j: number) => sec(i + 1, j, x.title, x.words))));
+  return [row(0, "intro", null, null, [sec(0, 0, null, 1000)]), ...chapters, row(9, "conclusion", null, null, [sec(9, 0, null, 700)])];
+};
+export const outlineCheckCtx = (extra: Partial<OutlineCheckContext> = {}): OutlineCheckContext => ({ ...posCtx(LOCKED), outline: outlineRows(), ...extra });
+/** A real-length outline_check reply: 4 good findings and 8 our code must drop. */
+export const CHECK_OUT = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/outline-check-reply.json", import.meta.url)));
+export const checkReply = (out: unknown = CHECK_OUT) => () => Promise.resolve(anthropic("end_turn", out));
+export const ocid = { stage: "outline_check", bookId: BOOK_ID };
+
 export const PRODUCT = Deno.readTextFileSync(new URL("./fixtures/amazon-product1.txt", import.meta.url));
 export const PAGE = Deno.readTextFileSync(new URL("./fixtures/amazon-page1.txt", import.meta.url));
 export const EXPECTED = JSON.parse(Deno.readTextFileSync(new URL("./fixtures/amazon-page1.expected.json", import.meta.url)));
@@ -117,6 +139,8 @@ export type Setup = {
   titleSaveError?: { code: string };
   outline?: OutlineContext | null;
   outlineSaveError?: { code: string };
+  check?: OutlineCheckContext | null;
+  checkSaveThrows?: boolean;
   limit?: number | null;
   monthTokens?: number;
   recent?: number;
@@ -131,6 +155,7 @@ export function setup(s: Setup = {}) {
   const saves: DriftSave[] = [];
   const titleSaves: TitleIdea[][] = [];
   const outlineSaves: OutlineDraft[] = [];
+  const checkSaves: OutlineCheckSave[] = [];
   const calls: { url: string; init: RequestInit }[] = [];
   const store: Store = {
     getUserId: () => Promise.resolve(s.userId === undefined ? USER : s.userId),
@@ -165,6 +190,12 @@ export function setup(s: Setup = {}) {
         row(outline.chapters.length + 1, "conclusion", null, null, [], [sec(null, outline.conclusion_words, 99, 0)]),
       ]);
     },
+    getOutlineCheckContext: (id) => Promise.resolve(s.check === undefined ? (id === BOOK_ID ? outlineCheckCtx() : null) : s.check),
+    saveOutlineCheck: (save) => {
+      checkSaves.push(save);
+      if (s.checkSaveThrows) return Promise.reject({ code: "23514" });
+      return Promise.resolve({ checked_at: save.checkedAt.replace("Z", "+00:00").replace(".000", ""), inputs_key: save.inputsKey });
+    },
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),
     sumCountedTokensSince: () => Promise.resolve(s.monthTokens ?? 0),
     countCallsSince: () => Promise.resolve(s.recent ?? 0),
@@ -180,7 +211,7 @@ export function setup(s: Setup = {}) {
     }) as typeof fetch,
     now: () => new Date("2026-09-29T12:00:00Z"),
   });
-  return { handle, logged, calls, saves, titleSaves, outlineSaves };
+  return { handle, logged, calls, saves, titleSaves, outlineSaves, checkSaves };
 }
 
 export function anthropic(stop: string, out: unknown, status = 200) {

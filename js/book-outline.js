@@ -20,16 +20,29 @@
      words save through js/autosave.js. Add chapter / Add section, Delete
      chapter / Remove section (confirm dialog), and drag or Alt + arrow
      keys to reorder chapters save at once.
-   - The word budget and the checks come from our code (js/word-budget.js,
-     js/outline-checks.js), never from the AI. The AI checks and Approve
-     outline come in E9.2.
+   - The word budget and the code checks come from our code (js/word-budget.js,
+     js/outline-checks.js), never from the AI.
+   - AI check (E9.2, stage outline_check): overlapping chapters, parts of the
+     reader promise no chapter covers, chapters that leave the positioning.
+     The server saves the result (0017 outline_checks) with a fingerprint of
+     the outline it read (js/outline-key.js). When the outline on screen has
+     another fingerprint, the result is "Out of date": an edit the AI reads
+     (titles, objectives, section titles, order), not words or boxes. AI
+     lines and pills carry an "AI" label.
+   - Approve outline (E9.2, 0017 approve_outline) marks step 05 done. It is
+     allowed with warnings; the dialog lists one line per warning, and "AI
+     check not run" or "AI check is out of date" as a line that is not
+     counted. Any outline edit removes the approval (the server clears it;
+     the screen clears it at once and reads it again after a save).
    - Chapters marked "Needs review" (unlock of 03) show a note and a pill.
+     Approving clears them.
 ═══════════════════════════════════════════════════ */
 
 (function () {
   const { ICON, esc } = kdpUi;
   const C = kdpOutlineChecks;
   const W = kdpWords;
+  const KEY = kdpOutlineKey;
 
   // Same limits as migration 0016 and supabase/functions/generate/lib/limits.ts.
   const MAX = { chapterTitle: 150, objective: 300, sectionTitle: 150, sectionWords: 10000 };
@@ -38,6 +51,8 @@
   const PER_CHAPTER = { min: 1, max: 6, default: 3 };
 
   const GRIP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+  const INFO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+  const AI = '<span class="otl-ai" title="Found by the AI">AI</span>';
   const CHEVRON = (open) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}"/></svg>`;
 
   let ctx = null, book = null, saver = null, els = null;
@@ -54,7 +69,12 @@
   let note = null;                       // { text, retry } after a failed add, move or remove
   let lastPer = PER_CHAPTER.default;
   let drag = null;                       // { id } while a chapter is dragged
-  let gen = null, del = null;            // dialogs, built on first use
+  let gen = null, del = null, appr = null;   // dialogs, built on first use
+  let checkRow = null;                   // the saved AI check { findings, inputs_key, checked_at } or null
+  let aiCheck = { state: 'idle' };       // idle | working | error | stopped
+  let checkToken = 0;
+  let approvalStale = false;             // an edit cleared the approval on screen: read it again after the save
+  let approvalSeq = 0;
 
   /* ── Values ──────────────────────────────── */
 
@@ -75,6 +95,60 @@
   const reviewCount = () => regular().filter((c) => c.needs_review).length;
   const fixedName = (c) => (c.kind === 'intro' ? 'Introduction' : 'Conclusion');
   const countOf = (rel) => { const r = one(rel); return r && Number.isInteger(r.count) ? r.count : 0; };
+
+  /* ── AI check and approval ── */
+
+  const lockedAt = () => { const p = one(book.positioning); return p ? p.locked_at : null; };
+  const checkStale = () => !!checkRow && checkRow.inputs_key !== KEY(chapters, lockedAt());
+  /** The saved AI findings that still apply: the check is current and names chapters that exist. */
+  function findings() {
+    if (!checkRow || checkStale()) return [];
+    const ids = new Set(regular().map((c) => c.id));
+    return (checkRow.findings || []).filter((f) => Array.isArray(f.chapters) && f.chapters.every((id) => ids.has(id)));
+  }
+  /** One line for a finding: "Chapters 3 and 6 cover the same idea". */
+  function findingText(f) {
+    const n = f.chapters.map((id) => numberOf(findChapter(id)));
+    if (f.kind === 'overlap') return `Chapters ${n[0]} and ${n[1]} cover the same idea`;
+    if (f.kind === 'drift') return `Chapter ${n[0]} leaves the positioning`;
+    return `No chapter covers “${f.quote}” from the reader promise`;
+  }
+  /** The AI pills on a chapter card. */
+  function aiPillTexts(c) {
+    const out = [];
+    for (const f of findings()) {
+      if (!f.chapters.includes(c.id)) continue;
+      if (f.kind === 'overlap') out.push(`Overlaps chapter ${numberOf(findChapter(f.chapters.find((x) => x !== c.id)))}`);
+      else if (f.kind === 'drift') out.push('Off the positioning');
+    }
+    return out;
+  }
+  /** Why the AI check can't run now, or ''. */
+  function checkBlock() {
+    if (!isLocked()) return 'Lock the positioning in 03 first.';
+    if (!regular().some((c) => str(c.title).trim())) return 'Give a chapter a title first.';
+    return '';
+  }
+  /** Why Approve can't run now, or '' (approval with warnings is allowed). */
+  function approveBlock() {
+    if (!isLocked()) return 'Lock the positioning in 03 first.';
+    if (!regular().length) return 'Add a chapter first.';
+    const n = regular().findIndex((c) => !str(c.title).trim());
+    if (n >= 0) return `Chapter ${n + 1} has no title. Every chapter needs one.`;
+    return '';
+  }
+  /** One line per open warning: the code checks, numbers with no source, then the current AI findings. */
+  function warnings() {
+    const out = C.check(chapters, brief()).rows.filter((r) => !r.ok).map((r) => r.text);
+    regular().forEach((c) => {
+      const nums = unsourcedNow(c);
+      if (nums.length) out.push(`Chapter ${numberOf(c)}: verify ${nums.join(', ')} (no source)`);
+    });
+    return out.concat(findings().map(findingText));
+  }
+  /** "AI check not run" or "AI check is out of date": a line in the dialog, not a warning (owner, E9.2). */
+  const aiInfo = () => (!checkRow ? 'AI check not run' : checkStale() ? 'AI check is out of date' : '');
+  const when = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
   /** The flagged numbers still in the chapter's text ("Verify: no source"). */
   function unsourcedNow(c) {
@@ -134,6 +208,33 @@
   function onSaved(res) {
     if (res.data.updated_at) book.updated_at = res.data.updated_at;
     ctx.refresh();
+    if (approvalStale) readApproval();
+  }
+
+  /**
+   * An outline edit removes the approval (0017). The screen shows it at once.
+   * A field edit may end up saving the same value (typed and undone), which
+   * the server ignores, so `reread` reads the approval again after the save.
+   */
+  function outlineChanged(reread) {
+    if (!book.outline_approved_at) return;
+    book.outline_approved_at = null;
+    approvalStale = !!reread;
+    approvalSeq++;
+    ctx.refresh();
+    if (active()) renderSide();
+  }
+
+  async function readApproval() {
+    approvalStale = false;
+    const seq = ++approvalSeq;
+    let res;
+    try { res = await kdp.getOutlineApproval(book.id); } catch (err) { return; }
+    if (seq !== approvalSeq || res.error) return;
+    if ((res.data || null) === (book.outline_approved_at || null)) return;
+    book.outline_approved_at = res.data || null;
+    ctx.refresh();
+    if (active()) renderSide();
   }
 
   function onError(res) {
@@ -169,16 +270,19 @@
 
   async function loadData(quiet) {
     if (!quiet || load.state !== 'ready') { load = { state: 'loading' }; if (active()) renderAll(); }
-    let res;
-    try { res = await kdp.getOutline(book.id); } catch (err) { res = { error: err }; }
+    const safe = (p) => p.catch((err) => ({ error: err }));
+    const [res, chk] = await Promise.all([safe(kdp.getOutline(book.id)), safe(kdp.getOutlineCheck(book.id))]);
     if (res.error) {
       if (!quiet || load.state !== 'ready') load = { state: 'error' };
     } else {
       setOutline(res.data);
+      // The AI check is extra: when it can't load, the outline still works.
+      if (!chk.error && aiCheck.state !== 'working') checkRow = chk.data || null;
       load = { state: 'ready' };
       ctx.refresh();
     }
     if (active()) renderAll();
+    if (approvalStale) readApproval();
   }
 
   function setOutline(rows) {
@@ -204,6 +308,7 @@
         <aside class="otl-side" aria-label="Word budget and outline check">
           <section class="panel otl-panel" data-budget aria-labelledby="otlBudget"></section>
           <section class="panel otl-panel" data-checks aria-labelledby="otlChecks"></section>
+          <section class="panel otl-panel" data-approve-card aria-labelledby="otlApprove"></section>
         </aside>
         <p class="sr-only" aria-live="polite" data-live></p>
       </div>`;
@@ -213,6 +318,7 @@
       list: root.querySelector('[data-list]'),
       budget: root.querySelector('[data-budget]'),
       checks: root.querySelector('[data-checks]'),
+      approve: root.querySelector('[data-approve-card]'),
       live: root.querySelector('[data-live]')
     };
     bind(root.querySelector('.otl'));
@@ -220,7 +326,7 @@
     else {
       renderAll();
       // Another step may have changed the outline (an unlock marks chapters): read it again.
-      if (load.state === 'ready' && !saver.hasUnsaved() && ai.state !== 'working') loadData(true);
+      if (load.state === 'ready' && !saver.hasUnsaved() && ai.state !== 'working' && aiCheck.state !== 'working') loadData(true);
     }
   }
 
@@ -355,14 +461,17 @@
     (checks.byChapter[c.id] || []).forEach((p) => pills.push(`<span class="check-badge warn">${ICON.warn()}${esc(p.text)}</span>`));
     const nums = unsourcedNow(c);
     if (nums.length) pills.push(`<span class="check-badge warn">${ICON.warn()}Verify: no source for ${esc(nums.join(', '))}</span>`);
+    aiPillTexts(c).forEach((t) => pills.push(`<span class="check-badge warn">${ICON.warn()}${esc(t)} ${AI}</span>`));
     return pills.join('');
   }
+
+  const isWarn = (c, checks) => !!(checks.byChapter[c.id] || c.needs_review || unsourcedNow(c).length || aiPillTexts(c).length);
 
   function chapterHtml(c) {
     const n = numberOf(c);
     const open = expanded.has(c.id);
     const checks = C.check(chapters, brief());
-    const warn = !!(checks.byChapter[c.id] || c.needs_review || unsourcedNow(c).length);
+    const warn = isWarn(c, checks);
     const title = str(c.title).trim();
     const name = title ? `Chapter ${n}: ${title}` : `Chapter ${n}`;
     return `<li class="otl-ch${warn ? ' is-warn' : ''}" data-ch="${c.id}">
@@ -448,10 +557,13 @@
     if (load.state !== 'ready') {
       els.budget.innerHTML = '<h2 class="ttl-label" id="otlBudget">WORD BUDGET</h2><div class="skel skel-line" aria-hidden="true"></div>';
       els.checks.innerHTML = '<h2 class="ttl-label" id="otlChecks">OUTLINE CHECK</h2>';
+      els.approve.innerHTML = '';
+      els.approve.hidden = true;
       return;
     }
     renderBudget();
     renderChecks();
+    renderApprove();
   }
 
   function renderBudget() {
@@ -490,8 +602,86 @@
       ? `<li class="is-pass">${ICON.check(16)}<span>${esc(x.text)}</span></li>`
       : `<li class="is-warn">${ICON.warn(16)}<span>${esc(x.text)}</span></li>`)).join('');
     els.checks.innerHTML = `
-      <div class="otl-check-head"><h2 class="ttl-label" id="otlChecks">OUTLINE CHECK</h2><span class="otl-by">Checked by KDP Lab</span></div>
-      ${rows ? `<ul class="ttl-check-list" data-check-list>${rows}</ul>` : '<p class="ttl-sub">Checks show here once you have chapters.</p>'}`;
+      <div class="otl-check-head"><h2 class="ttl-label" id="otlChecks" tabindex="-1">OUTLINE CHECK</h2><span class="otl-by">Checked by KDP Lab</span></div>
+      ${rows ? `<ul class="ttl-check-list" data-check-list>${rows}</ul>` : '<p class="ttl-sub">Checks show here once you have chapters.</p>'}
+      ${regular().length ? `<div class="otl-ai-block" role="group" data-ai-check aria-labelledby="otlAi">${aiCheckHtml()}</div>` : ''}`;
+  }
+
+  /** The AI part of the Outline check card (stage outline_check). */
+  function aiCheckHtml() {
+    const stale = checkStale();
+    const time = checkRow && checkRow.checked_at ? `<span class="otl-by" data-ai-time>Checked ${esc(when(checkRow.checked_at))}</span>` : '';
+    const head = `<div class="otl-check-head"><h3 class="ttl-label" id="otlAi" tabindex="-1">AI CHECK</h3>${time}</div>`;
+    if (aiCheck.state === 'working') {
+      return `${head}
+        <div class="help-working" role="status"><span class="spinner" aria-hidden="true"></span>Checking the outline…</div>
+        <div><button type="button" class="btn btn-secondary btn-sm" data-check-stop>Stop</button></div>`;
+    }
+    const parts = [head];
+    if (checkRow) {
+      const all = (checkRow.findings || []).filter((f) => Array.isArray(f.chapters) && f.chapters.every((id) => findChapter(id)));
+      const line = (f) => `<li class="is-warn">${ICON.warn(16)}<span class="otl-ai-text"><span>${esc(findingText(f))} ${AI}</span>`
+        + `<span class="otl-why">${esc(f.why)}</span>`
+        + `${(f.unsourced || []).length ? `<span class="check-badge warn">${ICON.warn()}Verify: no source for ${esc(f.unsourced.join(', '))}</span>` : ''}</span></li>`;
+      const pass = (t) => `<li class="is-pass">${ICON.check(16)}<span class="otl-ai-text"><span>${t} ${AI}</span></span></li>`;
+      const of = (k) => all.filter((f) => f.kind === k);
+      const rows = [
+        of('overlap').length ? of('overlap').map(line).join('') : pass('No two chapters cover the same idea'),
+        of('promise_gap').length ? of('promise_gap').map(line).join('') : pass('Covers the reader promise'),
+        of('drift').length ? of('drift').map(line).join('') : pass('Every chapter follows the positioning')
+      ];
+      parts.push(`<ul class="ttl-check-list${stale ? ' is-stale' : ''}" data-ai-list>${rows.join('')}</ul>`);
+    } else {
+      parts.push('<p class="ttl-sub">Not run yet. The AI looks for chapters that cover the same idea, parts of the reader promise no chapter covers, and chapters that leave the positioning.</p>');
+    }
+    if (aiCheck.state === 'error') {
+      const [kind, text, retry] = checkMessage(aiCheck.code);
+      parts.push(`<div class="alert alert-${kind}" role="alert">${ICON.warn(18)}<div>
+          <p class="alert-text">${esc(text)}</p>
+          ${retry ? '<button type="button" class="link-btn" data-check-retry>Try again</button>' : ''}
+        </div></div>`);
+    } else if (aiCheck.state === 'stopped') {
+      parts.push('<p class="help-note" role="status" data-ai-note>Stopped. If the AI had already finished, this call may still count.</p>');
+    } else if (stale) {
+      parts.push(`<p class="ttl-note is-warn" data-ai-note>${ICON.warn(16)}<span><strong>Out of date.</strong> The outline changed after the AI check. Check again.</span></p>`);
+    }
+    const block = checkBlock();
+    const off = !!block || ai.state === 'working';
+    parts.push(`<div class="otl-ai-actions">
+        <button type="button" class="btn btn-secondary" data-check${off ? ' disabled' : ''}${block ? ' aria-describedby="otlCheckWhy"' : ''}>${ICON.sparkle}${checkRow ? 'Check again' : 'Check outline'}</button>
+        ${block ? `<p class="field-hint" id="otlCheckWhy" data-check-why>${esc(block)}</p>` : ''}
+      </div>`);
+    return parts.join('');
+  }
+
+  /** [kind, text, retry] for an AI check error code. */
+  function checkMessage(code) {
+    switch (code) {
+      case 'positioning_not_locked': return ['warning', 'Lock your positioning in 03 first. The check compares the outline with it.', false];
+      case 'nothing_to_check': return ['warning', 'Give at least one chapter a title first.', false];
+      default: return kdpUi.aiMessage(code);
+    }
+  }
+
+  /** The Approve outline card (design 20). */
+  function renderApprove() {
+    els.approve.hidden = false;
+    if (book.outline_approved_at) {
+      els.approve.innerHTML = `
+        <h2 class="otl-h2" id="otlApprove" tabindex="-1">Outline approved</h2>
+        <p class="ttl-note is-pass" data-approved>${ICON.check(16)}<span>Approved ${esc(when(book.outline_approved_at))}. Step 05 is done.</span></p>
+        <p class="ttl-sub">Any change to the outline removes the approval. Approve it again after.</p>`;
+      return;
+    }
+    const block = approveBlock();
+    const n = warnings().length;
+    const text = n ? `Writing follows this structure. Fix the ${n === 1 ? '1 warning' : `${n} warnings`}, or approve anyway.` : 'Writing follows this structure.';
+    const off = !!block || ai.state === 'working';
+    els.approve.innerHTML = `
+      <h2 class="otl-h2" id="otlApprove" tabindex="-1">Approve outline</h2>
+      <p class="ttl-sub" data-approve-text>${esc(text)}</p>
+      <button type="button" class="btn btn-primary otl-approve-btn" data-approve${off ? ' disabled' : ''}${block ? ' aria-describedby="otlApproveWhy"' : ''}>Approve outline</button>
+      ${block ? `<p class="field-hint" id="otlApproveWhy" data-approve-why>${esc(block)}</p>` : ''}`;
   }
 
   /** After typing: totals, the chapter head, pills, budget and checks, without re-rendering the fields. */
@@ -510,7 +700,7 @@
       const p = els.list.querySelector(`[data-pills="${x.id}"]`);
       if (p) p.innerHTML = pillsHtml(x, checks);
       const li = els.list.querySelector(`[data-ch="${x.id}"]`);
-      if (li) li.classList.toggle('is-warn', !!(checks.byChapter[x.id] || x.needs_review || unsourcedNow(x).length));
+      if (li) li.classList.toggle('is-warn', isWarn(x, checks));
     });
     renderSide();
   }
@@ -528,6 +718,7 @@
         c[t.dataset.f] = t.value;
         saver.edit(`c|${c.id}|${t.dataset.f}`, 800);
         clearDone();
+        outlineChanged(true);
         renderDerived(c);
       } else if (t.dataset.s) {
         const hit = findSection(t.dataset.s);
@@ -543,6 +734,7 @@
         }
         saver.edit(`s|${hit.s.id}|${t.dataset.f}`, 800);
         clearDone();
+        outlineChanged(true);
         renderDerived(hit.c);
       }
     });
@@ -553,6 +745,7 @@
       if (!c) return;
       c[t.dataset.f] = t.checked;
       saver.edit(`c|${c.id}|${t.dataset.f}`, 0);
+      outlineChanged(true);
     });
     root.addEventListener('focusout', (e) => {
       const t = e.target;
@@ -563,6 +756,9 @@
       if (!b || b.disabled) return;
       if (b.matches('[data-generate], [data-generate-retry]')) return openGenerate();
       if (b.matches('[data-stop]')) return stop();
+      if (b.matches('[data-check], [data-check-retry]')) return runCheck();
+      if (b.matches('[data-check-stop]')) return stopCheck();
+      if (b.matches('[data-approve]')) return openApprove();
       if (b.matches('[data-reload]')) return loadData();
       if (b.matches('[data-note-retry]')) { const r = note && note.retry; note = null; renderTop(); if (r) r(); return; }
       if (b.dataset.toggle) return toggle(b.dataset.toggle);
@@ -661,6 +857,7 @@
     list.splice(to, 0, c);
     setOrder(list.map((x) => x.id));
     clearDone();
+    outlineChanged(false);
     renderList();
     renderSide();
     const h = els.list.querySelector(`[data-handle="${id}"]`);
@@ -719,6 +916,7 @@
     try { out = await kdp.getOutline(book.id); } catch (err) { out = { error: err }; }
     busy = '';
     if (!out.error) setOutline(out.data);
+    outlineChanged(false);
     ctx.refresh();
     if (!active()) return;
     renderAll();
@@ -743,6 +941,7 @@
       return;
     }
     c.sections.push(res.data);
+    outlineChanged(false);
     if (!active()) return;
     renderList();
     renderSide();
@@ -866,6 +1065,7 @@
       }
     }
     syncBook();
+    outlineChanged(false);
     ctx.refresh();
     del.done = true;
     del.d.close();
@@ -980,7 +1180,7 @@
     const rows = res.data && Array.isArray(res.data.chapters) ? res.data.chapters : null;
     if (token !== aiToken) {
       // Stopped: the reply is not shown, but the server saved the outline. Show what is saved.
-      if (rows) { setOutline(rows); ctx.refresh(); if (active() && ai.state !== 'working') renderAll(); }
+      if (rows) { setOutline(rows); outlineChanged(false); ctx.refresh(); if (active() && ai.state !== 'working') renderAll(); }
       return;
     }
     const code = res.error && res.error.code;
@@ -991,6 +1191,7 @@
     expanded = new Set();
     opened = false;
     setOutline(rows);
+    outlineChanged(false);   // replace_outline clears the approval
     ai = { state: 'done', done: { chapters: regular().length, words: C.planned(chapters), picked: !!res.data.aiPickedChapters, rescaled: !!res.data.rescaled } };
     ctx.refresh();
     if (!active()) return;
@@ -1016,6 +1217,155 @@
     if (g && !g.disabled) g.focus();
   }
 
+  /* ── AI check (stage outline_check) ──────── */
+
+  async function runCheck() {
+    if (aiCheck.state === 'working' || checkBlock() || ai.state === 'working') return;
+    const token = ++checkToken;
+    aiCheck = { state: 'working' };
+    renderSide();
+    const stopBtn = els && els.checks.querySelector('[data-check-stop]');
+    if (stopBtn) stopBtn.focus();
+    // The server reads the saved outline: save the edits first.
+    if (!(await settle())) { if (token === checkToken) checkFailed('save_first'); return; }
+    if (token !== checkToken) return;
+
+    let res;
+    try { res = await kdp.generate({ stage: 'outline_check', bookId: book.id }); }
+    catch (err) { res = { error: { code: 'network' } }; }
+    const d = res.data;
+    const okReply = !!(d && Array.isArray(d.findings) && typeof d.inputs_key === 'string');
+    // The server saved the result either way, so show it even after Stop.
+    if (okReply) checkRow = { findings: d.findings, inputs_key: d.inputs_key, checked_at: d.checked_at };
+    if (token !== checkToken) { if (okReply && active() && aiCheck.state !== 'working') renderAll(); return; }
+    const code = res.error && res.error.code;
+    if (code === 'unauthorized') { location.replace('../login.html'); return; }
+    if (code === 'not_found') { ctx.notFound(); return; }
+    if (code || !okReply) return checkFailed(code || 'server_error');
+
+    aiCheck = { state: 'idle' };
+    if (!active()) return;
+    renderAll();
+    const n = findings().length;
+    announce(n ? `Outline checked. The AI found ${n === 1 ? '1 problem' : `${n} problems`}.` : 'Outline checked. The AI found no problems.');
+    const h = document.getElementById('otlAi');
+    if (h) h.focus();
+  }
+
+  function checkFailed(code) {
+    aiCheck = { state: 'error', code };
+    if (!active()) return;
+    renderSide();
+    const a = els.checks.querySelector('[role="alert"]');
+    if (a) a.scrollIntoView({ block: 'nearest' });
+  }
+
+  function stopCheck() {
+    checkToken++;
+    aiCheck = { state: 'stopped' };
+    if (!active()) return;
+    renderSide();
+    const b = els.checks.querySelector('[data-check]');
+    if (b && !b.disabled) b.focus();
+  }
+
+  /* ── Approve outline (design 21) ─────────── */
+
+  function buildApprove() {
+    const d = document.createElement('dialog');
+    d.className = 'dialog dialog-sm';
+    d.id = 'otlApproveDialog';
+    d.setAttribute('aria-labelledby', 'oaTitle');
+    d.setAttribute('aria-describedby', 'oaText');
+    d.innerHTML = `
+      <form class="dialog-inner" novalidate>
+        <div class="dialog-head"><h2 id="oaTitle"></h2></div>
+        <ul class="ttl-check-list otl-appr-lines" data-appr-lines></ul>
+        <p class="delete-text" id="oaText" data-appr-text>Any change to the outline removes the approval. Approve it again after.</p>
+        <div class="alert alert-error" data-error role="alert" hidden></div>
+        <div class="dialog-foot">
+          <button type="button" class="btn btn-secondary" data-close></button>
+          <button type="submit" class="btn btn-primary" data-confirm></button>
+        </div>
+      </form>`;
+    document.body.append(d);
+    appr = { d, title: d.querySelector('#oaTitle'), lines: d.querySelector('[data-appr-lines]'), error: d.querySelector('[data-error]'), close: d.querySelector('[data-close]'), btn: d.querySelector('[data-confirm]'), busy: false, warned: false };
+    // "Fix them first": go to the checks. Cancel or Esc: back to the button.
+    const close = (fix) => {
+      if (appr.busy) return;
+      d.close();
+      if (!active()) return;
+      const t = fix ? document.getElementById('otlChecks') : els.approve.querySelector('[data-approve]');
+      if (t) t.focus();
+    };
+    appr.close.addEventListener('click', () => close(appr.warned));
+    d.addEventListener('cancel', (e) => { e.preventDefault(); close(false); });
+    d.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); approve(); });
+  }
+
+  function openApprove() {
+    if (approveBlock() || ai.state === 'working' || book.outline_approved_at) return;
+    if (!appr) buildApprove();
+    const list = warnings();
+    const info = aiInfo();
+    appr.busy = false;
+    appr.warned = list.length > 0;
+    appr.title.textContent = list.length ? `Approve with ${list.length === 1 ? '1 warning' : `${list.length} warnings`}?` : 'Approve outline?';
+    appr.lines.innerHTML = list.map((t) => `<li class="is-warn">${ICON.warn(16)}<span>${esc(t)}</span></li>`).join('')
+      + (info ? `<li class="is-info">${INFO}<span>${esc(info)}</span></li>` : '');
+    appr.lines.hidden = !list.length && !info;
+    appr.error.hidden = true;
+    appr.close.textContent = list.length ? 'Fix them first' : 'Cancel';
+    appr.btn.disabled = false;
+    appr.btn.textContent = list.length ? 'Approve anyway' : 'Approve outline';
+    appr.d.showModal();
+    appr.close.focus();
+  }
+
+  async function approve() {
+    if (appr.busy) return;
+    appr.busy = true;
+    appr.btn.disabled = true;
+    appr.btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Approving…';
+    appr.error.hidden = true;
+    let res;
+    if (!(await settle())) res = { error: { message: 'save_first' } };
+    else {
+      try { res = await kdp.approveOutline(book.id); } catch (err) { res = { error: { message: 'network' } }; }
+    }
+    appr.busy = false;
+    if (res.error) {
+      const e = res.error;
+      if (e.message === 'book_not_found') { appr.d.close(); ctx.notFound(); return; }
+      appr.btn.disabled = false;
+      appr.btn.textContent = appr.warned ? 'Approve anyway' : 'Approve outline';
+      const text = {
+        positioning_not_locked: 'Lock the positioning in 03 first. The outline follows it.',
+        outline_empty: 'Add at least one chapter first.',
+        chapter_untitled: `Every chapter needs a title.${e.details ? ` ${e.details}` : ''}`,
+        save_first: kdpUi.aiMessage('save_first')[1]
+      }[e.message] || 'We couldn’t approve the outline. Check your connection, then try again.';
+      appr.error.innerHTML = ICON.warn(18);
+      const p = document.createElement('div');
+      p.textContent = text;
+      appr.error.append(p);
+      appr.error.hidden = false;
+      return;
+    }
+    approvalSeq++;   // a read of the approval started before this is out of date
+    approvalStale = false;
+    book.outline_approved_at = res.data;
+    chapters.forEach((c) => { c.needs_review = false; });   // approving is the review (0017)
+    syncBook();
+    appr.d.close();
+    ctx.refresh();
+    if (!active()) return;
+    renderAll();
+    const h = document.getElementById('otlApprove');
+    if (h) h.focus();
+    announce('Outline approved. Step 05 is done.');
+  }
+
   /* ── Step API for js/book.js ─────────────── */
 
   /** Approving the outline (E9.2) marks step 05 done. */
@@ -1024,7 +1374,8 @@
   function missing() {
     if (!book) return '';
     const n = load.state === 'ready' ? chapters.length : countOf(book.chapters);
-    return n ? '' : 'Make an outline';
+    if (!n) return 'Make an outline';
+    return book.outline_approved_at ? '' : 'Approve the outline';
   }
 
   const needsReview = (b) => (load.state === 'ready' ? reviewCount() > 0 : countOf(b.review_chapters) > 0);

@@ -58,7 +58,7 @@ const test = async page => {
   ok(JSON.stringify(c1) === JSON.stringify(['pass: Within the word target', 'warn: Chapter 8 has no objective', 'pass: Every chapter has a title', 'pass: Every chapter has a section', 'pass: Every section has a word target', 'pass: 8 chapters, as in your Brief']), `checks: ${JSON.stringify(c1)}`);
   ok(/No objective/.test(await txt(`${ch(8)} [data-pills]`)) && await page.$eval(ch(8), (l) => l.classList.contains('is-warn')), 'chapter 8: No objective pill, warning border');
   ok(/Objective: No objective yet/.test(await txt(`${ch(8)} [data-head-obj]`)), 'chapter 8: "No objective yet"');
-  ok((await reason(5)) === '', 'sidebar: no reason once there is an outline');
+  ok((await reason(5)) === 'Approve the outline', `sidebar: "Approve the outline" once there is an outline (E9.2 owner): "${await reason(5)}"`);
 
   // 4. Words: the chapter total, budget and checks follow; the section saves.
   await page.fill(`${ch(1)} .otl-sec:nth-child(1) .otl-num-input`, '900');

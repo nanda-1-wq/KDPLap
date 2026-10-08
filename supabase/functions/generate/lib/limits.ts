@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -22,17 +22,18 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   title_ideas: MODELS.sonnet,
   competitor_import: MODELS.sonnet,
   outline_ideas: MODELS.sonnet,
+  outline_check: MODELS.sonnet,
 };
 
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -108,6 +109,10 @@ export const LENGTH_RANGES: Record<string, readonly [number, number | null]> = {
 // With no length in the Brief the outline aims here, and with no chapter count the AI picks 6 to 10.
 export const DEFAULT_OUTLINE_WORDS = [8000, 12000] as const;
 export const DEFAULT_CHAPTERS = [6, 10] as const;
+// AI outline check (E9.2): findings kept per check, and their text (same as migration 0017).
+export const MAX_FINDINGS = 8;
+export const MAX_FINDING_WHY = 300;
+export const MAX_FINDING_QUOTE = 300;
 
 /* ── Error codes (the UI maps these to messages) ── */
 
@@ -170,7 +175,8 @@ export type GenerateInput =
   | { stage: "drift_check"; bookId: string }
   | { stage: "title_ideas"; bookId: string }
   | { stage: "competitor_import"; bookId: string; text: string }
-  | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number };
+  | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number }
+  | { stage: "outline_check"; bookId: string };
 
 const sameKeys = (o: Record<string, unknown>, want: string[]) =>
   JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...want].sort());
@@ -187,6 +193,7 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *   title_ideas:     { stage, bookId }             at most 2 KB
  *   competitor_import: { stage, bookId, text }     at most 256 KB, text 200 to 60,000 characters
  *   outline_ideas:   { stage, bookId, sectionsPerChapter }   at most 2 KB, a whole number from 1 to 6
+ *   outline_check:   { stage, bookId }             at most 2 KB
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -222,7 +229,7 @@ export function parseInput(raw: string): GenerateInput | null {
     return { stage, bookId: o.bookId.toLowerCase(), sectionsPerChapter: n };
   }
 
-  if (stage === "brief_help" || stage === "review_insights" || stage === "drift_check" || stage === "title_ideas") {
+  if (stage === "brief_help" || stage === "review_insights" || stage === "drift_check" || stage === "title_ideas" || stage === "outline_check") {
     if (!sameKeys(o, ["stage", "bookId"])) return null;
     if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
     return { stage, bookId: o.bookId.toLowerCase() };

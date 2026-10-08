@@ -5,7 +5,7 @@
      check      pre-checks before any money is spent; the Job, or an error code
      prompt     [system, schema, user message]
      interpret  the provider reply as an Outcome
-     save       optional: drift_check, title_ideas and outline_ideas save their own results
+     save       optional: drift_check, title_ideas, outline_ideas and outline_check save their own results
      reply      the 200 body
    A stage with no entry throws "generate: unknown stage". */
 
@@ -21,6 +21,7 @@ import { helpFields, interpretPositioningHelp, POSITIONING_SCHEMA, POSITIONING_S
 import { DRIFT_SCHEMA, DRIFT_SYSTEM, driftUserMessage, interpretDriftCheck } from "./drift_check.ts";
 import { interpretTitleIdeas, type TitleContext, titleIdeasWanted, TITLE_SCHEMA, TITLE_SYSTEM, titleUserMessage } from "./title_ideas.ts";
 import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineTarget, outlineTarget, outlineUserMessage } from "./outline_ideas.ts";
+import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineChapters, outlineCheckKnown, outlineCheckUserMessage, type OutlineRow, outlineKey } from "./outline_check.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -32,7 +33,8 @@ export type Job =
   | { stage: "drift_check"; ctx: PositioningContext }
   | { stage: "title_ideas"; ctx: TitleContext; want: number }
   | { stage: "competitor_import"; text: string }
-  | { stage: "outline_ideas"; ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null };
+  | { stage: "outline_ideas"; ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null }
+  | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string };
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -225,6 +227,41 @@ const outlineIdeas: StageDef<"outline_ideas", OutlineContext> = {
   }),
 };
 
+// Step 05 (E9.2). The server reads the saved outline, the locked positioning,
+// the Brief and Research; the browser sends only the id. The result is saved
+// by the server (service role, 0017), with the fingerprint of the outline it
+// read: an edit made during the call shows the result "Out of date" at once.
+const outlineCheck: StageDef<"outline_check", OutlineCheckContext> = {
+  read: (store, input) => store.getOutlineCheckContext(input.bookId),
+  check: (_input, ctx) => {
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    const chapters = outlineChapters(ctx.outline);
+    if (!chapters.some((c) => (c.title ?? "").trim())) return { fail: "nothing_to_check" };
+    return { stage: "outline_check", ctx, chapters, key: outlineKey(ctx.outline, ctx.positioning.locked_at) };
+  },
+  prompt: (job) => [OUTLINE_CHECK_SYSTEM, OUTLINE_CHECK_SCHEMA, outlineCheckUserMessage(job.ctx)],
+  interpret: (job, httpOk, body) =>
+    interpretOutlineCheck(httpOk, body, job.chapters, positioningValues(job.ctx.positioning).reader_promise, outlineCheckKnown(job.ctx)),
+  // When the save does not happen the author gets nothing, so the call is not counted.
+  save: async (store, job, out, run) => {
+    let saved: { checked_at: string; inputs_key: string } | null = null;
+    try {
+      saved = await store.saveOutlineCheck({
+        bookId: job.ctx.bookId,
+        userId: run.userId,
+        findings: out.findings!,
+        inputsKey: job.key,
+        checkedAt: run.now.toISOString(),
+      });
+    } catch (err) {
+      console.error(`generate: outline check save failed: ${(err as { code?: string })?.code ?? "unknown"}`);
+      out = { ...out, counted: false, code: "server_error" };
+    }
+    return { out, saved };
+  },
+  reply: (_job, out, saved) => ({ stage: "outline_check", findings: out.findings, ...(saved as object | null) }),
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -236,6 +273,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   title_ideas: titleIdeas,
   competitor_import: competitorImport,
   outline_ideas: outlineIdeas,
+  outline_check: outlineCheck,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -273,7 +311,7 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
  * sources) and review_insights. positioning_help, drift_check, title_ideas,
- * competitor_import and outline_ideas need their job's data: they throw (use interpretJob).
+ * competitor_import, outline_ideas and outline_check need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);

@@ -10,7 +10,7 @@
 import * as L from "./lib.ts";
 
 // The Store types live in lib/types.ts (Batch B1); the tests import them from here.
-export type { DriftSave, SavedTitleOption, Store, UsageRow } from "./lib/types.ts";
+export type { DriftSave, OutlineCheckSave, SavedTitleOption, Store, UsageRow } from "./lib/types.ts";
 import type { Store } from "./lib/types.ts";
 
 export type Deps = {
@@ -128,7 +128,7 @@ export function makeHandler(deps: Deps) {
         console.error(`generate: provider result ${out.code} stop_reason=${(body as { stop_reason?: string } | null)?.stop_reason ?? "none"}`);
       }
 
-      // 5b. drift_check and title_ideas save their own results (see lib/stages.ts).
+      // 5b. drift_check, title_ideas, outline_ideas and outline_check save their own results (see lib/stages.ts).
       // A save that does not happen changes the outcome: not counted.
       let saved: unknown = null;
       if (def.save && !out.code) ({ out, saved } = await def.save(store, job, out, { userId, now }));

@@ -2576,3 +2576,26 @@ div.delete-text p { margin: 0; }
   .otl { grid-template-columns: minmax(0, 1fr); }
   .otl-side { position: static; }
 }
+
+/* Step 05: AI check and Approve (E9.2, designs 20 and 21) */
+.otl-ai {
+  flex-shrink: 0;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-1);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+.otl-ai-block { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--stone); }
+.otl-ai-text { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.otl-why { font-size: var(--text-sm); line-height: 1.45; color: var(--ink-2); }
+.ttl-check-list.is-stale li, .ttl-check-list.is-stale .is-pass svg, .ttl-check-list.is-stale .otl-why { color: var(--graphite); }
+.ttl-check-list .is-info { color: var(--graphite); }
+.ttl-check-list .is-info svg { flex-shrink: 0; margin-top: 2px; }
+.otl-ai-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.otl-h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.otl-approve-btn { width: 100%; }
+.otl-appr-lines[hidden] { display: none; }

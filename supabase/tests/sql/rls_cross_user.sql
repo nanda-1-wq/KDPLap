@@ -32,6 +32,8 @@ update public.sections set current_version_id = 'a6000000-0000-4000-8000-0000000
 insert into public.ai_usage (user_id, book_id, stage, model, input_tokens, output_tokens, status, counted) values
   ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'bio', 'm', 1, 1, 'ok', true);
 insert into public.user_settings (user_id) values ('00000000-0000-4000-8000-00000000000a');
+insert into public.outline_checks (book_id, user_id, findings, inputs_key, checked_at) values
+  ('a3000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', '[]', '0123456789abcdef', now());
 
 -- The tables under test: every table in public.
 create temp table rls_tables as
@@ -52,7 +54,7 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('15 public tables', (select count(*) from rls_tables) = 15, (select count(*) from rls_tables)::text);
+select pg_temp.chk('16 public tables (0017: outline_checks)', (select count(*) from rls_tables) = 16, (select count(*) from rls_tables)::text);
 select pg_temp.chk('RLS on for every public table', not exists (
   select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
 select pg_temp.chk('A has a row in every table', (select bool_and(n > 0) from (
@@ -64,9 +66,10 @@ set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000b';
 select pg_temp.chk(t || ': B reads 0 of A''s rows',
          (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I where user_id <> %L', t, '00000000-0000-4000-8000-00000000000b'), false, true, '')))[1]::text = '0')
   from rls_tables order by t;
-select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), 'OK 0')
+-- outline_checks (0017) gives the browser no write privilege at all: refused, not 0 rows.
+select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t = 'outline_checks' then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), 'OK 0')
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t = 'outline_checks' then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -90,6 +93,8 @@ select pg_temp.expect('title_options: on A''s book refused', $q$insert into publ
 select pg_temp.expect('chapters: on A''s book refused', $q$insert into public.chapters (book_id, position) values ('a3000000-0000-4000-8000-000000000001', 2)$q$, '42501%');
 select pg_temp.expect('sections: in A''s chapter refused', $q$insert into public.sections (chapter_id, position) values ('a4000000-0000-4000-8000-000000000001', 2)$q$, '42501%');
 select pg_temp.expect('section_versions: on A''s section refused', $q$insert into public.section_versions (section_id, version_no, source) values ('a5000000-0000-4000-8000-000000000001', 2, 'manual')$q$, '42501%');
+select pg_temp.expect('outline_checks: on A''s book refused (server only)', $q$insert into public.outline_checks (book_id, user_id, findings, inputs_key, checked_at) values ('a3000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', '[]', '0123456789abcdef', now())$q$, '42501%');
+select pg_temp.expect('approve_outline: A''s book reads as not found', $q$select public.approve_outline('a3000000-0000-4000-8000-000000000001')$q$, 'P0002 book_not_found%');
 select pg_temp.expect('user_settings: B''s settings with A''s pen name refused', $q$insert into public.user_settings (default_pen_name_id) values ('a1000000-0000-4000-8000-000000000001')$q$, '42501%');
 
 -- ── As user B: moving own rows to A is refused ──
