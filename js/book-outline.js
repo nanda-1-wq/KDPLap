@@ -90,7 +90,8 @@
     return null;
   };
   const numberOf = (c) => regular().indexOf(c) + 1;
-  const hasWriting = () => chapters.some((c) => (c.sections || []).some((s) => s.current_version_id));
+  // A version or a draft (0018 has_writing); the server refuses a replace either way.
+  const hasWriting = () => chapters.some((c) => (c.sections || []).some((s) => s.has_writing || s.current_version_id));
   // Chapters only: an unlock marks the Introduction and Conclusion rows too, but they have no pill.
   const reviewCount = () => regular().filter((c) => c.needs_review).length;
   const fixedName = (c) => (c.kind === 'intro' ? 'Introduction' : 'Conclusion');

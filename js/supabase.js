@@ -487,14 +487,15 @@ window.kdp = {
     return window.sb.rpc('unlock_positioning', { p_book_id: bookId });
   },
 
-  /** What an unlock marks, for the confirm dialog: chapters and chapters with writing. */
+  /** What an unlock marks, for the confirm dialog: chapters and chapters with writing (a version or a draft, 0018). */
   async getUnlockImpact(bookId) {
     const { data, error } = await window.sb
       .from('chapters')
-      .select('id, sections ( current_version_id )')
+      .select('id, sections ( current_version_id, section_drafts ( section_id ) )')
       .eq('book_id', bookId);
     if (error) return { data: null, error };
-    const written = data.filter((c) => (c.sections || []).some((s) => s.current_version_id)).length;
+    const drafted = (s) => (Array.isArray(s.section_drafts) ? s.section_drafts.length > 0 : !!s.section_drafts);
+    const written = data.filter((c) => (c.sections || []).some((s) => s.current_version_id || drafted(s))).length;
     return { data: { chapters: data.length, written }, error: null };
   },
 
@@ -573,7 +574,7 @@ window.kdp = {
     return oneRow(data, error, 'Chapter not found.');
   },
 
-  /** Writes section fields (title, word_target). 0 rows is an error. */
+  /** Writes section fields (title, word_target; status in step 06). 0 rows is an error. */
   async updateSection(id, fields) {
     const { data, error } = await window.sb
       .from('sections')
@@ -654,6 +655,93 @@ window.kdp = {
    */
   async approveOutline(bookId) {
     return window.sb.rpc('approve_outline', { p_book_id: bookId });
+  },
+
+  /* ── Step 06 Write (E10.1, migration 0018) ── */
+
+  /**
+   * A section's current version and its draft:
+   * { version: { id, version_no, content, word_count, source, label, partial, created_at } | null,
+   *   draft: { content, base_version_id, saved_at } | null }.
+   * error.notFound when the section is gone (deleted in 05) or not the user's.
+   */
+  async getSectionText(sectionId) {
+    const { data: s, error } = await window.sb
+      .from('sections')
+      .select('id, current_version_id')
+      .eq('id', sectionId)
+      .maybeSingle();
+    if (error) return { data: null, error };
+    if (!s) return { data: null, error: notFound('Section not found.') };
+    const [v, d] = await Promise.all([
+      s.current_version_id
+        ? window.sb.from('section_versions')
+          .select('id, version_no, content, word_count, source, label, partial, created_at')
+          .eq('id', s.current_version_id)
+          .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      window.sb.from('section_drafts')
+        .select('content, base_version_id, saved_at')
+        .eq('section_id', sectionId)
+        .maybeSingle()
+    ]);
+    if (v.error || d.error) return { data: null, error: v.error || d.error };
+    return { data: { version: v.data || null, draft: d.data || null }, error: null };
+  },
+
+  /** Every version of a section, newest first, without the text. */
+  async getVersions(sectionId) {
+    const { data, error } = await window.sb
+      .from('section_versions')
+      .select('id, version_no, source, label, word_count, partial, created_at')
+      .eq('section_id', sectionId)
+      .order('version_no', { ascending: false });
+    return { data: error ? null : (data || []), error };
+  },
+
+  /** One version's text (Compare). */
+  async getVersion(id) {
+    const { data, error } = await window.sb
+      .from('section_versions')
+      .select('id, version_no, content, source, label')
+      .eq('id', id)
+      .maybeSingle();
+    return { data: error ? null : data, error };
+  },
+
+  /**
+   * Autosave: the draft of a section (one row per section). Never a version.
+   * base = the version the text started from. Returns { section_id, saved_at }.
+   */
+  async saveDraft(sectionId, content, baseVersionId) {
+    const { data, error } = await window.sb
+      .from('section_drafts')
+      .upsert({ section_id: sectionId, content, base_version_id: baseVersionId }, { onConflict: 'section_id' })
+      .select('section_id, saved_at');
+    return oneRow(data, error, 'Section not found.');
+  },
+
+  /**
+   * Saves the text as a new manual version (0018 save_version) and deletes
+   * the draft. makeCurrent false keeps it as a version that is not current
+   * ("Keep saved version"). Returns { id, version_no, word_count, created_at,
+   * created } (created false: the same text as the current version).
+   * error.message: 'version_conflict' (another tab saved), 'section_too_long',
+   * 'section_not_found'.
+   */
+  async saveVersion(sectionId, content, baseVersionId, makeCurrent = true) {
+    return window.sb.rpc('save_version', {
+      p_section_id: sectionId, p_content: content, p_base_version_id: baseVersionId, p_make_current: makeCurrent
+    });
+  },
+
+  /**
+   * Restores a version as a new current 'restore' version (0018). Nothing is
+   * overwritten. error.message: 'version_conflict', 'unsaved_draft',
+   * 'version_not_found', 'section_not_found'.
+   */
+  async restoreVersion(sectionId, versionId, baseVersionId) {
+    return window.sb.rpc('restore_version', { p_section_id: sectionId, p_version_id: versionId, p_base_version_id: baseVersionId });
   },
 
   /** The Research gaps (step 02 insights) for "Copy gaps from Research". [] before an analysis. */

@@ -20,6 +20,10 @@
    A title marked "Needs review" (books.title_needs_review, set by an
    unlock of 03) shows a warning on 04, chapters marked "Needs review"
    (chapters.needs_review, same unlock) one on 05.
+   E10.1: 06 Write in js/book-write.js. On step 06 the sidebar folds to a
+   narrow rail (design 22) with a button to open it. A step may define
+   leave(): called when another step opens or on Exit to Books (Write saves
+   the typed text as a version there; Exit waits for it, at most 4 s).
    Other steps show a "Coming in" placeholder.
 ═══════════════════════════════════════════════════ */
 
@@ -62,6 +66,8 @@
   let step = readStep(params.get('step'));
   let book = null;
   const saves = {};   // step number → its last save state { state, message, canRetry, at }
+  const layout = document.querySelector('.book-layout');
+  let railOpen = false;   // on step 06 the sidebar is a rail until the writer opens it
   let saveSeq = 0;
 
   function readStep(value) {
@@ -114,10 +120,25 @@
         <span class="step-mark" aria-hidden="true">${mark}</span><span class="step-num">${pad(n)}</span>${name}${state ? `<span class="sr-only">${state}</span>` : ''}${review ? `<span class="step-flag">${SAVE_WARN}Needs review</span>` : ''}</a>`;
   }
 
+  /** Step 06 folds the sidebar to a rail (design 22); the button opens it again. */
+  function applyRail() {
+    const rail = step === LAST_V1_STEP && !railOpen;
+    layout.classList.toggle('is-rail', rail);
+    const btn = nav.querySelector('[data-rail-toggle]');
+    if (btn) {
+      btn.hidden = step !== LAST_V1_STEP;
+      btn.setAttribute('aria-expanded', String(!rail));
+      btn.setAttribute('aria-label', rail ? 'Open the steps sidebar' : 'Fold the steps sidebar');
+    }
+  }
+
   function renderNav() {
     const title = workingTitle(book);
     const pen = one(book.pen_names);
     nav.innerHTML = `
+      <button type="button" class="rail-toggle" data-rail-toggle hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
       <div class="book-id">
         <div class="cover-ph mini" aria-hidden="true">
           <div class="cover-ph-title">${esc(title)}</div><div class="cover-ph-rule"></div>
@@ -147,6 +168,7 @@
       <div class="sidebar-spacer"></div>
       <div class="saved-line" data-saved-line aria-live="polite"></div>`;
     renderSaveLine();
+    applyRail();
   }
 
   /**
@@ -284,6 +306,8 @@
 
   function go(n, moveFocus = true) {
     if (n < 1 || n > LAST_V1_STEP || n === step) return;
+    // Write keeps the typed text as a draft; leaving makes it a version. Errors show on the save line.
+    if (MODULES[step] && MODULES[step].leave) MODULES[step].leave().catch(() => {});
     step = n;
     history.pushState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}`);
     renderStep(moveFocus);
@@ -304,12 +328,28 @@
     }
   });
   nav.addEventListener('click', (e) => {
+    if (e.target.closest('[data-rail-toggle]')) {
+      railOpen = !railOpen;
+      applyRail();
+      nav.querySelector('[data-rail-toggle]').focus();
+      return;
+    }
     const link = e.target.closest('a[data-step]');
     if (!link || e.metaKey || e.ctrlKey || e.shiftKey) return;   // let "open in new tab" work
     e.preventDefault();
     go(Number(link.dataset.step));
   });
+  // Exit to Books: let the step save first (Write: the typed text as a version), at most 4 s.
+  const exit = document.querySelector('.exit-link');
+  if (exit) exit.addEventListener('click', (e) => {
+    const m = book && MODULES[step];
+    if (!m || !m.leave || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    Promise.race([m.leave().catch(() => {}), new Promise((r) => setTimeout(r, 4000))])
+      .then(() => { location.href = exit.href; });
+  });
   window.addEventListener('popstate', () => {
+    if (book && MODULES[step] && MODULES[step].leave) MODULES[step].leave().catch(() => {});
     step = readStep(new URLSearchParams(location.search).get('step'));
     if (book) renderStep(false);
   });
@@ -327,7 +367,9 @@
     Object.values(MODULES).forEach((m) => m.init && m.init(book, ctx));
     head.hidden = false;
     // Normalise the URL (for example a missing or bad step) without a new history entry.
-    history.replaceState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}`);
+    // Step 06 keeps the open section (?section=, js/book-write.js).
+    const section = step === LAST_V1_STEP ? params.get('section') : null;
+    history.replaceState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}${section && UUID.test(section) ? `&section=${encodeURIComponent(section)}` : ''}`);
     renderStep(false);
   }
 
