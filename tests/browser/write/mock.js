@@ -5,6 +5,7 @@ const W3 = 'e3e3e3e3-0000-4000-8000-000000000003';   // no outline
 const W4 = 'e4e4e4e4-0000-4000-8000-000000000004';   // approval removed by a 05 edit, writing exists
 const W5 = 'e5e5e5e5-0000-4000-8000-000000000005';   // a draft from an older version (another tab saved)
 const W6 = 'e6e6e6e6-0000-4000-8000-000000000006';   // unlocked after writing: sections "Needs review"
+const W7 = 'e7e7e7e7-0000-4000-8000-000000000007';   // a 1,200-word section (scrolling)
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 
 // Design 20 / 22, real length: [title, objective, [[section title, words], ...]]
@@ -93,6 +94,14 @@ const setup = async page => {
   w6[1].sections[0].needs_review = true;
   w6.forEach((c) => { c.needs_review = true; });
 
+  // W7: section 1.1 holds about 1,200 words (headings, lists, paragraphs).
+  const w7 = outline(DESIGN.slice(0, 2));
+  const para = 'Shoulder rolls ease the stiffness that builds up after long hours of sitting. Lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this **five times**, and keep your neck long.';
+  const long = Array.from({ length: 12 }, (_, i) => `## Part ${i + 1}\n\n${para}\n\n${para}\n\n- Sit near the front of your chair\n- Keep both feet flat on the floor`).join('\n\n');
+  addVersion(w7[1].sections[0], long, 'manual');
+  w7[1].sections[0].status = 'draft';
+  w7[1].sections[0].word_target = 1200;
+
   const book = (id, o) => ({ id, title: 'Chair Yoga for Seniors Over 60', subtitle: 'Gentle 15-Minute Routines', title_needs_review: false, title_examples: [], current_step: 6, updated_at: ago(2), pen_name_id: PA, series_name: null, series_number: null, outline_approved_at: null, brief: brief(), pos: pos(true), ...o });
   const store = globalThis.__store = {
     books: {
@@ -101,10 +110,11 @@ const setup = async page => {
       [W3]: book(W3, {}),
       [W4]: book(W4, {}),
       [W5]: book(W5, { outline_approved_at: ago(1) }),
-      [W6]: book(W6, { pos: pos(false) })
+      [W6]: book(W6, { pos: pos(false) }),
+      [W7]: book(W7, { outline_approved_at: ago(1) })
     },
-    outline: { [W1]: w1, [W2]: outline(DESIGN), [W3]: [], [W4]: w4, [W5]: w5, [W6]: w6 },
-    versions, drafts, s42: s42.id, c11: c11.id, c12: c12.id,
+    outline: { [W1]: w1, [W2]: outline(DESIGN), [W3]: [], [W4]: w4, [W5]: w5, [W6]: w6, [W7]: w7 },
+    versions, drafts, s42: s42.id, c11: c11.id, c12: c12.id, long: w7[1].sections[0].id, count,
     calls: [], writes: []
   };
   globalThis.__modes = globalThis.__modes || {};

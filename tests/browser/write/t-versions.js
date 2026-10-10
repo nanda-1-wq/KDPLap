@@ -137,7 +137,8 @@ const test = async page => {
   st.outline[W5][1].sections[0].current_version_id = other.id;
   await page.click('[data-save-version]');
   await page.waitForSelector('[data-use-draft]', { timeout: 5000 });
-  ok(/saved in another tab\. Choose which text to keep\./.test(await txt('[data-notes]')), `save conflict note: "${await txt('[data-notes]')}"`);
+  ok((await page.$$eval('[data-notes] .wr-note', (n) => n.length)) === 1 && /This section changed in another tab\./.test(await txt('[data-notes]')), `save conflict: one card: "${await txt('[data-notes]')}"`);
+  ok(await page.$eval('[data-editor]', (e) => e.innerText.trim().endsWith('Typed here again.')), 'save conflict: the text on screen stays');
   ok(st.drafts[st.c11] && st.drafts[st.c11].content.endsWith('Typed here again.'), 'the typing is on the server as a draft');
 
   return log.join('\n');

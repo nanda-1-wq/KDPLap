@@ -20,7 +20,9 @@
    - A draft started from a version that is no longer current means another
      tab saved meanwhile. The section then asks: "Use my draft" (saved as the
      newest version) or "Keep saved version" (the draft is kept as a version
-     that is not current). Nothing typed is lost.
+     that is not current). Nothing typed is lost. The same choice shows when
+     a save meets a newer version, and when the tab gets focus again and the
+     section's current version changed (adoptRemote, checkRemote).
    - Versions tab: every version, newest first, with Compare (word diff,
      js/word-diff.js) and Restore (a new version; nothing is overwritten).
    - Words written count a draft when it is newer than the current version.
@@ -275,10 +277,8 @@
       if (res.error) {
         const m = res.error.message;
         if (m === 'version_conflict') {
-          // Another tab saved. The draft is on the server; reopening shows the choice.
-          await openSection(id, { keepNote: true });
-          note = { kind: 'warning', text: 'This section was saved in another tab. Choose which text to keep.' };
-          if (active()) renderNotes();
+          // Another tab saved. The text on screen stays; the choice shows once (the conflict card).
+          await adoptRemote(id, null);
           return draftOk;
         }
         if (m === 'section_too_long') note = { kind: 'error', text: `This section is too long to save. Keep it under ${fmt(MAX_CHARS)} characters.` };
@@ -328,8 +328,8 @@
     cur.busy = '';
     if (res.error) {
       if (res.error.message === 'version_conflict') {
-        await openSection(id, { keepNote: true });
-        note = { kind: 'warning', text: 'This section was saved in another tab. Choose which text to keep, then restore again.' };
+        await adoptRemote(id, null);
+        return;
       } else {
         note = { kind: 'error', text: 'We couldn’t restore that version. Nothing changed.', retry: null };
       }
@@ -339,6 +339,55 @@
     const from = (cur.versions || []).find((v) => v.id === versionId);
     await openSection(id, { keepNote: false });
     announce(`Restored ${from ? `v${from.version_no}` : 'the version'} as version ${res.data.version_no}.`);
+  }
+
+  /**
+   * Another tab saved a newer version (seen on save, restore, or when this tab
+   * gets focus again). Nothing on screen is lost: with no typing of our own
+   * the newest text simply loads; otherwise our text is kept (as a draft on
+   * the server when it can be saved) and the conflict card asks which to keep.
+   * serverBase: the server's current version id, or null to read it now.
+   */
+  async function adoptRemote(id, serverBase) {
+    if (!cur || cur.id !== id || cur.state !== 'ready' || cur.conflict) return;
+    if (!dirty() && !cur.hasDraft && !saver.hasUnsaved()) {
+      await openSection(id, { keepNote: true });
+      announce('This section was updated in another tab. The newest text is shown.');
+      return;
+    }
+    let base = serverBase;
+    if (base === null) {
+      let head;
+      try { head = await kdp.getSectionHead(id); } catch (err) { head = { error: err }; }
+      if (head.error || !head.data) { note = { kind: 'error', text: 'This section was saved in another tab, and we couldn’t read it. Your text is still here. Try again in a moment.' }; renderNotes(); return; }
+      base = head.data.current_version_id || null;
+    }
+    // Our typing goes to the server first, still from our old version, so a reload shows the same choice.
+    if (saver.hasUnsaved()) await saver.flush();
+    if (!cur || cur.id !== id) return;
+    clearIdle();
+    cur.conflict = { content: cur.text, base: cur.base, at: new Date().toISOString() };
+    cur.base = base;
+    if (note && note.retry === 'version') note = null;
+    if (active()) { renderMainShell(); renderSide(); }
+    loadVersions();
+  }
+
+  let remoteCheck = false;
+  /** On focus: did another tab save a newer version of the open section? */
+  async function checkRemote() {
+    if (!active() || remoteCheck || !cur || cur.state !== 'ready' || cur.conflict || cur.busy || cur.saving) return;
+    const id = cur.id;
+    remoteCheck = true;
+    try {
+      let head;
+      try { head = await kdp.getSectionHead(id); } catch (err) { return; }
+      if (head.error || !head.data || !cur || cur.id !== id || cur.saving || cur.conflict) return;
+      const server = head.data.current_version_id || null;
+      if (server !== (cur.base || null)) await adoptRemote(id, server);
+    } finally {
+      remoteCheck = false;
+    }
   }
 
   /** "Use my draft" or "Keep saved version" after another tab saved. */
@@ -874,6 +923,9 @@
     });
     // The sidebar shows 06 done and "Needs review" without a visit first.
     loadOutline(true);
+    // Back in this tab: another tab may have saved the open section meanwhile.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkRemote(); });
+    window.addEventListener('focus', checkRemote);
   }
 
   window.kdpBookSteps = window.kdpBookSteps || {};

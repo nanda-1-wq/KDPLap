@@ -61,7 +61,9 @@
   --app-wr-side-w: 280px;     /* step 06 Versions / Checks / Brief */
   --app-wr-bar-h: 6px;        /* words written bars */
   --app-wr-bar-sm-w: 90px;
-  --app-wr-editor-min-h: 480px;
+  --app-wr-card-min-h: 240px;   /* the editor card never shrinks below this */
+  --app-wr-side-h: 32%;         /* narrow desktop: the right panel under the editor */
+  --app-wr-ms-w-narrow: 220px;
   --app-mini-cover-w: 46px;
   --app-mini-cover-h: 69px;
   --app-mini-cover-text: 6px;
@@ -2667,11 +2669,6 @@ div.delete-text p { margin: 0; }
 
 /* Manuscript list */
 .wr-ms {
-  position: sticky;
-  top: 0;
-  max-height: calc(100vh - var(--app-book-head-h));
-  min-height: calc(100vh - var(--app-book-head-h));
-  overflow-y: auto;
   padding: var(--space-5) var(--space-3) var(--space-6);
   background: var(--surface-2);
   border-right: 1px solid var(--stone);
@@ -2769,7 +2766,6 @@ div.delete-text p { margin: 0; }
 .wr-tool-text { font-size: var(--text-md); font-weight: 600; }
 .wr-words { margin-left: auto; display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-sm); color: var(--graphite); }
 .wr-editor {
-  min-height: var(--app-wr-editor-min-h);
   padding: var(--space-8) var(--space-12);
   font-family: var(--font-read);
   font-size: var(--text-read);
@@ -2795,11 +2791,6 @@ div.delete-text p { margin: 0; }
 
 /* Right panel: tabs, versions, Brief */
 .wr-side {
-  position: sticky;
-  top: 0;
-  max-height: calc(100vh - var(--app-book-head-h));
-  min-height: calc(100vh - var(--app-book-head-h));
-  overflow-y: auto;
   padding: var(--space-5) var(--space-4) var(--space-6);
   background: var(--surface);
   border-left: 1px solid var(--stone);
@@ -2835,13 +2826,35 @@ div.delete-text p { margin: 0; }
 .wr-leg-del { color: var(--danger); }
 .wr-leg-add { color: var(--success); }
 
+/* No page scroll on step 06 (design 22): the manuscript list, the editor text
+   and the right panel each scroll in their own column, full height. */
+.book-layout:has(.wr) { height: 100vh; overflow: hidden; }
+.book-layout:has(.wr) .book-main { height: 100vh; min-height: 0; }
+.book-content.has-step:has(.wr) { min-height: 0; overflow: hidden; }
+.wr { height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+.wr-ms, .wr-side { height: 100%; min-height: 0; max-height: none; overflow-y: auto; }
+.wr-main { height: 100%; min-height: 0; overflow-y: auto; }
+.wr-card { flex: 1 1 auto; min-height: var(--app-wr-card-min-h); }
+.wr-editor { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.wr.is-single .wr-main { overflow-y: auto; }
+
+/* Narrow desktop: the right panel goes under the editor, in its own scrolling box. */
 @media (max-width: 1200px) {
-  .wr { grid-template-columns: var(--app-wr-ms-w) minmax(0, 1fr); }
-  .wr-side { grid-column: 2; position: static; max-height: none; min-height: 0; border-left: none; border-top: 1px solid var(--stone); }
+  .wr { grid-template-columns: var(--app-wr-ms-w) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, var(--app-wr-side-h)); }
+  .wr-ms { grid-row: 1 / 3; }
+  .wr-main { grid-column: 2; grid-row: 1; }
+  .wr-side { grid-column: 2; grid-row: 2; height: auto; border-left: none; border-top: 1px solid var(--stone); }
 }
 @media (max-width: 900px) {
-  .wr { grid-template-columns: minmax(0, 1fr); }
-  .wr-ms, .wr-side { position: static; max-height: none; min-height: 0; grid-column: auto; }
+  .wr { grid-template-columns: var(--app-wr-ms-w-narrow) minmax(0, 1fr); }
   .wr-main { padding: var(--space-4); }
   .wr-editor { padding: var(--space-5); }
+}
+/* Phones (mobile layout is v2): one column, the page scrolls. */
+@media (max-width: 700px) {
+  .book-layout:has(.wr), .book-layout:has(.wr) .book-main { height: auto; overflow: visible; }
+  .book-content.has-step:has(.wr) { overflow: visible; }
+  .wr { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .wr-ms, .wr-main, .wr-side { grid-column: auto; grid-row: auto; height: auto; overflow: visible; }
+  .wr-editor { overflow: visible; }
 }

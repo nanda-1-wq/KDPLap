@@ -64,6 +64,8 @@ const setup = async page => {
   };
   const written = outline(DESIGN);
   written[1].sections[0].current_version_id = uid('7');
+  // E10.1: a section with only a draft (0018 has_writing) counts as writing too.
+  Object.assign(written[2].sections[1], { has_draft: true, has_writing: true });
   const book = (id, o) => ({ id, title: 'Chair Yoga for Seniors Over 60', subtitle: 'Gentle 15-Minute Routines', title_needs_review: false, title_examples: [], current_step: 5, updated_at: ago(2), pen_name_id: PA, series_name: null, series_number: null, outline_approved_at: null, ...o });
   const store = globalThis.__store = {
     books: {
@@ -97,7 +99,8 @@ const setup = async page => {
   });
   const chapterOf = (id) => { for (const bid of Object.keys(store.outline)) { const c = store.outline[bid].find((x) => x.id === id); if (c) return { bid, c }; } return null; };
   const sectionOf = (id) => { for (const bid of Object.keys(store.outline)) for (const c of store.outline[bid]) { const s = c.sections.find((x) => x.id === id); if (s) return { bid, c, s }; } return null; };
-  const hasVersion = (c) => c.sections.some((s) => s.current_version_id);
+  const isWritten = (s) => !!(s.current_version_id || s.has_draft);
+  const hasVersion = (c) => c.sections.some(isWritten);
   // 0017: an outline edit clears the approval (the mock plays the trigger).
   const unapprove = (bid) => { if (bid && store.books[bid]) store.books[bid].outline_approved_at = null; };
 
@@ -172,7 +175,7 @@ const setup = async page => {
         return json(r, 204, undefined, { 'content-range': `*/${hit ? 1 : 0}` });
       }
       const hit = sectionOf(id);
-      if (hit && hit.s.current_version_id) return json(r, 400, { code: 'P0001', message: 'has_writing' });
+      if (hit && isWritten(hit.s)) return json(r, 400, { code: 'P0001', message: 'has_writing' });
       if (hit) { hit.c.sections = hit.c.sections.filter((s) => s.id !== id); unapprove(hit.bid); }
       return json(r, 204, undefined, { 'content-range': `*/${hit ? 1 : 0}` });
     }

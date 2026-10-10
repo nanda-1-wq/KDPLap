@@ -689,7 +689,19 @@ window.kdp = {
     return { data: { version: v.data || null, draft: d.data || null }, error: null };
   },
 
-  /** Every version of a section, newest first, without the text. */
+  /** A section's current version id only (Write checks it when the tab gets focus). */
+  async getSectionHead(sectionId) {
+    const { data, error } = await window.sb
+      .from('sections')
+      .select('id, current_version_id')
+      .eq('id', sectionId)
+      .maybeSingle();
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: notFound('Section not found.') };
+    return { data, error: null };
+  },
+
+    /** Every version of a section, newest first, without the text. */
   async getVersions(sectionId) {
     const { data, error } = await window.sb
       .from('section_versions')

@@ -90,8 +90,9 @@
     return null;
   };
   const numberOf = (c) => regular().indexOf(c) + 1;
-  // A version or a draft (0018 has_writing); the server refuses a replace either way.
-  const hasWriting = () => chapters.some((c) => (c.sections || []).some((s) => s.has_writing || s.current_version_id));
+  // A version or a draft (0018 has_writing); the server refuses a replace or a delete either way.
+  const sectionWritten = (s) => !!(s.has_writing || s.current_version_id || s.has_draft);
+  const hasWriting = () => chapters.some((c) => (c.sections || []).some(sectionWritten));
   // Chapters only: an unlock marks the Introduction and Conclusion rows too, but they have no pill.
   const reviewCount = () => regular().filter((c) => c.needs_review).length;
   const fixedName = (c) => (c.kind === 'intro' ? 'Introduction' : 'Conclusion');
@@ -987,25 +988,36 @@
 
   function openDelete(kind, id) {
     if (!del) buildDelete();
-    let title, text, label;
+    let title, text, label, written;
     if (kind === 'chapter') {
       const c = findChapter(id);
       if (!c) return;
       const n = numberOf(c);
       const k = (c.sections || []).length;
-      title = `Delete chapter ${n}?`;
       const name = str(c.title).trim() ? `“${c.title.trim()}”` : 'This chapter';
-      text = `${k ? `${name} and its ${k === 1 ? 'section go' : `${k} sections go`}` : `${name} goes`}. Nothing is written yet, so nothing else is lost.`;
+      written = (c.sections || []).some(sectionWritten);
+      title = written ? `Chapter ${n} has writing` : `Delete chapter ${n}?`;
+      text = written
+        ? `This chapter has writing, so it can’t be deleted. ${name} keeps its sections and their text.`
+        : `${k ? `${name} and its ${k === 1 ? 'section go' : `${k} sections go`}` : `${name} goes`}. Nothing is written yet, so nothing else is lost.`;
       label = 'Delete chapter';
     } else {
       const hit = findSection(id);
       if (!hit) return;
       const no = `${numberOf(hit.c)}.${hit.c.sections.indexOf(hit.s) + 1}`;
-      title = `Remove section ${no}?`;
-      text = `${str(hit.s.title).trim() ? `“${hit.s.title.trim()}”` : 'This section'} and its word target go. Nothing is written yet, so nothing else is lost.`;
+      const name = str(hit.s.title).trim() ? `“${hit.s.title.trim()}”` : 'This section';
+      // A draft counts as writing, the same as a version (0018 has_writing).
+      written = sectionWritten(hit.s);
+      title = written ? `Section ${no} has writing` : `Remove section ${no}?`;
+      text = written
+        ? `This section has writing, so it can’t be deleted. ${name} keeps its text.`
+        : `${name} and its word target go. Nothing is written yet, so nothing else is lost.`;
       label = 'Remove section';
     }
-    del.target = { kind, id, label };
+    del.target = { kind, id, label, written };
+    // With writing there is nothing to confirm: only Close.
+    del.btn.hidden = !!written;
+    del.d.querySelector('[data-close]').textContent = written ? 'Close' : 'Cancel';
     del.busy = false;
     del.done = false;
     del.title.textContent = title;
@@ -1019,7 +1031,7 @@
 
   async function onDelete(e) {
     e.preventDefault();
-    if (del.busy) return;
+    if (del.busy || (del.target && del.target.written)) return;
     const t = del.target;
     del.busy = true;
     del.btn.disabled = true;

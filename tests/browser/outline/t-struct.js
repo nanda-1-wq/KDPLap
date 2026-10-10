@@ -113,14 +113,33 @@ const test = async page => {
   ok(/We couldn’t save the new order/.test(await txt('[data-status]')), 'error says so');
   globalThis.__modes.reorderError = false;
 
-  // 8. A chapter with writing cannot be deleted: the dialog says why.
+  // 8. A chapter with writing cannot be deleted: the dialog says why at once,
+  // with only Close (E10.1: it said "Nothing is written yet" before the server refused).
   await open(B5);
   await page.click(`${ch(1)} [data-del-chapter]`);
-  await page.click('dialog[open] [data-confirm]');
+  ok((await txt('dialog[open] h2')) === 'Chapter 1 has writing', `writing title: ${await txt('dialog[open] h2')}`);
+  ok(/^This chapter has writing, so it can’t be deleted\./.test(await txt('dialog[open] .delete-text')), `writing: ${await txt('dialog[open] .delete-text')}`);
+  ok(await page.$eval('dialog[open] [data-confirm]', (b) => b.hidden) && (await txt('dialog[open] [data-close]')) === 'Close', 'only Close');
+  const dels = globalThis.__store.writes.filter((w) => w.method === 'DELETE').length;
+  await page.$eval('dialog[open] form', (f) => f.requestSubmit());
   await wait();
-  ok((await txt('dialog[open] [data-error]')) === 'This chapter has writing, so it can’t be deleted.', `writing: ${await txt('dialog[open] [data-error]')}`);
+  ok(globalThis.__store.writes.filter((w) => w.method === 'DELETE').length === dels, 'a submit sends no delete');
   await page.click('dialog[open] [data-close]');
   ok((await titles()).length === 8, 'still 8 chapters');
+
+  // 8b. A section with only a draft (0018 has_writing) is writing too: the same words, never "Nothing is written yet".
+  await page.click(`${ch(2)} [data-toggle]`).catch(() => {});
+  const draftSec = globalThis.__store.outline[B5][2].sections[1].id;
+  await page.click(`#otlSD-${draftSec}`);
+  ok((await txt('dialog[open] h2')) === 'Section 2.2 has writing', `draft title: ${await txt('dialog[open] h2')}`);
+  ok(/^This section has writing, so it can’t be deleted\./.test(await txt('dialog[open] .delete-text')) && !/Nothing is written yet/.test(await txt('dialog[open] .delete-text')), `draft text: ${await txt('dialog[open] .delete-text')}`);
+  ok(await page.$eval('dialog[open] [data-confirm]', (b) => b.hidden), 'draft: only Close');
+  await page.click('dialog[open] [data-close]');
+  // A section with nothing written keeps the old dialog.
+  const emptySec = globalThis.__store.outline[B5][2].sections[2].id;
+  await page.click(`#otlSD-${emptySec}`);
+  ok(/Nothing is written yet, so nothing else is lost\./.test(await txt('dialog[open] .delete-text')) && await page.$eval('dialog[open] [data-confirm]', (b) => !b.hidden) && (await txt('dialog[open] [data-close]')) === 'Cancel', 'empty section: Remove section and Cancel');
+  await page.click('dialog[open] [data-close]');
 
   // 9. Add chapter on an empty book: Introduction, chapter, Conclusion.
   await open(B2);
