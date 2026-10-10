@@ -7,7 +7,7 @@ import * as L from "./lib.ts";
 import {
   BOOK_ID, briefCtx, cimp, cimpReply, comp, dc, dcReply, draft, good, help, helpReply, IDEA, imp, importReply, ins, insReply,
   LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, PRODUCT, PRODUCT_OUT, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
-  OUTLINE_OUT, oid, outlineCtx, outlineReply, checkReply, ocid, outlineCheckCtx, outlineRows,
+  OUTLINE_OUT, oid, outlineCtx, outlineReply, checkReply, ocid, outlineCheckCtx, outlineRows, V_ID, wid, writeCtx,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -221,4 +221,19 @@ Deno.test("snapshot: interpretResponse", async (t) => {
     brief_help: L.interpretResponse("brief_help", true, b),
     review_insights: L.interpretResponse("review_insights", true, b, L.reviewedBooks(reviewCtx)),
   });
+});
+
+/* ── section_write (E10.2): the streamed request and the refusals before the stream ── */
+
+Deno.test("snapshot: section_write request and refusals", async (t) => {
+  const job = L.stageDef("section_write").check(L.parseInput(JSON.stringify(wid))!, writeCtx()) as L.WriteJob;
+  await assertSnapshot(t, L.writeRequest(L.MODEL_FOR_STAGE.section_write, L.WRITE_SYSTEM, job.user, job.maxTokens), { name: "writeRequest section_write" });
+  const own = "Sit tall and roll slowly. ".repeat(90);
+  const refusals: [string, Setup, () => Request][] = [
+    ["target reached", { write: writeCtx({ current: { id: V_ID, content: own } }) }, () => post({ ...wid, baseVersionId: V_ID })],
+    ["version conflict", {}, () => post({ ...wid, baseVersionId: V_ID })],
+    ["unsaved draft", { write: writeCtx({ draft: "Typed." }) }, () => post(wid)],
+    ["more: false is refused", {}, () => post({ ...wid, more: false })],
+  ];
+  for (const [name, s, req] of refusals) await assertSnapshot(t, await run(s, req()), { name: `handler section_write ${name}` });
 });

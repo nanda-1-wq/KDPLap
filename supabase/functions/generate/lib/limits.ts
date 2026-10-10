@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -23,17 +23,18 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   competitor_import: MODELS.sonnet,
   outline_ideas: MODELS.sonnet,
   outline_check: MODELS.sonnet,
+  section_write: MODELS.sonnet,
 };
 
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 3400 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -115,6 +116,31 @@ export const MAX_FINDING_WHY = 300;
 export const MAX_FINDING_QUOTE = 300;
 // Write (step 06, E10): one section's text, in characters (same as js/book-write.js and 0018).
 export const SECTION_MAX_CHARS = 100_000;
+// Generate section (E10.2, stage section_write). Owner: at most 2,000 words a call
+// (max_tokens = min(3,400, ceil(aim × 1.6) + 200), MAX_TOKENS.section_write), a
+// 100 s soft deadline (TIMEOUT_MS.section_write). Same numbers as js/book-write.js.
+export const WRITE = {
+  wordsPerCall: 2000,      // the most one call asks for
+  defaultWords: 500,       // a section with no word target
+  minWords: 50,            // never ask for fewer
+  moreWords: 300,          // "Write more anyway?" past the target (rule B)
+  sampleChars: 1500,       // the pen name's writing sample in the prompt (answer 6)
+  previousChars: 2000,     // the end of the previous section
+  ownTailChars: 6000,      // the section's own text when generating the rest
+} as const;
+// The run's timers, in milliseconds (lib/write_run.ts). The tests pass smaller ones.
+/** A run is stale (taken over by the next claim, rule A) when its heartbeat is older than heartbeatMs, or it started over startedMs ago. Same values as 0020 section_run_fresh. */
+export const RUN_STALE = { heartbeatMs: 20_000, startedMs: 160_000 } as const;
+
+export const WRITE_TIMING = {
+  beatMs: 1000,            // heartbeat, crash copy, stop check
+  flushMs: 150,            // text to the browser in batches
+  pingMs: 10_000,          // an SSE comment when nothing else was sent
+  firstTextMs: 30_000,     // no first text: an AI failure
+  idleMs: 30_000,          // no event from the AI: an AI failure
+  softDeadlineMs: 100_000, // from the request start: stop and save (owner)
+  saveRetryMs: [250, 1000] as readonly number[],
+} as const;
 
 /* ── Error codes (the UI maps these to messages) ── */
 
@@ -133,6 +159,12 @@ export const ERROR_STATUS = {
   positioning_not_locked: 409,
   options_full: 409,
   has_writing: 409,
+  outline_not_approved: 409,
+  version_conflict: 409,
+  unsaved_draft: 409,
+  run_in_progress: 409,
+  target_reached: 422,
+  section_too_long: 422,
   monthly_limit: 429,
   rate_limited: 429,
   server_error: 500,
@@ -178,7 +210,8 @@ export type GenerateInput =
   | { stage: "title_ideas"; bookId: string }
   | { stage: "competitor_import"; bookId: string; text: string }
   | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number }
-  | { stage: "outline_check"; bookId: string };
+  | { stage: "outline_check"; bookId: string }
+  | { stage: "section_write"; bookId: string; sectionId: string; baseVersionId: string | null; more: boolean };
 
 const sameKeys = (o: Record<string, unknown>, want: string[]) =>
   JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...want].sort());
@@ -196,6 +229,7 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *   competitor_import: { stage, bookId, text }     at most 256 KB, text 200 to 60,000 characters
  *   outline_ideas:   { stage, bookId, sectionsPerChapter }   at most 2 KB, a whole number from 1 to 6
  *   outline_check:   { stage, bookId }             at most 2 KB
+ *   section_write:   { stage, bookId, sectionId, baseVersionId (uuid or null) [, more: true] }   at most 2 KB
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -231,6 +265,17 @@ export function parseInput(raw: string): GenerateInput | null {
     return { stage, bookId: o.bookId.toLowerCase(), sectionsPerChapter: n };
   }
 
+  if (stage === "section_write") {
+    // { stage, bookId, sectionId, baseVersionId: uuid | null [, more: true] }
+    const hasMore = "more" in o;
+    if (!sameKeys(o, hasMore ? ["stage", "bookId", "sectionId", "baseVersionId", "more"] : ["stage", "bookId", "sectionId", "baseVersionId"])) return null;
+    if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
+    if (typeof o.sectionId !== "string" || !UUID_RE.test(o.sectionId)) return null;
+    if (o.baseVersionId !== null && (typeof o.baseVersionId !== "string" || !UUID_RE.test(o.baseVersionId))) return null;
+    if (hasMore && o.more !== true) return null;
+    return { stage, bookId: o.bookId.toLowerCase(), sectionId: o.sectionId.toLowerCase(), baseVersionId: o.baseVersionId === null ? null : o.baseVersionId.toLowerCase(), more: hasMore };
+  }
+
   if (stage === "brief_help" || stage === "review_insights" || stage === "drift_check" || stage === "title_ideas" || stage === "outline_check") {
     if (!sameKeys(o, ["stage", "bookId"])) return null;
     if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
@@ -257,9 +302,14 @@ export function monthStartUtc(now: Date): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
 
-/** A limit code when the call must not run, or null. Monthly is checked first. */
-export function limitError(u: { monthTokens: number; monthlyLimit: number; callsLastMinute: number }): ErrorCode | null {
+/**
+ * A limit code when the call must not run, or null. Monthly is checked first.
+ * reserve (section_write, E10.2): the most this call can use plus the reserves
+ * of the user's other running runs; the month may not pass the limit with it.
+ */
+export function limitError(u: { monthTokens: number; monthlyLimit: number; callsLastMinute: number; reserve?: number }): ErrorCode | null {
   if (u.monthTokens >= u.monthlyLimit) return "monthly_limit";
+  if ((u.reserve ?? 0) > 0 && u.monthTokens + (u.reserve ?? 0) > u.monthlyLimit) return "monthly_limit";
   if (u.callsLastMinute >= CALLS_PER_MINUTE) return "rate_limited";
   return null;
 }

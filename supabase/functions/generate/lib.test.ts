@@ -106,7 +106,7 @@ Deno.test("buildRequest: bio uses Sonnet 5.5, small max_tokens, schema output", 
 });
 
 Deno.test("model map: Sonnet 5.5 for every stage, no Haiku", () => {
-  assertEquals(L.MODEL_FOR_STAGE, { bio: "claude-sonnet-5-5", amazon_import: "claude-sonnet-5-5", brief_help: "claude-sonnet-5-5", review_insights: "claude-sonnet-5-5", positioning_help: "claude-sonnet-5-5", drift_check: "claude-sonnet-5-5", title_ideas: "claude-sonnet-5-5", competitor_import: "claude-sonnet-5-5", outline_ideas: "claude-sonnet-5-5", outline_check: "claude-sonnet-5-5" });
+  assertEquals(L.MODEL_FOR_STAGE, { bio: "claude-sonnet-5-5", amazon_import: "claude-sonnet-5-5", brief_help: "claude-sonnet-5-5", review_insights: "claude-sonnet-5-5", positioning_help: "claude-sonnet-5-5", drift_check: "claude-sonnet-5-5", title_ideas: "claude-sonnet-5-5", competitor_import: "claude-sonnet-5-5", outline_ideas: "claude-sonnet-5-5", outline_check: "claude-sonnet-5-5", section_write: "claude-sonnet-5-5" });
   assertEquals(Object.values(L.MODELS), ["claude-sonnet-5-5"]);
   assert(!JSON.stringify(L.MODELS).includes("haiku"));
 });

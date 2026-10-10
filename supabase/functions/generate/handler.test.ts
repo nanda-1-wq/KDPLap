@@ -88,7 +88,11 @@ Deno.test("a failed usage log still returns the bio", quiet(async () => {
       getPositioningContext: async () => posCtx(), saveDriftFlags: async () => null,
       getTitleContext: async () => null, saveTitleOptions: async () => [], getOutlineContext: async () => null, replaceOutline: async () => [],
       getOutlineCheckContext: async () => null, saveOutlineCheck: async () => ({ checked_at: "", inputs_key: "" }), getMonthlyLimit: async () => null,
-      sumCountedTokensSince: async () => 0, countCallsSince: async () => 0, logUsage: () => Promise.reject({ code: "42501" }) }),
+      sumCountedTokensSince: async () => 0, countCallsSince: async () => 0, logUsage: () => Promise.reject({ code: "42501" }),
+      // E10.2 (section_write): not used by this test.
+      getWriteContext: () => Promise.resolve(null), sumRunningReserves: () => Promise.resolve(0), beginSectionRun: () => Promise.resolve({ usageId: null, recovered: null }),
+      beatSectionRun: () => Promise.resolve({ running: true, stop: false }),
+      finishSectionRun: () => Promise.resolve({ version_id: null, version_no: null, word_count: null, current: false, partial: false, conflict: false }) }),
     fetchFn: (() => Promise.resolve(anthropic("end_turn", { result: "ok", bio: "Hi there.", missing: "" }))) as typeof fetch,
     now: () => new Date(),
   });

@@ -11,6 +11,10 @@ Deno.test("stage table: one entry per stage, nothing else", () => {
   }
   // Only the stages that save their own results have a save step.
   assertEquals(L.STAGES.filter((s) => L.stageDef(s).save), ["drift_check", "title_ideas", "outline_ideas", "outline_check"]);
+  // E10.2: only section_write streams; it never goes through buildRequest or interpret.
+  assertEquals(L.STAGES.filter((s) => L.stageDef(s).stream), ["section_write"]);
+  assertThrows(() => L.buildRequest({ stage: "section_write" } as unknown as L.Job), Error, "generate: section_write streams, use writeRequest");
+  assertThrows(() => L.stageDef("section_write").interpret({} as never, true, {}), Error, "generate: section_write streams, use lib/write_run.ts");
 });
 
 Deno.test("stage table: an unknown stage fails clearly", () => {

@@ -11,6 +11,7 @@ import type { DriftFlag } from "./drift_check.ts";
 import type { TitleContext, TitleIdea } from "./title_ideas.ts";
 import type { OutlineContext, OutlineDraft } from "./outline_ideas.ts";
 import type { OutlineCheckContext, OutlineFinding } from "./outline_check.ts";
+import type { WriteContext } from "./section_write.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -55,6 +56,25 @@ export interface Store {
    * outline_checks). One row per book: a new check replaces the last one.
    */
   saveOutlineCheck(s: OutlineCheckSave): Promise<{ checked_at: string; inputs_key: string }>;
+  /**
+   * section_write (E10.2): the positioning context, the outline (0016
+   * outline_json), the section's current version and draft, the previous
+   * section's current version and the section's last run, through RLS.
+   * null = not the caller's book or no such section in it.
+   */
+  getWriteContext(bookId: string, sectionId: string): Promise<WriteContext | null>;
+  /** The reserves of the user's running, fresh Generate runs (0020 section_runs, through RLS). */
+  sumRunningReserves(userId: string): Promise<number>;
+  /**
+   * Claim the section (0020 section_run_begin, service role). Creates the
+   * usage row (failed, not counted). Refusals throw { code: "version_conflict"
+   * | "unsaved_draft" | "run_in_progress" | "section_not_found" }.
+   */
+  beginSectionRun(a: RunBegin): Promise<{ usageId: number | null; recovered: number | null }>;
+  /** Heartbeat and crash copy (0020 section_run_beat). Not an AI call. */
+  beatSectionRun(runId: string, content: string, input: number, output: number): Promise<{ running: boolean; stop: boolean }>;
+  /** End the run in one transaction (0020 section_run_finish). Throws { code: "run_not_running" } when taken over. */
+  finishSectionRun(a: RunFinish): Promise<RunSaved>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -66,3 +86,10 @@ export type SavedTitleOption = TitleIdea & { id: string; shortlisted: boolean; c
 export type OutlineCheckSave = { bookId: string; userId: string; findings: OutlineFinding[]; inputsKey: string; checkedAt: string };
 
 export type DriftSave = { bookId: string; userId: string; flags: DriftFlag[]; checkedAt: string; readUpdatedAt: string };
+
+export type RunBegin = { userId: string; bookId: string; sectionId: string; runId: string; baseVersionId: string | null; reserved: number; model: string };
+export type RunFinish = {
+  runId: string; text: string; partial: boolean; endReason: string; status: "ok" | "stopped" | "failed";
+  counted: boolean; input: number; output: number; estimated: boolean;
+};
+export type RunSaved = { version_id: string | null; version_no: number | null; word_count: number | null; current: boolean; partial: boolean; conflict: boolean };

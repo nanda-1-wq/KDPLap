@@ -22,6 +22,9 @@ import { DRIFT_SCHEMA, DRIFT_SYSTEM, driftUserMessage, interpretDriftCheck } fro
 import { interpretTitleIdeas, type TitleContext, titleIdeasWanted, TITLE_SCHEMA, TITLE_SYSTEM, titleUserMessage } from "./title_ideas.ts";
 import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineTarget, outlineTarget, outlineUserMessage } from "./outline_ideas.ts";
 import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineChapters, outlineCheckKnown, outlineCheckUserMessage, type OutlineRow, outlineKey } from "./outline_check.ts";
+import { locateSection, mdWords, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
+import type { WriteJob } from "./write_run.ts";
+import { RUN_STALE, SECTION_MAX_CHARS } from "./limits.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -34,7 +37,8 @@ export type Job =
   | { stage: "title_ideas"; ctx: TitleContext; want: number }
   | { stage: "competitor_import"; text: string }
   | { stage: "outline_ideas"; ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null }
-  | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string };
+  | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string }
+  | WriteJob;
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -52,6 +56,8 @@ export type StageDef<S extends Stage, C> = {
   interpret(job: JobOf<S>, httpOk: boolean, body: unknown): Outcome;
   /** For the stages that work without their job's data (interpretResponse). */
   interpretAlone?(httpOk: boolean, body: unknown, books: Competitor[]): Outcome;
+  /** section_write (E10.2): the reply is a stream; the handler runs lib/write_run.ts after the checks and limits. */
+  stream?: true;
   /** Runs only after a successful interpret. Returns the outcome (maybe changed) and what was saved. */
   save?(store: Store, job: JobOf<S>, out: Outcome, run: RunInfo): Promise<{ out: Outcome; saved: unknown }>;
   reply(job: JobOf<S>, out: Outcome, saved: unknown, run: RunInfo): Record<string, unknown>;
@@ -262,6 +268,50 @@ const outlineCheck: StageDef<"outline_check", OutlineCheckContext> = {
   reply: (_job, out, saved) => ({ stage: "outline_check", findings: out.findings, ...(saved as object | null) }),
 };
 
+/**
+ * section_write (E10.2): checks before any money is spent, in this order:
+ * the section is in the outline; Write is open (outline approved, or any
+ * writing); the positioning is locked; the Brief has a topic; the base the
+ * browser started from is still current (version_conflict); no unsaved typing
+ * with text (unsaved_draft); no fresh run (run_in_progress); room for more
+ * text (section_too_long); the target (target_reached unless more, rule B).
+ * The claim (0020) checks the base, the draft and the run again under a lock.
+ */
+const sectionWrite: StageDef<"section_write", WriteContext> = {
+  stream: true,
+  read: (store, input) => store.getWriteContext(input.bookId, input.sectionId),
+  check: (input, ctx) => {
+    const loc = locateSection(ctx);
+    if (!loc) return { fail: "not_found" };
+    const anyWriting = ctx.outline.some((c) => c.sections.some((s) => s.has_writing));
+    if (!ctx.book.outline_approved_at && !anyWriting) return { fail: "outline_not_approved" };
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    if (!positioningHasTopic(ctx)) return { fail: "not_enough_facts", extra: { missing: "" } };
+    if ((ctx.current?.id ?? null) !== input.baseVersionId) return { fail: "version_conflict" };
+    const draft = ctx.draft ?? "";
+    if (draft.trim() && draft !== (ctx.current?.content ?? "")) return { fail: "unsaved_draft" };
+    if (ctx.run && ctx.run.state === "running" && Date.parse(ctx.run.heartbeat_at) > Date.now() - RUN_STALE.heartbeatMs && Date.parse(ctx.run.started_at) > Date.now() - RUN_STALE.startedMs) {
+      return { fail: "run_in_progress" };
+    }
+    const own = ctx.current?.content ?? "";
+    if (own.length >= SECTION_MAX_CHARS - 1000) return { fail: "section_too_long" };
+    const target = loc.section.word_target && loc.section.word_target > 0 ? loc.section.word_target : null;
+    const have = mdWords(own);
+    const a = writeAim(target, have, input.more);
+    if (!a) return { fail: "target_reached", extra: { words: have, target } };
+    const user = writeUserMessage(ctx, a.aim);
+    const inputEstimate = estimateTokens(WRITE_SYSTEM.length + user.length);
+    return {
+      stage: "section_write", ctx, bookId: input.bookId, sectionId: input.sectionId, baseVersionId: input.baseVersionId,
+      aim: a.aim, target, maxTokens: a.maxTokens, user, title: loc.section.title, inputEstimate, reserve: inputEstimate + a.maxTokens,
+    };
+  },
+  prompt: (job) => [WRITE_SYSTEM, null, job.user],
+  // The stream is read by lib/write_run.ts; this stage never goes through interpret.
+  interpret: () => { throw new Error("generate: section_write streams, use lib/write_run.ts"); },
+  reply: () => { throw new Error("generate: section_write streams, use lib/write_run.ts"); },
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -274,6 +324,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   competitor_import: competitorImport,
   outline_ideas: outlineIdeas,
   outline_check: outlineCheck,
+  section_write: sectionWrite,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -291,6 +342,8 @@ export const isFail = (r: Job | StageFail): r is StageFail => "fail" in r;
 /** The Messages API request body for a job. */
 export function buildRequest(job: Job) {
   const stage = job.stage;
+  // section_write streams Markdown with no JSON schema: the handler uses writeRequest.
+  if (stage === "section_write") throw new Error("generate: section_write streams, use writeRequest");
   const [system, schema, content] = stageDef(stage).prompt(job);
   return {
     model: MODEL_FOR_STAGE[stage],

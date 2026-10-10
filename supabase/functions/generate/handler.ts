@@ -10,7 +10,7 @@
 import * as L from "./lib.ts";
 
 // The Store types live in lib/types.ts (Batch B1); the tests import them from here.
-export type { DriftSave, OutlineCheckSave, SavedTitleOption, Store, UsageRow } from "./lib/types.ts";
+export type { DriftSave, OutlineCheckSave, RunBegin, RunFinish, RunSaved, SavedTitleOption, Store, UsageRow } from "./lib/types.ts";
 import type { Store } from "./lib/types.ts";
 
 export type Deps = {
@@ -18,6 +18,12 @@ export type Deps = {
   openStore: (authHeader: string) => Store;
   fetchFn: typeof fetch;
   now: () => Date;
+  /** section_write (E10.2): keeps the run alive after the response (EdgeRuntime.waitUntil). */
+  waitUntil?: (p: Promise<unknown>) => void;
+  /** section_write: the run's timers (tests pass small ones). */
+  writeTiming?: Partial<L.WriteTiming>;
+  /** section_write: the run id (tests pass a fixed one). */
+  uuid?: () => string;
 };
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -83,19 +89,36 @@ export function makeHandler(deps: Deps) {
       if (L.isFail(checked)) return fail(checked.fail, checked.extra);
       const job = checked;
 
-      // 4. Limits, before any money is spent.
+      // 4. Limits, before any money is spent. section_write (E10.2) also
+      // reserves what it can use, plus the user's other running runs.
       const now = deps.now();
-      const [limit, monthTokens, recent] = await Promise.all([
+      const write = job.stage === "section_write" ? job : null;
+      const [limit, monthTokens, recent, running] = await Promise.all([
         store.getMonthlyLimit(),
         store.sumCountedTokensSince(userId, L.monthStartUtc(now)),
         store.countCallsSince(userId, new Date(now.getTime() - 60_000).toISOString()),
+        write ? store.sumRunningReserves(userId) : Promise.resolve(0),
       ]);
       const limitCode = L.limitError({
         monthTokens,
         monthlyLimit: limit ?? L.DEFAULT_MONTHLY_LIMIT,
         callsLastMinute: recent,
+        reserve: write ? write.reserve + running : 0,
       });
       if (limitCode) return fail(limitCode);
+
+      // 5w. section_write streams (lib/write_run.ts): the claim, the AI call,
+      // then the SSE response; the run saves its own version and usage row.
+      if (write) {
+        const r = await L.startWriteRun({
+          store, job: write, userId, runId: deps.uuid ? deps.uuid() : crypto.randomUUID(),
+          request: L.writeRequest(L.MODEL_FOR_STAGE.section_write, L.WRITE_SYSTEM, write.user, write.maxTokens), fetchFn: deps.fetchFn, apiKey: deps.env("ANTHROPIC_API_KEY")!,
+          url: ANTHROPIC_URL, signal: req.signal ?? null, headers: cors, timing: deps.writeTiming,
+          waitUntil: deps.waitUntil ?? ((p) => { p.catch(() => {}); }),
+        });
+        if ("fail" in r) return fail(r.fail as L.ErrorCode);
+        return r.response;
+      }
 
       // 5. The AI call.
       const request = L.buildRequest(job);
