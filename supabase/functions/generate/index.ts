@@ -35,7 +35,7 @@
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
 import type { BriefContext, Competitor, OutlineContext, OutlineRow, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
-import { stopAllRuns, WRITE_TIMING } from "./lib.ts";
+import { RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -283,10 +283,13 @@ function openStore(authHeader: string): Store {
     // reading order) and the section's last run. null = not the caller's book
     // or a section that is not in it.
     async getWriteContext(bookId, sectionId) {
-      const data = await readBook(bookId, `${POSITIONING_SELECT}, title, subtitle, outline_approved_at`);
+      // The book and the outline in parallel (outline_json reads nothing for a book the caller cannot see).
+      const [data, { data: outline, error }] = await Promise.all([
+        readBook(bookId, `${POSITIONING_SELECT}, title, subtitle, outline_approved_at`),
+        asUser.rpc("outline_json", { p_book_id: bookId }),
+      ]);
       const ctx = data && positioningContext(data);
       if (!ctx) return null;
-      const { data: outline, error } = await asUser.rpc("outline_json", { p_book_id: bookId });
       if (error) throw error;
       const rows = (outline ?? []) as WriteChapterRow[];
       const order = rows.flatMap((c) => c.sections);
@@ -315,8 +318,8 @@ function openStore(authHeader: string): Store {
 
     // Fresh running runs only: a stale one's reserve is released (rule A).
     async sumRunningReserves(userId) {
-      const fresh = new Date(Date.now() - 20_000).toISOString();
-      const young = new Date(Date.now() - 160_000).toISOString();
+      const fresh = new Date(Date.now() - RUN_STALE.heartbeatMs).toISOString();
+      const young = new Date(Date.now() - RUN_STALE.startedMs).toISOString();
       const { data, error } = await asUser
         .from("section_runs")
         .select("reserved_tokens")
@@ -355,7 +358,7 @@ function openStore(authHeader: string): Store {
         p_counted: a.counted, p_input: a.input, p_output: a.output, p_estimated: a.estimated,
       });
       if (error) throw error.message === "run_not_running" ? { code: "run_not_running" } : error;
-      return data as { version_id: string | null; version_no: number | null; word_count: number | null; current: boolean; partial: boolean; conflict: boolean };
+      return data as { version_id: string | null; version_no: number | null; word_count: number | null; current: boolean; partial: boolean; conflict: boolean; capped: boolean };
     },
 
     async getMonthlyLimit() {

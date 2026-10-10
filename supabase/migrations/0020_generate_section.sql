@@ -40,7 +40,8 @@
 --    10 calls a minute (rule C).
 -- 4. request_section_stop(run_id) for the user (SECURITY INVOKER, own running
 --    run only): sets stop_requested_at. The run reads it on its next beat.
--- 5. section_has_writing (0019): a partial version counts only while it is
+-- 5. section_has_writing (0019): a fresh running Generate run is writing (no
+--    delete mid-stream); a partial version counts only while it is
 --    the current version (owner, E10.2 answer 2). The delete guard,
 --    replace_outline, outline_json and unlock_positioning follow. This
 --    changes the 0016 comment "a stopped generation keeps its partial text
@@ -201,11 +202,18 @@ as $$
                     and not public.text_is_blank(v.content)
                     and (not v.partial or v.id = s.current_version_id))
       or exists (select 1 from public.section_drafts d
-                  where d.section_id = p_section_id and not public.text_is_blank(d.content));
+                  where d.section_id = p_section_id and not public.text_is_blank(d.content))
+      -- A fresh Generate run is writing too, so 05 or another tab cannot delete the
+      -- section mid-stream (the cascade would lose the text). Same rule as
+      -- section_run_fresh, written here because the user cannot call that function.
+      or exists (select 1 from public.section_runs r
+                  where r.section_id = p_section_id and r.state = 'running'
+                    and r.heartbeat_at > now() - interval '20 seconds'
+                    and r.started_at > now() - interval '160 seconds');
 $$;
 
 comment on function public.section_has_writing(uuid) is
-  'E10.1, 0019, 0020: a section has writing when it has a version or a draft with text. A partial version counts only while it is current.';
+  'E10.1, 0019, 0020: a section has writing when it has a version or a draft with text, or a fresh Generate run. A partial version counts only while it is current.';
 
 -- ---------------------------------------------------------------------------
 -- 7. restore_version: "Kept partial text from vN"
@@ -457,15 +465,22 @@ declare
   v_make     boolean := false;
   v_row      public.section_versions;
   v_no       int;
+  v_section  uuid;
+  v_capped   boolean := false;
 begin
-  select * into r from public.section_runs where run_id = p_run_id for update;
-  if not found or r.state <> 'running' then
+  -- Lock order: the section row first, then the run row, the same as
+  -- section_run_begin (and its stale takeover), so the two cannot deadlock.
+  select x.section_id into v_section from public.section_runs x where x.run_id = p_run_id;
+  if found then
+    select s.current_version_id into v_current from public.sections s where s.id = v_section for update;
+    select * into r from public.section_runs where run_id = p_run_id for update;
+  end if;
+  -- Rechecked under the locks: a takeover may have ended or replaced the run meanwhile.
+  if r.run_id is null or r.state <> 'running' or r.section_id is distinct from v_section then
     raise exception 'run_not_running'
       using errcode = 'P0001',
             detail = 'This run was ended or taken over.';
   end if;
-
-  select s.current_version_id into v_current from public.sections s where s.id = r.section_id for update;
 
   if not public.text_is_blank(p_text) then
     select v.content into v_base from public.section_versions v where v.id = r.base_version_id;
@@ -473,6 +488,7 @@ begin
     if char_length(v_text) > 100000 then
       v_text := left(v_text, 100000);
       v_partial := true;
+      v_capped := true;
     end if;
     v_make := not v_partial and v_current is not distinct from r.base_version_id;
     select coalesce(max(v.version_no), 0) + 1 into v_no from public.section_versions v where v.section_id = r.section_id;
@@ -506,12 +522,13 @@ begin
   return jsonb_build_object(
     'version_id', v_row.id, 'version_no', v_row.version_no, 'word_count', v_row.word_count,
     'current', v_make, 'partial', v_row.id is not null and v_row.partial,
-    'conflict', v_row.id is not null and not v_partial and not v_make);
+    'conflict', v_row.id is not null and not v_partial and not v_make,
+    'capped', v_capped);
 end;
 $$;
 
 comment on function public.section_run_finish(uuid, text, boolean, text, text, boolean, int, int, boolean) is
-  'E10.2 (service role): end a run in one transaction: the generated version (current only when complete and the base is still current), the usage row, the run row. Raises P0001 run_not_running.';
+  'E10.2 (service role): end a run in one transaction: the generated version (current only when complete and the base is still current; capped = cut at 100,000 characters), the usage row, the run row. Locks the section, then the run (as begin). Raises P0001 run_not_running.';
 
 -- Server only: the generate function calls these with the service role.
 revoke execute on function public.section_run_fresh(public.section_runs) from public, anon, authenticated;

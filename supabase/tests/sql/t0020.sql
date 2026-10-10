@@ -269,6 +269,62 @@ select pg_temp.chk('B reads none of A''s runs', (select count(*) from public.sec
 select pg_temp.expect('B updates 0 of A''s runs (RLS)', $q$update public.section_runs set stop_requested_at = now()$q$, 'OK 0');
 reset role;
 
+-- ── Review 1: a fresh run is writing, so the section cannot be deleted mid-stream ──
+\set S32 'pg_temp.sec(''b0000000-0000-4000-8000-000000000001'', 3, 2)'
+\set R10 '''f0000000-0000-4000-8000-000000000010'''
+\set R11 '''f0000000-0000-4000-8000-000000000011'''
+set role service_role;
+select public.section_run_begin(:A, :BOOK1, :S32, :R10, null, 100, 'claude-sonnet-5-5') is not null as b10 \gset
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';
+select pg_temp.chk('fresh run: the section has writing (as the user)', public.section_has_writing(:S32));
+select pg_temp.chk('fresh run: outline_json has_writing true',
+  (jsonb_path_query_first(public.outline_json('b0000000-0000-4000-8000-000000000001'), '$[3].sections[1]') ->> 'has_writing')::boolean);
+select pg_temp.expect('fresh run: Remove the section is refused', format($q$delete from public.sections where id = %s$q$, :'S32'), 'P0001 has_writing%');
+reset role;
+
+-- ── Review 7: finish locks the section, then the run, like begin. Two connections:
+-- x holds the section lock (a claim's first step); y finishes the run; x then locks
+-- the run row (a takeover's next step). With the old order (run, then section) this
+-- deadlocked; now y waits on the section and x gets the run row at once. ──
+create extension if not exists dblink;
+select pg_temp.sec('b0000000-0000-4000-8000-000000000001', 3, 2) as s32id \gset
+select dblink_connect('x', format('dbname=%s host=127.0.0.1 port=%s user=postgres', current_database(), current_setting('port'))) as cx \gset
+select dblink_connect('y', format('dbname=%s host=127.0.0.1 port=%s user=postgres', current_database(), current_setting('port'))) as cy \gset
+select dblink_exec('x', 'begin') as x1 \gset
+select dblink_exec('x', 'set local lock_timeout = ''3s''') as x2 \gset
+select count(*) as x3 from dblink('x', format($q$select 1 from public.sections where id = %L for update$q$, :'s32id')) t(i int) \gset
+select dblink_exec('y', 'set role service_role') as y1 \gset
+select dblink_send_query('y', format($q$select public.section_run_finish(%L, '', true, 'user_stop', 'stopped', true, 10, 2, true)::text$q$, :R10)) as y2 \gset
+select pg_sleep(0.3) as zz \gset
+select pg_temp.expect('lock order: the takeover gets the run row while finish waits (no deadlock)',
+  format($q$select * from dblink('x', 'select 1 from public.section_runs where section_id = ''%s'' for update') t(i int)$q$, :'s32id'), 'OK 1');
+select dblink_exec('x', 'commit') as x4 \gset
+select pg_temp.chk('lock order: then finish ends the run normally',
+  (select (r::jsonb) ->> 'capped' from dblink_get_result('y') t(r text)) = 'false' and (pg_temp.run(:S32)).state = 'ended');
+select dblink_disconnect('x') as dx \gset
+select dblink_disconnect('y') as dy \gset
+
+-- A stale run is not writing: Remove works again.
+set role service_role;
+select public.section_run_begin(:A, :BOOK1, :S32, :R11, null, 100, 'claude-sonnet-5-5') is not null as b11 \gset
+reset role;
+update public.section_runs set heartbeat_at = now() - interval '30 seconds' where run_id = :R11;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';
+select pg_temp.chk('stale run: not writing', not public.section_has_writing(:S32));
+select pg_temp.expect('stale run: Remove the section is allowed', format($q$delete from public.sections where id = %s$q$, :'S32'), 'OK 1');
+reset role;
+
+-- ── Review 4: over 100,000 characters the save says capped ──
+set role service_role;
+select public.section_run_begin(:A, :BOOK1, :S12, :R10, pg_temp.cur(:S12), 100, 'claude-sonnet-5-5') is not null as b12 \gset
+select public.section_run_finish(:R10, repeat('Sit tall. ', 10001), false, 'complete', 'ok', true, 10, 2, false) as f12 \gset
+reset role;
+select pg_temp.chk('capped: true, saved as partial, not current', (:'f12'::jsonb ->> 'capped')::boolean and (:'f12'::jsonb ->> 'partial')::boolean
+  and not (:'f12'::jsonb ->> 'current')::boolean and not (:'f12'::jsonb ->> 'conflict')::boolean, :'f12');
+
 -- ── Book delete removes runs ──
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';

@@ -92,4 +92,6 @@ export type RunFinish = {
   runId: string; text: string; partial: boolean; endReason: string; status: "ok" | "stopped" | "failed";
   counted: boolean; input: number; output: number; estimated: boolean;
 };
-export type RunSaved = { version_id: string | null; version_no: number | null; word_count: number | null; current: boolean; partial: boolean; conflict: boolean };
+export type RunSaved = { version_id: string | null; version_no: number | null; word_count: number | null; current: boolean; partial: boolean; conflict: boolean;
+  /** 0020: the text was cut at 100,000 characters (saved as a partial). */
+  capped: boolean };

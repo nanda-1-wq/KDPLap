@@ -643,7 +643,9 @@
     const done = g.done || { reason: 'ai_error' };
     const sv = g.saved;
     const words = Number.isInteger(sv.words) ? sv.words : W.count(g.text);
-    if (done.reason === 'complete') {
+    if (sv.capped) {
+      g.outcome = { kind: 'capped', versionId: sv.versionId, versionNo: sv.versionNo };
+    } else if (done.reason === 'complete') {
       g.outcome = sv.conflict || !sv.current
         ? { kind: 'conflict', versionNo: sv.versionNo }
         : { kind: 'done', versionNo: sv.versionNo, flagged: sv.flagged || 0 };
@@ -675,9 +677,8 @@
     const hit = findSection(id);
     const newCurrent = o.kind === 'done' || o.kind === 'lost_complete';
     if (newCurrent && hit && hit.s.status === 'not_started') hit.s.status = 'draft';
-    if (newCurrent || (o.kind !== 'save_failed' && o.kind !== 'lost_unknown')) {
-      if (hit) Object.assign(hit.s, { has_writing: true });
-    }
+    // Writing only when the server saved a version (a partial only counts once kept: 0020).
+    if (newCurrent && hit) Object.assign(hit.s, { has_writing: true });
     if (!cur || cur.id !== id) { gen = null; return; }
     if (newCurrent) {
       await openSection(id, { keepNote: true });
@@ -769,7 +770,7 @@
           </div>
         </div>`;
       document.body.append(d);
-      ask = { d, resolve: null, back: null };
+      ask = { d, resolve: null, back: null, pending: null };
       const finish = (v) => { const r = ask.resolve; ask.resolve = null; if (d.open) d.close(); if (r) r(v); };
       d.querySelector('[data-ask-yes]').addEventListener('click', () => finish(true));
       d.querySelector('[data-ask-no]').addEventListener('click', () => finish(false));
@@ -778,16 +779,19 @@
         if (ask.back && document.contains(ask.back)) ask.back.focus();
       });
     }
+    // Already open (a second Back or Exit while it asks): the same question, the same answer.
+    if (ask.pending) return ask.pending;
     ask.d.querySelector('#wrAskTitle').textContent = title;
     ask.d.querySelector('[data-ask-text]').textContent = text;
     ask.d.querySelector('[data-ask-yes]').textContent = ok;
     ask.d.querySelector('[data-ask-no]').textContent = cancel;
     ask.back = document.activeElement;
-    return new Promise((resolve) => {
-      ask.resolve = resolve;
+    ask.pending = new Promise((resolve) => {
+      ask.resolve = (v) => { ask.pending = null; resolve(v); };
       ask.d.showModal();
       ask.d.querySelector('[data-ask-no]').focus();
     });
+    return ask.pending;
   }
 
   /** Rule B (owner, E10.2): at or past the target, ask before writing more. */
@@ -828,6 +832,7 @@
       case 'done': return o.flagged
         ? `Saved as ${v(o.versionNo)}. ${o.flagged === 1 ? '1 claim needs' : `${o.flagged} claims need`} a source. Check the marked sentences.`
         : `Saved as ${v(o.versionNo)}.`;
+      case 'capped': return 'This section reached its length limit. The text is saved in Versions.';
       case 'conflict': return `This section was saved in another tab while the AI was writing. The new text is saved in Versions as ${v(o.versionNo)}.`;
       case 'stopped': return o.versionId
         ? `Writing stopped. The ${w(o.words)} written so far ${are(o.words)} saved in Versions as ${v(o.versionNo)}. They are not in your section yet. The tokens used so far count toward your usage.`
@@ -937,8 +942,8 @@
           </div></div></div>`;
     }
     const warn = o.kind === 'refused' && !['positioning_not_locked', 'outline_not_approved', 'not_enough_facts', 'section_too_long'].includes(o.code);
-    const retry = o.kind === 'refused' ? (warn && !['monthly_limit', 'unauthorized'].includes(o.code)) : o.kind !== 'lost_complete';
-    const cls = o.kind === 'refused' && !warn ? 'alert-warning' : (o.kind === 'conflict' || o.kind === 'stopped' || o.kind.startsWith('lost') || o.kind === 'interrupted') ? 'alert-warning' : 'alert-error';
+    const retry = o.kind === 'refused' ? (warn && !['monthly_limit', 'unauthorized'].includes(o.code)) : !['lost_complete', 'capped'].includes(o.kind);
+    const cls = o.kind === 'refused' && !warn ? 'alert-warning' : (o.kind === 'conflict' || o.kind === 'capped' || o.kind === 'stopped' || o.kind.startsWith('lost') || o.kind === 'interrupted') ? 'alert-warning' : 'alert-error';
     return `<div class="alert ${cls} wr-note" role="${cls === 'alert-error' ? 'alert' : 'status'}">${ICON.warn(16)}<div><p class="alert-text">${text}</p>
         <p class="alert-text">${retry ? `<button type="button" class="link-btn" data-gen-retry${genBlock() ? ' disabled' : ''}>Try again</button> · ` : ''}${close}</p></div></div>`;
   }

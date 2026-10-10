@@ -6,7 +6,7 @@
      start  { runId, aim, target, mode: "write" | "continue", recovered }
      text   { t }       new text since the last event (batched)
      done   { reason, partial, counted }
-     saved  { versionId, versionNo, words, current, partial, conflict, flagged }
+     saved  { versionId, versionNo, words, current, partial, conflict, capped, flagged }
      error  { error: "save_failed" | "server_error" }       instead of saved
      ": ping"           a comment when nothing else was sent for a while
    How each end is counted (owner, E10.2):
@@ -263,7 +263,7 @@ function streamRun(o: RunOptions, t: WriteTiming, res: Response, begun: Begun, s
       });
       send(sseEvent("saved", {
         versionId: saved.version_id, versionNo: saved.version_no, words: saved.word_count ?? mdWords(marked.text),
-        current: saved.current, partial: saved.partial, conflict: saved.conflict, flagged: saved.version_id ? marked.flagged : 0,
+        current: saved.current, partial: saved.partial, conflict: saved.conflict, capped: !!saved.capped, flagged: saved.version_id ? marked.flagged : 0,
       }));
     } catch (err) {
       const code = (err as { code?: string })?.code ?? "unknown";

@@ -42,7 +42,7 @@ Deno.test("section_write complete: streamed text, a normal version, counted with
   assertEquals(find(out, "done"), { reason: "complete", partial: false, counted: true });
   assertEquals(last(out).event, "saved");
   // words comes from the save (the fake store splits on spaces; 0020 md_word_count skips the marker).
-  assertEquals(find(out, "saved"), { versionId: "70000002-0000-4000-8000-000000000000", versionNo: 2, words: 23, current: true, partial: false, conflict: false, flagged: 1 });
+  assertEquals(find(out, "saved"), { versionId: "70000002-0000-4000-8000-000000000000", versionNo: 2, words: 23, current: true, partial: false, conflict: false, capped: false, flagged: 1 });
   // The claim: the reserve is the input estimate plus max_tokens.
   assertEquals(begins.length, 1);
   const job = begins[0];
@@ -70,7 +70,7 @@ Deno.test("section_write Stop before any text: input tokens counted, no version 
   assertEquals(find(out, "done"), { reason: "user_stop", partial: true, counted: true });
   assertEquals(finishes.length, 1);
   assertEquals(finishes[0], { runId: RUN, text: "", partial: true, endReason: "user_stop", status: "stopped", counted: true, input: 4512, output: 1, estimated: true });
-  assertEquals(find(out, "saved"), { versionId: null, versionNo: null, words: 0, current: false, partial: false, conflict: false, flagged: 0 });
+  assertEquals(find(out, "saved"), { versionId: null, versionNo: null, words: 0, current: false, partial: false, conflict: false, capped: false, flagged: 0 });
 }));
 
 Deno.test("section_write Stop right after the first token: a partial version, counted, estimated", quiet(async () => {
@@ -206,6 +206,11 @@ Deno.test("section_write the base changed while writing: saved, not current, con
   const { out } = await run({ saved: { current: false, conflict: true }, streamProvider: slow(TEXT, 5) });
   assertEquals(find(out, "saved").conflict, true);
   assertEquals(find(out, "saved").current, false);
+}));
+
+Deno.test("section_write over the 100,000 cap at save: capped, not shown as a conflict (review 4)", quiet(async () => {
+  const { out } = await run({ saved: { current: false, partial: true, conflict: false, capped: true }, streamProvider: slow(TEXT, 5) });
+  assertEquals([find(out, "saved").capped, find(out, "saved").conflict, find(out, "saved").partial], [true, false, true]);
 }));
 
 Deno.test("section_write a run taken over (stale, rule A): stops, no save, server_error", quiet(async () => {

@@ -180,6 +180,40 @@ const test = async page => {
   ok(/book\.html/.test(page.url()), 'Exit asks; Keep writing stays');
   const prevented = await g(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
   ok(prevented, 'closing the tab while writing: the browser asks');
+  // Review 2: Back twice, or Exit twice, while it asks: one question, and "Keep writing" holds for both.
+  const here = page.url();
+  await g((u) => {
+    const at = new URL(u);
+    for (const step of ['3', '5']) { at.searchParams.set('step', step); at.searchParams.delete('section'); history.pushState({ step: Number(step) }, '', at.toString()); }
+    history.pushState({ step: 6 }, '', u);
+  }, here);
+  const stops = writes('request_section_stop').length;
+  await g(() => { history.back(); setTimeout(() => history.back(), 150); });
+  await page.waitForSelector('dialog[open] #wrAskTitle', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  ok(await g(() => document.querySelectorAll('dialog[open]').length) === 1, 'double Back: one question');
+  await page.click('dialog[open] [data-ask-no]');
+  await page.waitForTimeout(400);
+  ok(new URL(page.url()).searchParams.get('step') === '6' && !!(await page.$('[data-gen-stop]')) && writes('request_section_stop').length === stops,
+    `double Back, Keep writing: still on 06, still writing, no stop (${page.url()})`);
+  await g(() => { const a = document.querySelector('.exit-link'); a.click(); a.click(); });
+  await page.waitForSelector('dialog[open] #wrAskTitle', { timeout: 5000 });
+  ok(await g(() => document.querySelectorAll('dialog[open]').length) === 1, 'double Exit: one question');
+  await page.click('dialog[open] [data-ask-no]');
+  await page.waitForTimeout(400);
+  ok(/book\.html/.test(page.url()) && !!(await page.$('[data-gen-stop]')) && writes('request_section_stop').length === stops, 'double Exit, Keep writing: stays, still writing');
+  // Both askers get the answer (before the fix the first one never settled).
+  await g(() => { const m = window.kdpBookSteps[6]; window.__asks = [m.confirmLeave(), m.confirmLeave()]; window.__askDone = null;
+    Promise.all(window.__asks).then((v) => { window.__askDone = v; }); });
+  await page.waitForSelector('dialog[open] [data-ask-no]', { timeout: 5000 });
+  await page.click('dialog[open] [data-ask-no]');
+  await page.waitForTimeout(300);
+  ok(JSON.stringify(await g(() => window.__askDone)) === '[false,false]', `two askers, one answer: ${JSON.stringify(await g(() => window.__askDone))}`);
+  // Any error while asking means stay (book.js mayLeave): Exit with a failing question stays, still writing.
+  await g(() => { const m = window.kdpBookSteps[6]; window.__cl = m.confirmLeave; m.confirmLeave = () => Promise.reject(new Error('boom')); document.querySelector('.exit-link').click(); });
+  await page.waitForTimeout(500);
+  ok(/book\.html/.test(page.url()) && !!(await page.$('[data-gen-stop]')), 'an error while asking: stays');
+  await g(() => { window.kdpBookSteps[6].confirmLeave = window.__cl; });
   // Stop and leave: the stop call, then it waits for "saved", then opens the other section.
   await page.click(`[data-section="${st.s52}"]`);
   await page.waitForSelector('dialog[open] [data-ask-yes]');

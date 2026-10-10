@@ -103,7 +103,7 @@ the suite's `mock.js` with a fake session, so no account or real data is
 used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial,
 t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from, t-import), `positioning` (t1, t2, t-drift,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
-`delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank),
+`delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
 `write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends). The write
 mock answers Generate section through the page's own `fetch` with a stream
 the test drives (`window.__gen.send(event, data)`), because `route.fulfill`

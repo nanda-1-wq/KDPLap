@@ -327,7 +327,7 @@ export function setup(s: Setup = {}) {
       return Promise.resolve({
         version_id: blank ? null : "70000002-0000-4000-8000-000000000000", version_no: blank ? null : 2,
         word_count: blank ? null : a.text.split(/\s+/).filter(Boolean).length, current: !blank && !a.partial,
-        partial: !blank && a.partial, conflict: false, ...s.saved,
+        partial: !blank && a.partial, conflict: false, capped: false, ...s.saved,
       });
     },
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),

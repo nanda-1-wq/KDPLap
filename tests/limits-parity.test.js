@@ -197,8 +197,15 @@ Deno.test("Generate section: words per call, max_tokens, the soft deadline, the 
   assertEquals(L.TIMEOUT_MS.section_write, 100_000);
   assertEquals(L.WRITE_TIMING.softDeadlineMs, L.TIMEOUT_MS.section_write);
   // A stale run: the same 20 s and 160 s in the function and in 0020.
-  assertEquals(one(f, String.raw`r\.heartbeat_at > now\(\) - interval '(\d+) seconds'`) * 1000, L.RUN_STALE.heartbeatMs);
-  assertEquals(one(f, String.raw`r\.started_at > now\(\) - interval '(\d+) seconds'`) * 1000, L.RUN_STALE.startedMs);
+  // Two places in 0020: section_run_fresh and section_has_writing (review 1).
+  assertEquals(nums(f, String.raw`r\.heartbeat_at > now\(\) - interval '(\d+) seconds'`).map(([n]) => n * 1000), [L.RUN_STALE.heartbeatMs, L.RUN_STALE.heartbeatMs]);
+  assertEquals(nums(f, String.raw`r\.started_at > now\(\) - interval '(\d+) seconds'`).map(([n]) => n * 1000), [L.RUN_STALE.startedMs, L.RUN_STALE.startedMs]);
+  // The browser turns Generate off for another tab's fresh run with the same numbers,
+  // and the function's reserve sum uses RUN_STALE, not numbers of its own (review 5).
+  assertEquals(jsConst("js/book-write.js", "RUN_FRESH"), { ...L.RUN_STALE });
+  const idx = read("supabase/functions/generate/index.ts");
+  assertEquals(/RUN_STALE\.heartbeatMs/.test(idx) && /RUN_STALE\.startedMs/.test(idx), true, "index.ts uses RUN_STALE");
+  assertEquals(/\b(20_?000|160_?000)\b/.test(idx), false, "index.ts has no stale-time numbers of its own");
   // The soft deadline ends a run well before the stale cut.
   assertEquals(L.WRITE_TIMING.softDeadlineMs < L.RUN_STALE.startedMs, true);
   // 100,000 characters: the run's crash copy, its recovery and its save.

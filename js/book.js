@@ -311,7 +311,8 @@
   async function mayLeave() {
     const m = book && MODULES[step];
     if (!m || !m.confirmLeave) return true;
-    try { return await m.confirmLeave(); } catch (e) { return true; }
+    // Any error while asking means stay: leaving must never skip "Stop and leave?".
+    try { return (await m.confirmLeave()) === true; } catch (e) { return false; }
   }
 
   async function go(n, moveFocus = true) {
