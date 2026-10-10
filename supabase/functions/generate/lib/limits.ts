@@ -113,6 +113,8 @@ export const DEFAULT_CHAPTERS = [6, 10] as const;
 export const MAX_FINDINGS = 8;
 export const MAX_FINDING_WHY = 300;
 export const MAX_FINDING_QUOTE = 300;
+// Write (step 06, E10): one section's text, in characters (same as js/book-write.js and 0018).
+export const SECTION_MAX_CHARS = 100_000;
 
 /* ── Error codes (the UI maps these to messages) ── */
 

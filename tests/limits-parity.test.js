@@ -178,3 +178,12 @@ Deno.test("pages: one helper, about 250 words a page, used by the Brief and the 
     assertEquals(/perPage|words a page|\b133\b/.test(src), false, `${f} has no page math of its own`);
   }
 });
+
+Deno.test("section text: 100,000 characters in the browser, the server and 0018 (owner, E10)", () => {
+  const f = M("0018_write_versions.sql");
+  assertEquals(L.SECTION_MAX_CHARS, 100_000);
+  assertEquals(jsConst("js/book-write.js", "MAX_CHARS"), L.SECTION_MAX_CHARS);
+  assertEquals(one(f, String.raw`section_versions_content_length_check\s+check \(char_length\(content\) <= (\d+)\)`), L.SECTION_MAX_CHARS);
+  assertEquals(one(f, String.raw`section_drafts_content_length_check check \(char_length\(content\) <= (\d+)\)`), L.SECTION_MAX_CHARS);
+  assertEquals(one(f, String.raw`if char_length\(p_content\) > (\d+) then`), L.SECTION_MAX_CHARS);
+});

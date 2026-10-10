@@ -14,6 +14,10 @@
      A custom target counts as met within 10% either side.
    kdpWords.within(words, target) → true | false (null target: false)
    kdpWords.short(n)         8000 → "8K", 12500 → "12.5K"
+   kdpWords.count(md)        words in a section's Markdown text (E10.1). Same
+     rule as md_word_count in migration 0018, which sets the saved count:
+     markers at the start of a line (# to ######, -, +, 1. or 1)) and every *
+     are not words; the rest is split on ASCII whitespace.
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -50,5 +54,12 @@
 
   const within = (words, t) => !!t && words >= t.min && (t.max === null || words <= t.max);
 
-  root.kdpWords = { WORDS_PER_PAGE, RANGES, pages, target, within, short };
+  // ASCII whitespace only, like Postgres [ \t\n\r\f\v] (0018 md_word_count).
+  const MARKER = /^[ \t]*(#{1,6}|[-+]|[0-9]{1,9}[.)])[ \t]+/gm;
+  function count(md) {
+    const t = String(md || '').replace(MARKER, '').replace(/\*/g, '');
+    return t.split(/[ \t\n\r\f\v]+/).filter(Boolean).length;
+  }
+
+  root.kdpWords = { WORDS_PER_PAGE, RANGES, pages, target, within, short, count };
 })(globalThis);
