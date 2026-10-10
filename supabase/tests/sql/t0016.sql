@@ -187,12 +187,21 @@ select pg_temp.expect('delete a chapter with no writing', $q$delete from public.
 select pg_temp.chk('its 3 sections went too', pg_temp.nsec('b0000000-0000-4000-8000-000000000001') = 3 * 3 + 2);
 select pg_temp.expect('delete a section with no writing', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 1) and position = 3$q$, 'OK 1');
 -- 0018: only the server (the generate function, service role) writes AI versions.
+-- 0020 (E10.2 answer 2): a stopped generation is a partial version that is not
+-- current; until the writer keeps it, it is not writing, so Remove works.
 set role service_role;
-insert into public.section_versions (user_id, section_id, version_no, content, source)
-  select '00000000-0000-4000-8000-00000000000a', s.id, 1, 'Partial text kept after a stop.', 'generate'
+insert into public.section_versions (user_id, section_id, version_no, content, source, partial)
+  select '00000000-0000-4000-8000-00000000000a', s.id, 1, 'Partial text kept after a stop.', 'generate', true
     from public.sections s where s.chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and s.position = 1;
 set role authenticated;
-select pg_temp.expect('delete: a section with a version (even not current) refused', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and position = 1$q$, 'P0001 has_writing%');
+select pg_temp.expect('delete: a section whose only version is a partial not kept is allowed (0020)', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and position = 1$q$, 'OK 1');
+-- A full version (here not current) is writing, as in 0016.
+set role service_role;
+insert into public.section_versions (user_id, section_id, version_no, content, source)
+  select '00000000-0000-4000-8000-00000000000a', s.id, 1, 'Text kept after a complete generation.', 'generate'
+    from public.sections s where s.chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and s.position = 2;
+set role authenticated;
+select pg_temp.expect('delete: a section with a version (even not current) refused', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and position = 2$q$, 'P0001 has_writing%');
 select pg_temp.expect('delete: its chapter refused', $q$delete from public.chapters where id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2)$q$, 'P0001 has_writing%');
 select pg_temp.expect('delete: an empty sibling section still works', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and position = 3$q$, 'OK 1');
 select pg_temp.expect('replace: refused once any section has writing', $q$select public.replace_outline('b0000000-0000-4000-8000-000000000001', pg_temp.outline(3))$q$, 'P0001 has_writing%');
