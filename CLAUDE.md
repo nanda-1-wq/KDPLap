@@ -43,7 +43,7 @@ Keep them working. Do not change them unless asked.
 - Every generation reads the **approved Brief and locked Positioning**. New angles not found in Brief or Research are flagged for the user ("drift check").
 - The AI may quote facts only from the user's Research sources. Any number or claim without a source gets a "Verify: no source" flag.
 - Bios use only facts the user entered. No invented credentials.
-- A failed or stopped generation keeps the partial text as a version and is not counted in usage.
+- A failed or stopped generation keeps the partial text as a version. A failed generation, or one stopped by the server, is not counted in usage. One stopped by the user (Stop, a closed tab or a lost connection) counts the tokens used.
 
 ## 6. Data rules
 - **One source of truth** for each value. Example: trim size lives in the Brief; Export only reads it.
