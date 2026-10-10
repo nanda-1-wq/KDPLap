@@ -64,6 +64,9 @@
   --app-wr-card-min-h: 240px;   /* the editor card never shrinks below this */
   --app-wr-side-h: 32%;         /* narrow desktop: the right panel under the editor */
   --app-wr-ms-w-narrow: 220px;
+  --app-wr-cursor-w: 2px;       /* E10.2: the streaming cursor (design 23) */
+  --app-wr-cursor-h: 1.1em;
+  --app-wr-flag-line: 1px;      /* the dashed line under an unsourced sentence */
   --app-mini-cover-w: 46px;
   --app-mini-cover-h: 69px;
   --app-mini-cover-text: 6px;
@@ -2858,3 +2861,71 @@ div.delete-text p { margin: 0; }
   .wr-ms, .wr-main, .wr-side { grid-column: auto; grid-row: auto; height: auto; overflow: visible; }
   .wr-editor { overflow: visible; }
 }
+
+/* ── Step 06 Generate section (E10.2, designs 22 and 23) ── */
+.wr-head .wr-gen-btn { margin-left: auto; }
+.wr-head .wr-status + .wr-gen-btn { margin-left: 0; }
+.wr-gen, .wr-out {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-xl);
+}
+.wr-gen h3, .wr-out h3 { margin: 0; font-size: var(--text-xl); font-weight: 600; overflow-wrap: anywhere; }
+.wr-out p { margin: 0; font-size: var(--text-base); line-height: 1.5; color: var(--ink-2); }
+.wr-out .alert { align-self: stretch; }
+.wr-out-label { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--danger); }
+.wr-out-err { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--danger); font-size: var(--text-sm); }
+.wr-gen-meta { margin: 0; font-size: var(--text-sm); color: var(--graphite); }
+.wr-gen-row { align-self: stretch; display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-sm); color: var(--graphite); }
+.wr-gen-bar { flex: 1 1 auto; margin: 0; }
+.wr-gen-count { white-space: nowrap; }
+.wr-card.is-writing, .wr-card.is-kept { overflow-y: auto; }
+.wr-card.is-writing .wr-editor, .wr-card.is-kept .wr-editor { flex: 0 0 auto; overflow: visible; }
+.wr-stream-label { padding-top: var(--space-5); margin-bottom: var(--space-3); }
+/* An empty section while the AI writes: no placeholder, the new text starts at the top. */
+.wr-card.is-writing .wr-editor.is-empty { display: none; }
+.wr-card.is-writing .wr-editor.is-empty + .wr-stream { padding-top: var(--space-8); }
+.wr-stream {
+  padding: 0 var(--space-12) var(--space-8);
+  font-family: var(--font-read);
+  font-size: var(--text-read);
+  line-height: var(--leading-read);
+  color: var(--ink);
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+.wr-stream p, .wr-stream ul, .wr-stream ol { margin: 0 0 var(--space-4); }
+.wr-stream h2 { margin: var(--space-6) 0 var(--space-3); font-size: var(--text-2xl); font-weight: 600; line-height: 1.3; }
+.wr-stream > :last-child { display: inline; }
+.wr-cursor { display: inline-block; width: var(--app-wr-cursor-w); height: var(--app-wr-cursor-h); margin-left: var(--app-wr-cursor-w); vertical-align: text-bottom; background: var(--ink); }
+.wr-hint { margin: 0; padding: 0 var(--space-12) var(--space-6); font-family: var(--font-read); font-size: var(--text-base); color: var(--graphite); }
+.wr-tag { display: inline-block; padding: 0 var(--space-2); border: 1px solid var(--stone-2); border-radius: var(--radius-pill); font-size: var(--text-xs); color: var(--graphite); }
+/* "[Verify: no source]": a pill with an icon and words, the sentence before it underlined (design 22). */
+.md-unsourced { text-decoration: underline dashed var(--warning); text-decoration-thickness: var(--app-wr-flag-line); text-underline-offset: 0.2em; }
+.md-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  vertical-align: middle;
+  color: var(--warning);
+  background: var(--warning-bg);
+  user-select: all;
+}
+@media (max-width: 900px) {
+  .wr-stream { padding: 0 var(--space-5) var(--space-5); }
+  .wr-hint { padding: 0 var(--space-5) var(--space-5); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wr-cursor { animation: wr-blink 1s steps(1) infinite; }
+}
+@keyframes wr-blink { 50% { opacity: 0; } }

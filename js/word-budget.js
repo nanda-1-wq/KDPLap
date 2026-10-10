@@ -56,8 +56,10 @@
 
   // ASCII whitespace only, like Postgres [ \t\n\r\f\v] (0018 md_word_count).
   const MARKER = /^[ \t]*(#{1,6}|[-+]|[0-9]{1,9}[.)])[ \t]+/gm;
+  // The source flag is not words (0020 md_word_count, owner E10.2 answer 7).
+  const FLAG = /\[Verify: no source\]/g;
   function count(md) {
-    const t = String(md || '').replace(MARKER, '').replace(/\*/g, '');
+    const t = String(md || '').replace(FLAG, ' ').replace(MARKER, '').replace(/\*/g, '');
     return t.split(/[ \t\n\r\f\v]+/).filter(Boolean).length;
   }
 

@@ -114,8 +114,12 @@ const setup = async page => {
       [W7]: book(W7, { outline_approved_at: ago(1) })
     },
     outline: { [W1]: w1, [W2]: outline(DESIGN), [W3]: [], [W4]: w4, [W5]: w5, [W6]: w6, [W7]: w7 },
-    versions, drafts, s42: s42.id, c11: c11.id, c12: c12.id, long: w7[1].sections[0].id, count,
-    calls: [], writes: []
+    versions, drafts, s42: s42.id, s43: w1[4].sections[2].id, s51: w1[5].sections[0].id, s52: w1[5].sections[1].id, w6s: w6[1].sections[0].id, c11: c11.id, c12: c12.id, long: w7[1].sections[0].id, count,
+    calls: [], writes: [],
+    // E10.2: section_runs rows by section id (what Write reads), and helpers for the tests.
+    runs: {},
+    addVersion: (sid, content, source, extra) => addVersion(sectionOf(sid).s, content, source, { created_at: now(), ...extra }),
+    sectionOf: (sid) => sectionOf(sid)
   };
   globalThis.__modes = globalThis.__modes || {};
   const mode = (k) => globalThis.__modes[k];
@@ -241,8 +245,27 @@ const setup = async page => {
       const curV = versionOf(s.current_version_id);
       if (drafts[s.id] && drafts[s.id].content !== (curV ? curV.content : '')) return fail(r, 'P0001', 'unsaved_draft');
       delete drafts[s.id];
-      const v = addVersion(s, old.content, 'restore', { label: `Restored from v${old.version_no}`, created_at: now() });
+      // 0020: restoring a partial version is "Kept partial text from vN".
+      const v = addVersion(s, old.content, 'restore', { label: `${old.partial ? 'Kept partial text from v' : 'Restored from v'}${old.version_no}`, created_at: now() });
       return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, created: true });
+    }
+    // E10.2: the run row (0020 section_runs) and Stop (request_section_stop, not an AI call).
+    if (path === '/rest/v1/section_runs' && method === 'GET') {
+      const run = store.runs[eq('section_id')];
+      return json(r, 200, run ? [copy(run)] : []);
+    }
+    if (path === '/rest/v1/rpc/request_section_stop') {
+      const p = body();
+      store.writes.push({ table: 'rpc', fn: 'request_section_stop', body: p });
+      if (mode('stopError')) return json(r, 500, { message: 'mock' });
+      const run = Object.values(store.runs).find((x) => x.run_id === p.p_run_id && x.state === 'running');
+      if (run) run.stop_requested_at = now();
+      return json(r, 200, !!run);
+    }
+    if (path === '/functions/v1/generate') {
+      // Generate streams through the page's fetch (see the init script below), never through here.
+      store.calls.push('ERR generate reached the route');
+      return json(r, 500, { error: 'server_error' });
     }
     if (path === '/rest/v1/pen_names' && method === 'GET') return json(r, 200, [{ id: PA, name: 'Nora Hale', voice: {} }]);
     if (path.startsWith('/rest/v1/')) return json(r, 200, []);
@@ -258,4 +281,30 @@ const setup = async page => {
       user_metadata: { full_name: 'Adnan' }, app_metadata: {}, created_at: ago(30) }
   };
   await ctx.addInitScript((s) => { try { localStorage.setItem('sb-hmtxnbgfzwqawfulwwrg-auth-token', s); } catch (e) {} }, JSON.stringify(session));
+  // E10.2: Generate streams, and route.fulfill sends a body all at once. So the page's fetch
+  // answers /functions/v1/generate itself, with a stream the test drives step by step:
+  //   window.__gen.send(event, data), .close(), .fail(); .refuse = { status, body } answers JSON.
+  //   .requests: what Write sent (body, headers); .aborted / .cancelled: the browser closed it.
+  await ctx.addInitScript(() => {
+    const enc = new TextEncoder();
+    const g = window.__gen = { requests: [], refuse: null, ctrl: null, aborted: false, cancelled: false, open: false,
+      send(event, data) { if (g.ctrl && g.open) g.ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)); },
+      ping() { if (g.ctrl && g.open) g.ctrl.enqueue(enc.encode(': ping\n\n')); },
+      close() { if (g.ctrl && g.open) { g.open = false; g.ctrl.close(); } },
+      fail() { if (g.ctrl && g.open) { g.open = false; g.ctrl.error(new TypeError('network')); } } };
+    const orig = window.fetch;
+    window.fetch = function (url, init) {
+      if (!/\/functions\/v1\/generate$/.test(String(url))) return orig.apply(this, arguments);
+      g.requests.push({ body: JSON.parse(init.body), headers: init.headers });
+      if (g.refuse) {
+        const { status, body } = g.refuse;
+        g.refuse = null;
+        return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+      }
+      g.aborted = false; g.cancelled = false;
+      const body = new ReadableStream({ start(c) { g.ctrl = c; g.open = true; }, cancel() { g.cancelled = true; g.open = false; } });
+      if (init.signal) init.signal.addEventListener('abort', () => { g.aborted = true; if (g.open) { g.open = false; try { g.ctrl.error(new DOMException('aborted', 'AbortError')); } catch (e) { /* closed */ } } });
+      return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8' } }));
+    };
+  });
 };

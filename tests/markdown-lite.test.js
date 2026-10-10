@@ -112,3 +112,33 @@ Deno.test("toPlain and normalize", () => {
   assertEquals(M.toPlain("## Title\n\nDo **this** *now*.\n\n- One\n- Two\n\n5 \\* 4"), "Title\n\nDo this now.\n\nOne\nTwo\n\n5 * 4");
   assertEquals(M.normalize("  A  \r\n\r\n\r\n\r\nB c  "), "A\n\nB c");
 });
+
+/* ── The source flag (E10.2) ── */
+
+const FLAGGED = "Shoulder rolls ease it. Studies show shoulder rolls cut neck pain by 40%. [Verify: no source]";
+const pillOf = () => ({ nodeType: 1, nodeName: "SPAN", getAttribute: (k) => (k === "data-flag" ? "1" : null), childNodes: [el("svg"), t("Verify: no source")] });
+
+Deno.test("flag: a pill (not editable) and the sentence before it underlined", () => {
+  const html = M.toHtml(FLAGGED);
+  assertEquals(html.replace(/<svg[\s\S]*?<\/svg>/, "<svg/>"),
+    '<p>Shoulder rolls ease it. <span class="md-unsourced">Studies show shoulder rolls cut neck pain by 40%.</span> ' +
+    '<span class="md-flag" contenteditable="false" data-flag="1"><svg/>Verify: no source</span></p>');
+  // A sentence with markup of its own: the pill only, so the tags nest.
+  assertEquals(M.toHtml("It is **40%** less. [Verify: no source]").includes("md-unsourced"), false);
+  // Two flags in one paragraph: each its own sentence.
+  assertEquals((M.toHtml("A 5. [Verify: no source] B 6. [Verify: no source]").match(/md-unsourced">([^<]*)</g) || []).length, 2);
+});
+
+Deno.test("flag: read back from the editor; deleting the pill deletes the flag", () => {
+  const kept = root(el("p", t("Shoulder rolls ease it. "), el("span", "Studies show shoulder rolls cut neck pain by 40%."), t(" "), pillOf()));
+  assertEquals(M.fromDom(kept), FLAGGED);
+  const removed = root(el("p", t("Shoulder rolls ease it. "), el("span", "Studies show shoulder rolls cut neck pain by 40%.")));
+  assertEquals(M.fromDom(removed), "Shoulder rolls ease it. Studies show shoulder rolls cut neck pain by 40%.");
+  // A pasted element that only looks like a pill (no data-flag) is plain text.
+  assertEquals(M.fromDom(root(el("p", el("span", "Verify: no source")))), "Verify: no source");
+});
+
+Deno.test("flag: escaped like any text; never a way in for markup", () => {
+  assertEquals(M.toHtml("<b>5</b>. [Verify: no source]").includes("&lt;b&gt;5&lt;/b&gt;."), true);
+  assertEquals(M.toHtml("<b>5</b>. [Verify: no source]").includes("<b>"), false);
+});

@@ -24,6 +24,9 @@
    narrow rail (design 22) with a button to open it. A step may define
    leave(): called when another step opens or on Exit to Books (Write saves
    the typed text as a version there; Exit waits for it, at most 4 s).
+   E10.2: a step may define confirmLeave(): resolves false to stay (Write
+   asks "Stop and leave?" while the AI writes). go, Exit and Back/Forward
+   wait for it.
    Other steps show a "Coming in" placeholder.
 ═══════════════════════════════════════════════════ */
 
@@ -304,8 +307,16 @@
 
   /* ── Navigation between steps ────────────── */
 
-  function go(n, moveFocus = true) {
+  /** True when the open step lets us leave (Write asks while the AI writes). */
+  async function mayLeave() {
+    const m = book && MODULES[step];
+    if (!m || !m.confirmLeave) return true;
+    try { return await m.confirmLeave(); } catch (e) { return true; }
+  }
+
+  async function go(n, moveFocus = true) {
     if (n < 1 || n > LAST_V1_STEP || n === step) return;
+    if (!(await mayLeave())) return;
     // Write keeps the typed text as a draft; leaving makes it a version. Errors show on the save line.
     if (MODULES[step] && MODULES[step].leave) MODULES[step].leave().catch(() => {});
     step = n;
@@ -345,12 +356,21 @@
     const m = book && MODULES[step];
     if (!m || !m.leave || e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
-    Promise.race([m.leave().catch(() => {}), new Promise((r) => setTimeout(r, 4000))])
-      .then(() => { location.href = exit.href; });
+    mayLeave().then((ok) => {
+      if (!ok) return;
+      Promise.race([m.leave().catch(() => {}), new Promise((r) => setTimeout(r, 4000))])
+        .then(() => { location.href = exit.href; });
+    });
   });
-  window.addEventListener('popstate', () => {
+  window.addEventListener('popstate', async () => {
+    const to = readStep(new URLSearchParams(location.search).get('step'));
+    if (book && to !== step && !(await mayLeave())) {
+      // Stay: put this step's address back.
+      history.pushState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}${step === 6 && MODULES[6] && MODULES[6].sectionQuery ? MODULES[6].sectionQuery() : ''}`);
+      return;
+    }
     if (book && MODULES[step] && MODULES[step].leave) MODULES[step].leave().catch(() => {});
-    step = readStep(new URLSearchParams(location.search).get('step'));
+    step = to;
     if (book) renderStep(false);
   });
 

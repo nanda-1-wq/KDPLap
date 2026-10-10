@@ -17,6 +17,11 @@
                                  read as its text, script and style are
                                  dropped. So pasted HTML cannot add markup.
    kdpMarkdown.toPlain(md)     → the text without markers (Compare versions).
+
+   The source flag (E10.2): "[Verify: no source]" after a sentence is stored
+   in the text. toHtml shows it as a pill (icon and words, not editable) and
+   underlines the sentence before it; fromDom reads the pill back as the flag.
+   Deleting the pill deletes the flag.
    kdpMarkdown.normalize(md)   → \r\n to \n, no trailing spaces, at most one
                                  blank line between blocks, trimmed.
 ═══════════════════════════════════════════════════ */
@@ -66,13 +71,37 @@
   /** "\- ", "\## ", "1\. " at the start of a paragraph line → the plain marker text. */
   const unescapeStart = (t) => String(t).replace(/^\\(#{1,6}|[-+])/, '$1').replace(/^([0-9]{1,9})\\([.)])/, '$1$2');
 
+  const FLAG = '[Verify: no source]';
+  const FLAG_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
+  const FLAG_HTML = `<span class="md-flag" contenteditable="false" data-flag="1">${FLAG_ICON}Verify: no source</span>`;
+
+  /**
+   * The flag as a pill; the sentence before it underlined. The sentence starts
+   * after the last ". ", "! " or "? " before the flag. It is underlined only
+   * when it holds no markup of its own, so tags always nest.
+   */
+  function flags(html) {
+    const parts = html.split(FLAG);
+    if (parts.length === 1) return html;
+    let out = '';
+    for (let i = 0; i < parts.length; i++) {
+      let seg = parts[i];
+      if (i < parts.length - 1) {
+        const m = seg.match(/^([\s\S]*[.!?]["”’)]*\s)?([^<>]*?\S)(\s*)$/);
+        if (m && !/^\s*$/.test(m[2])) seg = `${m[1] || ''}<span class="md-unsourced">${m[2]}</span>${m[3]}`;
+        out += seg + FLAG_HTML;
+      } else out += seg;
+    }
+    return out;
+  }
+
   /** Inline Markdown → HTML. Escapes first; \* stays a literal star. */
   function inline(text) {
     const STAR = '\u0000';
     let s = escapeHtml(unescapeStart(text).replace(/\\\*/g, STAR));
     s = s.replace(/\*\*(?=\S)([^*]*?\S)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/\*(?=\S)([^*]*?\S)\*/g, '<em>$1</em>');
-    return s.replace(/\u0000/g, '*');
+    return flags(s.replace(/\u0000/g, '*'));
   }
 
   function toHtml(md) {
@@ -113,6 +142,8 @@
   function inlineMd(node, bold, italic) {
     if (isText(node)) return textOf(node.nodeValue);
     if (!isEl(node)) return '';
+    // The source flag pill (E10.2): read back as the flag, whatever is inside it.
+    if (typeof node.getAttribute === 'function' && node.getAttribute('data-flag')) return FLAG;
     const tag = node.nodeName.toUpperCase();
     if (DROP.has(tag)) return '';
     if (tag === 'BR') return '\n';
@@ -184,5 +215,5 @@
     return normalize(out.join('\n\n'));
   }
 
-  root.kdpMarkdown = { toHtml, fromDom, toPlain, normalize, parse, escapeHtml };
+  root.kdpMarkdown = { toHtml, fromDom, toPlain, normalize, parse, escapeHtml, FLAG };
 })(globalThis);

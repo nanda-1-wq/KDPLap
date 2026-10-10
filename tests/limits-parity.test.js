@@ -187,3 +187,21 @@ Deno.test("section text: 100,000 characters in the browser, the server and 0018 
   assertEquals(one(f, String.raw`section_drafts_content_length_check check \(char_length\(content\) <= (\d+)\)`), L.SECTION_MAX_CHARS);
   assertEquals(one(f, String.raw`if char_length\(p_content\) > (\d+) then`), L.SECTION_MAX_CHARS);
 });
+
+Deno.test("Generate section: words per call, max_tokens, the soft deadline, the stale run and 100,000 in 0020 (owner, E10.2)", () => {
+  const f = M("0020_generate_section.sql");
+  // 2,000 words a call; max_tokens = 2,000 × 1.6 + 200 (answer 10).
+  assertEquals(L.WRITE.wordsPerCall, 2000);
+  assertEquals(L.MAX_TOKENS.section_write, Math.ceil(L.WRITE.wordsPerCall * 1.6) + 200);
+  // The soft deadline is the stage timeout (100 s).
+  assertEquals(L.TIMEOUT_MS.section_write, 100_000);
+  assertEquals(L.WRITE_TIMING.softDeadlineMs, L.TIMEOUT_MS.section_write);
+  // A stale run: the same 20 s and 160 s in the function and in 0020.
+  assertEquals(one(f, String.raw`r\.heartbeat_at > now\(\) - interval '(\d+) seconds'`) * 1000, L.RUN_STALE.heartbeatMs);
+  assertEquals(one(f, String.raw`r\.started_at > now\(\) - interval '(\d+) seconds'`) * 1000, L.RUN_STALE.startedMs);
+  // The soft deadline ends a run well before the stale cut.
+  assertEquals(L.WRITE_TIMING.softDeadlineMs < L.RUN_STALE.startedMs, true);
+  // 100,000 characters: the run's crash copy, its recovery and its save.
+  assertEquals(one(f, String.raw`content\s+text not null default '' check \(char_length\(content\) <= (\d+)\)`), L.SECTION_MAX_CHARS);
+  for (const [n] of nums(f, String.raw`(?:left\([^;]*?, |> )(\d{6})\b`)) assertEquals(n, L.SECTION_MAX_CHARS);
+});

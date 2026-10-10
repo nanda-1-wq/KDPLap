@@ -25,6 +25,21 @@ Deno.test("word count: the same cases as t0018.sql", () => {
   for (const [text, n] of CASES) assertEquals(W.count(text), n, JSON.stringify(text));
 });
 
+// The source flag (E10.2): the same cases as the "words:" lines in t0020.sql.
+const FLAG_CASES = [
+  ["Studies show 40% less pain. [Verify: no source]", 5],
+  ["One two. [Verify: no source] Three.", 3],
+  ["## Title\n\n- one **two**", 3],
+];
+
+Deno.test("word count: the source flag is not words (t0020.sql)", () => {
+  for (const [text, n] of FLAG_CASES) assertEquals(W.count(text), n, JSON.stringify(text));
+  const sql = Deno.readTextFileSync(new URL("../supabase/tests/sql/t0020.sql", import.meta.url));
+  const got = [...sql.matchAll(/^select pg_temp\.chk\('words: [^']*', public\.md_word_count\((E?'(?:[^']|'')*')\) = (\d+)\);$/gm)]
+    .map((m) => [unquote(m[1]), Number(m[2])]);
+  assertEquals(got, FLAG_CASES);
+});
+
 Deno.test("word count: the SQL file has the same cases", () => {
   const sql = Deno.readTextFileSync(new URL("../supabase/tests/sql/t0018.sql", import.meta.url));
   const got = [...sql.matchAll(/^select pg_temp\.chk\('words: [^']*', public\.md_word_count\((null|E?'(?:[^']|'')*')\) = (\d+)\);$/gm)]

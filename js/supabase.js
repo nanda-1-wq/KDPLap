@@ -973,6 +973,67 @@ window.kdp = {
   },
 
   /**
+   * Generate section (E10.2): streamed, so not functions.invoke (it waits for
+   * the whole body). Sends the user's JWT and the anon key, like invoke does.
+   * input: { stage: 'section_write', bookId, sectionId, baseVersionId, more? }.
+   * Each server-sent event goes to onEvent({ event, data }) as it comes:
+   * start, text, done, saved, error. Resolves when the stream ends:
+   *   { data: { streamed: true }, error: null }, or
+   *   { error: { code, words, target } } for a refusal before the stream
+   *     (the same codes as generate, plus target_reached with words/target),
+   *   { error: { code: 'network' } } when the function could not be reached,
+   *   { error: { code: 'stream_lost', streamed: true } } when the stream broke,
+   *   { error: { code: 'aborted', streamed } } when signal aborted it.
+   */
+  async generateStream(input, { onEvent, signal } = {}) {
+    const session = await this.getSession();
+    if (!session) return { data: null, error: { code: 'unauthorized' } };
+    let res;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/generate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        signal
+      });
+    } catch (err) {
+      return { data: null, error: { code: signal && signal.aborted ? 'aborted' : 'network', streamed: false } };
+    }
+    if (!res.ok || !/^text\/event-stream/.test(res.headers.get('content-type') || '')) {
+      let body = null;
+      try { body = await res.json(); } catch (err) { /* not JSON */ }
+      if (body && typeof body.error === 'string') {
+        return { data: null, error: { code: body.error, words: Number.isInteger(body.words) ? body.words : null, target: Number.isInteger(body.target) ? body.target : null } };
+      }
+      return { data: null, error: { code: res.status === 401 ? 'unauthorized' : 'server_error' } };
+    }
+    try {
+      await window.kdpSse.read(res.body, (e) => { if (onEvent) onEvent(e); });
+    } catch (err) {
+      return { data: null, error: { code: signal && signal.aborted ? 'aborted' : 'stream_lost', streamed: true } };
+    }
+    return { data: { streamed: true }, error: null };
+  },
+
+  /** Stop a running Generate (0020 request_section_stop). Not an AI call. data: true when it was running. */
+  async requestSectionStop(runId) {
+    return window.sb.rpc('request_section_stop', { p_run_id: runId });
+  },
+
+  /**
+   * A section's last Generate run (0020 section_runs), or null. Write reads it
+   * to turn Generate off while another tab writes, and after a lost stream.
+   */
+  async getSectionRun(sectionId) {
+    const { data, error } = await window.sb
+      .from('section_runs')
+      .select('run_id, state, end_reason, version_id, started_at, heartbeat_at, stop_requested_at, ended_at')
+      .eq('section_id', sectionId)
+      .maybeSingle();
+    return { data: error ? null : (data || null), error };
+  },
+
+  /**
    * Save an import: the page-1 books and the counts our rules make from them,
    * in one transaction (migration 0006). Manual counts stay unless replaceManual.
    * books: [{ title, author, bsr, reviews, rating, sponsored, included }] in page order.
