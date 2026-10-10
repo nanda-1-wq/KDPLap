@@ -186,9 +186,12 @@ select pg_temp.expect('reorder: another user''s book reads as not found', $q$sel
 select pg_temp.expect('delete a chapter with no writing', $q$delete from public.chapters where id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 4)$q$, 'OK 1');
 select pg_temp.chk('its 3 sections went too', pg_temp.nsec('b0000000-0000-4000-8000-000000000001') = 3 * 3 + 2);
 select pg_temp.expect('delete a section with no writing', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 1) and position = 3$q$, 'OK 1');
+-- 0018: only the server (the generate function, service role) writes AI versions.
+set role service_role;
 insert into public.section_versions (user_id, section_id, version_no, content, source)
   select '00000000-0000-4000-8000-00000000000a', s.id, 1, 'Partial text kept after a stop.', 'generate'
     from public.sections s where s.chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and s.position = 1;
+set role authenticated;
 select pg_temp.expect('delete: a section with a version (even not current) refused', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and position = 1$q$, 'P0001 has_writing%');
 select pg_temp.expect('delete: its chapter refused', $q$delete from public.chapters where id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2)$q$, 'P0001 has_writing%');
 select pg_temp.expect('delete: an empty sibling section still works', $q$delete from public.sections where chapter_id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 2) and position = 3$q$, 'OK 1');

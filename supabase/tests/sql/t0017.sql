@@ -190,10 +190,14 @@ select pg_temp.clears('keeps: chapter Needs review', 'b0000000-0000-4000-8000-00
   $q$update public.chapters set needs_review = false where id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 1)$q$, false);
 select pg_temp.clears('keeps: unsourced cleared by the author', 'b0000000-0000-4000-8000-000000000001',
   $q$update public.chapters set unsourced = '{}' where id = pg_temp.ch('b0000000-0000-4000-8000-000000000001', 1)$q$, false);
-select pg_temp.clears('keeps: a version written (E10)', 'b0000000-0000-4000-8000-000000000001',
-  $q$insert into public.section_versions (section_id, version_no, content, word_count, source) values (pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 1), 1, 'Our joints change as we age. Cartilage gets thinner and the fluid that keeps a knee moving smoothly drops.', 18, 'manual')$q$, false);
-select pg_temp.clears('keeps: current version and status (E10 writing)', 'b0000000-0000-4000-8000-000000000001',
-  $q$update public.sections set status = 'draft', current_version_id = (select id from public.section_versions limit 1) where id = pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 1)$q$, false);
+select pg_temp.clears('keeps: a version written (E10, through save_version since 0018)', 'b0000000-0000-4000-8000-000000000001',
+  $q$select public.save_version(pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 1), 'Our joints change as we age. Cartilage gets thinner and the fluid that keeps a knee moving smoothly drops.', null)$q$, false);
+select pg_temp.clears('keeps: a second version made current (E10 writing)', 'b0000000-0000-4000-8000-000000000001',
+  $q$select public.save_version(pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 1), 'Our joints change as we age, and a chair makes the moves safe.', (select current_version_id from public.sections where id = pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 1)))$q$, false);
+select pg_temp.clears('keeps: section status (E10 writing)', 'b0000000-0000-4000-8000-000000000001',
+  $q$update public.sections set status = 'reviewed' where id = pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 1)$q$, false);
+select pg_temp.clears('keeps: a draft saved (E10.1)', 'b0000000-0000-4000-8000-000000000001',
+  $q$insert into public.section_drafts (section_id, content) values (pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 2), 'A first line.')$q$, false);
 select pg_temp.clears('keeps: section Needs review', 'b0000000-0000-4000-8000-000000000001',
   $q$update public.sections set needs_review = false where id = pg_temp.sec('b0000000-0000-4000-8000-000000000001', 1, 1)$q$, false);
 select pg_temp.clears('keeps: an edit to another book', 'b0000000-0000-4000-8000-000000000001',
