@@ -73,7 +73,8 @@
   const allSections = () => chapters.flatMap((c) => (c.sections || []).map((s) => ({ c, s })));
   const findSection = (id) => allSections().find((x) => x.s.id === id) || null;
   const numberOf = (c) => regular().indexOf(c) + 1;
-  const hasWriting = (s) => !!(s.has_writing || s.current_version_id || s.has_draft);
+  // The server's has_writing (0019: non-blank versions or drafts) when it is there.
+  const hasWriting = (s) => (typeof s.has_writing === 'boolean' ? s.has_writing : !!(s.current_version_id || s.has_draft));
   const anyWriting = () => allSections().some((x) => hasWriting(x.s));
   const gateOpen = () => !!book.outline_approved_at || anyWriting();
 
@@ -116,6 +117,8 @@
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
+  /** Blank text in a section with no version yet: nothing to save as a version. */
+  const blankFirst = () => !!cur && !cur.base && !cur.text.trim();
   const versionName = (v) => (v.source === 'restore' && v.label ? v.label : (SOURCE_NAME[v.source] || 'Saved'));
   const dirty = () => !!cur && cur.state === 'ready' && cur.text !== cur.savedText;
   const active = () => !!els && ctx.isActive(6);
@@ -268,7 +271,10 @@
       clearIdle();
       if (saver.hasUnsaved()) await saver.flush();
       const draftOk = !(saver.state === 'error' && saver.hasUnsaved());
-      if (!dirty() && !cur.hasDraft) return true;
+      // Only real changes become a version: never the same text as the current
+      // version, and never a blank first version (a typed-and-deleted character
+      // once saved an empty v1 on leave; 0019 refuses it on the server too).
+      if (!dirty() || blankFirst()) return true;
       const sent = cur.text;
       const id = cur.id;
       let res;
@@ -673,7 +679,7 @@
     else if (dirty()) text = v ? `Unsaved changes since v${v.version_no}. Kept as a draft while you type.` : 'Not saved as a version yet. Kept as a draft while you type.';
     else if (v) text = `Saved as v${v.version_no} · ${relTime(v.created_at)}`;
     else text = 'Nothing written yet.';
-    const can = dirty() && !cur.conflict && !cur.busy;
+    const can = dirty() && !blankFirst() && !cur.conflict && !cur.busy;
     box.innerHTML = `<span class="wr-foot-text${saveErr ? ' is-error' : ''}" data-foot-text>${saveErr ? ICON.warn(14) : ''}${esc(text)}</span>
       <button type="button" class="btn btn-secondary btn-sm" data-save-version${can ? '' : ' disabled'}>Save version</button>`;
   }

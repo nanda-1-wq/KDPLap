@@ -132,7 +132,8 @@ const setup = async page => {
     ...c, sections: c.sections.map((s) => {
       const v = versionOf(s.current_version_id);
       const d = drafts[s.id];
-      return { ...s, has_writing: versions.some((x) => x.section_id === s.id) || !!d, words: v ? v.word_count : 0, version_at: v ? v.created_at : null,
+      // 0019: only versions and drafts with text count as writing.
+      return { ...s, has_writing: versions.some((x) => x.section_id === s.id && x.content.trim()) || !!(d && d.content.trim()), words: v ? v.word_count : 0, version_at: v ? v.created_at : null,
         has_draft: !!d, draft_words: d ? count(d.content) : null, draft_at: d ? d.saved_at : null };
     })
   }));
@@ -213,6 +214,8 @@ const setup = async page => {
       if (!hit) return json(r, 400, { code: 'P0002', message: 'section_not_found' });
       const s = hit.s;
       if (p.p_content.length > 100000) return fail(r, 'P0001', 'section_too_long');
+      // 0019: no blank first version.
+      if (!s.current_version_id && !p.p_content.trim()) return fail(r, 'P0001', 'empty_first_version');
       if (p.p_make_current) {
         if ((s.current_version_id || null) !== (p.p_base_version_id || null)) return fail(r, 'P0001', 'version_conflict');
         const curV = versionOf(s.current_version_id);

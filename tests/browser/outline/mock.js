@@ -5,6 +5,7 @@ const B3 = 'c3c3c3c3-0000-4000-8000-000000000003';   // unlocked, no outline
 const B4 = 'c4c4c4c4-0000-4000-8000-000000000004';   // unlocked after the outline: chapters "Needs review"
 const B5 = 'c5c5c5c5-0000-4000-8000-000000000005';   // locked, one section has writing
 const B6 = 'c6c6c6c6-0000-4000-8000-000000000006';   // locked, no outline, Brief has no chapter count and no length
+const B7 = 'c7c7c7c7-0000-4000-8000-000000000007';   // locked, the only version is blank (the E10.1 live bug): not writing (0019)
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 
 // Design 20, real length: [title, objective, [[section title, words], ...]]
@@ -64,6 +65,9 @@ const setup = async page => {
   };
   const written = outline(DESIGN);
   written[1].sections[0].current_version_id = uid('7');
+  // 0019: the Introduction's only version is blank, so has_writing is false.
+  const blankOnly = outline(DESIGN);
+  Object.assign(blankOnly[0].sections[0], { current_version_id: uid('7'), has_writing: false });
   // E10.1: a section with only a draft (0018 has_writing) counts as writing too.
   Object.assign(written[2].sections[1], { has_draft: true, has_writing: true });
   const book = (id, o) => ({ id, title: 'Chair Yoga for Seniors Over 60', subtitle: 'Gentle 15-Minute Routines', title_needs_review: false, title_examples: [], current_step: 5, updated_at: ago(2), pen_name_id: PA, series_name: null, series_number: null, outline_approved_at: null, ...o });
@@ -74,9 +78,10 @@ const setup = async page => {
       [B3]: book(B3, { brief: brief({}), pos: pos(false) }),
       [B4]: book(B4, { brief: brief({}), pos: pos(false) }),
       [B5]: book(B5, { brief: brief({}), pos: pos(true) }),
-      [B6]: book(B6, { brief: brief({ length_range: null, chapter_count: null }), pos: pos(true) })
+      [B6]: book(B6, { brief: brief({ length_range: null, chapter_count: null }), pos: pos(true) }),
+      [B7]: book(B7, { brief: brief({}), pos: pos(true) })
     },
-    outline: { [B1]: outline(DESIGN), [B2]: [], [B3]: [], [B4]: outline(DESIGN).map((c) => ({ ...c, needs_review: true })) /* unlock marks every row, Introduction and Conclusion too */, [B5]: written, [B6]: [] },
+    outline: { [B1]: outline(DESIGN), [B2]: [], [B3]: [], [B4]: outline(DESIGN).map((c) => ({ ...c, needs_review: true })) /* unlock marks every row, Introduction and Conclusion too */, [B5]: written, [B6]: [], [B7]: blankOnly },
     checks: {},   // book id → the saved outline check row (0017, written by the "server" only)
     calls: [], writes: [], gens: [], approves: []
   };
@@ -99,7 +104,8 @@ const setup = async page => {
   });
   const chapterOf = (id) => { for (const bid of Object.keys(store.outline)) { const c = store.outline[bid].find((x) => x.id === id); if (c) return { bid, c }; } return null; };
   const sectionOf = (id) => { for (const bid of Object.keys(store.outline)) for (const c of store.outline[bid]) { const s = c.sections.find((x) => x.id === id); if (s) return { bid, c, s }; } return null; };
-  const isWritten = (s) => !!(s.current_version_id || s.has_draft);
+  // The server's has_writing when the row has it (0019: text only), else any version or draft.
+  const isWritten = (s) => (typeof s.has_writing === 'boolean' ? s.has_writing : !!(s.current_version_id || s.has_draft));
   const hasVersion = (c) => c.sections.some(isWritten);
   // 0017: an outline edit clears the approval (the mock plays the trigger).
   const unapprove = (bid) => { if (bid && store.books[bid]) store.books[bid].outline_approved_at = null; };

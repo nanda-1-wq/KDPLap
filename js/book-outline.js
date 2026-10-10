@@ -90,8 +90,10 @@
     return null;
   };
   const numberOf = (c) => regular().indexOf(c) + 1;
-  // A version or a draft (0018 has_writing); the server refuses a replace or a delete either way.
-  const sectionWritten = (s) => !!(s.has_writing || s.current_version_id || s.has_draft);
+  // The server's has_writing (0018, 0019: a version or a draft with text) decides,
+  // so a blank version or draft does not block Regenerate or Remove. Older
+  // replies without the key fall back to any version or draft.
+  const sectionWritten = (s) => (typeof s.has_writing === 'boolean' ? s.has_writing : !!(s.current_version_id || s.has_draft));
   const hasWriting = () => chapters.some((c) => (c.sections || []).some(sectionWritten));
   // Chapters only: an unlock marks the Introduction and Conclusion rows too, but they have no pill.
   const reviewCount = () => regular().filter((c) => c.needs_review).length;

@@ -71,6 +71,7 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0014` custom word target and insights fingerprint, `t0015` book types and Other label,
 `t0016` outline rules (limits, caps, the "has writing" guard, replace_outline, add_chapter, reorder_chapters),
 `t0017` outline approve (approve_outline, the approval guard, every edit that clears it and the writing that does not, unlock, outline_checks shape, owner and RLS),
+`t0019` empty version fix (no blank first version; blank versions and drafts are not writing, so Remove and Regenerate work; unlock counts text only),
 `t0018` write versions (word count, versions only through save_version / restore_version or the server, the 100,000 limit, drafts, the current version guard, "has writing" with drafts, unlock, outline_json),
 `rls_cross_user` (user B against user A's rows in every table).
 
@@ -85,8 +86,8 @@ the suite's `mock.js` with a fake session, so no account or real data is
 used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial,
 t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from, t-import), `positioning` (t1, t2, t-drift,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
-`delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve),
-`write` (t1, t-draft, t-versions, t-idle, t-fixes). The runner caches supabase-js (checked
+`delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank),
+`write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty). The runner caches supabase-js (checked
 against the app's SRI hash) and two old file versions from git in
 `tests/browser/.cache/`. Screenshots go to `tests/browser/shots/`. Both
 folders are ignored by git.
