@@ -18,6 +18,7 @@ Design: ✅ approved (see `design/`)
 - [x] **PLAN review gate** (after E8): Batches A, B1, B2, C, the ultrareview fixes and C2. Plans and results in `docs/reviews/`.
 - [x] **E9** 05 Outline (E9.1 structure and generate, E9.2 AI check and approve). Plan and results in `docs/reviews/2026-10-07-e9-plan.md`.
 - [ ] **E10** 06 Write: sections, versions, improve menu, checks ← next
+  - E10.1 editor, drafts, versions: done (0018, merged 734b849)
 - [ ] **E11** Export DOCX + Markdown · Settings + AI usage
 - [ ] **E12** Real test: write one full book, fix what hurts
 
