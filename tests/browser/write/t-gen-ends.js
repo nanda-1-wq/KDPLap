@@ -14,6 +14,8 @@ const test = async page => {
     await page.waitForSelector('.wr-ver, .wr-panel .wr-soon', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(400);
   };
+  /** A query value of a URL (the run-code sandbox has no URL). */
+  const param = (u, k) => { const m = u.match(new RegExp(`[?&]${k}=([^&#]*)`)); return m ? decodeURIComponent(m[1]) : null; };
   const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => null);
   const g = (fn, arg) => page.evaluate(fn, arg);
   const send = (event, data) => g(([e, d]) => window.__gen.send(e, d), [event, data]);
@@ -167,12 +169,12 @@ const test = async page => {
   ok((await txt('dialog[open] #wrAskTitle')) === 'Writing is in progress' && (await txt('dialog[open] [data-ask-yes]')) === 'Stop and leave' && (await txt('dialog[open] [data-ask-no]')) === 'Keep writing', 'section switch asks first');
   await page.click('dialog[open] [data-ask-no]');
   await page.waitForTimeout(200);
-  ok(new URL(page.url()).searchParams.get('section') === st.s51 && !!(await page.$('[data-gen-stop]')), 'Keep writing: still here, still writing');
+  ok(param(page.url(), 'section') === st.s51 && !!(await page.$('[data-gen-stop]')), 'Keep writing: still here, still writing');
   await page.click('a[data-step="5"]');
   await page.waitForSelector('dialog[open] #wrAskTitle', { timeout: 5000 });
   await page.click('dialog[open] [data-ask-no]');
   await page.waitForTimeout(200);
-  ok(new URL(page.url()).searchParams.get('step') === '6' && !!(await page.$('.wr-editor')), 'step change asks; Keep writing stays on 06');
+  ok(param(page.url(), 'step') === '6' && !!(await page.$('.wr-editor')), 'step change asks; Keep writing stays on 06');
   await page.click('.exit-link');
   await page.waitForSelector('dialog[open] #wrAskTitle', { timeout: 5000 });
   await page.click('dialog[open] [data-ask-no]');
@@ -194,7 +196,7 @@ const test = async page => {
   ok(await g(() => document.querySelectorAll('dialog[open]').length) === 1, 'double Back: one question');
   await page.click('dialog[open] [data-ask-no]');
   await page.waitForTimeout(400);
-  ok(new URL(page.url()).searchParams.get('step') === '6' && !!(await page.$('[data-gen-stop]')) && writes('request_section_stop').length === stops,
+  ok(param(page.url(), 'step') === '6' && !!(await page.$('[data-gen-stop]')) && writes('request_section_stop').length === stops,
     `double Back, Keep writing: still on 06, still writing, no stop (${page.url()})`);
   await g(() => { const a = document.querySelector('.exit-link'); a.click(); a.click(); });
   await page.waitForSelector('dialog[open] #wrAskTitle', { timeout: 5000 });
@@ -221,7 +223,7 @@ const test = async page => {
   for (let i = 0; i < 30 && !writes('request_section_stop').some((w) => w.body.p_run_id === RUN); i++) await page.waitForTimeout(100);
   ok(writes('request_section_stop').some((w) => w.body.p_run_id === RUN), 'Stop and leave: the stop call');
   await page.waitForTimeout(300);
-  ok(new URL(page.url()).searchParams.get('section') === st.s51, 'it waits for the save before leaving');
+  ok(param(page.url(), 'section') === st.s51, 'it waits for the save before leaving');
   await finish();
   await until((s) => new URL(location.href).searchParams.get('section') === s, st.s52);
   ok(true, 'then it opens the other section');

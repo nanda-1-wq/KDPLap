@@ -15,6 +15,18 @@ const test = async page => {
     await page.waitForSelector('.wr-ver', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(300);
   };
+  /** Puts the caret at the end of the text in sel (DOM Range; End and Control+End do not do this on macOS). */
+  const caretEnd = (sel) => page.$eval(sel, (el) => {
+    el.closest('[contenteditable]').focus();
+    let t = el;
+    while (t.lastElementChild && t.lastElementChild.tagName !== 'BR' && t.lastElementChild.isContentEditable) t = t.lastElementChild;
+    const r = document.createRange();
+    r.selectNodeContents(t);
+    r.collapse(false);
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
   const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => null);
   const cards = () => page.$$eval('[data-notes] .wr-note', (n) => n.map((x) => x.innerText.replace(/\s+/g, ' ').trim()));
   const saves = () => st.writes.filter((w) => w.fn === 'save_version');
@@ -62,7 +74,7 @@ const test = async page => {
   // On save: type, another tab saves, Save version → one card, the text stays.
   await open(W1, st.s42);
   await page.click('[data-editor]');
-  await page.keyboard.press('Control+End');
+  await caretEnd('[data-editor]');
   await page.keyboard.type(' Typed before the other tab saved.');
   await settle();
   otherTab(st.s42, 'Saved in the other tab while this one typed.');

@@ -13,6 +13,16 @@ SUITE=${1:?suite}; FILE=${2:?test file}
 CACHE=$HERE/.cache; SHOTS=$HERE/shots/$SUITE
 mkdir -p "$CACHE" "$SHOTS"
 
+# The static server on 5500: tests/browser/serve.py (many connections at once).
+# Started here if nothing listens; another server there is used, with a warning.
+SERVER=$(lsof -nP -iTCP:5500 -sTCP:LISTEN -t 2>/dev/null | head -1 || true)
+if [[ -z $SERVER ]]; then
+  nohup python3 "$HERE/serve.py" >/dev/null 2>&1 &
+  for _ in {1..50}; do curl -fs -o /dev/null http://127.0.0.1:5500/ && break; sleep 0.1; done
+elif ! ps -o command= -p "$SERVER" | grep -q 'serve\.py'; then
+  echo "run.sh: port 5500 is not tests/browser/serve.py; pages may lose scripts. Stop that server to use serve.py." >&2
+fi
+
 # supabase-js 2.49.4, checked against the SRI hash the app pages use (jsdelivr is slow in the test browser).
 SB=$CACHE/supabase-2.49.4.js
 if [[ ! -s $SB ]]; then

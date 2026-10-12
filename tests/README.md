@@ -98,7 +98,9 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 tests/browser/run.sh title t1.js
 ```
 
-Needs the static server on port 5500. Every Supabase call is answered by
+Needs the static server on port 5500: `run.sh` starts `tests/browser/serve.py`
+when nothing listens there (`python3 -m http.server` queues only 5
+connections, so pages lose scripts: "kdpAutosave is not defined"). Every Supabase call is answered by
 the suite's `mock.js` with a fake session, so no account or real data is
 used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial,
 t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from, t-import), `positioning` (t1, t2, t-drift,

@@ -15,6 +15,18 @@ const test = async page => {
     await page.waitForSelector('.wr-ver, .wr-panel .wr-soon', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(400);
   };
+  /** Puts the caret at the end of the text in sel (DOM Range; End and Control+End do not do this on macOS). */
+  const caretEnd = (sel) => page.$eval(sel, (el) => {
+    el.closest('[contenteditable]').focus();
+    let t = el;
+    while (t.lastElementChild && t.lastElementChild.tagName !== 'BR' && t.lastElementChild.isContentEditable) t = t.lastElementChild;
+    const r = document.createRange();
+    r.selectNodeContents(t);
+    r.collapse(false);
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  });
   const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => null);
   const g = (fn, arg) => page.evaluate(fn, arg);
   const send = (event, data) => g(([e, d]) => window.__gen.send(e, d), [event, data]);
@@ -75,7 +87,7 @@ const test = async page => {
   await page.screenshot({ path: `${SHOTS}/t-generate-done.png` });
   // The pill round-trips: typing keeps the flag in the stored text.
   await page.click('[data-editor] p');
-  await page.keyboard.press('End');
+  await caretEnd('[data-editor] p');
   await page.keyboard.type(' Ok.');
   await page.waitForTimeout(1200);
   const d43 = st.drafts[st.s43];
@@ -85,7 +97,7 @@ const test = async page => {
   await open(W1, st.s42);
   ok(!(await page.$eval('[data-hint]', (h) => h.hidden)) && (await txt('[data-hint]')) === 'Keep writing, or generate the rest of this section.', 'hint under the target');
   await page.click('[data-editor]');
-  await page.keyboard.press('Control+End');
+  await caretEnd('[data-editor]');
   await page.keyboard.type(' Breathe out.');
   const before = writes('save_version').length;
   await page.click('[data-generate]');
