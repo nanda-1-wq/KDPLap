@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDP Lab · Improve states</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;family=Source+Serif+4:wght@400;600&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../design-tokens.css">
+<!-- E10.3 · 06 Write · Improve menu: the states design 22 and 23 do not draw.
+     Tokens from design/design-tokens.css only. Ink on paper; functional colors
+     only with an icon and a word, small areas. Every button 44 px. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
+  a { color: var(--ink); text-decoration: underline; }
+  :focus-visible, .is-focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .page { max-width: 1440px; padding: var(--space-10) var(--space-12); display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--space-6); align-items: start; }
+  .page-head { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-1); }
+  .page-head h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
+  .page-head p { margin: 0; font-size: var(--text-md); color: var(--graphite); max-width: 760px; line-height: 1.5; }
+  .wide { grid-column: span 2; }
+  @media (max-width: 899px) { .page { padding: var(--space-6) var(--space-4); } .wide { grid-column: 1 / -1; } }
+
+  .label { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); text-transform: uppercase; }
+  .state { display: flex; flex-direction: column; gap: var(--space-3); }
+  .state > .label { padding-left: var(--space-1); }
+
+  .card { background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl);
+          padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
+  .card h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+  .card p { margin: 0; font-size: var(--text-base); line-height: 1.5; color: var(--ink-2); }
+  .small { font-size: var(--text-sm) !important; color: var(--graphite) !important; }
+  .row { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+
+  .btn { min-height: var(--control-h); padding: 0 var(--space-4); display: inline-flex; align-items: center; justify-content: center;
+         gap: var(--space-2); border-radius: var(--radius-md); font-family: inherit; font-size: var(--text-base);
+         border: 1px solid var(--stone); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .btn-primary { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+  .btn-text { border-color: transparent; background: transparent; text-decoration: underline; padding: 0 var(--space-3); }
+  .btn[disabled], .btn.is-off { background: var(--surface-2); border-color: var(--stone); color: var(--muted); cursor: default; }
+  .btn-primary[disabled] { background: var(--mist); border-color: var(--mist); color: var(--muted); }
+
+  /* Editor excerpt (design 22) */
+  .ed { border: 1px solid var(--stone); border-radius: var(--radius-xl); background: var(--surface); position: relative; }
+  .tools { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--stone); }
+  .tool { width: var(--control-h); height: var(--control-h); display: inline-flex; align-items: center; justify-content: center;
+          border: none; background: transparent; border-radius: var(--radius-sm); color: var(--ink); font-family: inherit; font-size: var(--text-md); font-weight: 600; }
+  .tool-sep { width: 1px; height: 24px; background: var(--stone); margin: 0 var(--space-1); }
+  .tool-improve { width: auto; padding: 0 var(--space-3); gap: var(--space-2); font-weight: 500; border: 1px solid var(--stone); }
+  .tool-improve[disabled] { color: var(--muted); background: var(--surface-2); }
+  .tools .words { margin-left: auto; font-size: var(--text-sm); color: var(--graphite); }
+  .text { padding: var(--space-5) var(--space-6); font-family: var(--font-read); font-size: var(--text-lg); line-height: var(--leading-read); color: var(--ink); }
+  .text p { margin: 0 0 var(--space-3); font-size: inherit; line-height: inherit; color: inherit; }
+  .sel { background: var(--mist); box-shadow: 0 0 0 2px var(--mist); }
+  .float { position: absolute; display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-h);
+           padding: 0 var(--space-3); border-radius: var(--radius-md); background: var(--ink); color: var(--surface);
+           border: none; font-family: var(--font-ui); font-size: var(--text-md); font-weight: 500; box-shadow: var(--shadow-menu); }
+  .hint { display: flex; gap: var(--space-2); align-items: center; font-size: var(--text-sm); color: var(--graphite); padding: var(--space-2) var(--space-3); }
+  .tip { position: absolute; background: var(--ink); color: var(--surface); font-size: var(--text-sm); padding: var(--space-2) var(--space-3);
+         border-radius: var(--radius-sm); white-space: nowrap; }
+
+  /* Menu (design 22) */
+  .menu { background: var(--surface); border: 1px solid var(--stone-2); border-radius: var(--radius-lg); padding: 6px;
+          display: flex; flex-direction: column; gap: 1px; box-shadow: var(--shadow-menu); width: 100%; max-width: 300px; }
+  .menu-head { padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--graphite); border-bottom: 1px solid var(--mist); margin-bottom: var(--space-1); }
+  .menu-head strong { color: var(--ink); font-weight: 600; }
+  .mi { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-h); padding: 7px var(--space-3); border: none;
+        background: transparent; border-radius: var(--radius-sm); font-family: inherit; text-align: left; color: var(--ink); width: 100%; }
+  .mi > span:first-child { flex-grow: 1; display: flex; flex-direction: column; gap: 1px; }
+  .mi .t { font-size: var(--text-md); font-weight: 500; }
+  .mi .s { font-size: var(--text-xs); color: var(--graphite); }
+  .mi.is-active { background: var(--mist); }
+  .mi[aria-disabled="true"] .t, .mi[aria-disabled="true"] .s { color: var(--muted); }
+  .mi-why { font-size: var(--text-xs); color: var(--ink-2); padding: 2px var(--space-3) var(--space-2); display: flex; gap: 6px; align-items: flex-start; }
+  .menu-sep { height: 1px; background: var(--mist); margin: var(--space-1) 6px; }
+  .pill { font-size: 11px; padding: 1px 7px; border: 1px solid var(--stone-2); border-radius: var(--radius-pill); color: var(--graphite); }
+  .menu-note { display: flex; gap: var(--space-2); align-items: flex-start; padding: var(--space-2) var(--space-3); margin: 2px 2px var(--space-1);
+               border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--text-sm); color: var(--ink-2); line-height: 1.4; }
+
+  /* Custom box */
+  .field { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); }
+  .field label { font-size: var(--text-md); font-weight: 500; }
+  .field textarea { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.45; color: var(--ink); min-height: 88px; resize: none;
+                    border: 1px solid var(--ink); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); outline: 2px solid var(--ink); outline-offset: 2px; }
+  .field .count { font-size: var(--text-xs); color: var(--graphite); align-self: flex-end; font-family: var(--font-label); }
+
+  /* Status cards */
+  .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--stone); border-top-color: var(--ink); flex-shrink: 0; }
+  .passage { font-family: var(--font-read); font-size: var(--text-base); line-height: 1.6; color: var(--ink-2); background: var(--surface-2);
+             border-left: 3px solid var(--stone-2); padding: var(--space-2) var(--space-3); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+  .alert { display: flex; gap: var(--space-2); align-items: flex-start; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); font-size: var(--text-md); line-height: 1.5; }
+  .alert p { font-size: var(--text-md) !important; }
+  .alert-error { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger); }
+  .alert-error p { color: var(--danger) !important; }
+  .alert-warning { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--ink); }
+  .alert-warning svg { color: var(--warning); flex-shrink: 0; margin-top: 2px; }
+  .alert-info { background: var(--surface-2); border: 1px solid var(--stone); color: var(--ink-2); }
+
+  /* Suggestion panel */
+  .diff { font-family: var(--font-read); font-size: var(--text-lg); line-height: var(--leading-read); color: var(--ink); }
+  .del { background: var(--danger-bg); color: var(--danger); text-decoration: line-through; }
+  .ins { background: var(--success-bg); color: var(--success); text-decoration: underline; }
+  .flag { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-ui); font-size: var(--text-xs); font-weight: 600;
+          color: var(--warning); background: var(--warning-bg); border: 1px solid var(--warning); border-radius: var(--radius-pill); padding: 0 8px; vertical-align: 2px; }
+  .legend { display: flex; gap: var(--space-4); font-size: var(--text-sm); color: var(--graphite); }
+  .legend span { display: inline-flex; gap: 6px; align-items: center; }
+  .sw { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; line-height: 1; }
+  .sw-del { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger); }
+  .sw-ins { background: var(--success-bg); border: 1px solid var(--success); color: var(--success); }
+  .notes { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--mist); }
+  .note { display: flex; gap: var(--space-2); align-items: flex-start; font-size: var(--text-md); color: var(--ink-2); line-height: 1.45; }
+  .note svg { color: var(--warning); flex-shrink: 0; margin-top: 2px; }
+  .note strong { color: var(--warning); font-weight: 600; }
+  .head-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+
+  /* Off reasons */
+  .off { display: flex; flex-direction: column; gap: var(--space-2); }
+  .off-row { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: center; padding: var(--space-2) 0; border-top: 1px solid var(--mist); }
+  .off-row:first-child { border-top: none; }
+  .off-row .why { font-size: var(--text-md); color: var(--ink-2); line-height: 1.4; }
+  .off-row .when { font-size: var(--text-xs); color: var(--graphite); font-family: var(--font-label); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+
+  /* Dialog */
+  .backdrop { background: var(--overlay); border-radius: var(--radius-xl); padding: var(--space-10) var(--space-6); display: flex; justify-content: center; }
+  .dialog { background: var(--surface); border-radius: var(--radius-2xl); box-shadow: var(--shadow-dialog); padding: var(--space-6); width: 100%; max-width: 420px;
+            display: flex; flex-direction: column; gap: var(--space-4); }
+  .dialog h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+  .dialog p { margin: 0; font-size: var(--text-base); line-height: 1.5; color: var(--ink-2); }
+  .dialog .row { justify-content: flex-end; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></g></symbol>
+  <symbol id="info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></g></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></g></symbol>
+  <symbol id="copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></g></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></g></symbol>
+</svg>
+
+<main class="page">
+  <header class="page-head">
+    <span class="label">E10.3 · 06 Write · States</span>
+    <h1>Improve menu states</h1>
+    <p>The Improve states that designs 22 and 23 do not draw. The open menu is in design 22; the word diff style comes from Compare versions in design 23. Every AI change is a suggestion first. Accept saves a new version.</p>
+  </header>
+
+  <!-- 1. Trigger -->
+  <section class="state wide" aria-label="Trigger">
+    <span class="label">1 · Trigger: floating button and toolbar button</span>
+    <div class="ed">
+      <div class="tools" role="toolbar" aria-label="Formatting">
+        <button class="tool" aria-label="Bold">B</button>
+        <button class="tool" aria-label="Italic"><i>I</i></button>
+        <button class="tool" aria-label="Heading">H2</button>
+        <button class="tool" aria-label="Bulleted list"><svg width="16" height="16"><use href="#list"/></svg></button>
+        <span class="tool-sep" aria-hidden="true"></span>
+        <button class="tool tool-improve" aria-haspopup="menu"><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button>
+        <span class="words">310 / 450 words</span>
+      </div>
+      <div class="text">
+        <p>Shoulder rolls ease the stiffness that builds up after long hours of sitting. <span class="sel">Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this five times.</span> Keep your neck long and your chin level.</p>
+        <p>Next, reverse the direction. Roll your shoulders forward and down.</p>
+      </div>
+      <button class="float is-focus" style="left: 330px; top: 138px" aria-haspopup="menu"><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button>
+    </div>
+    <p class="small" style="margin:0">The floating button sits under the end of the selection (shown with its focus ring). The toolbar button opens the same menu for keyboard users. The selection already shows as whole sentences.</p>
+  </section>
+
+  <!-- 2. No selection -->
+  <section class="state" aria-label="No selection">
+    <span class="label">2 · No selection</span>
+    <div class="ed">
+      <div class="tools">
+        <button class="tool" aria-label="Bold">B</button>
+        <button class="tool" aria-label="Italic"><i>I</i></button>
+        <span class="tool-sep" aria-hidden="true"></span>
+        <button class="tool tool-improve" disabled aria-describedby="h2"><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button>
+      </div>
+      <div class="hint" id="h2"><svg width="16" height="16"><use href="#info"/></svg>Select text to improve it.</div>
+      <div class="text"><p>Shoulder rolls ease the stiffness that builds up after long hours of sitting.</p></div>
+    </div>
+  </section>
+
+  <!-- 3. Too short -->
+  <section class="state" aria-label="Selection too short">
+    <span class="label">3 · Selection too short</span>
+    <div class="menu" role="menu" aria-label="Improve selected text">
+      <div class="menu-head"><strong>1 sentence</strong> · 2 words</div>
+      <div class="menu-note"><svg width="16" height="16"><use href="#info"/></svg>Select at least 3 words.</div>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Edit and format</span><span class="s">Grammar and readability</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Improve</span><span class="s">Clearer wording, same meaning</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Expand</span><span class="s">Add detail or an example</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Shorten</span><span class="s">Cut filler words</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Humanize</span><span class="s">Natural reading in your voice</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Custom instruction</span><span class="s">Tell the AI what to change</span></span></button>
+      <div class="menu-sep"></div>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Create image</span><span class="s">From the selected text</span></span><span class="pill">v2</span></button>
+    </div>
+  </section>
+
+  <!-- 4. Too long -->
+  <section class="state" aria-label="Selection too long">
+    <span class="label">4 · Selection too long</span>
+    <div class="menu" role="menu" aria-label="Improve selected text">
+      <div class="menu-head"><strong>94 sentences</strong> · 1,820 words</div>
+      <div class="menu-note"><svg width="16" height="16"><use href="#info"/></svg>Select up to 1,500 words. You selected 1,820.</div>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Edit and format</span><span class="s">Grammar and readability</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Improve</span><span class="s">Clearer wording, same meaning</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Expand</span><span class="s">Add detail or an example</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Shorten</span><span class="s">Cut filler words</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Humanize</span><span class="s">Natural reading in your voice</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Custom instruction</span><span class="s">Tell the AI what to change</span></span></button>
+      <div class="menu-sep"></div>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Create image</span><span class="s">From the selected text</span></span><span class="pill">v2</span></button>
+    </div>
+  </section>
+
+  <!-- 5. Expand over 1,000 -->
+  <section class="state" aria-label="Expand over 1,000 words">
+    <span class="label">5 · Expand over 1,000 words</span>
+    <div class="menu" role="menu" aria-label="Improve selected text">
+      <div class="menu-head"><strong>61 sentences</strong> · 1,240 words</div>
+      <button class="mi" role="menuitem"><span><span class="t">Edit and format</span><span class="s">Grammar and readability</span></span></button>
+      <button class="mi is-active" role="menuitem"><span><span class="t">Improve</span><span class="s">Clearer wording, same meaning</span></span></button>
+      <button class="mi" role="menuitem" aria-disabled="true" aria-describedby="x5"><span><span class="t">Expand</span><span class="s">Add detail or an example</span></span></button>
+      <div class="mi-why" id="x5"><svg width="14" height="14"><use href="#info"/></svg>Select up to 1,000 words to expand.</div>
+      <button class="mi" role="menuitem"><span><span class="t">Shorten</span><span class="s">Cut filler words</span></span></button>
+      <button class="mi" role="menuitem"><span><span class="t">Humanize</span><span class="s">Natural reading in your voice</span></span></button>
+      <button class="mi" role="menuitem"><span><span class="t">Custom instruction</span><span class="s">Tell the AI what to change</span></span></button>
+      <div class="menu-sep"></div>
+      <button class="mi" role="menuitem" aria-disabled="true"><span><span class="t">Create image</span><span class="s">From the selected text</span></span><span class="pill">v2</span></button>
+    </div>
+  </section>
+
+  <!-- 6. Custom box -->
+  <section class="state" aria-label="Custom instruction">
+    <span class="label">6 · Custom instruction</span>
+    <div class="menu" role="dialog" aria-label="Custom instruction">
+      <div class="menu-head"><strong>2 sentences</strong> · 24 words</div>
+      <div class="field">
+        <label for="ci">What should change?</label>
+        <textarea id="ci">Use shorter sentences and speak to the reader as "you".</textarea>
+        <span class="count">55 / 300</span>
+      </div>
+      <div class="row" style="padding: var(--space-1) var(--space-3) var(--space-3)">
+        <button class="btn btn-primary"><svg width="16" height="16"><use href="#sparkle"/></svg>Send</button>
+        <button class="btn">Back</button>
+      </div>
+      <p class="small" style="margin:0; padding: 0 var(--space-3) var(--space-3)">Send is off while the box is empty.</p>
+    </div>
+  </section>
+
+  <!-- 7. Loading -->
+  <section class="state" aria-label="Loading">
+    <span class="label">7 · Loading</span>
+    <div class="card" role="status">
+      <span class="label">Improve · 4.2</span>
+      <div class="row"><span class="spin" aria-hidden="true"></span><h2>Improving 2 sentences…</h2></div>
+      <div class="passage">Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this five times.</div>
+      <p class="small">You can keep writing. If you change these sentences, we will ask before using the result.</p>
+      <div class="row"><button class="btn">Cancel</button></div>
+      <div class="row" style="padding-top: var(--space-2); border-top: 1px solid var(--mist)">
+        <button class="btn" disabled><svg width="18" height="18"><use href="#sparkle"/></svg>Generate section</button>
+        <span class="small">Wait for Improve to finish.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Stopped -->
+  <section class="state" aria-label="Stopped">
+    <span class="label">8 · Stopped (Cancel)</span>
+    <div class="card" role="status">
+      <span class="label">Improve · 4.2</span>
+      <h2>Stopped</h2>
+      <p>Your text did not change. The tokens already used count toward your usage.</p>
+      <div class="row"><button class="btn">Close</button></div>
+    </div>
+  </section>
+
+  <!-- 9. Suggestion panel -->
+  <section class="state wide" aria-label="Suggestion">
+    <span class="label">9 · Suggestion with word diff and all notes</span>
+    <div class="card">
+      <span class="label">Improve · 4.2</span>
+      <div class="head-row"><h2>Improved: 46 → 44 words</h2><span class="small">Just now</span></div>
+      <div class="diff">Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. <span class="del">This gentle yet powerful movement serves as a wonderful foundation for</span> <span class="ins">Do this five times, then rest.</span> Most people feel looser within a week. <span class="flag"><svg width="12" height="12"><use href="#warn"/></svg>Verify: no source</span> <span class="ins">Ruth likes to pair this with slow breathing.</span></div>
+      <div class="legend"><span><span class="sw sw-del" aria-hidden="true">−</span>Removed</span><span><span class="sw sw-ins" aria-hidden="true">+</span>Added</span></div>
+      <div class="notes" aria-label="Check before you accept">
+        <span class="label">Check before you accept</span>
+        <div class="note"><svg width="16" height="16"><use href="#warn"/></svg><span><strong>Source:</strong> 1 claim needs a source.</span></div>
+        <div class="note"><svg width="16" height="16"><use href="#warn"/></svg><span><strong>Marks:</strong> The original had 2 source marks; this has 1. Check that no claim lost its mark.</span></div>
+        <div class="note"><svg width="16" height="16"><use href="#warn"/></svg><span><strong>Names:</strong> New names: Ruth. Check them.</span></div>
+        <div class="note"><svg width="16" height="16"><use href="#warn"/></svg><span><strong>Structure:</strong> The structure changed: 3 list items became 2.</span></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary">Accept</button>
+        <button class="btn"><svg width="16" height="16"><use href="#sparkle"/></svg>Try again</button>
+        <button class="btn btn-text">Reject</button>
+      </div>
+      <p class="small">Accept saves a new version. Undo (Ctrl+Z) puts the old text back.</p>
+    </div>
+  </section>
+
+  <!-- 10. No change -->
+  <section class="state" aria-label="No change">
+    <span class="label">10 · No change</span>
+    <div class="card" role="status">
+      <span class="label">Edit and format · 4.2</span>
+      <h2>No changes suggested</h2>
+      <p>The text already does this. Nothing was saved. This request counts toward your usage.</p>
+      <div class="row"><button class="btn">Close</button></div>
+    </div>
+  </section>
+
+  <!-- 11. Applying -->
+  <section class="state" aria-label="Applying">
+    <span class="label">11 · Applying (after Accept)</span>
+    <div class="card" role="status">
+      <span class="label">Improve · 4.2</span>
+      <div class="head-row"><h2>Improved: 46 → 44 words</h2></div>
+      <div class="row"><span class="spin" aria-hidden="true"></span><span style="font-size: var(--text-base)">Saving…</span></div>
+      <div class="row">
+        <button class="btn btn-primary" disabled>Accept</button>
+        <button class="btn" disabled>Try again</button>
+        <button class="btn btn-text" disabled>Reject</button>
+      </div>
+      <p class="small">The editor is read only for a moment.</p>
+    </div>
+  </section>
+
+  <!-- 12. Error -->
+  <section class="state" aria-label="Error with retry">
+    <span class="label">12 · Error with retry</span>
+    <div class="card">
+      <span class="label">Improve · 4.2</span>
+      <h2>Improve stopped</h2>
+      <div class="alert alert-error" role="alert"><svg width="16" height="16" style="flex-shrink:0;margin-top:3px"><use href="#x"/></svg><div><p><strong>The AI service did not respond.</strong></p><p>Your text is safe. This attempt was not counted in your usage.</p></div></div>
+      <div class="row"><button class="btn btn-primary">Try again</button><button class="btn btn-text">Close</button></div>
+      <p class="small">Other first lines: "The AI service stopped." · "The AI service declined this text." · At Accept: "We couldn’t save the change. Your text is safe."</p>
+    </div>
+  </section>
+
+  <!-- 13. Text changed -->
+  <section class="state" aria-label="Text changed">
+    <span class="label">13 · Text changed since the request</span>
+    <div class="card">
+      <span class="label">Improve · 4.2</span>
+      <h2>The text changed</h2>
+      <div class="alert alert-warning" role="alert"><svg width="16" height="16"><use href="#warn"/></svg><div><p><strong>Check this:</strong> the selected text changed while the AI was working, so the suggestion was not used.</p></div></div>
+      <p class="small">Copy the suggestion to use it by hand, or select the text again.</p>
+      <div class="row"><button class="btn"><svg width="16" height="16"><use href="#copy"/></svg>Copy suggestion</button><button class="btn btn-text">Close</button></div>
+    </div>
+  </section>
+
+  <!-- 14. Improve off -->
+  <section class="state wide" aria-label="Improve off">
+    <span class="label">14 · Improve off: every reason</span>
+    <div class="card">
+      <div class="off">
+        <div class="off-row"><button class="btn tool-improve" disabled><svg width="16" height="16"><use href="#lock"/></svg>Improve</button><span class="why"><span class="when">Positioning not locked</span>Lock the positioning in 03 to use Improve. <a href="#">Go to 03</a></span></div>
+        <div class="off-row"><button class="btn tool-improve" disabled><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button><span class="why"><span class="when">Generate running in this tab</span>Wait for the section to finish writing.</span></div>
+        <div class="off-row"><button class="btn tool-improve" disabled><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button><span class="why"><span class="when">Generate running in another tab</span>This section is being written in another tab or window.</span></div>
+        <div class="off-row"><button class="btn tool-improve" disabled><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button><span class="why"><span class="when">Conflict card open</span>Choose which text to keep first.</span></div>
+        <div class="off-row"><button class="btn tool-improve" disabled><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button><span class="why"><span class="when">A suggestion is loading or open</span>Accept or reject the suggestion first.</span></div>
+        <div class="off-row"><button class="btn tool-improve" disabled><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button><span class="why"><span class="when">Section still loading or failed to load</span>Improve turns on when the section is ready.</span></div>
+      </div>
+      <p class="small">The reason shows under the toolbar, linked with aria-describedby. Needs review does not turn Improve off: the Needs review alert stays and Accept keeps it.</p>
+    </div>
+  </section>
+
+  <!-- 15. Leave confirm -->
+  <section class="state" aria-label="Leave confirm">
+    <span class="label">15 · Leave with an open suggestion</span>
+    <div class="backdrop">
+      <div class="dialog" role="alertdialog" aria-labelledby="lc">
+        <h2 id="lc">Leave without the suggestion?</h2>
+        <p>You have a suggestion you have not applied. Leave anyway? Your text stays as it is.</p>
+        <div class="row"><button class="btn">Stay</button><button class="btn btn-primary">Leave</button></div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
