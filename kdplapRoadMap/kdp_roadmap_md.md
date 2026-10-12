@@ -20,6 +20,7 @@ Design: ✅ approved (see `design/`)
 - [ ] **E10** 06 Write: sections, versions, improve menu, checks ← next
   - E10.1 editor, drafts, versions: done (0018, merged 734b849)
   - E10.1 fix: no blank first version (0019, merged 6e919ef)
+  - E10.2 Generate section (streaming): done (0020, generate v16, merged 81a2e34)
 - [ ] **E11** Export DOCX + Markdown · Settings + AI usage
 - [ ] **E12** Real test: write one full book, fix what hurts
 
