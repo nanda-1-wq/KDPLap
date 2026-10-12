@@ -407,7 +407,9 @@ function openStore(authHeader: string): Store {
 const edge = (globalThis as any).EdgeRuntime as { waitUntil?: (p: Promise<unknown>) => void } | undefined;
 addEventListener("beforeunload", (e) => {
   // deno-lint-ignore no-explicit-any
-  console.error(`generate: shutdown ${(e as any)?.detail?.reason ?? "unknown"}`);
+  const reason = (e as any)?.detail?.reason ?? "unknown";
+  // early_drop: the platform closes an idle worker, a normal event (STOP 2).
+  (reason === "early_drop" ? console.info : console.error)(`generate: shutdown ${reason}`);
   stopAllRuns("shutdown");
 });
 

@@ -122,10 +122,87 @@ Deno.test("source markers: a number not in the Brief or Research is marked once;
   assertEquals(out.flagged, 2);
 });
 
-Deno.test("tokens: the estimate is 3.5 characters a token, rounded up", () => {
+// STOP 2 live report: the marker broke "9 a.m.", "2.1" and decimals, and flagged list numbers "1.".
+// Each row: the model text and what is saved. Removing every " [Verify: no source]" gives back the model text.
+const M = " [Verify: no source]";
+const unmark = (t: string) => t.split(M).join("");
+const MARK_ROWS: [string, string, string][] = [
+  ["time", "Do the routine at 9 a.m. Then rest for 10 minutes.", "Do the routine at 9 a.m. Then rest for 10 minutes."],
+  ["time p.m. at the line end", "Stretch again at 4 p.m.", "Stretch again at 4 p.m."],
+  ["clock time", "Start at 10:30 each morning.", "Start at 10:30 each morning."],
+  ["section number", "See section 2.1 for the seated twist.", "See section 2.1 for the seated twist."],
+  ["section numbers in a list", "Sections 2.1 and 2.3 show the moves. Try them both.", "Sections 2.1 and 2.3 show the moves. Try them both."],
+  ["section number in brackets", "Use the breath from before (4.1) as you roll.", "Use the breath from before (4.1) as you roll."],
+  ["list number", "1. Sit tall in your chair.", "1. Sit tall in your chair."],
+  ["list number, then a claim", "2. Rolls cut neck pain by 40%.", "2. Rolls cut neck pain by 40%." + M],
+  ["bullet with a list number", "- 3. Breathe out as you roll.", "- 3. Breathe out as you roll."],
+  ["decimal, no source", "Stiff shoulders are 1.5 times more common after 70.", "Stiff shoulders are 1.5 times more common after 70." + M],
+  ["decimal mid-line", "Most adults lose 2.5 kg of muscle each decade. Keep moving.", "Most adults lose 2.5 kg of muscle each decade." + M + " Keep moving."],
+  ["money", "A class costs $15.50 a week. You need only a chair.", "A class costs $15.50 a week." + M + " You need only a chair."],
+  ["year", "Since 2015 chair classes have grown fast.", "Since 2015 chair classes have grown fast." + M],
+  ["100 or more", "Over 300 readers tried it.", "Over 300 readers tried it." + M],
+  ["small counts in instructions", "Hold for 30 seconds. Repeat 8 times, then rest 2 minutes.", "Hold for 30 seconds. Repeat 8 times, then rest 2 minutes."],
+  ["abbreviation", "Dr. Lee says 40% of falls happen at home. Clear the floor.", "Dr. Lee says 40% of falls happen at home." + M + " Clear the floor."],
+  ["e.g. inside a claim", "Small aids, e.g. a cushion, help 45% of readers. Try one.", "Small aids, e.g. a cushion, help 45% of readers." + M + " Try one."],
+  ["closing quote", "She said, \"It cut my pain by 40%.\" Then she smiled.", "She said, \"It cut my pain by 40%.\"" + M + " Then she smiled."],
+  ["no end mark", "Up to 25% more reach", "Up to 25% more reach" + M],
+  ["two claims, one marker", "In 2019, 40% of adults over 65 never stretched.", "In 2019, 40% of adults over 65 never stretched." + M],
+  ["Ruth, 68", "Ruth, 68, started with five minutes a day.", "Ruth, 68, started with five minutes a day."],
+  ["40% of adults, no source", "Sit tall. 40% of adults slump in their chairs. Lift your chest.", "Sit tall. 40% of adults slump in their chairs." + M + " Lift your chest."],
+  ["the AI's marker kept", "A 2019 survey found 72 percent liked it." + M + " Next, roll.", "A 2019 survey found 72 percent liked it." + M + " Next, roll."],
+  ["ratio N in M", "About 2 in 5 adults feel stiff each morning. Roll slowly.", "About 2 in 5 adults feel stiff each morning." + M + " Roll slowly."],
+  ["ratio N out of M", "Nearly 7 out of 10 readers sit too long.", "Nearly 7 out of 10 readers sit too long." + M],
+  ["ratio, both numbers in the sources but not the ratio", "Some 3 in 4 adults skip balance work.", "Some 3 in 4 adults skip balance work." + M],
+  ["study: a small number", "One study found 12 weeks of chair yoga helped. Start today.", "One study found 12 weeks of chair yoga helped." + M + " Start today."],
+  ["research: a small number", "Research shows 8 minutes a day is enough.", "Research shows 8 minutes a day is enough." + M],
+  ["survey: a small number", "In a survey, 9 of the readers liked it.", "In a survey, 9 of the readers liked it." + M],
+  ["data: a small number", "The data point to 7 easy habits.", "The data point to 7 easy habits." + M],
+  ["evidence: a small number", "The evidence for 8 short sessions is good.", "The evidence for 8 short sessions is good." + M],
+  ["claim words, sourced number", "Research says adults 65 and older need balance work.", "Research says adults 65 and older need balance work."],
+  ["claim words, no number", "Research shows that gentle moves help.", "Research shows that gentle moves help."],
+  ["lose 10 pounds", "Some readers lose 10 pounds in the first months.", "Some readers lose 10 pounds in the first months."],
+  ["research number","Adults 65 and older should do balance training 3 days a week.", "Adults 65 and older should do balance training 3 days a week."],
+];
+
+Deno.test("source markers: the STOP 2 rows, nothing inside a word or number, the text comes back", () => {
+  const known = L.writeKnown(writeCtx());
+  for (const [name, text, want] of MARK_ROWS) {
+    const out = L.markUnsourced(text, known);
+    assertEquals(out.text, want, name);
+    assertEquals(out.flagged, want.split(M).length - 1, name);
+    assertEquals(unmark(out.text), unmark(text), name);
+  }
+  // All rows as one section: the same, and the text comes back.
+  const all = MARK_ROWS.map((r) => r[1]).join("\n\n");
+  const out = L.markUnsourced(all, known);
+  assertEquals(out.text, MARK_ROWS.map((r) => r[2]).join("\n\n"));
+  assertEquals(unmark(out.text), unmark(all));
+});
+
+Deno.test("source markers: 31% from a source is not flagged; 40% with no source is, once, after the sentence", () => {
+  const base = writeCtx();
+  const ctx = writeCtx({ sources: [...base.sources, { kind: "source", body: "31% of adults over 65 fall each year.", citation: "NCOA, 2024", created_at: "2026-09-30T09:03:00Z" }] });
+  const text = "About 31% of adults over 65 fall each year. Studies say 40% of adults never stretch, and most of them sit all day. Start small.";
+  const out = L.markUnsourced(text, L.writeKnown(ctx));
+  assertEquals(out.text, "About 31% of adults over 65 fall each year. Studies say 40% of adults never stretch, and most of them sit all day." + M + " Start small.");
+  assertEquals(out.flagged, 1);
+  assertEquals(unmark(out.text), text);
+});
+
+Deno.test("source markers: a ratio from a source is not flagged, in either wording", () => {
+  const base = writeCtx();
+  const ctx = writeCtx({ sources: [...base.sources, { kind: "source", body: "About 1 in 4 adults over 65 falls each year.", citation: "CDC, 2024", created_at: "2026-09-30T09:03:00Z" }] });
+  const text = "About 1 in 4 adults over 65 falls each year. That is 1 out of 4 of your friends. Yet 1 in 3 never ask for help.";
+  const out = L.markUnsourced(text, L.writeKnown(ctx));
+  assertEquals(out.text, "About 1 in 4 adults over 65 falls each year. That is 1 out of 4 of your friends. Yet 1 in 3 never ask for help." + M);
+  assertEquals(out.flagged, 1);
+  assertEquals(unmark(out.text), text);
+});
+
+Deno.test("tokens: the estimate is 3.0 characters a token, rounded up", () => {
   assertEquals(L.estimateTokens(0), 0);
-  assertEquals(L.estimateTokens(7), 2);
-  assertEquals(L.estimateTokens(17_500), 5000);
+  assertEquals(L.estimateTokens(7), 3);
+  assertEquals(L.estimateTokens(15_000), 5000);
 });
 
 Deno.test("limits: the reserve keeps the month under the limit (plan example)", () => {

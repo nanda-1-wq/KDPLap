@@ -4,10 +4,9 @@
    The run itself (stream, heartbeats, Stop, save) is lib/write_run.ts.
    lib.ts re-exports the public names. */
 
-import { asData, obj, str } from "./common.ts";
+import { asData, numbersIn, obj, str, withoutFigures } from "./common.ts";
 import { briefAndResearch, knownText, positioningBlock, type PositioningContext, positioningValues } from "./context.ts";
 import { MAX_TOKENS, SECTION_MAX_CHARS, WRITE } from "./limits.ts";
-import { outlineUnsourced } from "./outline_ideas.ts";
 
 /** One section of outline_json (0016, 0018, 0019 keys). */
 export type WriteSectionRow = {
@@ -91,8 +90,8 @@ export function writeAim(target: number | null, have: number, more: boolean): { 
   return { aim, maxTokens: Math.min(MAX_TOKENS.section_write, Math.ceil(aim * 1.6) + 200) };
 }
 
-/** Our token estimate for text we saw but the AI did not count (Stop, failures): 3.5 characters a token. */
-export const estimateTokens = (chars: number) => Math.ceil(Math.max(0, chars) / 3.5);
+/** Our token estimate for text we saw but the AI did not count (Stop, failures): 3.0 characters a token (STOP 2 measured 2.97 and 3.06). */
+export const estimateTokens = (chars: number) => Math.ceil(Math.max(0, chars) / 3);
 
 /* ── What the prompt reads of the text around the section ── */
 
@@ -265,24 +264,92 @@ export function cleanSubset(text: string, title: string | null): string {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+// A possible sentence end: . ! or ? with closing quotes and an existing
+// marker, then a space and a capital letter, or the line end.
+const SENTENCE_END = /[.!?]+["”’)\]]*(?:\s*\[Verify: no source\])?(?=\s+["“‘(]?[A-Z]|\s*$)/g;
+// Words a period follows without ending the sentence ("Dr. Lee", "etc.").
+const ABBREVIATIONS = new Set("mr mrs ms dr prof st jr sr vs etc approx no fig vol inc ltd co ca".split(" "));
+
+/** False for a period after an abbreviation ("a.m.", "e.g.", "Dr.", "J.") or a list number at the line start ("1."). */
+function endsSentence(line: string, at: number): boolean {
+  if (line[at] !== ".") return true;
+  const word = (line.slice(0, at).match(/\S+$/)?.[0] ?? "");
+  const bare = word.replace(/^["“‘(]+/, "");
+  if (/^\d+$/.test(bare)) return !/^\s*(?:[-*]\s+)?$/.test(line.slice(0, at - word.length));
+  return !(/^[A-Za-z](?:\.[A-Za-z])*$/.test(bare) || ABBREVIATIONS.has(bare.toLowerCase()));
+}
+
+/** A line cut into sentences; joined back they give the line exactly. Spaces between sentences start the next one. */
+function sentencesOf(line: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  for (const m of line.matchAll(SENTENCE_END)) {
+    const end = m.index! + m[0].length;
+    if (line.slice(end).trim() && !endsSentence(line, m.index!)) continue;
+    out.push(line.slice(start, end));
+    start = end;
+  }
+  if (start < line.length) out.push(line.slice(start));
+  return out;
+}
+
+// A decimal after these words, or alone in brackets, is a section number ("see 2.1", "Sections 2.1 and 2.3", "(4.2)").
+const SECTION_WORDS = /(?:\b(?:sections?|chapters?|parts?|steps?|see)|§)\s*(?:\d+(?:\.\d+)*\s*(?:,|and|or|to|-|–)\s*)*$/i;
+
+// A sentence with these words makes every number in it a claim.
+const CLAIM_WORDS = /\b(?:stud(?:y|ies)|research(?:ers?)?|surveys?|data|evidence)\b/i;
+
 /**
- * The number check on the new text (owner, E9 rule): each sentence with a
- * number the Brief and Research do not have gets " [Verify: no source]" after
- * its last punctuation mark, unless the AI already put it there. Counts of
- * the book's own parts are skipped. Returns the text and how many markers it
- * has (the AI's and ours).
+ * Claim numbers in one sentence that the author's sources do not have:
+ * percentages, money, decimals, numbers of 100 or more (years included),
+ * ratios ("3 in 4", "2 out of 5"), and any number in a sentence that says
+ * study, research, survey, data or evidence. Never a list number at the line
+ * start, a section number ("see 2.1"), a time ("9 a.m.", "10:30") or another
+ * small count ("Ruth, 68", "3 days a week", "lose 10 pounds").
+ */
+function claimNumbers(sentence: string, have: Set<string>): string[] {
+  const s = withoutFigures(sentence).replace(/^(\s*(?:[-*]\s+)?)\d+[.)](?=\s)/, "$1");
+  const claim = CLAIM_WORDS.test(s);
+  const out: string[] = [];
+  for (const m of s.matchAll(/(?<![A-Za-z\d.,])([$£€]\s*)?(\d+(?:[.,]\d+)*)/g)) {
+    const n = m[2].replace(/,(?=\d{3}\b)/g, "");
+    const before = s.slice(0, m.index);
+    const after = s.slice(m.index! + m[0].length);
+    // A ratio is sourced only when the sources have the same ratio, not just its numbers.
+    const of = after.match(/^\s+(?:in|out of)\s+(\d+(?:,\d{3})*)\b/i)?.[1]?.replace(/,/g, "");
+    if (of && !have.has(`${n} in ${of}`)) { out.push(`${n} in ${of}`); continue; }
+    if (have.has(n) || out.includes(n)) continue;
+    const rest = after.replace(/^\s*(?:to|-|–)\s*[$£€]?\d+(?:[.,]\d+)*/i, "");   // "40-50%": look past the range
+    const percent = /^\s*(?:%|percent\b|per cent\b)/i.test(rest);
+    const money = !!m[1] || /^\s*(?:dollars?|usd|euros?|cents?)\b/i.test(rest);
+    const decimal = /[.,]/.test(n);
+    if (!percent && !money) {
+      if (/^\s*(?:[ap]\.?m\b|o'clock)/i.test(after) || /^:\d/.test(after) || /\d:$/.test(before)) continue;   // a time
+      if (decimal && (SECTION_WORDS.test(before) || (/\(\s*$/.test(before) && /^\s*\)/.test(after)))) continue;
+    }
+    if (claim || percent || money || decimal || Number(n) >= 100) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * The number check on the new text (owner, E9 rule; STOP 2 rules): a
+ * sentence with a claim number the Brief, Research and outline do not have
+ * gets " [Verify: no source]" after the whole sentence, at most once, and
+ * never when the AI already put one there. Nothing is inserted inside a word
+ * or a number: removing every " [Verify: no source]" gives back the text.
+ * Returns the text and how many markers it has (the AI's and ours).
  */
 export function markUnsourced(text: string, known: string): { text: string; flagged: number } {
+  const ratios = [...known.matchAll(/(?<![\d.,])(\d+(?:,\d{3})*)\s+(?:in|out of)\s+(\d+(?:,\d{3})*)\b/gi)]
+    .map((m) => `${m[1].replace(/,/g, "")} in ${m[2].replace(/,/g, "")}`);
+  const have = new Set([...numbersIn(known), ...ratios]);
   const out = String(text || "").split("\n").map((line) => {
     if (!line.trim() || /^##\s/.test(line)) return line;
-    // Sentences with what follows each (spaces, an existing marker).
-    const parts = line.match(/[^.!?]+(?:[.!?]+["”’)]*|$)(?:\s*\[Verify: no source\])?\s*/g) ?? [line];
-    return parts.map((p) => {
-      if (p.includes(MARKER) || !/\d/.test(p)) return p;
+    return sentencesOf(line).map((p) => {
+      if (p.includes(MARKER) || !/\d/.test(p) || !claimNumbers(p, have).length) return p;
       const sentence = p.replace(/\s+$/, "");
-      if (!outlineUnsourced(sentence, known).length) return p;
-      const tail = p.slice(sentence.length);
-      return `${sentence} ${MARKER}${tail}`;
+      return `${sentence} ${MARKER}${p.slice(sentence.length)}`;
     }).join("");
   }).join("\n");
   return { text: out, flagged: out.split(MARKER).length - 1 };
