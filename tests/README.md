@@ -58,6 +58,8 @@ deno test tests/word-diff.test.js
 deno test --allow-read tests/word-count.test.js
 deno test tests/sse-read.test.js
 deno test --allow-read tests/sentences.test.js
+deno test --allow-read tests/text-checks.test.js
+deno test --allow-read tests/section-check-key.test.js
 ```
 
 - `outline-checks.test.js`: the step 05 code checks and the shared words and
@@ -85,6 +87,17 @@ deno test --allow-read tests/sentences.test.js
   from `lib.section_write.test.ts` as data, and more); snapping a selection to
   whole sentences (markers, list and heading lines, blank edges); the context
   on each side (about 300 words, 2,500 characters).
+- `text-checks.test.js`: the Checks tab's code checks (`js/text-checks.js`,
+  E10.4): the number rule gives the same text as the server's
+  `markUnsourced` (the E10.2 marker rows, read as data, and more), the
+  known text is the server's `writeKnown`, the numbers row holds exactly the
+  sentences that rule marks; open marks, repeated phrases (3 to 6 words, 3+
+  times, the longest, never common words only), the same opener (paragraphs
+  only; a heading or a list resets), words vs the target (under 80%, over
+  120%, never counted), and under 30 ms on a 16,000-word section.
+- `section-check-key.test.js`: the section check fingerprint in the browser
+  (`js/section-check-key.js`) and in the function (`lib/section_check.ts`)
+  give the same key, and a pinned value.
 - `word-diff.test.js`: Compare versions (`js/word-diff.js`), design 23, and a
   10,000-word section.
 - `word-count.test.js`: `kdpWords.count` gives the same counts as
@@ -134,12 +147,16 @@ used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial,
 t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from, t-import), `positioning` (t1, t2, t-drift,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
-`write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve). The write
+`write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks). The write
 mock answers Generate section through the page's own `fetch` with a stream
 the test drives (`window.__gen.send(event, data)`), because `route.fulfill`
 sends a body all at once. Improve (E10.3) goes the same way so Cancel can
 abort it: the test answers each request with `window.__imp.reply(status,
-body)`, and the mock's `apply_suggestion` runs the checks of 0021. The runner caches supabase-js (checked
+body)`, and the mock's `apply_suggestion` runs the checks of 0021. The AI
+section check (E10.4) is answered the same way: `window.__chk.reply(status,
+body)`; `__store.checks` holds the saved checks, `__store.research` the
+Research rows, `__store.penVoice` the pen voice, and `__store.timeline` the
+times of version and draft writes (to check that autosave waits). The runner caches supabase-js (checked
 against the app's SRI hash) and two old file versions from git in
 `tests/browser/.cache/`. Screenshots go to `tests/browser/shots/`. Both
 folders are ignored by git.

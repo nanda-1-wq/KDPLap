@@ -257,7 +257,7 @@ Deno.test("Improve menu: the browser, the server and 0021 (owner, E10.3)", () =>
   for (const m of acts) assertEquals(names[m[1]], m[2], `version name of ${m[1]}`);
 });
 
-Deno.test("AI section check: the server and 0022 (owner, E10.4; the browser joins in Part 2)", () => {
+Deno.test("AI section check: the browser, the server and 0022 (owner, E10.4)", () => {
   const f = M("0022_section_checks.sql");
   const text = read(f);
   const quoted = (s) => [...s.matchAll(/'(\w+)'/g)].map((m) => m[1]);
@@ -278,4 +278,9 @@ Deno.test("AI section check: the server and 0022 (owner, E10.4; the browser join
   assertEquals(L.MAX_TOKENS.section_check, 1500);
   assertEquals(L.CHECK.maxFindings * 140 + 100 <= L.MAX_TOKENS.section_check, true);
   assertEquals([L.TIMEOUT_MS.section_check, L.BODY_BYTES.section_check], [90_000, 2048]);
+  // The browser (Part 2): the AI check button turns on at 50 words and off over 6,000 (js/write-checks.js).
+  assertEquals(jsConst("js/write-checks.js", "LIMITS"), { minWords: L.CHECK.minWords, maxWords: L.CHECK.maxWords });
+  // The three finding types and their labels in the Checks tab, in the server's order.
+  const types = [...read("js/write-checks.js").match(/const TYPE = \{([^}]*)\}/)[1].matchAll(/(\w+): '/g)].map((m) => m[1]);
+  assertEquals(types, [...L.CHECK_TYPES]);
 });

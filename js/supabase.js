@@ -1053,6 +1053,53 @@ window.kdp = {
   },
 
   /**
+   * The AI section check (E10.4, stage section_check, not streamed):
+   * input { stage: 'section_check', bookId, sectionId, baseVersionId }. The
+   * server reads the saved version itself and saves the result (0022).
+   * data: { stage, findings, areas, words, version_id, checked_at, inputs_key };
+   * error: { code, words } (words for check_too_short / check_too_long).
+   * onSent: called right after the request is handed to the network (Write
+   * pauses autosave until then, extra fix A).
+   */
+  async sectionCheck(input, { onSent } = {}) {
+    const session = await this.getSession();
+    if (!session) return { data: null, error: { code: 'unauthorized' } };
+    let res;
+    try {
+      const sent = fetch(`${SUPABASE_URL}/functions/v1/generate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(input)
+      });
+      if (onSent) onSent();
+      res = await sent;
+    } catch (err) {
+      return { data: null, error: { code: 'network' } };
+    }
+    let body = null;
+    try { body = await res.json(); } catch (err) { /* not JSON */ }
+    if (res.ok && body && typeof body === 'object' && body.stage === 'section_check') return { data: body, error: null };
+    if (body && typeof body.error === 'string') {
+      return { data: null, error: { code: body.error, words: Number.isInteger(body.words) ? body.words : null } };
+    }
+    return { data: null, error: { code: res.status === 401 ? 'unauthorized' : 'server_error' } };
+  },
+
+  /**
+   * The last AI check of a section (0022 section_checks, written by the
+   * generate function only): { version_id, findings, areas, words, inputs_key,
+   * checked_at }, or null before the first.
+   */
+  async getSectionCheck(sectionId) {
+    const { data, error } = await window.sb
+      .from('section_checks')
+      .select('version_id, findings, areas, words, inputs_key, checked_at')
+      .eq('section_id', sectionId)
+      .maybeSingle();
+    return { data: error ? null : (data || null), error };
+  },
+
+  /**
    * Accept a suggestion (0021 apply_suggestion): a new current version with
    * source = the action. base = the current version (Accept saves typed text
    * as a version first, so it is never null); fullText = the section's text

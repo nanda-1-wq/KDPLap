@@ -120,6 +120,9 @@ const setup = async page => {
     runs: {},
     // E10.3: section_suggestions rows by id (the test adds one with each suggestion it sends).
     suggestions: {},
+    // E10.4: section_checks rows by section id; Research rows for the number check; the pen voice;
+    // timeline: [what, ms] for order checks (save_version, draft writes; the page logs the check call).
+    checks: {}, research: { competitors: [], sources: [], insights: null }, penVoice: {}, timeline: [],
     addVersion: (sid, content, source, extra) => addVersion(sectionOf(sid).s, content, source, { created_at: now(), ...extra }),
     sectionOf: (sid) => sectionOf(sid)
   };
@@ -147,7 +150,7 @@ const setup = async page => {
     id: b.id, title: b.title, subtitle: b.subtitle, status: 'in_progress', current_step: b.current_step, updated_at: b.updated_at, topic_id: null,
     pen_name_id: b.pen_name_id, series_name: b.series_name, series_number: b.series_number, title_needs_review: b.title_needs_review, title_examples: b.title_examples,
     outline_approved_at: b.outline_approved_at,
-    pen_names: { id: PA, name: 'Nora Hale', voice: {} }, topics: null,
+    pen_names: { id: PA, name: 'Nora Hale', voice: store.penVoice }, topics: null,
     book_briefs: { ...b.brief }, competitors: [{ count: 3 }], real_sources: [{ count: 1 }],
     chapters: [{ count: store.outline[b.id].length }], review_chapters: [{ count: store.outline[b.id].filter((c) => c.needs_review).length }],
     positioning: b.pos ? { ...b.pos } : null
@@ -204,6 +207,7 @@ const setup = async page => {
     if (path === '/rest/v1/section_drafts' && method === 'POST') {
       const p = body();
       store.writes.push({ table: 'section_drafts', body: p });
+      store.timeline.push(['draft', Date.now()]);
       if (mode('draftDelay')) await delay(mode('draftDelay'));
       if (mode('draftError')) return json(r, 500, { message: 'mock' });
       if (!sectionOf(p.section_id)) return json(r, 403, { code: '42501', message: 'draft_owner' });
@@ -214,6 +218,7 @@ const setup = async page => {
     if (path === '/rest/v1/rpc/save_version') {
       const p = body();
       store.writes.push({ table: 'rpc', fn: 'save_version', body: p });
+      store.timeline.push(['save_version', Date.now()]);
       if (mode('versionDelay')) await delay(mode('versionDelay'));
       if (mode('versionError')) return json(r, 500, { message: 'mock' });
       const hit = sectionOf(p.p_section_id);
@@ -300,6 +305,15 @@ const setup = async page => {
       sg.version_id = v.id;
       return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, source: v.source });
     }
+    // E10.4: the last AI check of a section (0022) and the Research rows (listResearch).
+    if (path === '/rest/v1/section_checks' && method === 'GET') {
+      if (mode('checkLoadError')) return json(r, 500, { message: 'mock' });
+      const row = store.checks[eq('section_id')];
+      return json(r, 200, row ? [copy(row)] : []);
+    }
+    if (path === '/rest/v1/competitors' && method === 'GET') return json(r, 200, copy(store.research.competitors));
+    if (path === '/rest/v1/research_sources' && method === 'GET') return json(r, 200, copy(store.research.sources));
+    if (path === '/rest/v1/research_insights' && method === 'GET') return json(r, 200, store.research.insights ? [copy(store.research.insights)] : []);
     if (path === '/functions/v1/generate') {
       // Generate streams through the page's fetch (see the init script below), never through here.
       store.calls.push('ERR generate reached the route');
@@ -338,10 +352,22 @@ const setup = async page => {
         if (p) p.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
         return !!p;
       } };
+    // E10.4: the AI section check (not streamed). The test answers: window.__chk.reply(status, body);
+    // .requests: [{ body, at }] (at: Date.now() when the page sent it).
+    const chk = window.__chk = { requests: [], pending: [],
+      reply(status, body) {
+        const p = chk.pending.shift();
+        if (p) p(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+        return !!p;
+      } };
     const orig = window.fetch;
     window.fetch = function (url, init) {
       if (!/\/functions\/v1\/generate$/.test(String(url))) return orig.apply(this, arguments);
       const sent = JSON.parse(init.body);
+      if (sent.stage === 'section_check') {
+        chk.requests.push({ body: sent, at: Date.now() });
+        return new Promise((resolve) => chk.pending.push(resolve));
+      }
       if (sent.stage === 'section_improve') {
         imp.requests.push({ body: sent, headers: init.headers });
         return new Promise((resolve, reject) => {

@@ -22,6 +22,11 @@
    imp.toolbarHtml() · imp.render() · imp.refresh() · imp.onInput()
    imp.busy() (loading, open or applying) · imp.genWhy() · imp.confirmLeave()
    imp.reset() · imp.sectionId()
+   imp.openFor(start, end) (E10.4 "Fix with Improve"): selects that Markdown
+     range of the section in the editor and opens the menu at the toolbar's
+     Improve button. No AI call until the writer picks an action. Returns ''
+     when the menu opened, else why not ('missing' when the range is gone).
+   imp.offText() → Improve's own off reason as words, or ''.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -888,6 +893,37 @@
       refresh();
     }
 
+    /** "Fix with Improve" (E10.4): select md[start, end) in the editor, then open the menu (it snaps to whole sentences). */
+    function openFor(start, end) {
+      const why = offWhy();
+      if (why) return why;
+      const ed = editor();
+      if (!ed || ed.getAttribute('contenteditable') !== 'true') return 'loading';
+      let map = MD.fromDomMap(ed);
+      if (map.md !== cur().text) { host.sync(); map = MD.fromDomMap(ed); }
+      if (start < 0 || end > map.md.length || start >= end) return 'missing';
+      const p = map.domPoint(start, 'start'), q = map.domPoint(end, 'end');
+      if (!p || !q) return 'missing';
+      closeMenu(false);
+      ed.focus({ preventScroll: true });
+      try {
+        const r = document.createRange();
+        r.setStart(p.node, p.offset);
+        r.setEnd(q.node, q.offset);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        lastRange = r;
+      } catch (err) { return 'missing'; }
+      const block = blockOf(p.node);
+      if (block && block.scrollIntoView) block.scrollIntoView({ block: 'nearest' });
+      refresh(true);
+      const btn = els().main.querySelector('[data-imp-open]');
+      if (!btn) return 'loading';
+      openMenu(btn);
+      return menu ? '' : 'missing';
+    }
+
     async function confirmLeave() {
       if (!busy()) return true;
       if (imp.state === 'applying') return false;
@@ -918,6 +954,8 @@
       genWhy: genWhy2,
       confirmLeave,
       reset,
+      openFor,
+      offText: () => { const w = offWhy(); return w ? (WHY_TEXT[w] || WHY_TEXT.loading) : ''; },
       sectionId: () => (imp ? imp.sid : null)
     };
   }

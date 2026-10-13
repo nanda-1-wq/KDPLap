@@ -5,7 +5,7 @@
    Registers kdpBookSteps[6]. E10.1: the editor, drafts and versions.
    E10.2: Generate section (streamed, see "Generate" below). E10.3: the
    Improve menu (js/write-improve.js; the gates and the Accept hooks are
-   under "Improve" below). Checks are E10.4.
+   under "Improve" below). E10.4: the Checks tab (js/write-checks.js).
 
    - Write opens when the outline is approved, OR any section already has
      writing (owner, E10). When an edit in 05 removed the approval later,
@@ -42,6 +42,10 @@
      conflict card is open, or the positioning is not locked. Accept saves
      typed text as a manual version first, pauses autosave, then saves the
      AI text through apply_suggestion (one undo step in the editor).
+   - Checks (E10.4): code checks on the text while you type (free) and one
+     AI check of the saved version on a button (Save and check first when
+     typed; autosave paused until the call is sent). The tab shows a count
+     (never the words row). Advice only: never blocks Final or Next.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -93,6 +97,7 @@
    */
   let gen = null;
   let imp = null;                     // the Improve menu (js/write-improve.js)
+  let chk = null;                     // the Checks tab (js/write-checks.js)
   let holdDrafts = false;             // Accept: autosave paused (decision A)
 
   /* ── Values ──────────────────────────────── */
@@ -275,6 +280,7 @@
     if (active()) renderAll();
     loadVersions();
     loadRun();
+    chk.open(id);
     if (dirty()) armIdle();
   }
 
@@ -358,7 +364,13 @@
       return true;
     })();
     cur.saving = run;
-    try { return await run; } finally { if (cur) cur.saving = null; }
+    try { return await run; } finally {
+      if (cur) {
+        cur.saving = null;
+        // The head was drawn while saving (Generate, Improve and Checks off): draw it again (E10.4 fix).
+        if (active() && cur.state === 'ready') { renderHead(); imp.refresh(); }
+      }
+    }
   }
 
   async function restore(versionId) {
@@ -1023,14 +1035,17 @@
     if (!level) { renderHead(); renderFoot(); }
   }
 
-  /** Accept, step 2: typed text (or a section with no version yet) becomes a manual version first. */
-  async function improveSaveFirst() {
+  /**
+   * Accept, step 2: typed text (or a section with no version yet) becomes a manual version first.
+   * typing (E10.4 Save and check): typing during the save is allowed; the check reads the saved version.
+   */
+  async function improveSaveFirst(typing) {
     if (!cur || cur.state !== 'ready') return false;
     if (saver.hasUnsaved()) await saver.flush();
     if (!dirty() && cur.base) return true;
     const id = cur.id;
     const ok = await makeVersion('improve');
-    return ok && !!cur && cur.id === id && !cur.conflict && !(note && note.retry === 'version') && !dirty() && !!cur.base;
+    return ok && !!cur && cur.id === id && !cur.conflict && !(note && note.retry === 'version') && (typing || !dirty()) && !!cur.base;
   }
 
   /**
@@ -1122,6 +1137,8 @@
       live: root.querySelector('[data-live]')
     };
     bind(root.querySelector('.wr'));
+    // The number check knows the Research sources (as the server's rule): read on each step open.
+    chk.loadResearch();
     if (load.state === 'idle' || load.state === 'error') { loadOutline(); return; }
     renderAll();
     if (load.state !== 'ready') return;
@@ -1291,6 +1308,8 @@
       const t = s.word_target || 0;
       hint.hidden = !!genBlock() || !cur.text.trim() || (t > 0 && W.count(cur.text) >= t) || !!(gen && gen.id === cur.id);
     }
+    // The Checks panel follows the same gates (Generate, conflicts, a suggestion open).
+    chk.refresh();
   }
 
   function renderNotes() {
@@ -1302,7 +1321,11 @@
     }
     const hit = cur && findSection(cur.id);
     if (hit && hit.s.needs_review) {
-      parts.push(`<div class="alert alert-warning wr-note">${ICON.warn(16)}<div><p class="alert-text"><strong>Needs review.</strong> This section was written before the positioning was unlocked. Check it against 03 Positioning, then set its status.</p></div></div>`);
+      const [off, offText] = chk.aiWhy();
+      const why = off && off !== 'checking' ? offText : '';
+      parts.push(`<div class="alert alert-warning wr-note">${ICON.warn(16)}<div><p class="alert-text"><strong>Needs review.</strong> This section was written before the positioning was unlocked. Check it against 03 Positioning, then set its status.</p>
+          <div class="wr-note-actions"><button type="button" class="btn btn-secondary btn-sm" data-chk-review${off ? ` disabled${why ? ' aria-describedby="wrChkReviewWhy"' : ''}` : ''}>${SPARKLE}Run AI check</button></div>
+          ${why ? `<p class="alert-text wr-chk-small" id="wrChkReviewWhy">${esc(why)}</p>` : ''}</div></div>`);
     }
     if (cur && cur.conflict) {
       const busy = cur.busy === 'conflict';
@@ -1353,15 +1376,17 @@
 
   function renderSide() {
     if (!els || load.state !== 'ready' || !gateOpen()) return;
-    const tabBtn = (k, label) => `<button type="button" class="tab" role="tab" id="wrTab-${k}" aria-controls="wrPanel" aria-selected="${tab === k}" tabindex="${tab === k ? 0 : -1}" data-tab="${k}">${label}</button>`;
+    const tabBtn = (k, label, aria) => `<button type="button" class="tab" role="tab" id="wrTab-${k}" aria-controls="wrPanel" aria-selected="${tab === k}" tabindex="${tab === k ? 0 : -1}" data-tab="${k}"${aria ? ` aria-label="${aria}"` : ''}>${label}</button>`;
+    // The Checks count: code warnings + AI findings of a current check, never the words row (decision 6).
+    const n = chk.count();
     els.side.innerHTML = `
       <div class="tabs wr-tabs" role="tablist" aria-label="Section tools">
-        ${tabBtn('versions', 'Versions')}${tabBtn('checks', 'Checks')}${tabBtn('brief', 'Brief')}
+        ${tabBtn('versions', 'Versions')}${tabBtn('checks', n ? `Checks <span class="count" aria-hidden="true">${n}</span>` : 'Checks', n ? `Checks, ${n} to look at` : '')}${tabBtn('brief', 'Brief')}
       </div>
-      <div class="wr-panel" id="wrPanel" role="tabpanel" aria-labelledby="wrTab-${tab}" data-panel></div>`;
+      <div class="wr-panel" id="wrPanel" role="tabpanel" aria-labelledby="wrTab-${tab}" data-panel data-panel-kind="${tab}"></div>`;
     const panel = els.side.querySelector('[data-panel]');
     if (tab === 'versions') panel.innerHTML = versionsHtml();
-    else if (tab === 'checks') panel.innerHTML = `<div class="chip-label">CHECKS</div><p class="wr-soon">Checks for sources, repeated words, the chapter objective and the pen name's voice come in E10.3.</p>`;
+    else if (tab === 'checks') panel.innerHTML = chk.panelHtml();
     else panel.innerHTML = briefHtml();
   }
 
@@ -1465,6 +1490,13 @@
       const t = e.target.closest('button, a');
       if (!t || !root.contains(t)) return;
       if (t.dataset.goStep) { e.preventDefault(); ctx.go(Number(t.dataset.goStep)); return; }
+      if (els.side.contains(t) && chk.handleClick(t)) return;
+      if (t.hasAttribute('data-chk-review')) {
+        tab = 'checks';
+        renderSide();
+        chk.run();
+        return;
+      }
       if (t.dataset.toggle) {
         const id = t.dataset.toggle;
         if (open.has(id)) open.delete(id); else open.add(id);
@@ -1537,6 +1569,7 @@
     if (md === cur.text) return;
     cur.text = md;
     imp.onInput();
+    chk.onInput();
     saver.edit('draft', 800);
     armIdle();
     renderWords();
@@ -1604,6 +1637,29 @@
       reload: () => (cur ? openSection(cur.id, { keepNote: true }) : undefined),
       otherRun: () => { if (cur) { cur.otherRun = true; if (active()) { renderHead(); renderGen(); imp.refresh(); } } },
       confirm: confirmDialog,
+      announce
+    });
+    chk = kdpWriteChecks.create({
+      els: () => els,
+      cur: () => cur,
+      book: () => book,
+      chapters: () => chapters,
+      findSection,
+      dirty,
+      active,
+      why: improveWhy,
+      posLocked,
+      relTime,
+      imp: () => imp,
+      confirm: confirmDialog,
+      // Extra fix A: no draft write from "Save and check" until the check call is sent.
+      pauseDrafts: (on) => {
+        holdDrafts = !!on;
+        // Typing during the pause was not sent as a draft: send it now.
+        if (!on && dirty() && saver) saver.edit('draft', 800);
+      },
+      saveFirst: () => improveSaveFirst(true),
+      adoptRemote: () => (cur ? adoptRemote(cur.id, null) : undefined),
       announce
     });
     wantSection = new URLSearchParams(location.search).get('section');

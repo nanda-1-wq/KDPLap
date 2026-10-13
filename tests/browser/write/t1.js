@@ -69,7 +69,11 @@ const test = async page => {
   ok((await txt('.wr-panel .chip-label')) === '4.2 · VERSIONS', 'versions heading 4.2');
   ok(/Nothing is overwritten\./.test(await txt('.wr-panel')), 'versions note');
   await page.click('[data-tab="checks"]');
-  ok(/come in E10\.3/.test(await txt('.wr-panel')) && await page.$eval('[data-tab="checks"]', (b) => b.getAttribute('aria-selected') === 'true'), 'Checks tab: coming in E10.3');
+  // E10.4: the Checks tab is live (the old "come in E10.3" text is gone; t-checks tests it in full).
+  await page.waitForSelector('.wr-panel .wr-chk', { timeout: 5000 }).catch(() => {});
+  const checks = await txt('.wr-panel');
+  ok(/^IN YOUR TEXT /.test(checks) && /AI CHECK AI /.test(checks) && !/E10\.3/.test(checks) && await page.$eval('[data-tab="checks"]', (b) => b.getAttribute('aria-selected') === 'true'), `Checks tab: both groups, no "come in E10.3": "${checks.slice(0, 120)}"`);
+  ok((await txt('[data-tab="checks"]')) === 'Checks 1', `Checks tab count (the 40% claim): "${await txt('[data-tab="checks"]')}"`);
   await page.keyboard.press('ArrowRight');
   ok(await page.$eval('[data-tab="brief"]', (b) => b.getAttribute('aria-selected') === 'true' && document.activeElement === b), 'arrow key moves to Brief');
   const brief = await txt('.wr-panel');
