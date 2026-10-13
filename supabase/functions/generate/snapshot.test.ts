@@ -9,6 +9,7 @@ import {
   LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, PRODUCT, PRODUCT_OUT, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
   OUTLINE_OUT, oid, outlineCtx, outlineReply, checkReply, ocid, outlineCheckCtx, outlineRows, V_ID, wid, writeCtx,
   iid, IMPROVE_SEL, improveCtx, improveReply,
+  checkCtx, chkid, sectionCheckReply,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -66,6 +67,8 @@ async function run(s: Setup, req: Request) {
       ...(f.checkSaves.length ? { checkSaves: f.checkSaves } : {}),
       // E10.3: the same, for the suggestion saves.
       ...(f.suggestionSaves.length ? { suggestionSaves: f.suggestionSaves } : {}),
+      // E10.4: the same, for the section check saves.
+      ...(f.sectionCheckSaves.length ? { sectionCheckSaves: f.sectionCheckSaves } : {}),
       provider: await Promise.all(f.calls.map(async (c) => ({
         url: c.url,
         headers: c.init.headers,
@@ -265,4 +268,29 @@ Deno.test("snapshot: section_improve requests and replies", async (t) => {
     ["instruction without custom", { write: ctx }, () => post({ ...iid, instruction: "Shorter." })],
   ];
   for (const [name, s, req] of cases) await assertSnapshot(t, await run(s, req()), { name: `handler section_improve ${name}` });
+});
+
+/* ── section_check (E10.4): the request and every reply shape ── */
+
+Deno.test("snapshot: section_check request and replies", async (t) => {
+  const job = L.stageDef("section_check").check(L.parseInput(JSON.stringify(chkid))!, checkCtx()) as L.CheckJob;
+  await assertSnapshot(t, L.buildRequest(job), { name: "buildRequest section_check" });
+  const ctx = checkCtx();
+  const cases: [string, Setup, () => Request][] = [
+    ["success", { write: ctx, provider: sectionCheckReply() }, () => post(chkid)],
+    ["no problems", { write: ctx, provider: sectionCheckReply({ findings: [] }) }, () => post(chkid)],
+    ["no voice", { write: checkCtx({ pen: { niche: null, voice: {} } }), provider: sectionCheckReply() }, () => post(chkid)],
+    ["save fails", { write: ctx, provider: sectionCheckReply(), sectionCheckSaveThrows: true }, () => post(chkid)],
+    ["max_tokens", { write: ctx, provider: reply("max_tokens", '{"findings":[{"type":"voi') }, () => post(chkid)],
+    ["refusal", { write: ctx, provider: reply("refusal", "") }, () => post(chkid)],
+    ["timeout", { write: ctx, provider: timeout }, () => post(chkid)],
+    ["not locked", { write: checkCtx({ positioning: { ...ctx.positioning!, locked_at: null } }) }, () => post(chkid)],
+    ["nothing to check", { write: checkCtx({ current: null }) }, () => post(chkid)],
+    ["version conflict", { write: ctx }, () => post({ ...chkid, baseVersionId: "70000009-0000-4000-8000-000000000000" })],
+    ["unsaved draft", { write: checkCtx({ draft: "Typed." }) }, () => post(chkid)],
+    ["too short", { write: checkCtx({ current: { id: V_ID, content: "Sit tall and roll your shoulders back. ".repeat(6) } }) }, () => post(chkid)],
+    ["too long", { write: checkCtx({ current: { id: V_ID, content: "Sit tall and roll. ".repeat(1501) } }) }, () => post(chkid)],
+    ["null base", { write: ctx }, () => post({ ...chkid, baseVersionId: null })],
+  ];
+  for (const [name, s, req] of cases) await assertSnapshot(t, await run(s, req()), { name: `handler section_check ${name}` });
 });

@@ -19,6 +19,9 @@
    POST { stage: "section_improve", bookId, sectionId, baseVersionId, action, selection, before, after[, instruction] }
                                                 → { stage, suggestionId, action, text, words, flagged, notes }
                                                   or { stage, action, unchanged: true }   (E10.3, not streamed)
+   POST { stage: "section_check", bookId, sectionId, baseVersionId }
+                                                → { stage, findings, areas, words, version_id, checked_at, inputs_key }
+                                                  (E10.4, not streamed; the server reads the saved version)
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
@@ -28,10 +31,10 @@
    RLS applies as that user, and so do the title options insert and the
    outline save (replace_outline, 0016). Only the
    ai_usage insert, the drift check save, the outline check save (0017),
-   the section_write run (0020 section_run_begin, _beat, _finish) and the
-   suggestion save (0021) use the service role; they filter by, or write, the
-   caller's user id (the run RPCs and the 0021 guard check the section's owner
-   and book themselves).
+   the section_write run (0020 section_run_begin, _beat, _finish), the
+   suggestion save (0021) and the section check save (0022) use the service role; they filter by, or write, the
+   caller's user id (the run RPCs and the 0021 and 0022 guards check the
+   section's owner and book themselves).
    section_write keeps its run alive with EdgeRuntime.waitUntil; on shutdown
    (beforeunload) every open run stops and saves its text as a partial version.
 ═══════════════════════════════════════════════════ */
@@ -381,6 +384,23 @@ function openStore(authHeader: string): Store {
         .single();
       if (error) throw error;
       return data as { id: string; created_at: string };
+    },
+
+    // Service role (0022 lets only this role write section_checks). The
+    // section and its version were read through RLS as the caller first, and
+    // the 0022 guard checks the owner, the book and the version. One row per
+    // section: a new check replaces the last one.
+    async saveSectionCheck(s) {
+      const { data, error } = await admin()
+        .from("section_checks")
+        .upsert({
+          section_id: s.sectionId, user_id: s.userId, book_id: s.bookId, version_id: s.versionId, findings: s.findings,
+          areas: s.areas, words: s.words, inputs_key: s.inputsKey, checked_at: s.checkedAt,
+        }, { onConflict: "section_id" })
+        .select("checked_at, inputs_key")
+        .single();
+      if (error) throw error;
+      return data as { checked_at: string; inputs_key: string };
     },
 
     async getMonthlyLimit() {

@@ -256,3 +256,26 @@ Deno.test("Improve menu: the browser, the server and 0021 (owner, E10.3)", () =>
   const names = Object.fromEntries([...read("js/book-write.js").match(/const SOURCE_NAME = \{([^}]*)\}/)[1].matchAll(/(\w+): '([^']+)'/g)].map((m) => [m[1], m[2]]));
   for (const m of acts) assertEquals(names[m[1]], m[2], `version name of ${m[1]}`);
 });
+
+Deno.test("AI section check: the server and 0022 (owner, E10.4; the browser joins in Part 2)", () => {
+  const f = M("0022_section_checks.sql");
+  const text = read(f);
+  const quoted = (s) => [...s.matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  // The three types, in the server's order.
+  assertEquals(quoted(text.match(/e ->> 'type' not in \(([^)]*)\)/)[1]), [...L.CHECK_TYPES]);
+  // At most 8 findings; message and quote 300 characters; at most 2 empty quotes (objective gaps, decision 1).
+  assertEquals(one(f, String.raw`jsonb_array_length\(j\) > (\d+)`), L.CHECK.maxFindings);
+  assertEquals(one(f, String.raw`char_length\(e ->> 'message'\) > (\d+)`), L.CHECK.messageChars);
+  assertEquals(one(f, String.raw`char_length\(e ->> 'quote'\) > (\d+)`), L.CHECK.quoteChars);
+  assertEquals(one(f, String.raw`where e ->> 'quote' = ''\) <= (\d+)`), L.CHECK.maxGaps);
+  assertEquals(/when e ->> 'quote' = '' then e ->> 'type' = 'objective'/.test(text), true, "0022: an empty quote only for objective");
+  // The fingerprint: 16 hex, as keyHash.
+  assertEquals(/inputs_key ~ '\^\[0-9a-f\]\{16\}\$'/.test(text), true, "0022: inputs_key 16 hex");
+  // Words 50 to 6,000 (owner, E10.4); 0022 stores up to 1,000,000.
+  assertEquals([L.CHECK.minWords, L.CHECK.maxWords], [50, 6000]);
+  assertEquals(one(f, String.raw`words between 0 and (\d+)`) >= L.CHECK.maxWords, true);
+  // The reply fits: 8 findings of about 140 tokens (a 300-character message and quote) + JSON, under max_tokens.
+  assertEquals(L.MAX_TOKENS.section_check, 1500);
+  assertEquals(L.CHECK.maxFindings * 140 + 100 <= L.MAX_TOKENS.section_check, true);
+  assertEquals([L.TIMEOUT_MS.section_check, L.BODY_BYTES.section_check], [90_000, 2048]);
+});

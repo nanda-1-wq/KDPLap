@@ -10,7 +10,7 @@
 import * as L from "./lib.ts";
 
 // The Store types live in lib/types.ts (Batch B1); the tests import them from here.
-export type { DriftSave, OutlineCheckSave, RunBegin, RunFinish, RunSaved, SavedTitleOption, Store, SuggestionSave, UsageRow } from "./lib/types.ts";
+export type { DriftSave, OutlineCheckSave, RunBegin, RunFinish, RunSaved, SavedTitleOption, SectionCheckSave, Store, SuggestionSave, UsageRow } from "./lib/types.ts";
 import type { Store } from "./lib/types.ts";
 
 export type Deps = {
@@ -90,7 +90,7 @@ export function makeHandler(deps: Deps) {
       const job = checked;
 
       // 4. Limits, before any money is spent. A job with a reserve
-      // (section_write E10.2, section_improve E10.3) also reserves what it can
+      // (section_write E10.2, section_improve E10.3, section_check E10.4) also reserves what it can
       // use, plus the user's running Generate runs.
       const now = deps.now();
       const write = job.stage === "section_write" ? job : null;
@@ -153,7 +153,7 @@ export function makeHandler(deps: Deps) {
         console.error(`generate: provider result ${out.code} stop_reason=${(body as { stop_reason?: string } | null)?.stop_reason ?? "none"}`);
       }
 
-      // 5b. drift_check, title_ideas, outline_ideas, outline_check and section_improve save their own results (see lib/stages.ts).
+      // 5b. drift_check, title_ideas, outline_ideas, outline_check, section_improve and section_check save their own results (see lib/stages.ts).
       // A save that does not happen changes the outcome: not counted.
       let saved: unknown = null;
       if (def.save && !out.code) ({ out, saved } = await def.save(store, job, out, { userId, now }));

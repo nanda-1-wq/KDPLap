@@ -5,7 +5,7 @@
      check      pre-checks before any money is spent; the Job, or an error code
      prompt     [system, schema, user message]
      interpret  the provider reply as an Outcome
-     save       optional: drift_check, title_ideas, outline_ideas, outline_check and section_improve save their own results
+     save       optional: drift_check, title_ideas, outline_ideas, outline_check, section_improve and section_check save their own results
      reply      the 200 body
    A stage with no entry throws "generate: unknown stage". */
 
@@ -25,7 +25,8 @@ import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type
 import { locateSection, mdWords, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
 import type { WriteJob } from "./write_run.ts";
 import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove, runIsFresh } from "./section_improve.ts";
-import { IMPROVE, RUN_STALE, SECTION_MAX_CHARS } from "./limits.ts";
+import { CHECK, IMPROVE, RUN_STALE, SECTION_MAX_CHARS } from "./limits.ts";
+import { checkKeyOf, type CheckJob, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM } from "./section_check.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -40,7 +41,8 @@ export type Job =
   | { stage: "outline_ideas"; ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null }
   | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string }
   | WriteJob
-  | ImproveJob;
+  | ImproveJob
+  | CheckJob;
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -373,6 +375,62 @@ const sectionImprove: StageDef<"section_improve", WriteContext> = {
   },
 };
 
+/**
+ * section_check (E10.4): the AI check of the saved current version. Checks
+ * before any money is spent, in this order: the section is in the outline;
+ * Write is open (outline approved, or any writing); the positioning is locked
+ * (owner decision 5); the section has a version (nothing_to_check); the base
+ * the browser sent is the current version (version_conflict); no unsaved
+ * typing with text (unsaved_draft: the browser saves first, extra fix A); no
+ * fresh Generate run (run_in_progress); 50 to 6,000 words. The server reads
+ * the text itself and saves the result (service role); when that save fails
+ * the writer gets nothing, so the call is not counted. Advice only.
+ */
+const sectionCheck: StageDef<"section_check", WriteContext> = {
+  read: (store, input) => store.getWriteContext(input.bookId, input.sectionId),
+  check: (input, ctx) => {
+    const loc = locateSection(ctx);
+    if (!loc) return { fail: "not_found" };
+    const anyWriting = ctx.outline.some((c) => c.sections.some((s) => s.has_writing));
+    if (!ctx.book.outline_approved_at && !anyWriting) return { fail: "outline_not_approved" };
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    if (!ctx.current) return { fail: "nothing_to_check" };
+    if (ctx.current.id !== input.baseVersionId) return { fail: "version_conflict" };
+    const draft = ctx.draft ?? "";
+    if (draft.trim() && draft !== ctx.current.content) return { fail: "unsaved_draft" };
+    if (runIsFresh(ctx.run)) return { fail: "run_in_progress" };
+    const words = mdWords(ctx.current.content);
+    if (words < CHECK.minWords) return { fail: "check_too_short", extra: { words } };
+    if (words > CHECK.maxWords) return { fail: "check_too_long", extra: { words } };
+    const user = checkUserMessage(ctx);
+    const inputEstimate = estimateTokens(SECTION_CHECK_SYSTEM.length + user.length);
+    return {
+      stage: "section_check", ctx, bookId: input.bookId, sectionId: input.sectionId, versionId: ctx.current.id,
+      text: ctx.current.content, words, hasVoice: hasVoice(ctx.pen?.voice), key: checkKeyOf(ctx), user, inputEstimate,
+      reserve: inputEstimate + MAX_TOKENS.section_check,
+    };
+  },
+  prompt: (job) => [SECTION_CHECK_SYSTEM, SECTION_CHECK_SCHEMA, job.user],
+  interpret: (job, httpOk, body) => interpretSectionCheck(httpOk, body, job.text, job.hasVoice),
+  save: async (store, job, out, run) => {
+    let saved: { checked_at: string; inputs_key: string } | null = null;
+    try {
+      saved = await store.saveSectionCheck({
+        sectionId: job.sectionId, bookId: job.bookId, userId: run.userId, versionId: job.versionId,
+        findings: out.check!.findings, areas: out.check!.areas, words: job.words, inputsKey: job.key, checkedAt: run.now.toISOString(),
+      });
+    } catch (err) {
+      console.error(`generate: section check save failed: ${(err as { code?: string })?.code ?? "unknown"}`);
+      out = { ...out, counted: false, code: "server_error" };
+    }
+    return { out, saved };
+  },
+  reply: (job, out, saved) => ({
+    stage: "section_check", findings: out.check!.findings, areas: out.check!.areas, words: job.words, version_id: job.versionId,
+    ...(saved as object | null),
+  }),
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -387,6 +445,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   outline_check: outlineCheck,
   section_write: sectionWrite,
   section_improve: sectionImprove,
+  section_check: sectionCheck,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -427,7 +486,7 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
  * sources) and review_insights. positioning_help, drift_check, title_ideas,
- * competitor_import, outline_ideas, outline_check and section_improve need their job's data: they throw (use interpretJob).
+ * competitor_import, outline_ideas, outline_check, section_improve and section_check need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);

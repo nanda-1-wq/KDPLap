@@ -12,6 +12,7 @@ import { type PositioningSuggestions } from "./positioning_help.ts";
 import { type Insights } from "./review_insights.ts";
 import { type TitleIdea } from "./title_ideas.ts";
 import { type ImproveResult } from "./section_improve.ts";
+import { type SectionCheckResult } from "./section_check.ts";
 
 const TONES: Record<string, string> = {
   warm: "Warm", encouraging: "Encouraging", practical: "Practical",
@@ -79,6 +80,7 @@ export type Outcome = {
   rescaled?: boolean;   // outline_ideas: the words were scaled to the target
   findings?: OutlineFinding[];   // outline_check
   improve?: ImproveResult;       // section_improve (E10.3)
+  check?: SectionCheckResult;    // section_check (E10.4)
 };
 
 

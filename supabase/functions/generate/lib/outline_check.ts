@@ -49,7 +49,11 @@ export function outlineKey(rows: Pick<OutlineRow, "id" | "kind" | "title" | "obj
     if (c.kind !== "chapter") continue;
     parts.push([c.id, text(c.title), text(c.objective), ...(c.sections ?? []).map((s) => `${s.id}\u0003${text(s.title)}`)].join("\u0001"));
   }
-  const s = parts.join("\u0002");
+  return keyHash(parts.join("\u0002"));
+}
+
+/** 16 hex: a plain 64-bit hash of a string (not a security feature). Also the section check key (E10.4). */
+export function keyHash(s: string): string {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for (let i = 0; i < s.length; i++) {
     const ch = s.charCodeAt(i);

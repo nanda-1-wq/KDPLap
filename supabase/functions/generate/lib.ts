@@ -7,14 +7,14 @@
      lib/limits.ts     stages, models, limits, error codes, CORS, parseInput
      lib/common.ts     small shared helpers (text, prompt data, reply reading)
      lib/context.ts    the positioning context shared by three stages
-     lib/<stage>.ts    one file per stage: prompt and reply (competitor_import: Batch C2, outline_ideas: E9.1, outline_check: E9.2, section_improve: E10.3)
+     lib/<stage>.ts    one file per stage: prompt and reply (competitor_import: Batch C2, outline_ideas: E9.1, outline_check: E9.2, section_improve: E10.3, section_check: E10.4)
      lib/stages.ts     the stage table, buildRequest, interpretJob
      lib/types.ts      the Store types (re-exported by handler.ts)
    Tests: lib.test.ts, handler*.test.ts, snapshot.test.ts.
 ═══════════════════════════════════════════════════ */
 
 export {
-  ALLOWED_ORIGINS, BODY_BYTES, BRIEF_MAX, CALLS_PER_MINUTE, COPY_MIN_CHARS, corsHeaders, DEFAULT_MONTHLY_LIMIT, ERROR_STATUS, type ErrorCode, type GenerateInput, IMPROVE, IMPROVE_ACTIONS, IMPROVE_GROWTH, type ImproveAction, limitError, MAX_AUTHOR_CHARS, MAX_BIO_CHARS, MAX_BODY_BYTES, MAX_BOOKS, MAX_BSR, MAX_COMPETITORS, MAX_EXAMPLE_CHARS, MAX_FINDING_QUOTE, MAX_FINDING_WHY, MAX_FINDINGS, MAX_FLAG_QUOTE, MAX_FLAG_WHY, MAX_FLAGS, MAX_INSIGHT_CHARS, MAX_INSIGHTS, MAX_KEPT_REASON, MAX_PAGE_CHARS, MAX_PROMPT_BOOKS, MAX_PROMPT_SOURCE_CHARS, MAX_PROMPT_SOURCES, MAX_REVIEW_BOX, MAX_REVIEWS, MAX_SOURCE_BODY, MAX_TITLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, MAX_TOC, MAX_TOKENS, MAX_TYPE_LABEL, MAX_UNSOURCED, DEFAULT_CHAPTERS, DEFAULT_OUTLINE_WORDS, LENGTH_RANGES, MAX_PROMPT_TOC_CHARS, OUTLINE_MAX, SECTIONS_PER_CHAPTER, MAX_IMPORT_REVIEWS, MIN_PAGE_CHARS, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MODELS, monthStartUtc, parseInput, POS_LIST_MAX, POS_TEXT_MAX, POSITIONING_FIELDS, type PositioningField, type Stage, RUN_STALE, SECTION_MAX_CHARS, STAGES, TIMEOUT_MS, TITLE_IDEAS_PER_CALL, TITLE_MAX, WRITE, WRITE_TIMING,
+  ALLOWED_ORIGINS, BODY_BYTES, BRIEF_MAX, CALLS_PER_MINUTE, CHECK, CHECK_TYPES, type CheckType, COPY_MIN_CHARS, corsHeaders, DEFAULT_MONTHLY_LIMIT, ERROR_STATUS, type ErrorCode, type GenerateInput, IMPROVE, IMPROVE_ACTIONS, IMPROVE_GROWTH, type ImproveAction, limitError, MAX_AUTHOR_CHARS, MAX_BIO_CHARS, MAX_BODY_BYTES, MAX_BOOKS, MAX_BSR, MAX_COMPETITORS, MAX_EXAMPLE_CHARS, MAX_FINDING_QUOTE, MAX_FINDING_WHY, MAX_FINDINGS, MAX_FLAG_QUOTE, MAX_FLAG_WHY, MAX_FLAGS, MAX_INSIGHT_CHARS, MAX_INSIGHTS, MAX_KEPT_REASON, MAX_PAGE_CHARS, MAX_PROMPT_BOOKS, MAX_PROMPT_SOURCE_CHARS, MAX_PROMPT_SOURCES, MAX_REVIEW_BOX, MAX_REVIEWS, MAX_SOURCE_BODY, MAX_TITLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, MAX_TOC, MAX_TOKENS, MAX_TYPE_LABEL, MAX_UNSOURCED, DEFAULT_CHAPTERS, DEFAULT_OUTLINE_WORDS, LENGTH_RANGES, MAX_PROMPT_TOC_CHARS, OUTLINE_MAX, SECTIONS_PER_CHAPTER, MAX_IMPORT_REVIEWS, MIN_PAGE_CHARS, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MODELS, monthStartUtc, parseInput, POS_LIST_MAX, POS_TEXT_MAX, POSITIONING_FIELDS, type PositioningField, type Stage, RUN_STALE, SECTION_MAX_CHARS, STAGES, TIMEOUT_MS, TITLE_IDEAS_PER_CALL, TITLE_MAX, WRITE, WRITE_TIMING,
 } from "./lib/limits.ts";
 export {
   asData, BOOK_TYPES, bookTypeText, numbersIn, type Outcome, readVoice, unsourcedNumbers, withoutFigures, wordCount,
@@ -50,7 +50,7 @@ export {
   interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineDraft, type OutlineTarget, outlineTarget, outlineUnsourced, outlineUserMessage, promptTocs,
 } from "./lib/outline_ideas.ts";
 export {
-  FINDING_KINDS, type FindingKind, interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineCheckKnown, outlineCheckUserMessage, type OutlineFinding, outlineKey, type OutlineRow,
+  FINDING_KINDS, type FindingKind, interpretOutlineCheck, keyHash, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineCheckKnown, outlineCheckUserMessage, type OutlineFinding, outlineKey, type OutlineRow,
 } from "./lib/outline_check.ts";
 export {
   capText, cleanSubset, estimateTokens, headingsIn, locateSection, markUnsourced, mdWords, sentencesOf, tailText, WRITE_SYSTEM, type WriteChapterRow, type WriteContext,
@@ -60,6 +60,10 @@ export {
   IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, type ImproveNotes, type ImproveResult, improveTask, improveUserMessage,
   improveWords, interpretImprove, newNames, normalizeMarkers, runIsFresh, type StructureChange, structureChange,
 } from "./lib/section_improve.ts";
+export {
+  type CheckArea, type CheckAreas, type CheckJob, checkKeyOf, checkUserMessage, findQuote, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM,
+  sectionCheckKey, type SectionCheckResult, type SectionFinding, voiceParts,
+} from "./lib/section_check.ts";
 export { sseEvent, ssePing, sseReader, type SseEvent } from "./lib/sse.ts";
 export { endPolicy, type EndReason, openRunCount, startWriteRun, stopAllRuns, type WriteJob, type WriteTiming } from "./lib/write_run.ts";
 export {

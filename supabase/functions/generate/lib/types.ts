@@ -14,6 +14,7 @@ import type { OutlineCheckContext, OutlineFinding } from "./outline_check.ts";
 import type { WriteContext } from "./section_write.ts";
 import type { ImproveAction } from "./limits.ts";
 import type { ImproveNotes } from "./section_improve.ts";
+import type { CheckAreas, SectionFinding } from "./section_check.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -83,6 +84,12 @@ export interface Store {
    * book). Returns the new row's id.
    */
   saveSuggestion(s: SuggestionSave): Promise<{ id: string; created_at: string }>;
+  /**
+   * section_check (E10.4): save the last AI check of a section (service role,
+   * 0022: only that role writes section_checks; its guard checks the
+   * section's owner, book and version). One row per section: an upsert.
+   */
+  saveSectionCheck(s: SectionCheckSave): Promise<{ checked_at: string; inputs_key: string }>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -96,6 +103,11 @@ export type OutlineCheckSave = { bookId: string; userId: string; findings: Outli
 export type SuggestionSave = {
   userId: string; bookId: string; sectionId: string; action: ImproveAction; instruction: string | null;
   baseVersionId: string | null; selection: string; output: string; flagged: number; notes: ImproveNotes;
+};
+
+export type SectionCheckSave = {
+  sectionId: string; bookId: string; userId: string; versionId: string; findings: SectionFinding[]; areas: CheckAreas;
+  words: number; inputsKey: string; checkedAt: string;
 };
 
 export type DriftSave = { bookId: string; userId: string; flags: DriftFlag[]; checkedAt: string; readUpdatedAt: string };

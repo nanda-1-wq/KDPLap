@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write", "section_improve"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write", "section_improve", "section_check"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -25,17 +25,18 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   outline_check: MODELS.sonnet,
   section_write: MODELS.sonnet,
   section_improve: MODELS.sonnet,
+  section_check: MODELS.sonnet,
 };
 
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048, section_improve: 65_536 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048, section_improve: 65_536, section_check: 2048 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 3400, section_improve: 4096 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000, section_check: 90_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 3400, section_improve: 4096, section_check: 1500 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -156,6 +157,22 @@ export const IMPROVE_GROWTH: Record<ImproveAction, number> = {
   edit_format: 1.15, improve: 1.15, humanize: 1.15, shorten: 0.85, custom: 1.6, expand: 2.2,
 };
 
+// AI check of one section (E10.4, stage section_check, not streamed). The
+// saved current version: 50 to 6,000 words (md_word_count rule). At most 8
+// findings, a message and a quote of at most 300 characters each, at most 2
+// objective gaps with an empty quote (owner decision 1). Same numbers as 0022
+// (and js/ in Part 2).
+export const CHECK_TYPES = ["objective", "voice", "drift"] as const;
+export type CheckType = (typeof CHECK_TYPES)[number];
+export const CHECK = {
+  minWords: 50,
+  maxWords: 6000,
+  maxFindings: 8,
+  maxGaps: 2,              // objective findings with an empty quote
+  messageChars: 300,
+  quoteChars: 300,
+} as const;
+
 export const WRITE_TIMING = {
   beatMs: 1000,            // heartbeat, crash copy, stop check
   flushMs: 150,            // text to the browser in batches
@@ -191,6 +208,8 @@ export const ERROR_STATUS = {
   section_too_long: 422,
   selection_too_short: 422,
   selection_too_long: 422,
+  check_too_short: 422,
+  check_too_long: 422,
   monthly_limit: 429,
   rate_limited: 429,
   server_error: 500,
@@ -238,6 +257,7 @@ export type GenerateInput =
   | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number }
   | { stage: "outline_check"; bookId: string }
   | { stage: "section_write"; bookId: string; sectionId: string; baseVersionId: string | null; more: boolean }
+  | { stage: "section_check"; bookId: string; sectionId: string; baseVersionId: string }
   | {
     stage: "section_improve"; bookId: string; sectionId: string; baseVersionId: string | null; action: ImproveAction;
     selection: string; before: string; after: string; instruction: string | null;
@@ -264,6 +284,7 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *                      [, instruction (only and always for action "custom")] }   at most 64 KB;
  *                    selection 1 to 15,000 characters, before and after 0 to 2,500,
  *                    instruction 1 to 300 after trim (sent trimmed)
+ *   section_check:   { stage, bookId, sectionId, baseVersionId (uuid, never null) }   at most 2 KB
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -308,6 +329,14 @@ export function parseInput(raw: string): GenerateInput | null {
     if (o.baseVersionId !== null && (typeof o.baseVersionId !== "string" || !UUID_RE.test(o.baseVersionId))) return null;
     if (hasMore && o.more !== true) return null;
     return { stage, bookId: o.bookId.toLowerCase(), sectionId: o.sectionId.toLowerCase(), baseVersionId: o.baseVersionId === null ? null : o.baseVersionId.toLowerCase(), more: hasMore };
+  }
+
+  if (stage === "section_check") {
+    if (!sameKeys(o, ["stage", "bookId", "sectionId", "baseVersionId"])) return null;
+    for (const k of ["bookId", "sectionId", "baseVersionId"] as const) {
+      if (typeof o[k] !== "string" || !UUID_RE.test(o[k] as string)) return null;
+    }
+    return { stage, bookId: (o.bookId as string).toLowerCase(), sectionId: (o.sectionId as string).toLowerCase(), baseVersionId: (o.baseVersionId as string).toLowerCase() };
   }
 
   if (stage === "section_improve") {
@@ -363,7 +392,7 @@ export function monthStartUtc(now: Date): string {
 
 /**
  * A limit code when the call must not run, or null. Monthly is checked first.
- * reserve (section_write, E10.2; section_improve, E10.3): the most this call can
+ * reserve (section_write, E10.2; section_improve, E10.3; section_check, E10.4): the most this call can
  * use plus the reserves of the user's running Generate runs; the month may not
  * pass the limit with it.
  */
