@@ -10,11 +10,21 @@ Deno.test("stage table: one entry per stage, nothing else", () => {
     for (const k of ["read", "check", "prompt", "interpret", "reply"] as const) assertEquals(typeof d[k], "function", `${s}.${k}`);
   }
   // Only the stages that save their own results have a save step.
-  assertEquals(L.STAGES.filter((s) => L.stageDef(s).save), ["drift_check", "title_ideas", "outline_ideas", "outline_check"]);
+  assertEquals(L.STAGES.filter((s) => L.stageDef(s).save), ["drift_check", "title_ideas", "outline_ideas", "outline_check", "section_improve"]);
   // E10.2: only section_write streams; it never goes through buildRequest or interpret.
   assertEquals(L.STAGES.filter((s) => L.stageDef(s).stream), ["section_write"]);
   assertThrows(() => L.buildRequest({ stage: "section_write" } as unknown as L.Job), Error, "generate: section_write streams, use writeRequest");
   assertThrows(() => L.stageDef("section_write").interpret({} as never, true, {}), Error, "generate: section_write streams, use lib/write_run.ts");
+});
+
+Deno.test("stage table: section_improve (E10.3) is a normal JSON stage, not streamed", () => {
+  const d = L.stageDef("section_improve");
+  assertEquals(d.stream, undefined);
+  assertEquals(typeof d.save, "function");
+  assertEquals(L.MODEL_FOR_STAGE.section_improve, "claude-sonnet-5-5");
+  assertEquals([L.TIMEOUT_MS.section_improve, L.MAX_TOKENS.section_improve, L.BODY_BYTES.section_improve], [120_000, 4096, 65_536]);
+  // The largest body cap is still the pasted Amazon pages (256 KB).
+  assertEquals(L.MAX_BODY_BYTES, 262_144);
 });
 
 Deno.test("stage table: an unknown stage fails clearly", () => {
@@ -29,7 +39,7 @@ Deno.test("stage table: an unknown stage fails clearly", () => {
 Deno.test("interpretResponse: the stages that need their job throw instead of using the Brief parser", async () => {
   // This reply is a valid Brief answer. Before B1 these three stages fell into the Brief parser.
   const brief = await anthropic("end_turn", { result: "ok", target_reader: "A", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
-  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check"] as const) {
+  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_improve"] as const) {
     assertThrows(() => L.interpretResponse(s, true, brief), Error, `generate: ${s} needs its job, use interpretJob`);
   }
   assertEquals(L.interpretResponse("brief_help", true, brief).code, null);

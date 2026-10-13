@@ -1,6 +1,6 @@
 /* Shared fixtures and fakes for the generate tests (handler.*.test.ts, snapshot.test.ts). */
 import { assert } from "jsr:@std/assert@1";
-import { type DriftSave, makeHandler, type OutlineCheckSave, type RunBegin, type RunFinish, type RunSaved, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
+import { type DriftSave, makeHandler, type OutlineCheckSave, type RunBegin, type RunFinish, type RunSaved, type SavedTitleOption, type Store, type SuggestionSave, type UsageRow } from "./handler.ts";
 import type { BriefContext, Competitor, OutlineCheckContext, OutlineContext, OutlineDraft, OutlineRow, PenRow, PositioningContext, PositioningRow, ReviewContext, TitleContext, TitleIdea, TopicRow, WriteChapterRow, WriteContext, WriteTiming } from "./lib.ts";
 export const ID = "3f1c2a9e-8b7d-4c6e-9a5b-1d2e3f4a5b6c";
 export const USER = "11111111-2222-4333-8444-555555555555";
@@ -152,6 +152,27 @@ export const writeCtx = (extra: Partial<WriteContext> = {}): WriteContext => {
 };
 export const wid = { stage: "section_write", bookId: BOOK_ID, sectionId: SECTION_ID, baseVersionId: null };
 
+/* ── section_improve (E10.3) ── */
+
+/** Section 4.2 as written (real length, design 22): an old v15 marker, a list, about 160 words. */
+export const IMPROVE_TEXT = [
+  "Shoulder rolls ease the stiffness that builds up after long hours of sitting. Most people feel looser within a week. [Verify: no source]",
+  "Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. This gentle yet powerful movement serves as a wonderful foundation for everything that follows. Do this five times.",
+  "- Sit near the front of your chair\n- Keep both feet flat on the floor\n- Let your hands rest on your thighs",
+  "Next, reverse the direction. Roll your shoulders forward and down, again five times. Keep your neck long and your chin level, and breathe out as each roll ends. If your shoulder clicks or aches, make the circle smaller and slower. A small circle done well helps more than a big one done in a rush.",
+].join("\n\n");
+/** The passage design 22b selects: the second paragraph (2 sentences... snapped to 3). */
+export const IMPROVE_SEL = "Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. This gentle yet powerful movement serves as a wonderful foundation for everything that follows. Do this five times.";
+export const improveCtx = (extra: Partial<WriteContext> = {}): WriteContext =>
+  writeCtx({ current: { id: V_ID, content: IMPROVE_TEXT }, penName: "Nora Hale", ...extra });
+const [IMP_BEFORE, IMP_AFTER] = IMPROVE_TEXT.split(IMPROVE_SEL);
+export const iid = {
+  stage: "section_improve", bookId: BOOK_ID, sectionId: SECTION_ID, baseVersionId: V_ID, action: "improve",
+  selection: IMPROVE_SEL, before: IMP_BEFORE, after: IMP_AFTER,
+};
+export const IMPROVED = "Now lift your shoulders toward your ears, then roll them back and down in a slow circle. Do this five times, then rest.";
+export const improveReply = (text: unknown = IMPROVED) => () => Promise.resolve(anthropic("end_turn", { text }));
+
 /** One SSE event as Anthropic sends it. */
 export const aev = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 /** A whole Anthropic stream: message_start, the text in chunks, message_delta, message_stop. */
@@ -252,6 +273,8 @@ export type Setup = {
   timing?: Partial<WriteTiming>;
   streamProvider?: (init?: RequestInit) => Promise<Response>;
   signal?: AbortSignal;
+  // section_improve (E10.3); the context comes from `write`
+  suggestionSaveThrows?: boolean;
 };
 
 export function setup(s: Setup = {}) {
@@ -264,6 +287,7 @@ export function setup(s: Setup = {}) {
   const begins: RunBegin[] = [];
   const beats: { runId: string; content: string; input: number; output: number }[] = [];
   const finishes: RunFinish[] = [];
+  const suggestionSaves: SuggestionSave[] = [];
   const runs: Promise<unknown>[] = [];
   let finishTries = 0;
   const store: Store = {
@@ -330,6 +354,11 @@ export function setup(s: Setup = {}) {
         partial: !blank && a.partial, conflict: false, capped: false, ...s.saved,
       });
     },
+    saveSuggestion: (save) => {
+      suggestionSaves.push(save);
+      if (s.suggestionSaveThrows) return Promise.reject({ code: "23514" });
+      return Promise.resolve({ id: "5a000001-0000-4000-8000-000000000000", created_at: "2026-09-29T12:00:00.12+00:00" });
+    },
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),
     sumCountedTokensSince: () => Promise.resolve(s.monthTokens ?? 0),
     countCallsSince: () => Promise.resolve(s.recent ?? 0),
@@ -351,7 +380,7 @@ export function setup(s: Setup = {}) {
   });
   /** Waits for every run handed to waitUntil (the save happens there). */
   const settle = () => Promise.all(runs);
-  return { handle, logged, calls, saves, titleSaves, outlineSaves, checkSaves, begins, beats, finishes, runs, settle };
+  return { handle, logged, calls, saves, titleSaves, outlineSaves, checkSaves, begins, beats, finishes, runs, settle, suggestionSaves };
 }
 
 export function anthropic(stop: string, out: unknown, status = 200) {

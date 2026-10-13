@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write", "section_improve"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -24,17 +24,18 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   outline_ideas: MODELS.sonnet,
   outline_check: MODELS.sonnet,
   section_write: MODELS.sonnet,
+  section_improve: MODELS.sonnet,
 };
 
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048, section_improve: 65_536 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 3400 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 3400, section_improve: 4096 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -132,6 +133,29 @@ export const WRITE = {
 /** A run is stale (taken over by the next claim, rule A) when its heartbeat is older than heartbeatMs, or it started over startedMs ago. Same values as 0020 section_run_fresh. */
 export const RUN_STALE = { heartbeatMs: 20_000, startedMs: 160_000 } as const;
 
+// Improve menu (E10.3, stage section_improve, not streamed). The selected
+// passage: 3 to 1,500 words (Expand 1,000, owner decision 10), at most 15,000
+// characters; about 300 words of context on each side, at most 2,500
+// characters; a Custom instruction of 1 to 300 characters; the output at most
+// 25,000 characters. Same numbers as 0021 (and js/ in Part 2).
+export const IMPROVE_ACTIONS = ["edit_format", "improve", "expand", "shorten", "humanize", "custom"] as const;
+export type ImproveAction = (typeof IMPROVE_ACTIONS)[number];
+export const IMPROVE = {
+  minWords: 3,
+  maxWords: 1500,
+  expandMaxWords: 1000,
+  selectionChars: 15_000,
+  contextChars: 2500,
+  instructionChars: 300,
+  outputChars: 25_000,
+  maxNames: 5,             // new names shown in the notes
+} as const;
+// max_tokens = min(MAX_TOKENS.section_improve, ceil(words × factor × 1.6) + 200):
+// the factor is the most the action may grow the passage, with a margin.
+export const IMPROVE_GROWTH: Record<ImproveAction, number> = {
+  edit_format: 1.15, improve: 1.15, humanize: 1.15, shorten: 0.85, custom: 1.6, expand: 1.65,
+};
+
 export const WRITE_TIMING = {
   beatMs: 1000,            // heartbeat, crash copy, stop check
   flushMs: 150,            // text to the browser in batches
@@ -165,6 +189,8 @@ export const ERROR_STATUS = {
   run_in_progress: 409,
   target_reached: 422,
   section_too_long: 422,
+  selection_too_short: 422,
+  selection_too_long: 422,
   monthly_limit: 429,
   rate_limited: 429,
   server_error: 500,
@@ -211,7 +237,11 @@ export type GenerateInput =
   | { stage: "competitor_import"; bookId: string; text: string }
   | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number }
   | { stage: "outline_check"; bookId: string }
-  | { stage: "section_write"; bookId: string; sectionId: string; baseVersionId: string | null; more: boolean };
+  | { stage: "section_write"; bookId: string; sectionId: string; baseVersionId: string | null; more: boolean }
+  | {
+    stage: "section_improve"; bookId: string; sectionId: string; baseVersionId: string | null; action: ImproveAction;
+    selection: string; before: string; after: string; instruction: string | null;
+  };
 
 const sameKeys = (o: Record<string, unknown>, want: string[]) =>
   JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...want].sort());
@@ -230,6 +260,10 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *   outline_ideas:   { stage, bookId, sectionsPerChapter }   at most 2 KB, a whole number from 1 to 6
  *   outline_check:   { stage, bookId }             at most 2 KB
  *   section_write:   { stage, bookId, sectionId, baseVersionId (uuid or null) [, more: true] }   at most 2 KB
+ *   section_improve: { stage, bookId, sectionId, baseVersionId (uuid or null), action, selection, before, after
+ *                      [, instruction (only and always for action "custom")] }   at most 64 KB;
+ *                    selection 1 to 15,000 characters, before and after 0 to 2,500,
+ *                    instruction 1 to 300 after trim (sent trimmed)
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -276,6 +310,31 @@ export function parseInput(raw: string): GenerateInput | null {
     return { stage, bookId: o.bookId.toLowerCase(), sectionId: o.sectionId.toLowerCase(), baseVersionId: o.baseVersionId === null ? null : o.baseVersionId.toLowerCase(), more: hasMore };
   }
 
+  if (stage === "section_improve") {
+    const custom = o.action === "custom";
+    const keys = ["stage", "bookId", "sectionId", "baseVersionId", "action", "selection", "before", "after"];
+    if (!sameKeys(o, custom ? [...keys, "instruction"] : keys)) return null;
+    if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
+    if (typeof o.sectionId !== "string" || !UUID_RE.test(o.sectionId)) return null;
+    if (o.baseVersionId !== null && (typeof o.baseVersionId !== "string" || !UUID_RE.test(o.baseVersionId))) return null;
+    if (typeof o.action !== "string" || !(IMPROVE_ACTIONS as readonly string[]).includes(o.action)) return null;
+    if (typeof o.selection !== "string" || o.selection.length < 1 || o.selection.length > IMPROVE.selectionChars) return null;
+    for (const k of ["before", "after"] as const) {
+      if (typeof o[k] !== "string" || (o[k] as string).length > IMPROVE.contextChars) return null;
+    }
+    let instruction: string | null = null;
+    if (custom) {
+      if (typeof o.instruction !== "string") return null;
+      instruction = o.instruction.trim();
+      if (instruction.length < 1 || instruction.length > IMPROVE.instructionChars) return null;
+    }
+    return {
+      stage, bookId: o.bookId.toLowerCase(), sectionId: o.sectionId.toLowerCase(),
+      baseVersionId: o.baseVersionId === null ? null : o.baseVersionId.toLowerCase(),
+      action: o.action as ImproveAction, selection: o.selection, before: o.before as string, after: o.after as string, instruction,
+    };
+  }
+
   if (stage === "brief_help" || stage === "review_insights" || stage === "drift_check" || stage === "title_ideas" || stage === "outline_check") {
     if (!sameKeys(o, ["stage", "bookId"])) return null;
     if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
@@ -304,8 +363,9 @@ export function monthStartUtc(now: Date): string {
 
 /**
  * A limit code when the call must not run, or null. Monthly is checked first.
- * reserve (section_write, E10.2): the most this call can use plus the reserves
- * of the user's other running runs; the month may not pass the limit with it.
+ * reserve (section_write, E10.2; section_improve, E10.3): the most this call can
+ * use plus the reserves of the user's running Generate runs; the month may not
+ * pass the limit with it.
  */
 export function limitError(u: { monthTokens: number; monthlyLimit: number; callsLastMinute: number; reserve?: number }): ErrorCode | null {
   if (u.monthTokens >= u.monthlyLimit) return "monthly_limit";

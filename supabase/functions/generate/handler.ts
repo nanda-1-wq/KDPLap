@@ -10,7 +10,7 @@
 import * as L from "./lib.ts";
 
 // The Store types live in lib/types.ts (Batch B1); the tests import them from here.
-export type { DriftSave, OutlineCheckSave, RunBegin, RunFinish, RunSaved, SavedTitleOption, Store, UsageRow } from "./lib/types.ts";
+export type { DriftSave, OutlineCheckSave, RunBegin, RunFinish, RunSaved, SavedTitleOption, Store, SuggestionSave, UsageRow } from "./lib/types.ts";
 import type { Store } from "./lib/types.ts";
 
 export type Deps = {
@@ -89,21 +89,23 @@ export function makeHandler(deps: Deps) {
       if (L.isFail(checked)) return fail(checked.fail, checked.extra);
       const job = checked;
 
-      // 4. Limits, before any money is spent. section_write (E10.2) also
-      // reserves what it can use, plus the user's other running runs.
+      // 4. Limits, before any money is spent. A job with a reserve
+      // (section_write E10.2, section_improve E10.3) also reserves what it can
+      // use, plus the user's running Generate runs.
       const now = deps.now();
       const write = job.stage === "section_write" ? job : null;
+      const reserve = "reserve" in job ? job.reserve : 0;
       const [limit, monthTokens, recent, running] = await Promise.all([
         store.getMonthlyLimit(),
         store.sumCountedTokensSince(userId, L.monthStartUtc(now)),
         store.countCallsSince(userId, new Date(now.getTime() - 60_000).toISOString()),
-        write ? store.sumRunningReserves(userId) : Promise.resolve(0),
+        reserve ? store.sumRunningReserves(userId) : Promise.resolve(0),
       ]);
       const limitCode = L.limitError({
         monthTokens,
         monthlyLimit: limit ?? L.DEFAULT_MONTHLY_LIMIT,
         callsLastMinute: recent,
-        reserve: write ? write.reserve + running : 0,
+        reserve: reserve ? reserve + running : 0,
       });
       if (limitCode) return fail(limitCode);
 
@@ -151,7 +153,7 @@ export function makeHandler(deps: Deps) {
         console.error(`generate: provider result ${out.code} stop_reason=${(body as { stop_reason?: string } | null)?.stop_reason ?? "none"}`);
       }
 
-      // 5b. drift_check, title_ideas, outline_ideas and outline_check save their own results (see lib/stages.ts).
+      // 5b. drift_check, title_ideas, outline_ideas, outline_check and section_improve save their own results (see lib/stages.ts).
       // A save that does not happen changes the outcome: not counted.
       let saved: unknown = null;
       if (def.save && !out.code) ({ out, saved } = await def.save(store, job, out, { userId, now }));

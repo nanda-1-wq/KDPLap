@@ -34,6 +34,9 @@ insert into public.section_runs (section_id, user_id, book_id, run_id, state, ba
    'a7000000-0000-4000-8000-000000000001', 'running', 'a6000000-0000-4000-8000-000000000001');
 insert into public.section_drafts (section_id, user_id, content, base_version_id) values
   ('a5000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'Writing A, still being typed', 'a6000000-0000-4000-8000-000000000001');
+insert into public.section_suggestions (id, user_id, book_id, section_id, action, base_version_id, selection, output) values
+  ('a8000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001',
+   'a5000000-0000-4000-8000-000000000001', 'improve', 'a6000000-0000-4000-8000-000000000001', 'Writing A', 'Better writing A');
 insert into public.ai_usage (user_id, book_id, stage, model, input_tokens, output_tokens, status, counted) values
   ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'bio', 'm', 1, 1, 'ok', true);
 insert into public.user_settings (user_id) values ('00000000-0000-4000-8000-00000000000a');
@@ -59,7 +62,7 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('18 public tables (0020: section_runs)', (select count(*) from rls_tables) = 18, (select count(*) from rls_tables)::text);
+select pg_temp.chk('19 public tables (0021: section_suggestions)', (select count(*) from rls_tables) = 19, (select count(*) from rls_tables)::text);
 select pg_temp.chk('RLS on for every public table', not exists (
   select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
 select pg_temp.chk('A has a row in every table', (select bool_and(n > 0) from (
@@ -72,11 +75,12 @@ select pg_temp.chk(t || ': B reads 0 of A''s rows',
          (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I where user_id <> %L', t, '00000000-0000-4000-8000-00000000000b'), false, true, '')))[1]::text = '0')
   from rls_tables order by t;
 -- outline_checks (0017) gives the browser no write privilege at all,
--- section_versions (0018) no update or delete, and section_runs (0020) no
--- delete (its update goes through RLS: 0 rows): refused, not 0 rows.
+-- section_versions (0018) no update or delete, and section_runs (0020) and
+-- section_suggestions (0021) no delete (their update goes through RLS: 0
+-- rows): refused, not 0 rows.
 select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_versions') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_versions', 'section_runs') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_versions', 'section_runs', 'section_suggestions') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -102,6 +106,9 @@ select pg_temp.expect('sections: in A''s chapter refused', $q$insert into public
 select pg_temp.expect('section_versions: on A''s section refused', $q$insert into public.section_versions (section_id, version_no, source) values ('a5000000-0000-4000-8000-000000000001', 2, 'manual')$q$, '42501%');
 select pg_temp.expect('section_runs: B cannot insert a run (server only)', $q$insert into public.section_runs (section_id, user_id, book_id, run_id, state) values ('a5000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000b', 'b3000000-0000-4000-8000-000000000001', 'b7000000-0000-4000-8000-000000000001', 'running')$q$, '42501%');
 select pg_temp.expect('request_section_stop: B cannot stop A''s run', $q$select 1 where public.request_section_stop('a7000000-0000-4000-8000-000000000001')$q$, 'OK 0');
+select pg_temp.expect('section_suggestions: B cannot insert a suggestion (server only)', $q$insert into public.section_suggestions (user_id, book_id, section_id, action, selection, output) values ('00000000-0000-4000-8000-00000000000b', 'b3000000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000001', 'improve', 'a b c', 'a b d')$q$, '42501%');
+select pg_temp.expect('section_suggestions: B cannot mark A''s suggestion used', $q$update public.section_suggestions set used_at = now() where id = 'a8000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('apply_suggestion: A''s suggestion reads as not found', $q$select public.apply_suggestion('a8000000-0000-4000-8000-000000000001', 'a6000000-0000-4000-8000-000000000001', 'Better writing A')$q$, 'P0002 suggestion_not_found%');
 select pg_temp.expect('section_drafts: on A''s section refused', $q$insert into public.section_drafts (section_id, content) values ('a5000000-0000-4000-8000-000000000001', 'X')$q$, '42501%');
 select pg_temp.expect('save_version: A''s section reads as not found', $q$select public.save_version('a5000000-0000-4000-8000-000000000001', 'X', 'a6000000-0000-4000-8000-000000000001')$q$, 'P0002 section_not_found%');
 select pg_temp.expect('restore_version: A''s section reads as not found', $q$select public.restore_version('a5000000-0000-4000-8000-000000000001', 'a6000000-0000-4000-8000-000000000001', 'a6000000-0000-4000-8000-000000000001')$q$, 'P0002 section_not_found%');

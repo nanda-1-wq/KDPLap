@@ -23,6 +23,13 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
   HTTP 529, refusal, max_tokens, too long, shutdown), what it saves and
   counts, the save retry, the refusals before any AI call, rule A (a stale
   run recovered) and rule C (heartbeats and Stop are not AI calls).
+- `lib.section_improve.test.ts` and `handler.section_improve.test.ts` (E10.3,
+  Improve menu, not streamed): the input per action (instruction only for
+  Custom), the word limits (Expand 1,000), max_tokens per action, the prompt
+  (Brief block, voice, data tags, injections, the six task blocks), reading
+  the reply, the source markers on the output, the notes (markers lost, new
+  names, structure), the saved suggestion and its counted row, the refusals
+  before any AI call (with the reserve), and Cancel (the server finishes).
 - `stages.test.ts`: the stage table.
 - `snapshot.test.ts`: the exact provider request for every stage, and every
   reply and error shape. A refactor must leave
@@ -53,7 +60,9 @@ deno test tests/sse-read.test.js
   the 40-character Other label, competitor import page text, outline limits
   (0016), the Brief length ranges, one page estimate helper, and Generate
   section: 2,000 words a call, max_tokens, the 100 s deadline, the 20 s and
-  160 s stale run and 100,000 characters in 0020). It fails
+  160 s stale run and 100,000 characters in 0020; the Improve menu: actions,
+  text sizes, the stale run and the 1-hour life in 0021, the word limits and
+  max_tokens). It fails
   when a value disagrees or can no longer be found.
 - `markdown-lite.test.js`: the step 06 text format (`js/markdown-lite.js`): the
   Markdown subset to HTML (everything escaped) and back from the editor's DOM
@@ -90,6 +99,7 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0019` empty version fix (no blank first version; blank versions and drafts are not writing, so Remove and Regenerate work; unlock counts text only),
 `t0018` write versions (word count, versions only through save_version / restore_version or the server, the 100,000 limit, drafts, the current version guard, "has writing" with drafts, unlock, outline_json),
 `t0020` Generate section (section_runs: claim, refusals, heartbeat, Stop, the guard, finish for each end, conflict, 100,000 cut, rule A stale recovery, the usage row, a partial counts as writing only while current, the marker is not a word, the "Kept partial text" label, RLS),
+`t0021` Improve suggestions (server only, the owner and version guards, the checks, the replaced version guard, apply_suggestion: once, 1 hour, the base rules, save_version then apply_suggestion, the draft, a fresh run, the text check, 100,000, Needs review, Reviewed and Final kept, a book delete),
 `rls_cross_user` (user B against user A's rows in every table).
 
 ## Browser (mocked, playwright-cli)

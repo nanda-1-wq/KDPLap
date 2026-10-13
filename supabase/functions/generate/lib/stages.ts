@@ -5,7 +5,7 @@
      check      pre-checks before any money is spent; the Job, or an error code
      prompt     [system, schema, user message]
      interpret  the provider reply as an Outcome
-     save       optional: drift_check, title_ideas, outline_ideas and outline_check save their own results
+     save       optional: drift_check, title_ideas, outline_ideas, outline_check and section_improve save their own results
      reply      the 200 body
    A stage with no entry throws "generate: unknown stage". */
 
@@ -24,7 +24,8 @@ import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, 
 import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineChapters, outlineCheckKnown, outlineCheckUserMessage, type OutlineRow, outlineKey } from "./outline_check.ts";
 import { locateSection, mdWords, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
 import type { WriteJob } from "./write_run.ts";
-import { RUN_STALE, SECTION_MAX_CHARS } from "./limits.ts";
+import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove, runIsFresh } from "./section_improve.ts";
+import { IMPROVE, RUN_STALE, SECTION_MAX_CHARS } from "./limits.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -38,7 +39,8 @@ export type Job =
   | { stage: "competitor_import"; text: string }
   | { stage: "outline_ideas"; ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null }
   | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string }
-  | WriteJob;
+  | WriteJob
+  | ImproveJob;
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -312,6 +314,65 @@ const sectionWrite: StageDef<"section_write", WriteContext> = {
   reply: () => { throw new Error("generate: section_write streams, use lib/write_run.ts"); },
 };
 
+/**
+ * section_improve (E10.3): checks before any money is spent, in this order:
+ * the section is in the outline; Write is open (outline approved, or any
+ * writing); the positioning is locked; the base the browser started from is
+ * still current (version_conflict: another tab saved); no fresh Generate run
+ * (run_in_progress); the selection has 3 to 1,500 words (Expand 1,000).
+ * Unsaved typing is not checked: the draft is this tab's own, and Accept
+ * saves it first. The server saves the suggestion (service role); when that
+ * save fails the writer gets nothing, so the call is not counted.
+ */
+const sectionImprove: StageDef<"section_improve", WriteContext> = {
+  read: (store, input) => store.getWriteContext(input.bookId, input.sectionId),
+  check: (input, ctx) => {
+    const loc = locateSection(ctx);
+    if (!loc) return { fail: "not_found" };
+    const anyWriting = ctx.outline.some((c) => c.sections.some((s) => s.has_writing));
+    if (!ctx.book.outline_approved_at && !anyWriting) return { fail: "outline_not_approved" };
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    if ((ctx.current?.id ?? null) !== input.baseVersionId) return { fail: "version_conflict" };
+    if (runIsFresh(ctx.run)) return { fail: "run_in_progress" };
+    const words = mdWords(input.selection);
+    if (words < IMPROVE.minWords) return { fail: "selection_too_short", extra: { words } };
+    if (words > improveMaxWords(input.action)) return { fail: "selection_too_long", extra: { words } };
+    const base = { ctx, action: input.action, instruction: input.instruction, selection: input.selection, before: input.before, after: input.after, words };
+    const user = improveUserMessage(base);
+    const maxTokens = improveMaxTokens(input.action, words);
+    const inputEstimate = estimateTokens(IMPROVE_SYSTEM.length + user.length);
+    return {
+      stage: "section_improve", ...base, bookId: input.bookId, sectionId: input.sectionId, baseVersionId: input.baseVersionId,
+      maxTokens, user, inputEstimate, reserve: inputEstimate + maxTokens,
+    };
+  },
+  prompt: (job) => [IMPROVE_SYSTEM, IMPROVE_SCHEMA, job.user],
+  interpret: (job, httpOk, body) => interpretImprove(job, httpOk, body),
+  save: async (store, job, out, run) => {
+    // "No changes suggested" saves no row and is counted (decision 9).
+    if (out.improve!.unchanged) return { out, saved: null };
+    let saved: { id: string; created_at: string } | null = null;
+    try {
+      saved = await store.saveSuggestion({
+        userId: run.userId, bookId: job.bookId, sectionId: job.sectionId, action: job.action, instruction: job.instruction,
+        baseVersionId: job.baseVersionId, selection: job.selection, output: out.improve!.text, flagged: out.improve!.flagged, notes: out.improve!.notes,
+      });
+    } catch (err) {
+      console.error(`generate: suggestion save failed: ${(err as { code?: string })?.code ?? "unknown"}`);
+      out = { ...out, counted: false, code: "server_error" };
+    }
+    return { out, saved };
+  },
+  reply: (job, out, saved) => {
+    const r = out.improve!;
+    if (r.unchanged) return { stage: "section_improve", action: job.action, unchanged: true };
+    return {
+      stage: "section_improve", suggestionId: (saved as { id: string }).id, action: job.action, text: r.text,
+      words: improveWords(job, r.text), flagged: r.flagged, notes: r.notes,
+    };
+  },
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -325,6 +386,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   outline_ideas: outlineIdeas,
   outline_check: outlineCheck,
   section_write: sectionWrite,
+  section_improve: sectionImprove,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -347,7 +409,8 @@ export function buildRequest(job: Job) {
   const [system, schema, content] = stageDef(stage).prompt(job);
   return {
     model: MODEL_FOR_STAGE[stage],
-    max_tokens: MAX_TOKENS[stage],
+    // section_improve (E10.3) sets its own, from the passage; every other stage uses its fixed cap.
+    max_tokens: "maxTokens" in job ? job.maxTokens : MAX_TOKENS[stage],
     // Sonnet 5.5's lowest thinking setting: no extended thinking for a bio or a copy task.
     thinking: { type: "between_tools" },
     output_config: { effort: "low", format: { type: "json_schema", schema } },
@@ -364,7 +427,7 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
  * sources) and review_insights. positioning_help, drift_check, title_ideas,
- * competitor_import, outline_ideas and outline_check need their job's data: they throw (use interpretJob).
+ * competitor_import, outline_ideas, outline_check and section_improve need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);

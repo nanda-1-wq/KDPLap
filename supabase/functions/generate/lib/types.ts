@@ -12,6 +12,8 @@ import type { TitleContext, TitleIdea } from "./title_ideas.ts";
 import type { OutlineContext, OutlineDraft } from "./outline_ideas.ts";
 import type { OutlineCheckContext, OutlineFinding } from "./outline_check.ts";
 import type { WriteContext } from "./section_write.ts";
+import type { ImproveAction } from "./limits.ts";
+import type { ImproveNotes } from "./section_improve.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -75,6 +77,12 @@ export interface Store {
   beatSectionRun(runId: string, content: string, input: number, output: number): Promise<{ running: boolean; stop: boolean }>;
   /** End the run in one transaction (0020 section_run_finish). Throws { code: "run_not_running" } when taken over. */
   finishSectionRun(a: RunFinish): Promise<RunSaved>;
+  /**
+   * section_improve (E10.3): save a suggestion (service role, 0021: only that
+   * role writes section_suggestions; its guard checks the section's owner and
+   * book). Returns the new row's id.
+   */
+  saveSuggestion(s: SuggestionSave): Promise<{ id: string; created_at: string }>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -84,6 +92,11 @@ export interface Store {
 export type SavedTitleOption = TitleIdea & { id: string; shortlisted: boolean; created_at: string };
 
 export type OutlineCheckSave = { bookId: string; userId: string; findings: OutlineFinding[]; inputsKey: string; checkedAt: string };
+
+export type SuggestionSave = {
+  userId: string; bookId: string; sectionId: string; action: ImproveAction; instruction: string | null;
+  baseVersionId: string | null; selection: string; output: string; flagged: number; notes: ImproveNotes;
+};
 
 export type DriftSave = { bookId: string; userId: string; flags: DriftFlag[]; checkedAt: string; readUpdatedAt: string };
 

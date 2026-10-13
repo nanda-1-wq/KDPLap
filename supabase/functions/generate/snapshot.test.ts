@@ -8,6 +8,7 @@ import {
   BOOK_ID, briefCtx, cimp, cimpReply, comp, dc, dcReply, draft, good, help, helpReply, IDEA, imp, importReply, ins, insReply,
   LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, PRODUCT, PRODUCT_OUT, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
   OUTLINE_OUT, oid, outlineCtx, outlineReply, checkReply, ocid, outlineCheckCtx, outlineRows, V_ID, wid, writeCtx,
+  iid, IMPROVE_SEL, improveCtx, improveReply,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -63,6 +64,8 @@ async function run(s: Setup, req: Request) {
       ...(f.outlineSaves.length ? { outlineSaves: f.outlineSaves } : {}),
       // E9.2: the same, for the outline check saves.
       ...(f.checkSaves.length ? { checkSaves: f.checkSaves } : {}),
+      // E10.3: the same, for the suggestion saves.
+      ...(f.suggestionSaves.length ? { suggestionSaves: f.suggestionSaves } : {}),
       provider: await Promise.all(f.calls.map(async (c) => ({
         url: c.url,
         headers: c.init.headers,
@@ -236,4 +239,30 @@ Deno.test("snapshot: section_write request and refusals", async (t) => {
     ["more: false is refused", {}, () => post({ ...wid, more: false })],
   ];
   for (const [name, s, req] of refusals) await assertSnapshot(t, await run(s, req()), { name: `handler section_write ${name}` });
+});
+
+/* ── section_improve (E10.3): the request for each action and every reply shape ── */
+
+Deno.test("snapshot: section_improve requests and replies", async (t) => {
+  for (const action of L.IMPROVE_ACTIONS) {
+    const body = { ...iid, action, ...(action === "custom" ? { instruction: "Use shorter sentences and speak to the reader as \"you\"." } : {}) };
+    const job = L.stageDef("section_improve").check(L.parseInput(JSON.stringify(body))!, improveCtx()) as L.ImproveJob;
+    await assertSnapshot(t, L.buildRequest(job), { name: `buildRequest section_improve ${action}` });
+  }
+  const ctx = improveCtx();
+  const cases: [string, Setup, () => Request][] = [
+    ["success", { write: ctx, provider: improveReply() }, () => post(iid)],
+    ["custom", { write: ctx, provider: improveReply() }, () => post({ ...iid, action: "custom", instruction: "Use shorter sentences." })],
+    ["no changes", { write: ctx, provider: improveReply(IMPROVE_SEL) }, () => post({ ...iid, action: "edit_format" })],
+    ["notes", { write: ctx, provider: improveReply("Now lift your shoulders up, as Ruth does. Studies show 52% feel better.\n\n- Sit tall") }, () => post({ ...iid, action: "shorten" })],
+    ["save fails", { write: ctx, provider: improveReply(), suggestionSaveThrows: true }, () => post(iid)],
+    ["max_tokens", { write: ctx, provider: reply("max_tokens", '{"text":"Now lift') }, () => post(iid)],
+    ["refusal", { write: ctx, provider: reply("refusal", "") }, () => post(iid)],
+    ["timeout", { write: ctx, provider: timeout }, () => post(iid)],
+    ["selection too short", { write: ctx }, () => post({ ...iid, selection: "Sit up." })],
+    ["selection too long", { write: ctx }, () => post({ ...iid, action: "expand", selection: "Sit tall. ".repeat(501) })],
+    ["version conflict", { write: ctx }, () => post({ ...iid, baseVersionId: null })],
+    ["instruction without custom", { write: ctx }, () => post({ ...iid, instruction: "Shorter." })],
+  ];
+  for (const [name, s, req] of cases) await assertSnapshot(t, await run(s, req()), { name: `handler section_improve ${name}` });
 });

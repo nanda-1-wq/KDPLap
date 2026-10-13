@@ -43,6 +43,8 @@ export type WriteContext = PositioningContext & {
   previous: string;
   /** The section's last Generate run, or null. */
   run: { state: string; heartbeat_at: string; started_at: string } | null;
+  /** The book's pen name (section_improve: a name the notes never flag, decision B). */
+  penName?: string | null;
 };
 
 /** Where the section is: its chapter, its number ("4.2"), the chapter number, the other sections. */
@@ -279,8 +281,8 @@ function endsSentence(line: string, at: number): boolean {
   return !(/^[A-Za-z](?:\.[A-Za-z])*$/.test(bare) || ABBREVIATIONS.has(bare.toLowerCase()));
 }
 
-/** A line cut into sentences; joined back they give the line exactly. Spaces between sentences start the next one. */
-function sentencesOf(line: string): string[] {
+/** A line cut into sentences; joined back they give the line exactly. Spaces between sentences start the next one. Also used by section_improve (new names). */
+export function sentencesOf(line: string): string[] {
   const out: string[] = [];
   let start = 0;
   for (const m of line.matchAll(SENTENCE_END)) {

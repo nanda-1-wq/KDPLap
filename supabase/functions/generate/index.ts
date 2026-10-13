@@ -16,6 +16,9 @@
    POST { stage: "section_write", bookId, sectionId, baseVersionId[, more] }
                                                 → text/event-stream (E10.2, lib/write_run.ts):
                                                   start, text…, done, saved | error
+   POST { stage: "section_improve", bookId, sectionId, baseVersionId, action, selection, before, after[, instruction] }
+                                                → { stage, suggestionId, action, text, words, flagged, notes }
+                                                  or { stage, action, unchanged: true }   (E10.3, not streamed)
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
@@ -24,10 +27,11 @@
    Reads use a client built from the caller's Authorization header, so
    RLS applies as that user, and so do the title options insert and the
    outline save (replace_outline, 0016). Only the
-   ai_usage insert, the drift check save, the outline check save (0017) and
-   the section_write run (0020 section_run_begin, _beat, _finish) use the
-   service role; they filter by, or write, the caller's user id (the run RPCs
-   check the section's owner and book themselves).
+   ai_usage insert, the drift check save, the outline check save (0017),
+   the section_write run (0020 section_run_begin, _beat, _finish) and the
+   suggestion save (0021) use the service role; they filter by, or write, the
+   caller's user id (the run RPCs and the 0021 guard check the section's owner
+   and book themselves).
    section_write keeps its run alive with EdgeRuntime.waitUntil; on shutdown
    (beforeunload) every open run stops and saves its text as a partial version.
 ═══════════════════════════════════════════════════ */
@@ -277,15 +281,16 @@ function openStore(authHeader: string): Store {
       return data as { checked_at: string; inputs_key: string };
     },
 
-    // section_write (E10.2), all through RLS as the caller: the positioning
-    // read, the approval, the outline (0016 outline_json), the section's
-    // current version and draft, the previous section's current version (in
-    // reading order) and the section's last run. null = not the caller's book
-    // or a section that is not in it.
+    // section_write (E10.2) and section_improve (E10.3), all through RLS as
+    // the caller: the positioning read, the approval, the pen name, the
+    // outline (0016 outline_json), the section's current version and draft,
+    // the previous section's current version (in reading order) and the
+    // section's last run. null = not the caller's book or a section that is
+    // not in it.
     async getWriteContext(bookId, sectionId) {
       // The book and the outline in parallel (outline_json reads nothing for a book the caller cannot see).
       const [data, { data: outline, error }] = await Promise.all([
-        readBook(bookId, `${POSITIONING_SELECT}, title, subtitle, outline_approved_at`),
+        readBook(bookId, `${POSITIONING_SELECT}, title, subtitle, outline_approved_at, pen_name:pen_names ( name )`),
         asUser.rpc("outline_json", { p_book_id: bookId }),
       ]);
       const ctx = data && positioningContext(data);
@@ -313,6 +318,7 @@ function openStore(authHeader: string): Store {
         draft: (draft.data as { content: string } | null)?.content ?? null,
         previous: at > 0 ? text(order[at - 1].current_version_id) ?? "" : "",
         run: (run.data as WriteContext["run"]) ?? null,
+        penName: (one(data.pen_name) as { name: string } | null)?.name ?? null,
       } satisfies WriteContext;
     },
 
@@ -359,6 +365,22 @@ function openStore(authHeader: string): Store {
       });
       if (error) throw error.message === "run_not_running" ? { code: "run_not_running" } : error;
       return data as { version_id: string | null; version_no: number | null; word_count: number | null; current: boolean; partial: boolean; conflict: boolean; capped: boolean };
+    },
+
+    // Service role (0021 lets only this role write section_suggestions). The
+    // section was read through RLS as the caller first, and the 0021 guard
+    // checks that user_id owns the section and book_id is its book.
+    async saveSuggestion(s) {
+      const { data, error } = await admin()
+        .from("section_suggestions")
+        .insert({
+          user_id: s.userId, book_id: s.bookId, section_id: s.sectionId, action: s.action, instruction: s.instruction,
+          base_version_id: s.baseVersionId, selection: s.selection, output: s.output, flagged: s.flagged, notes: s.notes,
+        })
+        .select("id, created_at")
+        .single();
+      if (error) throw error;
+      return data as { id: string; created_at: string };
     },
 
     async getMonthlyLimit() {
