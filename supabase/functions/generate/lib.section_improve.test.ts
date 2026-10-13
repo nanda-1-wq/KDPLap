@@ -96,18 +96,18 @@ Deno.test("checks: the gates, in order, before any money is spent", () => {
 Deno.test("max_tokens: min(4,096, ceil(words × growth × 1.6) + 200) per action", () => {
   const mt = (action: L.ImproveAction, w: number) => L.improveMaxTokens(action, w);
   assertEquals([mt("edit_format", 150), mt("improve", 150), mt("humanize", 150)], [476, 476, 476]);
-  assertEquals([mt("shorten", 150), mt("custom", 150), mt("expand", 150)], [404, 584, 596]);
+  assertEquals([mt("shorten", 150), mt("custom", 150), mt("expand", 150)], [404, 584, 728]);
   assertEquals([mt("improve", 1500), mt("shorten", 1500), mt("custom", 1500)], [2960, 2240, 4040]);
-  assertEquals(mt("expand", 1000), 2840);
-  assertEquals(mt("expand", 1500), 4096);   // 4,160 is over the cap: why Expand stops at 1,000 words
+  assertEquals(mt("expand", 1000), 3720);   // growth 2.2 (live check: Expand wrote about 2 times)
+  assertEquals(mt("expand", 1500), 4096);   // 5,480 is over the cap: why Expand stops at 1,000 words
   assertEquals(mt("custom", 3000), 4096);
   assertEquals(L.MAX_TOKENS.section_improve, 4096);
   const j = job({ selection: words(1000), action: "expand" });
-  assertEquals([j.maxTokens, j.reserve], [2840, j.inputEstimate + 2840]);
+  assertEquals([j.maxTokens, j.reserve], [3720, j.inputEstimate + 3720]);
   assertEquals(j.inputEstimate, L.estimateTokens(L.IMPROVE_SYSTEM.length + j.user.length));
   // The request carries the job's max_tokens; the schema is { text }.
   const req = L.buildRequest(j);
-  assertEquals([req.max_tokens, req.model, req.output_config.effort], [2840, "claude-sonnet-5-5", "low"]);
+  assertEquals([req.max_tokens, req.model, req.output_config.effort], [3720, "claude-sonnet-5-5", "low"]);
   assertEquals(req.output_config.format.schema, L.IMPROVE_SCHEMA);
   assertEquals(req.thinking, { type: "between_tools" });
   assert(!("stream" in req));
@@ -177,9 +177,9 @@ Deno.test("prompt: the six task blocks", () => {
   assertStringIncludes(t("edit_format"), "Task: Edit and format. Fix grammar, spelling, punctuation and readability.");
   assertStringIncludes(t("edit_format"), "In subheadings, fix spelling only. Keep the length between 90% and 110% of the passage (about 200 words).");
   assertStringIncludes(t("improve"), "Same facts. Keep the length between 90% and 110% of the passage (about 200 words).");
-  assertStringIncludes(t("expand"), "about 1.5 times as long (about 300 words)");
+  assertStringIncludes(t("expand"), "Task: Expand. Write about 300 words. Never more than 340 words.");
   assertStringIncludes(t("expand"), 'no new subheadings. No new numbers, studies, research, quotes, named people, brands, products or places. An example says "a reader who...", never a name.');
-  assertStringIncludes(t("shorten"), "about 70% as long (about 140 words)");
+  assertStringIncludes(t("shorten"), "Task: Shorten. Write about 140 words. Never more than 160 words.");
   assertStringIncludes(t("shorten"), "Keep every step, every instruction, every subheading and the number of every claim you keep.");
   assertStringIncludes(t("humanize"), '"delve", "unlock", "game-changer"');
   assertStringIncludes(t("humanize"), "Same meaning, facts and structure. Keep the length between 85% and 110% of the passage (about 200 words).");

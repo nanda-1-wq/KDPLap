@@ -109,9 +109,9 @@ export function improveTask(action: ImproveAction, words: number): string {
     case "improve":
       return `Task: Improve. Make the wording clearer with the same meaning: better word choice, a clearer order, smoother links between sentences. Same facts. Keep the length between 90% and 110% of the passage (about ${words} words).`;
     case "expand":
-      return `Task: Expand. Make the passage about 1.5 times as long (about ${about(1.5)} words). Add explanation, a concrete step or a short example that fits the reader and the section. New sentences, paragraphs or list items are fine; no new subheadings. No new numbers, studies, research, quotes, named people, brands, products or places. An example says "a reader who...", never a name.`;
+      return `Task: Expand. Write about ${about(1.5)} words. Never more than ${about(1.7)} words. Add explanation, a concrete step or a short example that fits the reader and the section. New sentences, paragraphs or list items are fine; no new subheadings. No new numbers, studies, research, quotes, named people, brands, products or places. An example says "a reader who...", never a name.`;
     case "shorten":
-      return `Task: Shorten. Make the passage about 70% as long (about ${about(0.7)} words). Cut filler, repeats and weak phrases first. Keep every step, every instruction, every subheading and the number of every claim you keep. Drop a sentence only when its point is made elsewhere in the passage.`;
+      return `Task: Shorten. Write about ${about(0.7)} words. Never more than ${about(0.8)} words. Cut filler, repeats and weak phrases first. Keep every step, every instruction, every subheading and the number of every claim you keep. Drop a sentence only when its point is made elsewhere in the passage.`;
     case "humanize":
       return `Task: Humanize. Make the passage read naturally in the author's voice. Cut stock phrases ("it's important to note", "in today's fast-paced world", "delve", "unlock", "game-changer"), empty openers and closers, and needless lists of three. Vary sentence length and openings. Prefer concrete words. Same meaning, facts and structure. Keep the length between 85% and 110% of the passage (about ${words} words).`;
     case "custom":

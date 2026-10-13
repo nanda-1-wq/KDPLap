@@ -153,7 +153,7 @@ export const IMPROVE = {
 // max_tokens = min(MAX_TOKENS.section_improve, ceil(words × factor × 1.6) + 200):
 // the factor is the most the action may grow the passage, with a margin.
 export const IMPROVE_GROWTH: Record<ImproveAction, number> = {
-  edit_format: 1.15, improve: 1.15, humanize: 1.15, shorten: 0.85, custom: 1.6, expand: 1.65,
+  edit_format: 1.15, improve: 1.15, humanize: 1.15, shorten: 0.85, custom: 1.6, expand: 2.2,
 };
 
 export const WRITE_TIMING = {
