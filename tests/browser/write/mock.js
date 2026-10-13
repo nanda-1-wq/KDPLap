@@ -118,6 +118,8 @@ const setup = async page => {
     calls: [], writes: [],
     // E10.2: section_runs rows by section id (what Write reads), and helpers for the tests.
     runs: {},
+    // E10.3: section_suggestions rows by id (the test adds one with each suggestion it sends).
+    suggestions: {},
     addVersion: (sid, content, source, extra) => addVersion(sectionOf(sid).s, content, source, { created_at: now(), ...extra }),
     sectionOf: (sid) => sectionOf(sid)
   };
@@ -262,6 +264,42 @@ const setup = async page => {
       if (run) run.stop_requested_at = now();
       return json(r, 200, !!run);
     }
+    // E10.3: apply_suggestion, with the checks of 0021.
+    if (path === '/rest/v1/rpc/apply_suggestion') {
+      const p = body();
+      store.writes.push({ table: 'rpc', fn: 'apply_suggestion', body: p });
+      if (mode('applyDelay')) await delay(mode('applyDelay'));
+      if (mode('applyError')) return json(r, 500, { message: 'mock' });
+      const sg = store.suggestions[p.p_suggestion_id];
+      if (!sg) return json(r, 400, { code: 'P0002', message: 'suggestion_not_found' });
+      const hit = sectionOf(sg.section_id);
+      if (!hit) return json(r, 400, { code: 'P0002', message: 'section_not_found' });
+      const s = hit.s;
+      if (sg.used_at) return fail(r, 'P0001', 'suggestion_used');
+      if (mode('expired') || Date.now() - Date.parse(sg.created_at) > 3600e3) return fail(r, 'P0001', 'suggestion_expired');
+      const base = versionOf(p.p_base_version_id);
+      const sgBase = versionOf(sg.base_version_id);
+      if (!base || base.section_id !== s.id || (sgBase && base.version_no < sgBase.version_no)) return fail(r, 'P0001', 'version_conflict');
+      if (s.current_version_id !== base.id) return fail(r, 'P0001', 'version_conflict');
+      if (drafts[s.id] && drafts[s.id].content !== base.content) return fail(r, 'P0001', 'unsaved_draft');
+      const run = store.runs[s.id];
+      if (run && run.state === 'running' && Date.now() - Date.parse(run.heartbeat_at) < 20000 && Date.now() - Date.parse(run.started_at) < 160000) return fail(r, 'P0001', 'run_in_progress');
+      // Only the passage changed: the text before the output + the selection + the text after it = the base text.
+      const full = p.p_full_text;
+      let okText = false;
+      for (let i = full.indexOf(sg.output); i >= 0 && !okText; i = full.indexOf(sg.output, i + 1)) {
+        okText = full.slice(0, i) + sg.selection + full.slice(i + sg.output.length) === base.content;
+      }
+      if (!okText) return fail(r, 'P0001', 'suggestion_mismatch');
+      if (full.length > 100000) return fail(r, 'P0001', 'section_too_long');
+      const v = addVersion(s, full, sg.action, { created_at: now() });
+      if (s.status === 'not_started') s.status = 'draft';
+      if (!store.books[hit.bid].pos || !store.books[hit.bid].pos.locked_at) s.needs_review = true;
+      delete drafts[s.id];
+      sg.used_at = now();
+      sg.version_id = v.id;
+      return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, source: v.source });
+    }
     if (path === '/functions/v1/generate') {
       // Generate streams through the page's fetch (see the init script below), never through here.
       store.calls.push('ERR generate reached the route');
@@ -292,10 +330,31 @@ const setup = async page => {
       ping() { if (g.ctrl && g.open) g.ctrl.enqueue(enc.encode(': ping\n\n')); },
       close() { if (g.ctrl && g.open) { g.open = false; g.ctrl.close(); } },
       fail() { if (g.ctrl && g.open) { g.open = false; g.ctrl.error(new TypeError('network')); } } };
+    // E10.3: Improve (not streamed). The test answers each request: window.__imp.reply(status, body);
+    // .requests: what Write sent; .aborted: Cancel closed the request.
+    const imp = window.__imp = { requests: [], pending: [], aborted: 0,
+      reply(status, body) {
+        const p = imp.pending.shift();
+        if (p) p.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+        return !!p;
+      } };
     const orig = window.fetch;
     window.fetch = function (url, init) {
       if (!/\/functions\/v1\/generate$/.test(String(url))) return orig.apply(this, arguments);
-      g.requests.push({ body: JSON.parse(init.body), headers: init.headers });
+      const sent = JSON.parse(init.body);
+      if (sent.stage === 'section_improve') {
+        imp.requests.push({ body: sent, headers: init.headers });
+        return new Promise((resolve, reject) => {
+          const entry = { resolve, reject };
+          imp.pending.push(entry);
+          if (init.signal) init.signal.addEventListener('abort', () => {
+            imp.aborted++;
+            imp.pending = imp.pending.filter((x) => x !== entry);
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        });
+      }
+      g.requests.push({ body: sent, headers: init.headers });
       if (g.refuse) {
         const { status, body } = g.refuse;
         g.refuse = null;

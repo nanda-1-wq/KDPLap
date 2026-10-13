@@ -1015,6 +1015,57 @@ window.kdp = {
     return { data: { streamed: true }, error: null };
   },
 
+  /**
+   * Improve menu (E10.3): one suggestion for a passage. Not streamed; a plain
+   * fetch (not functions.invoke) so Cancel can abort it with `signal`. The
+   * server finishes anyway and counts the tokens (owner, decision 4).
+   * input: { stage: 'section_improve', bookId, sectionId, baseVersionId, action,
+   *   selection, before, after [, instruction] (Custom only) }.
+   * data: { suggestionId, action, text, words: { before, after }, flagged,
+   *   notes: { markersLost, newNames, structureChanged } } or { action, unchanged: true }.
+   * error.code: the generate codes (selection_too_short / selection_too_long
+   * with error.words, version_conflict, run_in_progress, positioning_not_locked,
+   * ai_stopped, ai_declined, ai_unavailable, ...), 'network', or 'aborted'.
+   */
+  async improve(input, { signal } = {}) {
+    const session = await this.getSession();
+    if (!session) return { data: null, error: { code: 'unauthorized' } };
+    let res;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/generate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        signal
+      });
+    } catch (err) {
+      return { data: null, error: { code: signal && signal.aborted ? 'aborted' : 'network' } };
+    }
+    let body = null;
+    try { body = await res.json(); } catch (err) {
+      if (signal && signal.aborted) return { data: null, error: { code: 'aborted' } };
+    }
+    if (res.ok && body && typeof body === 'object' && body.stage === 'section_improve') return { data: body, error: null };
+    if (body && typeof body.error === 'string') {
+      return { data: null, error: { code: body.error, words: Number.isInteger(body.words) ? body.words : null } };
+    }
+    return { data: null, error: { code: res.status === 401 ? 'unauthorized' : 'server_error' } };
+  },
+
+  /**
+   * Accept a suggestion (0021 apply_suggestion): a new current version with
+   * source = the action. base = the current version (Accept saves typed text
+   * as a version first, so it is never null); fullText = the section's text
+   * with the passage replaced. Returns { id, version_no, word_count,
+   * created_at, source }. error.message: 'suggestion_used',
+   * 'suggestion_expired', 'version_conflict', 'unsaved_draft',
+   * 'run_in_progress', 'suggestion_mismatch', 'section_too_long',
+   * 'suggestion_not_found', 'section_not_found'.
+   */
+  async applySuggestion(suggestionId, baseVersionId, fullText) {
+    return window.sb.rpc('apply_suggestion', { p_suggestion_id: suggestionId, p_base_version_id: baseVersionId, p_full_text: fullText });
+  },
+
   /** Stop a running Generate (0020 request_section_stop). Not an AI call. data: true when it was running. */
   async requestSectionStop(runId) {
     return window.sb.rpc('request_section_stop', { p_run_id: runId });

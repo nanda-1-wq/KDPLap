@@ -142,3 +142,113 @@ Deno.test("flag: escaped like any text; never a way in for markup", () => {
   assertEquals(M.toHtml("<b>5</b>. [Verify: no source]").includes("&lt;b&gt;5&lt;/b&gt;."), true);
   assertEquals(M.toHtml("<b>5</b>. [Verify: no source]").includes("<b>"), false);
 });
+
+/* ── fromDomMap (E10.3, the Improve menu) ── */
+
+/** Our own toHtml output as fake nodes, with the pill (data-flag) and parent links. */
+const readHtml = (html) => {
+  const top = root();
+  const stack = [top];
+  for (const m of html.matchAll(/<(\/?)(\w+)([^>]*?)(\/?)>|([^<]+)/g)) {
+    const cur = stack[stack.length - 1];
+    if (m[5]) { cur.childNodes.push(t(m[5].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&"))); continue; }
+    if (m[1]) { stack.pop(); continue; }
+    const n = el(m[2]);
+    if (/data-flag="1"/.test(m[3])) n.getAttribute = (k) => (k === "data-flag" ? "1" : null);
+    cur.childNodes.push(n);
+    if (m[2] !== "br" && !m[4]) stack.push(n);
+  }
+  return link(top);
+};
+const link = (n, parent = null) => { n.parentNode = parent; for (const k of n.childNodes) link(k, n); return n; };
+const textNodes = (n, out = []) => { if (n.nodeType === 3) out.push(n); else n.childNodes.forEach((k) => textNodes(k, out)); return out; };
+
+const MAPPED = [
+  SECTION,
+  FLAGGED,
+  "Plain text only.",
+  "*a **b** c*",
+  "5 \\* 4 is 20",
+  "\\- not a list\n\n1\\. not numbered",
+  "Line one\nline two",
+  "## Shoulder rolls\n\nDo this **five times**. Studies show rolls cut pain by 40%. [Verify: no source] Then rest.\n\n- Sit tall\n- Breathe out. [Verify: no source]",
+];
+
+Deno.test("fromDomMap: the same Markdown as fromDom, for every tree here", () => {
+  const trees = [
+    ...MAPPED.map((md) => readHtml(M.toHtml(md))),
+    link(root(el("p", el("span", "Keep "), el("u", "this"), " ", el("a", "link text"), el("script", "alert(1)"), el("font", " words")), el("style", "p { color: red }"), el("img"), el("table", el("tr", el("td", "Cell"))))),
+    link(root("First line", el("div", "Second line"), el("div", el("br")))),
+    link(root(el("p", "Soft", el("br"), "break"))),
+    link(root(el("p", "No break space"))),
+    link(root(el("p", "Tabs\tand\n\nnew lines"))),
+    link(root(el("p", "Empty ", el("b", " "), "bold"))),
+    link(root(el("p", "Do", el("strong", " five times "), "now"))),
+    link(root(el("p", el("b", "Bold ", el("i", "and italic"))))),
+    link(root(el("ul", el("li", "One", el("ul", el("li", "Inner"))), el("li", "Two"), " loose ", el("ol", el("li", "Deep"))))),
+    link(root(el("h3", "Small ", el("b", "heading")))),
+    link(root(el("p", "2 * 3 = 6"), el("p", "- not a list"), el("p", "## not a heading"), el("p", "1. not numbered"))),
+    link(root(el("p", t("Shoulder rolls ease it. "), el("span", "Studies show shoulder rolls cut neck pain by 40%."), t(" "), pillOf()))),
+    link(root(el("p", "  "), el("p", "Only this.  "), el("div", el("p", "Nested "), "tail"))),
+    link(root()),
+  ];
+  for (const tree of trees) assertEquals(M.fromDomMap(tree).md, M.fromDom(tree));
+});
+
+Deno.test("fromDomMap: DOM → Markdown offsets land on the same character, and back", () => {
+  for (const md of MAPPED) {
+    const tree = readHtml(M.toHtml(md));
+    const map = M.fromDomMap(tree);
+    assertEquals(map.md, md);
+    // The pill's own text is one unit (its edges are checked below).
+    const inPill = (n) => { for (let x = n.parentNode; x; x = x.parentNode) if (x.getAttribute) return true; return false; };
+    for (const n of textNodes(tree).filter((x) => !inPill(x))) {
+      const v = n.nodeValue;
+      for (let i = 0; i < v.length; i++) {
+        const at = map.mdOffset(n, i);
+        const want = v[i] === "*" ? "\\" : v[i];
+        assertEquals(map.md[at], want, `${JSON.stringify(md)} @ ${JSON.stringify(v)}[${i}]`);
+        const back = map.domPoint(at, "start");
+        assertEquals(back.node.nodeValue[back.offset], v[i]);
+        const end = map.domPoint(at + (v[i] === "*" ? 2 : 1), "end");
+        assertEquals(end.node === n && end.offset === i + 1, true, `end of ${JSON.stringify(v)}[${i}]`);
+      }
+    }
+  }
+});
+
+Deno.test("fromDomMap: element boundaries, the pill, the text edges", () => {
+  const tree = readHtml(M.toHtml(FLAGGED));
+  const map = M.fromDomMap(tree);
+  const p = tree.childNodes[0];
+  const pill = p.childNodes.find((k) => k.getAttribute);
+  const iPill = p.childNodes.indexOf(pill);
+  // Before the pill: the flag's first character; after it: the end.
+  assertEquals(map.mdOffset(p, iPill), FLAGGED.length - M.FLAG.length);
+  assertEquals(map.mdOffset(p, iPill + 1), FLAGGED.length);
+  assertEquals(map.mdOffset(tree, 0), 0);
+  assertEquals(map.mdOffset(tree, tree.childNodes.length), FLAGGED.length);
+  // The flag as a passage end: just after the pill.
+  assertEquals(map.domPoint(FLAGGED.length, "end"), { node: p, offset: iPill + 1 });
+  assertEquals(map.domPoint(FLAGGED.length - M.FLAG.length, "start"), { node: p, offset: iPill });
+  // Markers we add ("## ", "- ") map to the text after them.
+  const sec = M.fromDomMap(readHtml(M.toHtml(SECTION)));
+  const at = SECTION.indexOf("- Sit near");
+  assertEquals(sec.domPoint(at, "start").node.nodeValue, "Sit near the front of your chair");
+  assertEquals(sec.domPoint(0, "start").node.nodeValue, "Shoulder rolls, both ways");
+});
+
+Deno.test("round trip of Improve outputs is stable (toHtml → DOM → Markdown)", () => {
+  const outputs = [
+    "Now lift your shoulders up toward your ears, then roll them back and down. Do this five times, then rest.",
+    "Most people feel looser within a week. [Verify: no source] Ruth likes to pair this with slow breathing.",
+    "## Shoulder rolls, both ways\n\nShoulder rolls ease the stiffness. **Do this five times.**\n\n- Sit near the front of your chair\n- Keep both feet flat on the floor",
+    "1. Breathe in as you lift\n2. Breathe out as you roll back. [Verify: no source]",
+    "A cost of $15.50 a week, or 2 \\* 3 sessions.",
+  ];
+  for (const md of outputs) {
+    const tree = readHtml(M.toHtml(md));
+    assertEquals(M.fromDom(tree), md);
+    assertEquals(M.fromDomMap(tree).md, md);
+  }
+});

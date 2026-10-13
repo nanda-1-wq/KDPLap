@@ -213,7 +213,7 @@ Deno.test("Generate section: words per call, max_tokens, the soft deadline, the 
   for (const [n] of nums(f, String.raw`(?:left\([^;]*?, |> )(\d{6})\b`)) assertEquals(n, L.SECTION_MAX_CHARS);
 });
 
-Deno.test("Improve menu: the server and 0021 (owner, E10.3; the browser joins in Part 2)", () => {
+Deno.test("Improve menu: the browser, the server and 0021 (owner, E10.3)", () => {
   const f = M("0021_section_suggestions.sql");
   // The six actions: the server, the suggestion table, the version guard, and 0001's version sources.
   const quoted = (s) => [...s.matchAll(/'(\w+)'/g)].map((m) => m[1]);
@@ -243,4 +243,16 @@ Deno.test("Improve menu: the server and 0021 (owner, E10.3; the browser joins in
   // 64 KB holds the largest request even at 3 bytes a character.
   assertEquals((L.IMPROVE.selectionChars + 2 * L.IMPROVE.contextChars + L.IMPROVE.instructionChars) * 3 + 1024 <= L.BODY_BYTES.section_improve, true);
   assertEquals(L.TIMEOUT_MS.section_improve, 120_000);
+  // The browser (Part 2): 3 to 1,500 words, Expand 1,000, 15,000 characters, a 300-character
+  // instruction (js/write-improve.js), about 300 words and 2,500 characters of context (js/sentences.js).
+  assertEquals(jsConst("js/write-improve.js", "LIMITS"), {
+    minWords: L.IMPROVE.minWords, maxWords: L.IMPROVE.maxWords, expandMaxWords: L.IMPROVE.expandMaxWords,
+    selectionChars: L.IMPROVE.selectionChars, instructionChars: L.IMPROVE.instructionChars,
+  });
+  assertEquals(jsConst("js/sentences.js", "CONTEXT"), { words: 300, chars: L.IMPROVE.contextChars });
+  // The six actions in the browser's menu, in the server's order; their version names match Versions.
+  const acts = [...read("js/write-improve.js").matchAll(/^\s*\['(\w+)', '[^']+', '[^']+', '([^']+)', '[^']+'\],?$/gm)];
+  assertEquals(acts.map((m) => m[1]), [...L.IMPROVE_ACTIONS]);
+  const names = Object.fromEntries([...read("js/book-write.js").match(/const SOURCE_NAME = \{([^}]*)\}/)[1].matchAll(/(\w+): '([^']+)'/g)].map((m) => [m[1], m[2]]));
+  for (const m of acts) assertEquals(names[m[1]], m[2], `version name of ${m[1]}`);
 });

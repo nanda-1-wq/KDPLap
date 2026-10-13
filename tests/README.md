@@ -49,6 +49,7 @@ deno test tests/markdown-lite.test.js
 deno test tests/word-diff.test.js
 deno test --allow-read tests/word-count.test.js
 deno test tests/sse-read.test.js
+deno test --allow-read tests/sentences.test.js
 ```
 
 - `outline-checks.test.js`: the step 05 code checks and the shared words and
@@ -66,8 +67,15 @@ deno test tests/sse-read.test.js
   when a value disagrees or can no longer be found.
 - `markdown-lite.test.js`: the step 06 text format (`js/markdown-lite.js`): the
   Markdown subset to HTML (everything escaped) and back from the editor's DOM
-  (only an allowlist is read; pasted markup and scripts are dropped), and the
-  "[Verify: no source]" pill both ways (E10.2).
+  (only an allowlist is read; pasted markup and scripts are dropped), the
+  "[Verify: no source]" pill both ways (E10.2), and `fromDomMap` (E10.3): the
+  same Markdown as `fromDom`, DOM positions to Markdown offsets and back, the
+  pill's edges, and Improve outputs that read back the same.
+- `sentences.test.js`: the Improve menu's sentence rule (`js/sentences.js`) cuts
+  lines exactly like the server's `sentencesOf` (the E10.2 marker rows, read
+  from `lib.section_write.test.ts` as data, and more); snapping a selection to
+  whole sentences (markers, list and heading lines, blank edges); the context
+  on each side (about 300 words, 2,500 characters).
 - `word-diff.test.js`: Compare versions (`js/word-diff.js`), design 23, and a
   10,000-word section.
 - `word-count.test.js`: `kdpWords.count` gives the same counts as
@@ -116,10 +124,12 @@ used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial,
 t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from, t-import), `positioning` (t1, t2, t-drift,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
-`write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends). The write
+`write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve). The write
 mock answers Generate section through the page's own `fetch` with a stream
 the test drives (`window.__gen.send(event, data)`), because `route.fulfill`
-sends a body all at once. The runner caches supabase-js (checked
+sends a body all at once. Improve (E10.3) goes the same way so Cancel can
+abort it: the test answers each request with `window.__imp.reply(status,
+body)`, and the mock's `apply_suggestion` runs the checks of 0021. The runner caches supabase-js (checked
 against the app's SRI hash) and two old file versions from git in
 `tests/browser/.cache/`. Screenshots go to `tests/browser/shots/`. Both
 folders are ignored by git.

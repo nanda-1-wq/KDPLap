@@ -3,8 +3,9 @@
    /js/book-write.js   (used by app/book.html, loaded before js/book.js)
 
    Registers kdpBookSteps[6]. E10.1: the editor, drafts and versions.
-   E10.2: Generate section (streamed, see "Generate" below). The Improve
-   menu and Checks are E10.3.
+   E10.2: Generate section (streamed, see "Generate" below). E10.3: the
+   Improve menu (js/write-improve.js; the gates and the Accept hooks are
+   under "Improve" below). Checks are E10.4.
 
    - Write opens when the outline is approved, OR any section already has
      writing (owner, E10). When an edit in 05 removed the approval later,
@@ -36,6 +37,11 @@
      the writer can keep (a restore) or leave there. At or past the section's
      word target, Generate asks first (rule B). A run in another tab turns
      Generate off here. "[Verify: no source]" shows as a pill.
+   - Improve (E10.3): one suggestion at a time. Generate is off while it
+     loads or is open (decision 8); Improve is off while Generate runs, a
+     conflict card is open, or the positioning is not locked. Accept saves
+     typed text as a manual version first, pauses autosave, then saves the
+     AI text through apply_suggestion (one undo step in the editor).
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -86,6 +92,8 @@
    * outcome (phase 'ended'): what the card under the head shows until it is closed.
    */
   let gen = null;
+  let imp = null;                     // the Improve menu (js/write-improve.js)
+  let holdDrafts = false;             // Accept: autosave paused (decision A)
 
   /* ── Values ──────────────────────────────── */
 
@@ -147,7 +155,7 @@
   const active = () => !!els && ctx.isActive(6);
   /** Generate is saving first, writing or stopping: the section is read only. */
   const genBusy = () => !!gen && gen.phase !== 'ended';
-  const locked = () => !!cur && (!!cur.conflict || (genBusy() && gen.id === cur.id));
+  const locked = () => !!cur && (!!cur.conflict || cur.busy === 'apply' || (genBusy() && gen.id === cur.id));
 
   /* ── Autosave: the draft ─────────────────── */
 
@@ -160,6 +168,9 @@
   async function save(fields) {
     const d = fields.draft;
     if (!d) return { data: {}, error: null };
+    // Accept is saving: no draft may land between save_version and apply_suggestion (decision A).
+    // The text it holds is already in the manual version Accept saved first.
+    if (holdDrafts) return { data: {}, error: null };
     const res = await kdp.saveDraft(d.sectionId, d.content, d.base);
     if (res.error) return res;
     return { data: { ...res.data, sent: d }, error: null };
@@ -230,6 +241,7 @@
     const token = ++sectionToken;
     clearIdle();
     if (gen && gen.id !== id && !genBusy()) gen = null;   // an old section's result card
+    if (imp.sectionId() && imp.sectionId() !== id) imp.reset();
     const hit = findSection(id);
     if (hit) open.add(hit.c.id);
     cur = { id, state: 'loading', versions: null, versionsState: 'idle' };
@@ -504,7 +516,7 @@
     const r = res.data;
     const mine = !!(gen && gen.runId && r && r.run_id === gen.runId);
     cur.otherRun = !!r && !mine && runFresh(r);
-    if (active()) { renderHead(); renderGen(); }
+    if (active()) { renderHead(); renderGen(); imp.refresh(); }
   }
 
   const posLocked = () => !!(one(book.positioning) || {}).locked_at;
@@ -513,6 +525,7 @@
   function genBlock() {
     if (!cur || cur.state !== 'ready') return 'loading';
     if (genBusy()) return 'busy';
+    if (imp.busy()) return 'improve';   // decision 8
     if (cur.conflict) return 'conflict';
     if (cur.busy || cur.saving) return 'busy';
     if (!posLocked()) return 'positioning';
@@ -806,6 +819,7 @@
    * Stop and leave waits for the save (at most STOP_WAIT_MS and the poll).
    */
   async function confirmLeave() {
+    if (!(await imp.confirmLeave())) return false;
     if (!genBusy()) return true;
     if (gen.phase === 'saving') return false;
     const yes = await confirmDialog({
@@ -978,6 +992,118 @@
     renderSide();
   }
 
+  /* ── Improve (E10.3) ─────────────────────── */
+
+  /** Why Improve is off for the open section ('' when it can run). The suggestion's own state is in write-improve.js. */
+  function improveWhy() {
+    if (!cur || cur.state !== 'ready') return 'loading';
+    if (cur.conflict) return 'conflict';
+    if (genBusy() && gen.id === cur.id) return 'gen_here';
+    if (cur.otherRun) return 'other_tab';
+    if ((cur.busy && cur.busy !== 'apply') || cur.saving) return 'loading';
+    if (!posLocked()) return 'positioning';
+    return '';
+  }
+
+  /**
+   * Accept, level 1: the editor is read only (typing is not taken in).
+   * Level 2: autosave is paused too. 0: back to normal.
+   */
+  function hold(level) {
+    if (!cur) { holdDrafts = false; return; }
+    if (level) cur.busy = 'apply';
+    else if (cur.busy === 'apply') cur.busy = '';
+    holdDrafts = level === 2;
+    const ed = els && els.main.querySelector('[data-editor]');
+    if (ed) {
+      const ro = locked();
+      ed.setAttribute('contenteditable', ro ? 'false' : 'true');
+      ed.setAttribute('aria-readonly', String(ro));
+    }
+    if (!level) { renderHead(); renderFoot(); }
+  }
+
+  /** Accept, step 2: typed text (or a section with no version yet) becomes a manual version first. */
+  async function improveSaveFirst() {
+    if (!cur || cur.state !== 'ready') return false;
+    if (saver.hasUnsaved()) await saver.flush();
+    if (!dirty() && cur.base) return true;
+    const id = cur.id;
+    const ok = await makeVersion('improve');
+    return ok && !!cur && cur.id === id && !cur.conflict && !(note && note.retry === 'version') && !dirty() && !!cur.base;
+  }
+
+  /**
+   * The passage replaced in the editor as one undo step: when the passage and
+   * the new text each fit on one line (the usual case), only that range is
+   * replaced with inline HTML. Chrome's insertHTML merges block HTML into the
+   * block around it, so anything else (or a result that reads back different)
+   * sets the editor HTML directly: undo is lost for that step; the text is
+   * right either way (plan §7).
+   */
+  function replacePassage(ed, full, edit) {
+    const LINE_MARK = /^(#{1,6} |[-+] |[0-9]{1,9}[.)] )/;
+    let ok = false;
+    const oldLine = edit && edit.selection, newLine = edit && edit.output;
+    if (edit && !/\n/.test(oldLine) && !/\n/.test(newLine)) {
+      const m1 = oldLine.match(LINE_MARK), m2 = newLine.match(LINE_MARK);
+      if ((m1 ? m1[0] : '') === (m2 ? m2[0] : '')) {
+        const skip = m1 ? m1[0].length : 0;
+        const rest = newLine.slice(skip);
+        const inner = LINE_MARK.test(rest) ? '' : MD.toHtml(rest).replace(/^<p>|<\/p>$/g, '');
+        const map = MD.fromDomMap(ed);
+        const p = map.domPoint(edit.at + skip, 'start'), q = map.domPoint(edit.at + oldLine.length, 'end');
+        if (inner && map.md === edit.before && p && q && !/^<(h2|ul|ol)>/.test(inner)) {
+          try {
+            ed.focus();
+            const r = document.createRange();
+            r.setStart(p.node, p.offset);
+            r.setEnd(q.node, q.offset);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+            // The pill's icon is an <svg>, which Chrome inserts as a block (it splits the
+            // paragraph): the pills go in without it and get it right after.
+            const icon = (inner.match(/<svg[\s\S]*?<\/svg>/) || [''])[0];
+            ok = document.execCommand('insertHTML', false, inner.replace(/<svg[\s\S]*?<\/svg>/g, ''));
+            ed.querySelectorAll('.md-flag').forEach((f) => { if (!f.querySelector('svg')) f.insertAdjacentHTML('afterbegin', icon); });
+            ok = ok && MD.fromDom(ed) === full;
+          } catch (err) { ok = false; }
+        }
+      }
+    }
+    if (!ok) ed.innerHTML = MD.toHtml(full);
+    ed.classList.toggle('is-empty', !full);
+    return ok;
+  }
+
+  /** Accept, the end: the new version is current; the editor text is replaced (one undo step when it can be). */
+  function improveApplied(v, full, action, edit) {
+    const id = cur.id;
+    const source = v.source || action;
+    cur.base = v.id;
+    cur.savedText = full;
+    cur.hasDraft = false;
+    cur.version = { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, content: full, source };
+    const hit = findSection(id);
+    if (hit) {
+      Object.assign(hit.s, { current_version_id: v.id, has_writing: true, has_draft: false, draft_words: null, draft_at: null, words: v.word_count, version_at: v.created_at });
+      if (hit.s.status === 'not_started') hit.s.status = 'draft';
+    }
+    const ed = els && els.main.querySelector('[data-editor]');
+    if (ed) {
+      ed.setAttribute('contenteditable', 'true');
+      replacePassage(ed, full, edit);
+    }
+    hold(0);
+    cur.text = ed ? MD.fromDom(ed) : full;
+    if (saver.hasUnsaved() || saver.state === 'error') saver.reset('saved');
+    ctx.refresh();
+    if (active()) { renderManuscript(); renderHead(); renderNotes(); renderWords(); renderFoot(); renderManuscriptCount(); }
+    loadVersions();
+    announce(`Saved as version ${v.version_no} · ${SOURCE_NAME[source] || 'Saved'}.`);
+  }
+
   /* ── Rendering ───────────────────────────── */
 
   function render(root) {
@@ -1108,6 +1234,7 @@
       <div class="wr-head" data-head></div>
       <div data-notes></div>
       <div data-gen></div>
+      <div data-imp></div>
       <div class="wr-card${writing ? ' is-writing' : ''}${kept ? ' is-kept' : ''}">
         <div class="wr-tools" role="toolbar" aria-label="Formatting" aria-controls="wrEditor">
           <button type="button" class="wr-tool" data-cmd="bold" aria-label="Bold" title="Bold (Ctrl+B)"${ro ? ' disabled' : ''}>${TOOL.bold}</button>
@@ -1115,8 +1242,10 @@
           <button type="button" class="wr-tool wr-tool-text" data-cmd="h2" aria-label="Heading" title="Heading"${ro ? ' disabled' : ''}>H2</button>
           <button type="button" class="wr-tool" data-cmd="list" aria-label="Bulleted list" title="Bulleted list"${ro ? ' disabled' : ''}>${TOOL.list}</button>
           <button type="button" class="wr-tool" data-cmd="clear" aria-label="Clear formatting" title="Clear formatting"${ro ? ' disabled' : ''}>${TOOL.clear}</button>
+          ${imp.toolbarHtml()}
           <div class="wr-words" data-words></div>
         </div>
+        <p class="wr-imp-hint" id="wrImpHint" data-imp-hint hidden></p>
         <div class="wr-editor" id="wrEditor" data-editor role="textbox" aria-multiline="true" aria-labelledby="wrSecTitle"
              contenteditable="${ro ? 'false' : 'true'}" spellcheck="true" aria-readonly="${ro}" data-placeholder="Start writing this section, or use Generate section."></div>
         <div class="wr-stream" data-stream hidden></div>
@@ -1134,6 +1263,7 @@
     renderStream();
     renderWords();
     renderFoot();
+    imp.render();
   }
 
   function renderHead() {
@@ -1406,6 +1536,7 @@
     ed.classList.toggle('is-empty', !md);
     if (md === cur.text) return;
     cur.text = md;
+    imp.onInput();
     saver.edit('draft', 800);
     armIdle();
     renderWords();
@@ -1458,6 +1589,23 @@
   function init(b, c) {
     ctx = c;
     book = b;
+    imp = kdpWriteImprove.create({
+      els: () => els,
+      cur: () => cur,
+      book: () => book,
+      label: () => { const hit = cur && findSection(cur.id); return hit ? sectionLabel(hit.c, hit.s).split(' ')[0] : ''; },
+      why: improveWhy,
+      changed: () => { if (active() && cur && cur.state === 'ready') { renderHead(); renderGen(); renderFoot(); } },
+      sync: onInput,
+      saveFirst: improveSaveFirst,
+      hold,
+      applied: improveApplied,
+      adoptRemote: () => (cur ? adoptRemote(cur.id, null) : undefined),
+      reload: () => (cur ? openSection(cur.id, { keepNote: true }) : undefined),
+      otherRun: () => { if (cur) { cur.otherRun = true; if (active()) { renderHead(); renderGen(); imp.refresh(); } } },
+      confirm: confirmDialog,
+      announce
+    });
     wantSection = new URLSearchParams(location.search).get('section');
     saver = kdpAutosave.create({
       read,
