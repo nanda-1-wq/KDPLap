@@ -58,6 +58,8 @@
   .float { position: absolute; display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-h);
            padding: 0 var(--space-3); border-radius: var(--radius-md); background: var(--ink); color: var(--surface);
            border: none; font-family: var(--font-ui); font-size: var(--text-md); font-weight: 500; box-shadow: var(--shadow-menu); }
+  .float-slot { position: relative; height: calc(var(--control-h) + var(--space-3)); }
+  .float-slot .float { position: absolute; top: 0; }
   .hint { display: flex; gap: var(--space-2); align-items: center; font-size: var(--text-sm); color: var(--graphite); padding: var(--space-2) var(--space-3); }
   .tip { position: absolute; background: var(--ink); color: var(--surface); font-size: var(--text-sm); padding: var(--space-2) var(--space-3);
          border-radius: var(--radius-sm); white-space: nowrap; }
@@ -73,7 +75,9 @@
   .mi .t { font-size: var(--text-md); font-weight: 500; }
   .mi .s { font-size: var(--text-xs); color: var(--graphite); }
   .mi.is-active { background: var(--mist); }
-  .mi[aria-disabled="true"] .t, .mi[aria-disabled="true"] .s { color: var(--muted); }
+  .mi[aria-disabled="true"] { cursor: default; }
+  .mi[aria-disabled="true"] .t { color: var(--muted); font-weight: 400; }
+  .mi[aria-disabled="true"] .s { color: var(--muted); }
   .mi-why { font-size: var(--text-xs); color: var(--ink-2); padding: 2px var(--space-3) var(--space-2); display: flex; gap: 6px; align-items: flex-start; }
   .menu-sep { height: 1px; background: var(--mist); margin: var(--space-1) 6px; }
   .pill { font-size: 11px; padding: 1px 7px; border: 1px solid var(--stone-2); border-radius: var(--radius-pill); color: var(--graphite); }
@@ -164,12 +168,12 @@
         <span class="words">310 / 450 words</span>
       </div>
       <div class="text">
-        <p>Shoulder rolls ease the stiffness that builds up after long hours of sitting. <span class="sel">Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this five times.</span> Keep your neck long and your chin level.</p>
-        <p>Next, reverse the direction. Roll your shoulders forward and down.</p>
+        <p>Shoulder rolls ease the stiffness that builds up after long hours of sitting. <span class="sel">Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this five times.</span></p>
+        <div class="float-slot"><button class="float is-focus" id="float1" aria-haspopup="menu"><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button></div>
+        <p>Keep your neck long and your chin level. Next, reverse the direction. Roll your shoulders forward and down.</p>
       </div>
-      <button class="float is-focus" style="left: 330px; top: 138px" aria-haspopup="menu"><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button>
     </div>
-    <p class="small" style="margin:0">The floating button sits under the end of the selection (shown with its focus ring). The toolbar button opens the same menu for keyboard users. The selection already shows as whole sentences.</p>
+    <p class="small" style="margin:0">The floating button sits below the end of the selection (shown with its focus ring). In the app it never covers text: it sits below the line where the selection ends and flips above the selection's first line when there is no room below (near the bottom of the window). The toolbar button opens the same menu for keyboard users. The selection already shows as whole sentences.</p>
   </section>
 
   <!-- 2. No selection -->
@@ -263,7 +267,7 @@
       <span class="label">Improve · 4.2</span>
       <div class="row"><span class="spin" aria-hidden="true"></span><h2>Improving 2 sentences…</h2></div>
       <div class="passage">Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this five times.</div>
-      <p class="small">You can keep writing. If you change these sentences, we will ask before using the result.</p>
+      <p class="small">You can keep writing. If you change these sentences, the result cannot be used.</p>
       <div class="row"><button class="btn">Cancel</button></div>
       <div class="row" style="padding-top: var(--space-2); border-top: 1px solid var(--mist)">
         <button class="btn" disabled><svg width="18" height="18"><use href="#sparkle"/></svg>Generate section</button>
@@ -386,5 +390,17 @@
     </div>
   </section>
 </main>
+<script>
+  // Mock only: put the floating button under the end of the selection, inside
+  // the gap below the paragraph, so it covers no words at any width.
+  (function place() {
+    var sel = document.querySelector('.ed .sel'), btn = document.getElementById('float1');
+    var rects = sel.getClientRects(), end = rects[rects.length - 1];
+    var box = btn.parentElement.getBoundingClientRect();
+    var left = Math.max(0, Math.min(end.right - box.left - btn.offsetWidth, box.width - btn.offsetWidth));
+    btn.style.left = left + 'px';
+    window.addEventListener('resize', place, { once: true });
+  })();
+</script>
 </body>
 </html>
