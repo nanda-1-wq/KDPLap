@@ -94,7 +94,48 @@ const test = async page => {
   });
   ok(fl.h >= 44 && fl.covers === 0 && fl.below, `floating button below the selection, covers no text: ${JSON.stringify(fl)}`);
   ok(fl.on && fl.hint, 'toolbar Improve is on, no hint');
-  await shots('trigger');
+  /** The selection fully inside the editor's visible box; the button too, over no words and not on the hint under the editor. */
+  const fits = () => g(() => {
+    const ed = document.querySelector('[data-editor]');
+    const r0 = ed.getBoundingClientRect();
+    const main = document.querySelector('.wr-main').getBoundingClientRect();
+    const box = { top: Math.max(r0.top, main.top, 0), bottom: Math.min(r0.bottom, main.bottom, innerHeight) };
+    const f = document.querySelector('[data-imp-float]');
+    const fr = f && !f.hidden ? f.getBoundingClientRect() : null;
+    const sel = getSelection().getRangeAt(0).getBoundingClientRect();
+    const hint = document.querySelector('[data-hint]');
+    const hr = hint && !hint.hidden ? hint.getBoundingClientRect() : null;
+    const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+    let covers = 0;
+    if (fr) for (let t = w.nextNode(); t; t = w.nextNode()) {
+      const r = document.createRange(); r.selectNodeContents(t);
+      for (const x of r.getClientRects()) if (x.right > fr.left && x.left < fr.right && x.bottom > fr.top && x.top < fr.bottom) covers++;
+    }
+    return {
+      selIn: sel.top >= box.top - 0.5 && sel.bottom <= box.bottom + 0.5,
+      floatIn: !!fr && fr.top >= box.top - 0.5 && fr.bottom <= box.bottom + 0.5,
+      covers,
+      onHint: !!fr && !!hr && fr.bottom > hr.top && fr.top < hr.bottom
+    };
+  });
+  const fit1440 = await fits();
+  ok(fit1440.selIn && fit1440.floatIn && !fit1440.covers && !fit1440.onHint, `1440: selection and button inside the editor: ${JSON.stringify(fit1440)}`);
+  await page.screenshot({ path: `${SHOTS}/t-improve-trigger-1440.png` });
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.waitForTimeout(300);
+  const fit900 = await fits();
+  ok(fit900.selIn && fit900.floatIn && !fit900.covers && !fit900.onHint, `900: selection and button inside the editor, not on the hint: ${JSON.stringify(fit900)}`);
+  await page.screenshot({ path: `${SHOTS}/t-improve-trigger-900.png` });
+  // A new selection at 900 px near the editor's bottom edge: scrolled into view.
+  await g(() => { const ed = document.querySelector('[data-editor]'); ed.scrollTop = 0; });
+  await select('Keep both feet', 0, 'Keep both feet', 9);
+  await page.waitForTimeout(300);
+  const fitLow = await fits();
+  ok(fitLow.selIn && fitLow.floatIn && !fitLow.covers && !fitLow.onHint, `900, a selection at the bottom edge is scrolled into view: ${JSON.stringify(fitLow)}`);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.waitForTimeout(250);
+  await select('lift your shoulders', 7, 'Do this', 4);
+  await page.waitForSelector('[data-imp-float]:not([hidden])', { timeout: 3000 });
 
   // 3. The menu: snapped to whole sentences, the header, 7 items, Create image off with "v2", 44 px, keyboard, Esc.
   await openMenu();
@@ -112,6 +153,18 @@ const test = async page => {
   await page.keyboard.press('ArrowUp');
   ok(await g(() => document.activeElement.dataset.impAct === 'improve'), 'ArrowUp moves back');
   await shots('menu');
+  // At 900 px (shots() resized and back): the menu stays by the button, inside the window.
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.waitForTimeout(300);
+  const m900 = await g(() => {
+    const m = document.querySelector('[data-imp-menu]').getBoundingClientRect();
+    const f = document.querySelector('[data-imp-float]');
+    const a = (f && !f.hidden ? f : document.querySelector('[data-imp-open]')).getBoundingClientRect();
+    return { near: Math.abs(m.top - a.bottom) < 12 || Math.abs(m.bottom - a.top) < 12, inside: m.top >= 0 && m.bottom <= innerHeight && m.left >= 0 && m.right <= innerWidth };
+  });
+  ok(m900.near && m900.inside, `900: the menu by its button, inside the window: ${JSON.stringify(m900)}`);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.waitForTimeout(250);
   await page.keyboard.press('Escape');
   ok(!(await has('[data-imp-menu]')) && await g(() => document.activeElement === document.querySelector('[data-editor]')) && (await selected()).startsWith('Now lift'), 'Esc closes the menu; focus back in the editor with the selection');
   // The toolbar button opens the same menu (keyboard users), and Enter picks an item.
@@ -201,7 +254,8 @@ const test = async page => {
   await page.click('[data-imp-act="improve"]');
   await until(() => window.__imp.requests.length === 6);
   const OUT = 'Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this **five times**, then rest. Most people feel looser within a week. [Verify: no source] Keep your neck long and your *chin* level. Ruth likes to pair this with slow breathing.';
-  const s1 = await suggest({ text: OUT, flagged: 1, notes: { markersLost: 1, newNames: ['Ruth'], structureChanged: { headings: false, paragraphs: null, listItems: { before: 3, after: 2 } } } });
+  // Consistent with the server: the passage has no source marks, so none can be lost.
+  const s1 = await suggest({ text: OUT, flagged: 1, notes: { markersLost: 0, newNames: ['Ruth'], structureChanged: { headings: false, paragraphs: null, listItems: { before: 3, after: 2 } } } });
   ok(s1.req.selection === 'Now lift your shoulders up toward your ears, then roll them back and down in a slow circle. Do this **five times**. Keep your neck long and your *chin* level.', `3 sentences: ${s1.req.selection}`);
   await waitCard('review');
   // Words as md_word_count counts them (the source flag is not words).
@@ -210,14 +264,13 @@ const test = async page => {
   ok(diff.ins.some((t) => /then rest\./.test(t)) && diff.ins.some((t) => /Ruth likes/.test(t)) && diff.pill, `diff: ${JSON.stringify(diff)}`);
   ok(/Removed/.test(await txt('[data-imp] .wr-cmp-legend')) && /Added/.test(await txt('[data-imp] .wr-cmp-legend')), 'legend: Removed and Added');
   const notes = await page.$$eval('[data-imp] .wr-imp-n', (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ').trim()));
-  ok(notes.join(' | ') === 'Source: 1 claim needs a source. | Marks: The original had 0 source marks; this has 1. Check that no claim lost its mark. | Names: New names: Ruth. Check them. | Structure: The structure changed: 3 list items became 2.', `notes: ${notes.join(' | ')}`);
-  ok(await page.$$eval('[data-imp] .wr-imp-n svg', (s) => s.length === 4), 'every note has an icon');
+  ok(notes.join(' | ') === 'Source: 1 claim needs a source. | Names: New names: Ruth. Check them. | Structure: The structure changed: 3 list items became 2.', `notes (no Marks note when nothing was lost): ${notes.join(' | ')}`);
+  ok(await page.$$eval('[data-imp] .wr-imp-n svg', (s) => s.length === 3), 'every note has an icon');
   ok((await txt('[data-imp-accept]')) === 'Accept' && (await txt('[data-imp-again]')) === 'Try again' && (await txt('[data-imp-reject]')) === 'Reject', 'Accept, Try again, Reject');
-  ok(/Accept saves a new version\. Undo \(Ctrl\+Z\) puts the old text back\./.test(await txt('[data-imp]')), 'help line');
+  ok(/Accept saves a new version\. You can restore the old one in Versions\./.test(await txt('[data-imp]')), 'help line');
   ok(await page.$eval('[data-generate]', (b) => b.disabled) && (await txt('#wrImpGenWhy')) === 'Accept or reject the suggestion first.', 'Generate is off while a suggestion is open');
   const btnH = await page.$$eval('[data-imp] button', (bs) => bs.map((b) => b.getBoundingClientRect().height));
   ok(btnH.every((h) => h >= 44), `card buttons 44 px: ${btnH.map(Math.round)}`);
-  await shots('review');
 
   // 8. Reject: nothing written; the passage is selected again.
   const w1 = st.writes.length;
@@ -381,7 +434,7 @@ const test = async page => {
   ok((await card()) === '' && st.writes.filter((w) => w.fn === 'apply_suggestion').length === w14, 'Leave: another section, nothing applied');
 
   // 15. Snapping: a source marker joins its sentence; a list marker joins; too short; Custom box.
-  const MARKED = 'Hold your arms out to the sides. Studies show arm circles cut shoulder pain by 30%. [Verify: no source] Rest now.\n\n- Circle forward ten times\n- Circle back ten times';
+  const MARKED = 'Hold your arms out to the sides. Studies show arm circles cut shoulder pain by 30%. [Verify: no source] Over 300 readers tried it. [Verify: no source] Rest now.\n\n- Circle forward ten times\n- Circle back ten times';
   st.addVersion(st.s43, MARKED, 'manual');
   await open(W1, st.s43);
   await select('arm circles cut', 2, 'arm circles cut', 6);
@@ -393,14 +446,29 @@ const test = async page => {
   ok((await imps())[0].selection === 'Studies show arm circles cut shoulder pain by 30%. [Verify: no source]', `sent with the marker: ${(await imps())[0].selection}`);
   await page.click('[data-imp-cancel]');
   await page.click('[data-imp-close]');
+  // All four notes, consistent with the server: 2 marks in the passage, 1 kept (markersLost 1, flagged 1).
+  await select('Studies show', 2, 'Over 300', 3);
+  await openMenu();
+  await page.click('[data-imp-act="humanize"]');
+  await until(() => window.__imp.requests.length === 2);
+  const r4 = (await imps())[1];
+  ok(r4.selection === 'Studies show arm circles cut shoulder pain by 30%. [Verify: no source] Over 300 readers tried it. [Verify: no source]', `two marked sentences: ${r4.selection}`);
+  await suggest({ text: 'Arm circles can ease stiff shoulders.\n\nRuth and 300 other readers tried it. [Verify: no source]', flagged: 1,
+    notes: { markersLost: 1, newNames: ['Ruth'], structureChanged: { headings: false, paragraphs: { before: 1, after: 2 }, listItems: null } } });
+  await waitCard('review');
+  const notes4 = await page.$$eval('[data-imp] .wr-imp-n', (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ').trim()));
+  ok(notes4.join(' | ') === 'Source: 1 claim needs a source. | Marks: 1 source mark from the original is missing. Check that no claim lost its mark. | Names: New names: Ruth. Check them. | Structure: The structure changed: 1 paragraph became 2.', `four notes: ${notes4.join(' | ')}`);
+  ok(await page.$$eval('[data-imp] .wr-imp-n svg', (x) => x.length === 4), 'every note has an icon');
+  await shots('review');
+  await page.click('[data-imp-reject]');
   await select('Circle forward', 3, 'Circle back', 3);
   await openMenu();
   await page.keyboard.press('Escape');
   await page.click('[data-imp-open]');
   await page.waitForSelector('[data-imp-menu]');
   await page.click('[data-imp-act="improve"]');
-  await until(() => window.__imp.requests.length === 2);
-  ok((await imps())[1].selection === '- Circle forward ten times\n- Circle back ten times', `list marker joins: ${JSON.stringify((await imps())[1].selection)}`);
+  await until(() => window.__imp.requests.length === 3);
+  ok((await imps())[2].selection === '- Circle forward ten times\n- Circle back ten times', `list marker joins: ${JSON.stringify((await imps())[2].selection)}`);
   await page.click('[data-imp-cancel]');
   await page.click('[data-imp-close]');
   await select('Rest now', 1, 'Rest now', 3);
@@ -408,7 +476,7 @@ const test = async page => {
   const short = await g(() => ({ head: document.querySelector('.wr-imp-head').innerText, note: (document.querySelector('.wr-imp-note') || {}).innerText, off: [...document.querySelectorAll('[data-imp-act]')].every((b) => b.getAttribute('aria-disabled') === 'true') }));
   ok(short.head === '1 sentence · 2 words' && short.note === 'Select at least 3 words.' && short.off, `too short: ${JSON.stringify(short)}`);
   await page.click('[data-imp-act="improve"]', { force: true });   // aria-disabled: Playwright would wait
-  ok((await imps()).length === 2, 'an off item sends nothing');
+  ok((await imps()).length === 3, 'an off item sends nothing');
   await shots('too-short');
   await page.keyboard.press('Escape');
   // Custom: the box, the counter, Send off when empty, 300 characters, Back.
@@ -432,8 +500,8 @@ const test = async page => {
   await page.click('[data-imp-act="custom"]');
   ok((await page.$eval('[data-imp-ask]', (t) => t.value)) === 'Use shorter sentences and speak to the reader as "you".', 'the instruction is kept');
   await page.click('[data-imp-send]');
-  await until(() => window.__imp.requests.length === 3);
-  const r15 = (await imps())[2];
+  await until(() => window.__imp.requests.length === 4);
+  const r15 = (await imps())[3];
   ok(r15.action === 'custom' && r15.instruction === 'Use shorter sentences and speak to the reader as "you".' && Object.keys(r15).slice(-1)[0] === 'instruction', `custom request: ${r15.action} ${r15.instruction}`);
   await reply(200, { stage: 'section_improve', action: 'custom', unchanged: true });
   await waitCard('nochange');
@@ -459,28 +527,19 @@ const test = async page => {
   await shots('too-long');
   await page.keyboard.press('Escape');
 
-  // 17. The floating button flips above the selection near the bottom of the editor.
-  await open(W7, st.long);
-  const flips = await g(() => {
-    const ed = document.querySelector('[data-editor]');
-    const items = [...ed.querySelectorAll('li')];
-    const last = items[items.length - 1];
-    ed.focus();
-    const r = document.createRange(); r.selectNodeContents(last);
-    getSelection().removeAllRanges(); getSelection().addRange(r);
-    ed.scrollTop = ed.scrollHeight;
-    return true;
-  });
-  await page.waitForTimeout(200);
+  // 17. The floating button flips above when only that fits: the top of a paragraph taller than the editor.
+  await select('Sit tall and', 0, 'Sit tall and', 3);
+  await page.waitForTimeout(300);
   const flip = await g(() => {
     const f = document.querySelector('[data-imp-float]');
     if (!f) return null;
     const fr = f.getBoundingClientRect();
     const sel = getSelection().getRangeAt(0).getBoundingClientRect();
-    const eb = document.querySelector('[data-editor]').getBoundingClientRect();
-    return { above: fr.bottom <= sel.top, gapTop: !!document.querySelector('[data-editor] .wr-imp-gap-top'), hidden: f.hidden, ft: Math.round(fr.top), st: Math.round(sel.top), et: Math.round(eb.top), eb: Math.round(eb.bottom), top: f.style.top };
+    return { above: fr.bottom <= sel.top, gapTop: !!document.querySelector('[data-editor] .wr-imp-gap-top'), hidden: f.hidden };
   });
-  ok(flips && flip && flip.above && flip.gapTop && !flip.hidden, `flips above near the bottom: ${JSON.stringify(flip)}`);
+  const fitFlip = await fits();
+  ok(flip && flip.above && flip.gapTop && !flip.hidden && fitFlip.selIn && fitFlip.floatIn && !fitFlip.covers, `flips above, both inside the editor: ${JSON.stringify({ ...flip, ...fitFlip })}`);
+  await page.keyboard.press('ArrowRight');
 
   // 18. Improve off: every reason. Positioning not locked (W6, Needs review too).
   await open(W6, st.w6s);

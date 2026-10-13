@@ -2944,8 +2944,9 @@ div.delete-text p { margin: 0; }
 .wr-imp-hint svg { flex-shrink: 0; }
 .wr-imp-hint a { color: var(--ink); }
 /* The floating button sits in a gap opened under (or over) the selection's block: it covers no words. */
-.wr-editor .wr-imp-gap { margin-bottom: var(--app-imp-gap); }
-.wr-editor .wr-imp-gap-top { margin-top: var(--app-imp-gap); }
+/* Padding, not margin: it always adds room to scroll, also under the last block. */
+.wr-editor .wr-imp-gap { padding-bottom: var(--app-imp-gap); }
+.wr-editor .wr-imp-gap-top { padding-top: var(--app-imp-gap); }
 .wr-imp-float {
   position: absolute;
   z-index: 5;

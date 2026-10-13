@@ -52,7 +52,6 @@
 
   const fmt = (n) => Number(n || 0).toLocaleString('en-US');
   const plural = (n, one, many) => `${fmt(n)} ${n === 1 ? one : many}`;
-  const flagsIn = (md) => String(md || '').split(MD.FLAG).length - 1;
 
   function create(host) {
     /**
@@ -184,8 +183,8 @@
         <button type="button" class="wr-tool wr-imp-btn" data-imp-open aria-haspopup="menu" aria-expanded="false" disabled aria-describedby="wrImpHint">${SPARKLE()}Improve</button>`;
     }
 
-    /** The toolbar button, the hint under the toolbar and the floating button. */
-    function refresh() {
+    /** The toolbar button, the hint under the toolbar and the floating button (reveal: the selection just changed). */
+    function refresh(reveal) {
       const e = els();
       if (!e) return;
       const btn = e.main.querySelector('[data-imp-open]');
@@ -202,7 +201,7 @@
       hint.hidden = !text;
       hint.innerHTML = text ? `${why === 'positioning' ? LOCK(16) : INFO(16)}<span>${text}</span>` : '';
       if (btn.disabled) btn.setAttribute('aria-describedby', 'wrImpHint'); else btn.removeAttribute('aria-describedby');
-      placeFloat(why ? null : editorRange());
+      placeFloat(why ? null : editorRange(), !!reveal);
     }
 
     function clearGap() {
@@ -219,12 +218,48 @@
       return best;
     }
 
+    /** Scrolling boxes around the editor (the editor itself first). */
+    function scrollers(ed) {
+      const out = [ed];
+      for (let n = ed.parentElement; n && n !== document.body; n = n.parentElement) {
+        if (/(auto|scroll)/.test(getComputedStyle(n).overflowY)) out.push(n);
+      }
+      out.push(document.scrollingElement || document.documentElement);
+      return out;
+    }
+
+    /** The part of the editor that can be seen: its box cut by every scrolling box around it and the window. */
+    function viewBox(ed) {
+      const r = ed.getBoundingClientRect();
+      let top = Math.max(r.top, 0), bottom = Math.min(r.bottom, document.documentElement.clientHeight);
+      for (const n of scrollers(ed).slice(1, -1)) {
+        const b = n.getBoundingClientRect();
+        top = Math.max(top, b.top);
+        bottom = Math.min(bottom, b.bottom);
+      }
+      return { top, bottom, height: Math.max(0, bottom - top), left: r.left, right: r.right };
+    }
+
+    /** Scrolls by dy, the editor first, then the boxes around it. */
+    function scrollBy(ed, dy) {
+      let left = dy;
+      for (const n of scrollers(ed)) {
+        if (Math.abs(left) < 1) return;
+        const before = n.scrollTop;
+        n.scrollTop = before + left;
+        left -= n.scrollTop - before;
+      }
+    }
+
     /**
      * The floating button: in a gap opened under the block where the selection
-     * ends, so it covers no words; above the block where it starts when there
-     * is no room below (near the bottom of the editor).
+     * ends (or over the block where it starts, when only that fits), so it
+     * covers no words. The selected text and the button stay fully inside the
+     * editor's visible box: right after the selection changes (reveal), the
+     * editor scrolls to make room; when nothing fits (a selection taller than
+     * the editor), the button hides and the toolbar button stays.
      */
-    function placeFloat(range) {
+    function placeFloat(range, reveal) {
       const c = card();
       const ed = editor();
       let f = c && c.querySelector('[data-imp-float]');
@@ -243,27 +278,55 @@
       }
       const endBlock = blockOf(range.endContainer) || ed;
       const startBlock = blockOf(range.startContainer) || ed;
-      const edBox = ed.getBoundingClientRect();
+      f.hidden = false;   // a hidden button measures 0 px high
       const fh = f.offsetHeight;
-      const rects = range.getClientRects();
-      const endRect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
-      const roomBelow = edBox.bottom - endBlock.getBoundingClientRect().bottom;
-      const above = roomBelow < fh * 2 && startBlock.getBoundingClientRect().top - edBox.top > fh * 2;
-      const block = above ? startBlock : endBlock;
-      const cls = above ? 'wr-imp-gap-top' : 'wr-imp-gap';
-      if (!block.classList.contains(cls) || ed.querySelectorAll('.wr-imp-gap, .wr-imp-gap-top').length !== 1) {
+      const GAP = 6;
+      const setGap = (block, cls) => {
+        if (block.classList.contains(cls) && ed.querySelectorAll('.wr-imp-gap, .wr-imp-gap-top').length === 1) return;
         clearGap();
         if (block !== ed) block.classList.add(cls);
+      };
+      /** Where the button goes for one side, and how far to scroll for all of it to show (0: it fits; NaN: it cannot). */
+      const measure = (side) => {
+        const block = side === 'above' ? startBlock : endBlock;
+        setGap(block, side === 'above' ? 'wr-imp-gap-top' : 'wr-imp-gap');
+        const box = viewBox(ed);
+        const sel = range.getBoundingClientRect();
+        const b = block.getBoundingClientRect();
+        // The gap is padding on the block (it always adds room to scroll): the button sits inside it.
+        const cs = getComputedStyle(block);
+        const top = side === 'above' ? b.top + parseFloat(cs.paddingTop) - GAP - fh : b.bottom - parseFloat(cs.paddingBottom) + GAP;
+        // A small margin inside the visible box, so the button never touches its edge (or the hint under it).
+        const lo = Math.min(sel.top, top - GAP), hi = Math.max(sel.bottom, top + fh + GAP);
+        let need = 0;
+        if (hi > box.bottom) need = hi - box.bottom;
+        if (lo - need < box.top) need = hi - lo > box.height ? NaN : lo - box.top;
+        return { side, top, need: Math.abs(need) < 1 ? 0 : need };   // sub-pixel layout: under 1 px fits
+      };
+      let m = null;
+      const kept = ed.querySelector('.wr-imp-gap-top') ? 'above' : 'below';
+      if (reveal) {
+        for (const side of ['below', 'above']) { const x = measure(side); if (x.need === 0) { m = x; break; } }
+        for (const side of m ? [] : ['below', 'above']) {
+          const x = measure(side);
+          if (Number.isNaN(x.need)) continue;
+          scrollBy(ed, x.need);
+          const y = measure(side);
+          if (y.need === 0) { m = y; break; }
+        }
+        if (!m) m = measure('below');
+      } else {
+        m = measure(kept);
       }
+      const box = viewBox(ed);
       const cBox = c.getBoundingClientRect();
-      const bBox = block.getBoundingClientRect();
-      const top = above ? bBox.top - cBox.top - fh - 6 : bBox.bottom - cBox.top + 6;
-      const left = Math.max(edBox.left - cBox.left + 8, Math.min(endRect.right - cBox.left - f.offsetWidth, edBox.right - cBox.left - f.offsetWidth - 8));
-      f.style.top = `${Math.round(top)}px`;
-      f.style.left = `${Math.round(left)}px`;
-      // Scrolled out of the editor's view: hidden.
-      const y = (above ? bBox.top - fh : bBox.bottom);
-      f.hidden = y < edBox.top - fh || y > edBox.bottom;
+      const rects = range.getClientRects();
+      const endRect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+      const left = Math.max(box.left - cBox.left + 8, Math.min(endRect.right - cBox.left - f.offsetWidth, box.right - cBox.left - f.offsetWidth - 8));
+      f.style.top = `${m.top - cBox.top}px`;
+      f.style.left = `${left}px`;
+      // Never outside the editor's visible box (so never over the hint or the foot under it).
+      f.hidden = m.top < box.top - 1 || m.top + fh > box.bottom + 1;
     }
 
     /* ── Menu ──────────────────────────────── */
@@ -362,7 +425,10 @@
 
     function placeMenu() {
       if (!menu) return;
-      const { el, anchor } = menu;
+      const { el } = menu;
+      // The floating button can hide (scrolled out of view): the toolbar button is the anchor then.
+      const tool = els() && els().main.querySelector('[data-imp-open]');
+      const anchor = (menu.anchor.hidden || !menu.anchor.isConnected) && tool ? tool : menu.anchor;
       const a = anchor.getBoundingClientRect();
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const h = el.offsetHeight, w = el.offsetWidth;
@@ -641,9 +707,10 @@
       const out = [];
       const note = (title, text) => `<div class="wr-imp-n">${ICON.warn(16)}<span><strong>${title}:</strong> ${esc(text)}</span></div>`;
       if (r.flagged > 0) out.push(note('Source', `${r.flagged === 1 ? '1 claim needs' : `${fmt(r.flagged)} claims need`} a source.`));
+      // The server's count only (marks in the passage minus marks in the result).
       if (n.markersLost > 0) {
-        const had = flagsIn(imp.selection), has = flagsIn(r.text);
-        out.push(note('Marks', `The original had ${plural(had, 'source mark', 'source marks')}; this has ${fmt(has)}. Check that no claim lost its mark.`));
+        const lost = n.markersLost === 1 ? '1 source mark from the original is missing' : `${fmt(n.markersLost)} source marks from the original are missing`;
+        out.push(note('Marks', `${lost}. Check that no claim lost its mark.`));
       }
       if (Array.isArray(n.newNames) && n.newNames.length) out.push(note('Names', `New names: ${n.newNames.join(', ')}. Check them.`));
       const sc = n.structureChanged;
@@ -715,7 +782,7 @@
               <button type="button" class="btn btn-secondary btn-sm" data-imp-again${offAgain ? ' disabled' : ''}>${SPARKLE()}Try again</button>
               <button type="button" class="link-btn wr-imp-text-btn" data-imp-reject${applying ? ' disabled' : ''}>Reject</button>
             </div>
-            <p class="wr-imp-small">${applying ? 'The editor is read only for a moment.' : 'Accept saves a new version. Undo (Ctrl+Z) puts the old text back.'}</p>
+            <p class="wr-imp-small">${applying ? 'The editor is read only for a moment.' : 'Accept saves a new version. You can restore the old one in Versions.'}</p>
             ${applying ? '' : genWhy}</section>`;
         }
         default: return '';
@@ -770,11 +837,11 @@
     }
 
     let raf = 0;
-    const soon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (!menu) refresh(); }); };
+    const soon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (!menu) refresh(true); }); };
 
     document.addEventListener('selectionchange', soon);
     document.addEventListener('pointerup', () => { if (pointerDown) { pointerDown = false; soon(); } });
-    window.addEventListener('resize', () => { refresh(); placeMenu(); });
+    window.addEventListener('resize', () => { refresh(true); placeMenu(); });
     document.addEventListener('pointerdown', (e) => {
       if (!menu) return;
       if (menu.el.contains(e.target) || (menu.anchor && menu.anchor.contains(e.target))) return;
