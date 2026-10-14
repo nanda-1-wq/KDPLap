@@ -86,6 +86,10 @@ const test = async page => {
   // 1. Code checks on open (4.2, design 22): the 40% claim, the words row (info), the tab count.
   await open(W1, st.s42);
   ok((await tabLabel()) === 'Checks 1', `tab count 1 (the claim; never the words row): "${await tabLabel()}"`);
+  // The number is aria-hidden; the tab's accessible name carries it.
+  const tabName = () => page.$eval('[data-tab="checks"]', (b) => [b.getAttribute('aria-label'), b.querySelector('.count') ? b.querySelector('.count').getAttribute('aria-hidden') : null]);
+  ok(JSON.stringify(await tabName()) === JSON.stringify(['Checks, 1 to review', 'true']), `accessible name: ${JSON.stringify(await tabName())}`);
+  ok(await page.getByRole('tab', { name: 'Checks, 1 to review', exact: true }).count() === 1, 'found by role and name: "Checks, 1 to review"');
   await checksTab();
   ok((await txt('.wr-chk-group:first-child .chip-label')) === 'IN YOUR TEXT', 'group: IN YOUR TEXT');
   ok((await rowText('number')) === '"40%" has no source Add a source in 02 Research, or mark it. Show', `number row: "${await rowText('number')}"`);
@@ -118,6 +122,7 @@ const test = async page => {
   const gap = await txt('[data-chk-finding="2"]');
   ok(gap === `OBJECTIVE ${FINDINGS[2].message} MISSING FROM THE TEXT Nothing to select. Add this part yourself.` && !(await has('[data-chk-finding="2"] [data-chk-fix]')), `objective gap, no Fix, no Generate in the hint: "${gap}"`);
   ok((await tabLabel()) === 'Checks 4', `tab count = 1 claim + 3 findings: "${await tabLabel()}"`);
+  ok((await tabName())[0] === 'Checks, 4 to review', `accessible name follows the count: "${(await tabName())[0]}"`);
   ok(!(await has('[data-chk-area]')), 'no pass rows when every area has issues');
   ok(await shots('result') === false, 'result: no sideways scroll at 900 px');
 
@@ -283,6 +288,7 @@ const test = async page => {
   await checksTab();
   ok(/^IN YOUR TEXT Nothing to check yet\. Start writing this section\./.test(await txt('.wr-chk')), 'empty section: nothing to check yet');
   ok(await page.$eval('[data-chk-run]', (b) => b.disabled), 'empty section: AI check off');
+  ok(JSON.stringify(await tabName()) === JSON.stringify(['Checks', null]) && (await tabLabel()) === 'Checks', `count 0: no number, the name is just "Checks": ${JSON.stringify(await tabName())}`);
   ok(await shots('empty') === false, 'empty: no sideways scroll at 900 px');
 
   // 12. Locked: Generate running here, another tab, a conflict, the positioning.

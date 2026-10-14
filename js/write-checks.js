@@ -273,7 +273,7 @@
       if (tab) {
         const n = count();
         tab.innerHTML = n ? `Checks <span class="count" aria-hidden="true">${n}</span>` : 'Checks';
-        tab.setAttribute('aria-label', n ? `Checks, ${n} to look at` : 'Checks');
+        tab.setAttribute('aria-label', n ? `Checks, ${n} to review` : 'Checks');
       }
       const panel = e.side.querySelector('[data-panel][data-panel-kind="checks"]');
       if (!panel) return;

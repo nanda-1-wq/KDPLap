@@ -1378,10 +1378,11 @@
     if (!els || load.state !== 'ready' || !gateOpen()) return;
     const tabBtn = (k, label, aria) => `<button type="button" class="tab" role="tab" id="wrTab-${k}" aria-controls="wrPanel" aria-selected="${tab === k}" tabindex="${tab === k ? 0 : -1}" data-tab="${k}"${aria ? ` aria-label="${aria}"` : ''}>${label}</button>`;
     // The Checks count: code warnings + AI findings of a current check, never the words row (decision 6).
+    // The number is hidden from screen readers; the tab's name says it ("Checks, 4 to review").
     const n = chk.count();
     els.side.innerHTML = `
       <div class="tabs wr-tabs" role="tablist" aria-label="Section tools">
-        ${tabBtn('versions', 'Versions')}${tabBtn('checks', n ? `Checks <span class="count" aria-hidden="true">${n}</span>` : 'Checks', n ? `Checks, ${n} to look at` : '')}${tabBtn('brief', 'Brief')}
+        ${tabBtn('versions', 'Versions')}${tabBtn('checks', n ? `Checks <span class="count" aria-hidden="true">${n}</span>` : 'Checks', n ? `Checks, ${n} to review` : 'Checks')}${tabBtn('brief', 'Brief')}
       </div>
       <div class="wr-panel" id="wrPanel" role="tabpanel" aria-labelledby="wrTab-${tab}" data-panel data-panel-kind="${tab}"></div>`;
     const panel = els.side.querySelector('[data-panel]');
