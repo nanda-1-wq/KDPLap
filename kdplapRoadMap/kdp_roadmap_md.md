@@ -17,12 +17,13 @@ Design: ✅ approved (see `design/`)
 - [x] **E8** 03 Positioning (drift check, lock) + 04 Title
 - [x] **PLAN review gate** (after E8): Batches A, B1, B2, C, the ultrareview fixes and C2. Plans and results in `docs/reviews/`.
 - [x] **E9** 05 Outline (E9.1 structure and generate, E9.2 AI check and approve). Plan and results in `docs/reviews/2026-10-07-e9-plan.md`.
-- [ ] **E10** 06 Write: sections, versions, improve menu, checks ← next
+- [x] **E10** 06 Write: sections, versions, improve menu, checks
   - E10.1 editor, drafts, versions: done (0018, merged 734b849)
   - E10.1 fix: no blank first version (0019, merged 6e919ef)
   - E10.2 Generate section (streaming): done (0020, generate v16, merged 81a2e34)
   - E10.3 Improve menu: done (0021, generate v18, merged ec664c1)
-- [ ] **E11** Export DOCX + Markdown · Settings + AI usage
+  - E10.4 Checks tab: done (0022, generate v19, merged cd9966f)
+- [ ] **E11** Export DOCX + Markdown · Settings + AI usage ← next
 - [ ] **E12** Real test: write one full book, fix what hurts
 
 ## v2 · KDP-ready files
