@@ -59,6 +59,24 @@ export const improveMaxWords = (action: ImproveAction) => (action === "expand" ?
 
 /* ── Prompt ── */
 
+/**
+ * G3 P9: the passage is part of the section. True when the draft or the
+ * current version text has one place where the selection occurs, the text
+ * before it ends with `before` and the text after it starts with `after`.
+ * The browser sends before and after trimmed (js/sentences.js tail, head), so
+ * whitespace at the edges is ignored on both sides.
+ */
+export function selectionInText(texts: (string | null | undefined)[], selection: string, before: string, after: string): boolean {
+  const b = before.trim(), a = after.trim();
+  for (const t of texts) {
+    if (!t || !selection) continue;
+    for (let i = t.indexOf(selection); i >= 0; i = t.indexOf(selection, i + 1)) {
+      if (t.slice(0, i).trimEnd().endsWith(b) && t.slice(i + selection.length).trimStart().startsWith(a)) return true;
+    }
+  }
+  return false;
+}
+
 export const IMPROVE_SCHEMA = {
   type: "object",
   properties: { text: { type: "string" } },

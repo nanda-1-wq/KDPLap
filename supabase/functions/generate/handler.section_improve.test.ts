@@ -98,6 +98,7 @@ Deno.test("section_improve refusals before the call: the AI is never called and 
     ["run_in_progress", { write: { ...ctx, run: fresh } }, iid, 409, { error: "run_in_progress" }],
     ["selection_too_short", { write: ctx }, { ...iid, selection: "Sit up." }, 422, { error: "selection_too_short", words: 2 }],
     ["selection_too_long (Expand over 1,000)", { write: ctx }, { ...iid, action: "expand", selection: "Sit tall. ".repeat(501) }, 422, { error: "selection_too_long", words: 1002 }],
+    ["selection_not_in_text (G3 P9)", { write: ctx }, { ...iid, selection: "Roll your hips in a slow circle, five times each way." }, 409, { error: "selection_not_in_text" }],
     ["bad_request (instruction on Improve)", { write: ctx }, { ...iid, instruction: "Shorter." }, 400, { error: "bad_request" }],
     ["bad_request (unknown action)", { write: ctx }, { ...iid, action: "poem" }, 400, { error: "bad_request" }],
     ["another user's section", { write: null }, iid, 404, { error: "not_found" }],

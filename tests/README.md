@@ -60,6 +60,7 @@ deno test tests/sse-read.test.js
 deno test --allow-read tests/sentences.test.js
 deno test --allow-read tests/text-checks.test.js
 deno test --allow-read tests/section-check-key.test.js
+deno test --allow-read tests/selection-in-text.test.js
 ```
 
 - `outline-checks.test.js`: the step 05 code checks and the shared words and
@@ -98,6 +99,11 @@ deno test --allow-read tests/section-check-key.test.js
 - `section-check-key.test.js`: the section check fingerprint in the browser
   (`js/section-check-key.js`) and in the function (`lib/section_check.ts`)
   give the same key, and a pinned value.
+- `selection-in-text.test.js` (G3 P9): the browser's own selection and context
+  (`js/sentences.js` snap and context) on Markdown with bold, italic, list
+  items, headings and a marker, and the whole section, all pass the
+  function's check that an Improve passage is part of the section
+  (`selectionInText`, `lib/section_improve.ts`).
 - `word-diff.test.js`: Compare versions (`js/word-diff.js`), design 23, and a
   10,000-word section.
 - `word-count.test.js`: `kdpWords.count` gives the same counts as

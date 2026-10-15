@@ -24,7 +24,7 @@ import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, 
 import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineChapters, outlineCheckKnown, outlineCheckUserMessage, type OutlineRow, outlineKey } from "./outline_check.ts";
 import { locateSection, mdWords, runIsFresh, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
 import type { WriteJob } from "./write_run.ts";
-import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove } from "./section_improve.ts";
+import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove, selectionInText } from "./section_improve.ts";
 import { CHECK, IMPROVE, SECTION_MAX_CHARS } from "./limits.ts";
 import { checkKeyOf, type CheckJob, checkKnown, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM } from "./section_check.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
@@ -319,7 +319,9 @@ const sectionWrite: StageDef<"section_write", WriteContext> = {
  * the section is in the outline; Write is open (outline approved, or any
  * writing); the positioning is locked; the base the browser started from is
  * still current (version_conflict: another tab saved); no fresh Generate run
- * (run_in_progress); the selection has 3 to 1,500 words (Expand 1,000).
+ * (run_in_progress); the selection has 3 to 1,500 words (Expand 1,000); the
+ * selection and its before and after are in the draft or the current version
+ * (selection_not_in_text, G3 P9).
  * Unsaved typing is not checked: the draft is this tab's own, and Accept
  * saves it first. The server saves the suggestion (service role); when that
  * save fails the writer gets nothing, so the call is not counted.
@@ -337,6 +339,8 @@ const sectionImprove: StageDef<"section_improve", WriteContext> = {
     const words = mdWords(input.selection);
     if (words < IMPROVE.minWords) return { fail: "selection_too_short", extra: { words } };
     if (words > improveMaxWords(input.action)) return { fail: "selection_too_long", extra: { words } };
+    // G3 P9: the passage and its context come from the section's text (the draft or the current version).
+    if (!selectionInText([ctx.draft, ctx.current?.content], input.selection, input.before, input.after)) return { fail: "selection_not_in_text" };
     const base = { ctx, action: input.action, instruction: input.instruction, selection: input.selection, before: input.before, after: input.after, words };
     const user = improveUserMessage(base);
     const maxTokens = improveMaxTokens(input.action, words);

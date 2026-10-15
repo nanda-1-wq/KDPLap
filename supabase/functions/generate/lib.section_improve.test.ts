@@ -11,9 +11,17 @@ const MARK = "[Verify: no source]";
 const parse = (o: unknown) => L.parseInput(JSON.stringify(o));
 const def = L.stageDef("section_improve");
 type Input = Extract<L.GenerateInput, { stage: "section_improve" }>;
-/** The check for a request body (defaults: iid) on a context (defaults: improveCtx()). */
-const check = (o: Record<string, unknown> = {}, ctx = improveCtx()) => def.check(parse({ ...iid, ...o }) as Input, ctx) as L.ImproveJob | L.StageFail;
-const job = (o: Record<string, unknown> = {}, ctx = improveCtx()) => {
+/**
+ * The context a body's passage comes from (G3 P9): its version text is before + selection + after,
+ * so a made-up passage is still part of the section. With the iid defaults it is IMPROVE_TEXT.
+ */
+const ctxFor = (o: Record<string, unknown>) => {
+  const b = { ...iid, ...o } as Record<string, unknown>;
+  return improveCtx({ current: { id: V_ID, content: `${b.before}${b.selection}${b.after}` } });
+};
+/** The check for a request body (defaults: iid) on a context (defaults: the body's own text, ctxFor). */
+const check = (o: Record<string, unknown> = {}, ctx = ctxFor(o)) => def.check(parse({ ...iid, ...o }) as Input, ctx) as L.ImproveJob | L.StageFail;
+const job = (o: Record<string, unknown> = {}, ctx = ctxFor(o)) => {
   const j = check(o, ctx);
   if ("fail" in j) throw new Error(`check failed: ${j.fail}`);
   return j;
@@ -223,9 +231,10 @@ Deno.test("interpret: marker spellings and the Markdown clean-up", async () => {
 });
 
 Deno.test("markers on the output: the v16 rule (Brief, Research, outline; never the passage)", async () => {
-  const ctx = improveCtx();
+  const sel = "Most people feel looser within a week. Studies show 52% feel better. Roll back five times.";
+  const ctx = ctxFor({ selection: sel });   // the passage is in the section (G3 P9)
   ctx.sources = [...posCtx().sources, { kind: "source", body: "A survey of 1,200 adults found 38% skip balance work.", citation: "Balance Survey, 2024", created_at: "2026-09-30T09:03:00Z" }];
-  const j = job({ selection: "Most people feel looser within a week. Studies show 52% feel better. Roll back five times." }, ctx);
+  const j = job({ selection: sel }, ctx);
   const out = async (t: string) => L.interpretJob(j, true, await body("end_turn", { text: t })).improve!;
   // A new claim number is flagged; a number from Research is not.
   const a = await out("Studies show 52% feel better. A survey found 38% skip balance work. Roll back five times.");
@@ -296,4 +305,61 @@ Deno.test("reply: the suggestion and the words", async () => {
     words: { before: 36, after: 18 }, flagged: 0, notes: { markersLost: 0, newNames: [], structureChanged: null },
   });
   assertEquals(SECTION_ID, j.sectionId);
+});
+
+/* ── G3 P9: the passage must be part of the section ── */
+
+const MD_TEXT = [
+  "## Before you start",
+  `Sit near the front of a **sturdy chair**. Keep your *feet flat* on the floor. Most people feel looser within a week. ${MARK}`,
+  "- Sit tall\n- Let your **hands rest** on your thighs\n- Breathe out slowly",
+  "## Shoulder rolls",
+  "Lift your shoulders toward your ears. Roll them back and down. Do this *five* times.",
+].join("\n\n");
+/** before and after as the browser sends them: trimmed; short = only the nearest part (tail and head cut). */
+const around = (text: string, sel: string, short = false) => {
+  const i = text.indexOf(sel);
+  const b = text.slice(0, i).trim(), a = text.slice(i + sel.length).trim();
+  return short ? { before: b.slice(Math.max(0, b.length - 30)).replace(/^\S*\s+/, ""), after: a.slice(0, 30).replace(/\s+\S*$/, "") } : { before: b, after: a };
+};
+
+Deno.test("selectionInText: passages across Markdown pass (bold, italic, list, heading, marker, whole section)", () => {
+  for (const [name, sel] of [
+    ["bold", "Sit near the front of a **sturdy chair**. Keep your *feet flat* on the floor."],
+    ["italic", "Keep your *feet flat* on the floor. Most people feel looser within a week."],
+    ["list items", "- Let your **hands rest** on your thighs\n- Breathe out slowly"],
+    ["a heading", "## Shoulder rolls\n\nLift your shoulders toward your ears."],
+    ["a marker", `Most people feel looser within a week. ${MARK}\n\n- Sit tall`],
+    ["the whole section", MD_TEXT],
+  ]) {
+    for (const short of [false, true]) {
+      const c = around(MD_TEXT, sel, short);
+      assert(L.selectionInText([null, MD_TEXT], sel, c.before, c.after), `${name}${short ? " (short context)" : ""}`);
+      // The stage check passes it too (draft and version the same text).
+      const r = check({ selection: sel, ...c, action: "edit_format" }, improveCtx({ current: { id: V_ID, content: MD_TEXT }, draft: MD_TEXT }));
+      assert(!("fail" in r), `${name}: ${JSON.stringify(r)}`);
+    }
+  }
+});
+
+Deno.test("selectionInText: the rule (draft or version; before and after must touch)", () => {
+  const t = IMPROVE_TEXT;
+  const c = around(t, IMPROVE_SEL);
+  assertEquals(L.selectionInText([t, null], IMPROVE_SEL, c.before, c.after), true);                       // in the draft
+  assertEquals(L.selectionInText([null, t], IMPROVE_SEL, c.before, c.after), true);                       // in the version
+  assertEquals(L.selectionInText(["Other text.", t], IMPROVE_SEL, c.before, c.after), true);              // a stale draft, the version has it
+  assertEquals(L.selectionInText([null, null], IMPROVE_SEL, c.before, c.after), false);
+  assertEquals(L.selectionInText([t], "Roll your hips in a circle.", "", ""), false);                       // not in the section
+  assertEquals(L.selectionInText([t], IMPROVE_SEL, "Keep both feet flat on the floor", c.after), false);   // before is elsewhere
+  assertEquals(L.selectionInText([t], IMPROVE_SEL, c.before, "Shoulder rolls ease the stiffness"), false); // after is elsewhere
+  // The same sentence twice: only the second copy has this context.
+  const twice = "Sit tall. Breathe out.\n\nRest now. Sit tall. Breathe out. Then stand.";
+  assertEquals(L.selectionInText([twice], "Sit tall. Breathe out.", "Rest now.", "Then stand."), true);
+  assertEquals(L.selectionInText([twice], "Sit tall. Breathe out.", "Then stand.", ""), false);
+});
+
+Deno.test("check: a passage that is not in the section is selection_not_in_text, before the call", () => {
+  assertEquals(check({ selection: "Roll your hips in a slow circle, five times each way." }, improveCtx()), { fail: "selection_not_in_text" });
+  assertEquals(check({ before: "Keep both feet flat on the floor" }, improveCtx()), { fail: "selection_not_in_text" });
+  assertEquals("fail" in check({}, improveCtx()), false);   // the design 22b passage is in IMPROVE_TEXT
 });

@@ -58,7 +58,7 @@ export {
 } from "./lib/section_write.ts";
 export {
   IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, type ImproveNotes, type ImproveResult, improveTask, improveUserMessage,
-  improveWords, interpretImprove, newNames, normalizeMarkers, type StructureChange, structureChange,
+  improveWords, interpretImprove, newNames, normalizeMarkers, selectionInText, type StructureChange, structureChange,
 } from "./lib/section_improve.ts";
 export {
   type CheckArea, type CheckAreas, type CheckJob, checkKeyOf, checkKnown, checkUserMessage, findQuote, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM,

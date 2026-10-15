@@ -209,6 +209,7 @@ export const ERROR_STATUS = {
   section_too_long: 422,
   selection_too_short: 422,
   selection_too_long: 422,
+  selection_not_in_text: 409,
   check_too_short: 422,
   check_too_long: 422,
   monthly_limit: 429,
