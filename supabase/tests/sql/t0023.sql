@@ -1,5 +1,5 @@
 -- 0023 G3 fixes: the book-level "has writing" the generate function now reads
--- for outline_ideas (outline_json, P1).
+-- (outline_json, P1) and the optional "unsourced" list on an AI section finding (P4).
 -- Run: supabase/tests/sql/run.sh t0023.sql
 \ir helpers.sql
 
@@ -74,4 +74,40 @@ select pg_temp.chk('P1: a fresh run: writing', pg_temp.book_writing(:BOOK1));
 reset role;
 set role service_role;
 select public.section_run_finish(:R2, '', true, 'user_stop', 'stopped', true, 1, 0, true) is not null as f2 \gset
+reset role;
+
+-- ── P4: an AI section finding may carry "unsourced" ──
+select pg_temp.chk('P4: the 0022 shape (3 keys) still passes',
+  public.section_finding_ok('{"type": "drift", "message": "Off the positioning.", "quote": "Lose weight fast."}'));
+select pg_temp.chk('P4: with unsourced passes',
+  public.section_finding_ok('{"type": "drift", "message": "Studies show 45% skip it.", "quote": "Lose weight fast.", "unsourced": ["45"]}'));
+select pg_temp.chk('P4: an objective gap with unsourced passes',
+  public.section_finding_ok('{"type": "objective", "message": "Say 3 in 4 readers.", "quote": "", "unsourced": ["3 in 4"]}'));
+select pg_temp.chk('P4: 10 numbers of 20 characters pass',
+  public.section_finding_ok(jsonb_build_object('type', 'voice', 'message', 'm', 'quote', 'q', 'unsourced', (select jsonb_agg(lpad(i::text, 20, '0')) from generate_series(1, 10) i))));
+select pg_temp.chk('P4: unsourced as a string refused',
+  not public.section_finding_ok('{"type": "drift", "message": "m", "quote": "q", "unsourced": "45"}'));
+select pg_temp.chk('P4: an empty list refused (the key is left out instead)',
+  not public.section_finding_ok('{"type": "drift", "message": "m", "quote": "q", "unsourced": []}'));
+select pg_temp.chk('P4: 11 numbers refused',
+  not public.section_finding_ok(jsonb_build_object('type', 'voice', 'message', 'm', 'quote', 'q', 'unsourced', (select jsonb_agg(i::text) from generate_series(1, 11) i))));
+select pg_temp.chk('P4: a number item refused',
+  not public.section_finding_ok('{"type": "drift", "message": "m", "quote": "q", "unsourced": [45]}'));
+select pg_temp.chk('P4: an empty string refused',
+  not public.section_finding_ok('{"type": "drift", "message": "m", "quote": "q", "unsourced": [""]}'));
+select pg_temp.chk('P4: 21 characters refused',
+  not public.section_finding_ok(jsonb_build_object('type', 'drift', 'message', 'm', 'quote', 'q', 'unsourced', jsonb_build_array(repeat('1', 21)))));
+select pg_temp.chk('P4: a fifth key refused',
+  not public.section_finding_ok('{"type": "drift", "message": "m", "quote": "q", "unsourced": ["45"], "severity": "major"}'));
+select pg_temp.chk('P4: another fourth key refused',
+  not public.section_finding_ok('{"type": "drift", "message": "m", "quote": "q", "severity": "major"}'));
+select pg_temp.chk('P4: the old rules still hold with unsourced (blank message refused)',
+  not public.section_finding_ok('{"type": "drift", "message": "  ", "quote": "q", "unsourced": ["45"]}'));
+-- The service role saves a check whose finding has unsourced (the table check uses the new rule).
+set role service_role;
+select pg_temp.expect('P4: a section check with unsourced saves',
+  format($q$insert into public.section_checks (section_id, user_id, book_id, version_id, findings, areas, words, inputs_key, checked_at)
+            values (%s, '00000000-0000-4000-8000-00000000000a', 'b0000000-0000-4000-8000-000000000001', null,
+                    '[{"type": "drift", "message": "Studies show 45%% skip it.", "quote": "Sit tall.", "unsourced": ["45"]}]',
+                    '{"objective": "pass", "voice": "pass", "drift": "issues"}', 60, '0123456789abcdef', now())$q$, :'S12'), 'OK 1');
 reset role;

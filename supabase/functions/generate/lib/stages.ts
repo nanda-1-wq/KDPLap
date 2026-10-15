@@ -26,7 +26,7 @@ import { locateSection, mdWords, runIsFresh, WRITE_SYSTEM, type WriteContext, wr
 import type { WriteJob } from "./write_run.ts";
 import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove } from "./section_improve.ts";
 import { CHECK, IMPROVE, SECTION_MAX_CHARS } from "./limits.ts";
-import { checkKeyOf, type CheckJob, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM } from "./section_check.ts";
+import { checkKeyOf, type CheckJob, checkKnown, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM } from "./section_check.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -409,7 +409,7 @@ const sectionCheck: StageDef<"section_check", WriteContext> = {
     };
   },
   prompt: (job) => [SECTION_CHECK_SYSTEM, SECTION_CHECK_SCHEMA, job.user],
-  interpret: (job, httpOk, body) => interpretSectionCheck(httpOk, body, job.text, job.hasVoice),
+  interpret: (job, httpOk, body) => interpretSectionCheck(httpOk, body, job.text, job.hasVoice, checkKnown(job.ctx, job.text)),
   save: async (store, job, out, run) => {
     let saved: { checked_at: string; inputs_key: string } | null = null;
     try {

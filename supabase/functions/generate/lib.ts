@@ -61,7 +61,7 @@ export {
   improveWords, interpretImprove, newNames, normalizeMarkers, type StructureChange, structureChange,
 } from "./lib/section_improve.ts";
 export {
-  type CheckArea, type CheckAreas, type CheckJob, checkKeyOf, checkUserMessage, findQuote, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM,
+  type CheckArea, type CheckAreas, type CheckJob, checkKeyOf, checkKnown, checkUserMessage, findQuote, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM,
   sectionCheckKey, type SectionCheckResult, type SectionFinding, voiceParts,
 } from "./lib/section_check.ts";
 export { sseEvent, ssePing, sseReader, type SseEvent } from "./lib/sse.ts";

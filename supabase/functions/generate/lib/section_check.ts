@@ -12,9 +12,11 @@ import { asData, cleanLine, cutWords, obj, type Outcome, readReply, str } from "
 import { briefAndResearch, positioningBlock, positioningValues } from "./context.ts";
 import { CHECK, CHECK_TYPES, type CheckType } from "./limits.ts";
 import { keyHash } from "./outline_check.ts";
-import { locateSection, otherSectionsLine, PART, voiceBlock, withoutShortVoice, type WriteContext, writeVoice } from "./section_write.ts";
+import { outlineUnsourced } from "./outline_ideas.ts";
+import { locateSection, otherSectionsLine, PART, voiceBlock, withoutShortVoice, type WriteContext, writeKnown, writeVoice } from "./section_write.ts";
 
-export type SectionFinding = { type: CheckType; message: string; quote: string };
+/** unsourced (G3 P4): numbers in the message with no source, only when there is one (0023). */
+export type SectionFinding = { type: CheckType; message: string; quote: string; unsourced?: string[] };
 export type CheckArea = "pass" | "issues" | "unclear" | "skipped";
 export type CheckAreas = Record<CheckType, CheckArea>;
 export type SectionCheckResult = { findings: SectionFinding[]; areas: CheckAreas };
@@ -70,6 +72,14 @@ export function checkKeyOf(ctx: WriteContext): string {
     sectionTitle: loc.section.title, lockedAt: ctx.positioning?.locked_at ?? null, penName: ctx.penName ?? null, voice: ctx.pen?.voice,
   });
 }
+
+/**
+ * The sources for the number rule on AI check messages (G3 P4): the Brief,
+ * Research and outline (writeKnown), plus the checked text, so a message
+ * that quotes the text's own number is not flagged twice (the code checks
+ * already flag it in "In your text").
+ */
+export const checkKnown = (ctx: WriteContext, text: string) => [writeKnown(ctx), text].join("\n");
 
 /** True when the pen name has any voice field (tones, reading level, point of view, sentences, paragraphs, sample). */
 export function hasVoice(raw: unknown): boolean {
@@ -173,10 +183,12 @@ export function findQuote(raw: string, text: string): string | null {
  * - a voice finding when the pen name has no voice is left out;
  * - repeats (same type and quote, or same gap message) are dropped; at most
  *   CHECK.maxFindings, in the model's order.
+ * - a number in a message that known (checkKnown) does not have is listed
+ *   in the finding's unsourced (G3 P4, the step 05 rule).
  * Areas: issues (kept findings), unclear (only dropped ones), skipped (voice,
  * no voice set), else pass. An empty list is a valid, counted answer.
  */
-export function interpretSectionCheck(httpOk: boolean, body: unknown, text: string, voice: boolean): Outcome {
+export function interpretSectionCheck(httpOk: boolean, body: unknown, text: string, voice: boolean, known = ""): Outcome {
   const { base, out, fail } = readReply(httpOk, body);
   if (fail || !out) return fail!;
   if (!Array.isArray(out.findings)) return { ...base, status: "failed", counted: false, code: "ai_unavailable" };
@@ -200,7 +212,9 @@ export function interpretSectionCheck(httpOk: boolean, body: unknown, text: stri
     if (seen.has(key)) continue;
     seen.add(key);
     if (quote === "") gaps++;
-    findings.push({ type, message, quote });
+    // The step 05 number rule on the message (G3 P4); the badge shows them.
+    const unsourced = outlineUnsourced(message, known);   // at most 10, each at most 20 characters
+    findings.push(unsourced.length ? { type, message, quote, unsourced } : { type, message, quote });
   }
   const area = (t: CheckType): CheckArea => {
     if (t === "voice" && !voice) return "skipped";

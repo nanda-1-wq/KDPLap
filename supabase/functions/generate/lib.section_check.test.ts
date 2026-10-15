@@ -267,3 +267,29 @@ Deno.test("findQuote: exact, then without wrapping quote marks; &lt; and &gt; tu
   assertEquals(L.findQuote("Most people feel looser within a week. [Verify: no source]", CHECK_TEXT), "Most people feel looser within a week. [Verify: no source]");
   assertEquals(L.findQuote("- Keep both feet flat on the floor", CHECK_TEXT), "- Keep both feet flat on the floor");
 });
+
+/* ── G3 P4: the step 05 number rule on each message ── */
+
+Deno.test("section_check: a number with no source in a message is listed in unsourced; others keep 3 keys", () => {
+  const j = job() as L.CheckJob;
+  const q = "Chair yoga also helps you lose weight fast, so you can drop a dress size by summer.";
+  const out = L.interpretJob(j, true, msg({ findings: [
+    f("drift", "Studies show 45% of readers skip weight advice. Cut it.", q),
+    f("objective", "The Brief speaks to adults over 60, and this part does not.", ""),
+    f("voice", "The text says under 10 rolls but then 12 rolls. Pick one.", "Keep the count under 10 &lt; 12 rolls a day."),
+    f("drift", "Weight loss is not in the locked positioning.", "Gentle movement every day helps more than one long session a week."),
+  ] }));
+  const fs = out.check!.findings;
+  assertEquals(fs[0], { type: "drift", message: "Studies show 45% of readers skip weight advice. Cut it.", quote: q, unsourced: ["45"] });
+  assertEquals(Object.keys(fs[1]).sort(), ["message", "quote", "type"]);   // 60 is in the Brief
+  assertEquals(Object.keys(fs[2]).sort(), ["message", "quote", "type"]);   // 10 and 12 are in the checked text
+  assertEquals(Object.keys(fs[3]).sort(), ["message", "quote", "type"]);   // no number
+});
+
+Deno.test("section_check: at most 10 unsourced numbers of at most 20 characters", () => {
+  const j = job() as L.CheckJob;
+  const message = Array.from({ length: 12 }, (_, i) => `${41 + i}%`).join(", ") + " of readers.";
+  const out = L.interpretJob(j, true, msg({ findings: [f("objective", message, "")] }));
+  assertEquals(out.check!.findings[0].unsourced, ["41", "42", "43", "44", "45", "46", "47", "48", "49", "50"]);
+  assertEquals(L.checkKnown(j.ctx, "Sit 7 times.").endsWith("\nSit 7 times."), true);
+});
