@@ -3,7 +3,9 @@
 // check (mock.js window.__chk answers it): never run, Checking, findings with
 // Fix with Improve (no AI call until an action), an objective gap with no Fix,
 // pass / skipped / unclear rows, quote gone, out of date (a save, an unlock, a
-// voice change), Save and check (autosave paused until the call is sent),
+// voice change, a sibling renamed, a new word target), Save and check (the
+// editor read only and autosave paused until the call is sent, G3 P3), the
+// "Verify: no source" badge on a message (G3 P4), a lost connection (G3 P8),
 // errors and limits, every locked reason, under 50 and over 6,000 words,
 // Research numbers, open marks, the Needs review button, a load error, and
 // Final with warnings. Screenshots at 1440 and 900 px.
@@ -53,8 +55,11 @@ const test = async page => {
   /** The fingerprint the server would save for a section now (js/section-check-key.js, same as the function). */
   const keyOf = (sid, bid = W1) => {
     const { c, s } = st.sectionOf(sid);
-    return g((p) => window.kdpSectionCheckKey(p), { versionId: s.current_version_id, kind: c.kind, chapterTitle: c.title, objective: c.objective, sectionTitle: s.title,
-      lockedAt: st.books[bid].pos ? st.books[bid].pos.locked_at : null, penName: 'Nora Hale', voice: st.penVoice });
+    // G3 P10: the word target and the chapter's other sections are parts of the key.
+    return g(([p, secs]) => window.kdpSectionCheckKey({ ...p, siblings: window.kdpSectionCheckKey.siblings(p.kind, secs, p.sid) }),
+      [{ sid, versionId: s.current_version_id, kind: c.kind, chapterTitle: c.title, objective: c.objective, sectionTitle: s.title,
+        lockedAt: st.books[bid].pos ? st.books[bid].pos.locked_at : null, penName: 'Nora Hale', voice: st.penVoice, wordTarget: s.word_target },
+       c.sections.map((x) => ({ id: x.id, title: x.title }))]);
   };
   /** The server's reply (and its saved row, so a reload shows it). */
   const result = async (sid, findings, areas, bid = W1) => {
@@ -256,7 +261,6 @@ const test = async page => {
   ok(/The AI service did not respond\. If the AI had already finished, this call may still count\. Try again/.test(await txt('.wr-chk-group:last-child'))
     && !/Nothing was counted/.test(await txt('.wr-chk-group:last-child')), `network: may count: "${await txt('.wr-chk-group:last-child .alert')}"`);
 
-
   // 8. Final with warnings, and the step's state: checks never block (decision 6).
   await page.selectOption('[data-status]', 'final');
   await page.waitForTimeout(400);
@@ -281,6 +285,25 @@ const test = async page => {
   await checksTab();
   ok(/Out of date/.test(await txt('.wr-chk-group:last-child')), 'the pen name’s voice changed: out of date');
   st.penVoice = {};
+  // G3 P10: a sibling section renamed, or a new word target, makes the check out of date.
+  const sec = st.sectionOf(st.s42);
+  st.checks[st.s42].inputs_key = await keyOf(st.s42);
+  await open(W1, st.s42);
+  await checksTab();
+  ok(!/Out of date/.test(await txt('.wr-chk-group:last-child')), 'P10: with the new key parts the saved check is current');
+  const sib = sec.c.sections.find((x) => x.id !== st.s42);
+  const sibTitle = sib.title;
+  sib.title = `${sibTitle} (renamed)`;
+  await open(W1, st.s42);
+  await checksTab();
+  ok(/Out of date/.test(await txt('.wr-chk-group:last-child')), 'P10: a sibling section renamed in 05: out of date');
+  sib.title = sibTitle;
+  const target = sec.s.word_target;
+  sec.s.word_target = (target || 0) + 100;
+  await open(W1, st.s42);
+  await checksTab();
+  ok(/Out of date/.test(await txt('.wr-chk-group:last-child')), 'P10: a new word target: out of date');
+  sec.s.word_target = target;
   // G3 P4: a message with a number with no source shows the step 05 badge; the others none.
   const findings0 = st.checks[st.s42].findings;
   st.checks[st.s42].findings = [{ ...FINDINGS[0], message: 'Studies say 45% of readers skip this. Speak to the reader as "you".', unsourced: ['45'] }, FINDINGS[2]];

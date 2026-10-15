@@ -78,7 +78,9 @@
       const pen = one(book().pen_names) || {};
       return kdpSectionCheckKey({
         versionId: c.base, kind: hit.c.kind, chapterTitle: hit.c.title, objective: hit.c.objective, sectionTitle: hit.s.title,
-        lockedAt: pos.locked_at || null, penName: pen.name || null, voice: pen.voice
+        lockedAt: pos.locked_at || null, penName: pen.name || null, voice: pen.voice,
+        // G3 P10: the word target and the chapter's other sections, as the prompt sends them.
+        wordTarget: hit.s.word_target, siblings: kdpSectionCheckKey.siblings(hit.c.kind, hit.c.sections, hit.s.id)
       });
     }
 
