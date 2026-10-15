@@ -392,5 +392,5 @@
     return { panelHtml, count, open, onInput, loadResearch, run, refresh, handleClick, aiWhy };
   }
 
-  window.kdpWriteChecks = { create, LIMITS };
+  window.kdpWriteChecks = { create };
 })();

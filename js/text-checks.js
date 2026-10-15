@@ -292,5 +292,5 @@
     return { rows, warnings: rows.filter((r) => r.kind === 'warn').length, empty: false };
   }
 
-  root.kdpTextChecks = { check, mark, knownOf, plural, MARKER };
+  root.kdpTextChecks = { check, mark, knownOf };
 })(globalThis);

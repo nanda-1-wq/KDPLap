@@ -960,5 +960,5 @@
     };
   }
 
-  window.kdpWriteImprove = { create, LIMITS };
+  window.kdpWriteImprove = { create };
 })();
