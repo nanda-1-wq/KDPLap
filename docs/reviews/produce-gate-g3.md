@@ -1,6 +1,6 @@
 # PRODUCE gate G3: fixes that change behaviour
 
-Status: 2026-10-15, branch `claude/produce-gate`. STOP 2 done: the server part is committed and pushed, and the owner applied 0023 (through Claude chat). STOP 3 done: the browser part is built, every suite is green, and it is committed and pushed after "commit and push". **Next:** the owner deploys generate v20, and the live check runs after "live".
+Status: 2026-10-15, branch `claude/produce-gate`. STOP 2 done: the server part is committed and pushed, and the owner applied 0023 (through Claude chat). STOP 3 done: the browser part is built, every suite is green, and it is committed and pushed after "commit and push". The owner deployed generate v20 (from `ed15fde`). **Live check done** (section 7): 2 AI calls, ai_usage rows 215 and 216, about $0.049 of the $0.15 budget. All checks that could run passed.
 Plan: `docs/reviews/2026-10-15-g3-plan.md` (with the owner's 3 changes at the top).
 Source: `docs/reviews/produce-gate-g1.md` (P1, P3 to P10, section 7 owner answers) and `docs/reviews/produce-gate-g2.md`.
 
@@ -208,3 +208,26 @@ Files shared by several findings were staged hunk by hunk. The mixed blocks in `
    - P6: Generate one section with a 2,000-word aim and read `end_reason`.
    - P10: an old check shows "Out of date" once.
    The report will list the `ai_usage` rows used.
+
+## 7. Live check (2026-10-15, generate v20 from `ed15fde`, 0023 applied)
+
+Test account, signed in by loading `.env.test` into the login form in the shell, with output discarded (never read or printed). Book 4e2dde85, local site on port 5500 from `ed15fde`. ai_usage max id before: 214.
+
+| Step | What ran | Result |
+|---|---|---|
+| P10, old checks | Opened 1.2 and the Introduction, which have checks saved before G3. The checked version = the current version and there is no draft, so only the key could have changed. | **Pass.** Both show "Out of date". |
+| P4 + P10 once | "Check again" on 1.2: one AI check (row **215**). Then a reload. | **Pass.** 3 findings, none with a number in its message, so no badge and the saved row has the 3-key shape (as designed: "if one appears"). After the reload the new check is current: "Out of date" showed once. |
+| P1 | `outline_ideas` sent directly (the 05 button is off on this book: every section has writing). | **Pass (refusal half).** 409 `has_writing`, no AI call, no usage row. v20 reads "has writing" from `outline_json` without error. The positive half (Regenerate runs after a discarded partial) needs a book whose only writing is a discarded partial, which this book cannot be. The owner chose to keep the refusal check, plus the unit test (handler) and the SQL test (`t0023`, `outline_json` gives `has_writing` false for a discarded partial). |
+| P6 | Owner's choice: 7.1 (Conclusion) target 300 → 2,400 in 05, so the aim is 2,000. Then one Generate (row **216**). | **Pass.** `end_reason = complete`, exact tokens (5,257 in, 2,610 out), 27 s. `reserved_tokens = 9,284` = input estimate + **4,200** (the new cap is live). It wrote 1,606 new words (343 → 1,949), v6 "Continued". |
+
+Cleanup (no AI calls): 7.1 restored to its v5 text as v7 "Restored from v5" (343 words, the same text as v5; nothing overwritten). Target back to 300. Status still Final. The target edit had cleared the outline approval, so the outline was approved again (`approve_outline`).
+
+| ai_usage row | Stage | Tokens in / out | Counted | Cost (Sonnet 5.5, $2 in / $10 out per million) |
+|---|---|---|---|---|
+| 215 | section_check | 4,838 / 280 | yes | $0.0125 |
+| 216 | section_write | 5,257 / 2,610 | yes | $0.0366 |
+| **Total** | | | | **$0.0491** |
+
+**Observation for P6:** this reply used **1.63 tokens a word** (2,610 tokens for 1,606 words by the `md_word_count` rule, which counts neither the Markdown marks nor the markers). E10.2 measured 1.37. The factor 2.0 assumes at most 1.6 tokens a word for a reply 25% over the aim. At 1.63 tokens a word, a 2,500-word reply needs about 4,075 tokens: still under 4,200, but only about 125 to spare. If more runs show 1.6 or more, the next step would be a factor of 2.1 (cap 4,400). It stays a watch item, not a fix: this run ended "complete" well under the cap.
+
+Left as is: the Introduction and 1.1 still show their pre-G3 checks as "Out of date" (expected, per P10). 1.2 now has a current check.
