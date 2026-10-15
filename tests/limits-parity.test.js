@@ -190,9 +190,9 @@ Deno.test("section text: 100,000 characters in the browser, the server and 0018 
 
 Deno.test("Generate section: words per call, max_tokens, the soft deadline, the stale run and 100,000 in 0020 (owner, E10.2)", () => {
   const f = M("0020_generate_section.sql");
-  // 2,000 words a call; max_tokens = 2,000 × 1.6 + 200 (answer 10).
+  // 2,000 words a call; max_tokens = 2,000 × 2.0 + 200 (answer 10, G3 P6).
   assertEquals(L.WRITE.wordsPerCall, 2000);
-  assertEquals(L.MAX_TOKENS.section_write, Math.ceil(L.WRITE.wordsPerCall * 1.6) + 200);
+  assertEquals(L.MAX_TOKENS.section_write, Math.ceil(L.WRITE.wordsPerCall * 2) + 200);
   // The soft deadline is the stage timeout (100 s).
   assertEquals(L.TIMEOUT_MS.section_write, 100_000);
   assertEquals(L.WRITE_TIMING.softDeadlineMs, L.TIMEOUT_MS.section_write);

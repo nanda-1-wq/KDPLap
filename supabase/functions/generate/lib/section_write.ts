@@ -79,7 +79,9 @@ export function mdWords(md: string): number {
  *   Under the target: what is left, at least WRITE.minWords, at most 2,000.
  *   At the target or past it: the browser asks first (rule B); with more = true,
  *   WRITE.moreWords; without it, null (target_reached).
- * max_tokens follows: ceil(aim × 1.6) + 200, at most MAX_TOKENS.section_write.
+ * max_tokens follows: ceil(aim × 2.0) + 200, at most MAX_TOKENS.section_write
+ * (4,200). G3 P6: a reply 25% over the aim, at 1.6 tokens a word (1.37 measured
+ * in E10.2, plus Markdown and markers), still ends before max_tokens.
  */
 export function writeAim(target: number | null, have: number, more: boolean): { aim: number; maxTokens: number } | null {
   let aim: number;
@@ -89,7 +91,7 @@ export function writeAim(target: number | null, have: number, more: boolean): { 
     aim = WRITE.moreWords;
   } else aim = Math.max(WRITE.minWords, target - have);
   aim = Math.min(aim, WRITE.wordsPerCall);
-  return { aim, maxTokens: Math.min(MAX_TOKENS.section_write, Math.ceil(aim * 1.6) + 200) };
+  return { aim, maxTokens: Math.min(MAX_TOKENS.section_write, Math.ceil(aim * 2) + 200) };
 }
 
 /** Our token estimate for text we saw but the AI did not count (Stop, failures): 3.0 characters a token (STOP 2 measured 2.97 and 3.06). */

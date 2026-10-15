@@ -20,17 +20,17 @@ Deno.test("input: exact keys, uuids, a null or uuid base, more only as true", ()
 });
 
 Deno.test("words per call: at most 2,000 (owner); the target; no target; rule B", () => {
-  assertEquals(L.writeAim(450, 0, false), { aim: 450, maxTokens: 920 });
-  assertEquals(L.writeAim(450, 310, false), { aim: 140, maxTokens: 424 });
-  assertEquals(L.writeAim(450, 430, false), { aim: 50, maxTokens: 280 });            // at least 50
-  assertEquals(L.writeAim(2500, 0, false), { aim: 2000, maxTokens: 3400 });          // 2,000 a call, max_tokens 3,400
-  assertEquals(L.writeAim(10000, 300, false), { aim: 2000, maxTokens: 3400 });
-  assertEquals(L.writeAim(null, 0, false), { aim: 500, maxTokens: 1000 });            // no target
-  assertEquals(L.writeAim(0, 900, false), { aim: 500, maxTokens: 1000 });
+  assertEquals(L.writeAim(450, 0, false), { aim: 450, maxTokens: 1100 });
+  assertEquals(L.writeAim(450, 310, false), { aim: 140, maxTokens: 480 });
+  assertEquals(L.writeAim(450, 430, false), { aim: 50, maxTokens: 300 });            // at least 50
+  assertEquals(L.writeAim(2500, 0, false), { aim: 2000, maxTokens: 4200 });          // 2,000 a call, max_tokens 4,200 (G3 P6)
+  assertEquals(L.writeAim(10000, 300, false), { aim: 2000, maxTokens: 4200 });
+  assertEquals(L.writeAim(null, 0, false), { aim: 500, maxTokens: 1200 });            // no target
+  assertEquals(L.writeAim(0, 900, false), { aim: 500, maxTokens: 1200 });
   assertEquals(L.writeAim(450, 450, false), null);                                     // at the target: ask first (rule B)
   assertEquals(L.writeAim(450, 700, false), null);
-  assertEquals(L.writeAim(450, 700, true), { aim: 300, maxTokens: 680 });              // "Write more anyway"
-  assertEquals(L.MAX_TOKENS.section_write, 3400);
+  assertEquals(L.writeAim(450, 700, true), { aim: 300, maxTokens: 800 });              // "Write more anyway"
+  assertEquals(L.MAX_TOKENS.section_write, 4200);
   assertEquals(L.TIMEOUT_MS.section_write, 100_000);                                   // the soft deadline
 });
 

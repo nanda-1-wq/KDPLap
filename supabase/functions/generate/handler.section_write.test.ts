@@ -56,7 +56,7 @@ Deno.test("section_write complete: streamed text, a normal version, counted with
   });
   // The request: streamed, max_tokens from 450 words.
   const sent = JSON.parse(String(calls[0].init.body));
-  assertEquals([sent.stream, sent.max_tokens, sent.output_config], [true, 920, { effort: "low" }]);
+  assertEquals([sent.stream, sent.max_tokens, sent.output_config], [true, 1100, { effort: "low" }]);
   assert(!("format" in sent.output_config));
   // Rule C: the usage row is the run's own (begin and finish); heartbeats add none.
   assertEquals(logged, []);

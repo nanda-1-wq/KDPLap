@@ -7738,7 +7738,7 @@ snapshot[`snapshot: interpretResponse 1`] = `
 
 snapshot[`writeRequest section_write 1`] = `
 {
-  max_tokens: 920,
+  max_tokens: 1100,
   messages: [
     {
       content: \`<brief>
