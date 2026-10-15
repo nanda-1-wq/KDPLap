@@ -177,9 +177,8 @@
           ok: 'Save and check', cancel: 'Cancel'
         });
         if (!yes || !ready() || cur().id !== id) return;
+        // The editor is read only and autosave paused until the call is sent (extra fix A, G3 P3).
         host.pauseDrafts(true);
-        // Typing during the save stays on screen; its draft waits until the call is sent (extra fix A),
-        // and the result then shows "Out of date".
         const ok = await host.saveFirst();
         if (!ok || !ready() || cur().id !== id) { host.pauseDrafts(false); refresh(); return; }
       } else host.pauseDrafts(true);

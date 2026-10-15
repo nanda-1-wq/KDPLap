@@ -1218,8 +1218,10 @@
       imp: () => imp,
       confirm: confirmDialog,
       // Extra fix A: no draft write from "Save and check" until the check call is sent.
+      // G3 P3: the editor is read only for that window too (hold 2, as Accept), so
+      // nothing typed can be lost if the tab closes before the draft is sent.
       pauseDrafts: (on) => {
-        holdDrafts = !!on;
+        hold(on ? 2 : 0);
         // Typing during the pause was not sent as a draft: send it now.
         if (!on && dirty() && saver) saver.edit('draft', 800);
       },

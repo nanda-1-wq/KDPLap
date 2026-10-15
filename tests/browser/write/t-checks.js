@@ -171,7 +171,8 @@ const test = async page => {
   await page.click('[data-chk-row="opener"] [data-chk-show]');
   ok((await selected()) === 'You sit tall. You breathe out. You roll back.', `Show selects the 3 sentences: "${await selected()}"`);
 
-  // 6. Save and check: Cancel sends nothing; Save and check saves first, autosave paused until the call is sent.
+  // 6. Save and check: Cancel sends nothing; Save and check saves first; the editor is read only and
+  // autosave paused until the call is sent (G3 P3: typing in that window can never be lost).
   await caretEnd();
   await page.keyboard.type(' Rest.');
   await page.click('[data-chk-run]');
@@ -188,9 +189,12 @@ const test = async page => {
   const t0 = Date.now();
   await page.click('dialog[open] [data-ask-yes]');
   await page.waitForTimeout(150);
-  // Typed while the version saves: kept on screen; its draft waits until the call is sent.
+  const edState = () => g(() => { const ed = document.querySelector('[data-editor]'); return [ed.getAttribute('contenteditable'), ed.getAttribute('aria-readonly')]; });
+  ok(JSON.stringify(await edState()) === '["false","true"]', `read only while the version saves, as during Accept: ${JSON.stringify(await edState())}`);
+  const shown = await g(() => document.querySelector('[data-editor]').innerText);
   await caretEnd();
   await page.keyboard.type(' Done.');
+  ok(await g(() => document.querySelector('[data-editor]').innerText) === shown, 'typing while the version saves adds nothing (nothing on screen to lose)');
   await until(() => window.__chk.requests.length === 2, null, 6000);
   modes.versionDelay = 0;
   const sentAt = await g(() => window.__chk.requests[1].at);
@@ -200,8 +204,13 @@ const test = async page => {
   const saveAt = (tl.find(([w]) => w === 'save_version') || [])[1];
   ok(saveAt && saveAt < sentAt && r2.baseVersionId === v5, `order: save_version (v5) first, then the check on it: ${JSON.stringify(r2)}`);
   ok(!tl.some(([w, at]) => w === 'draft' && at >= saveAt && at <= sentAt), `no draft write between the save and the call (autosave paused): ${JSON.stringify(tl.map(([w, at]) => [w, at - t0]))} sent ${sentAt - t0}`);
+  await until(() => document.querySelector('[data-editor]').getAttribute('contenteditable') === 'true', null, 3000);
+  ok((await edState())[1] === 'false' && /You can keep writing\./.test(await txt('.wr-chk-group:last-child')), 'editable again once the call is sent ("You can keep writing")');
+  // Typed after the call is sent: kept, and sent as a draft.
+  await caretEnd();
+  await page.keyboard.type(' Done.');
   await page.waitForTimeout(1300);
-  ok(st.timeline.some(([w, at]) => w === 'draft' && at > sentAt) && /Done\.$/.test(st.drafts[st.s42] ? st.drafts[st.s42].content : ''), 'the typing during the save is sent as a draft after the call');
+  ok(st.timeline.some(([w, at]) => w === 'draft' && at > sentAt) && /Done\.$/.test(st.drafts[st.s42] ? st.drafts[st.s42].content : ''), 'typing after the call is sent goes out as a draft');
   // Pass, skipped and unclear rows (and the result is out of date: typed after the save).
   await result(st.s42, [], { objective: 'pass', voice: 'skipped', drift: 'unclear' });
   await page.waitForSelector('[data-chk-area="objective"]', { timeout: 5000 });
