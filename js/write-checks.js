@@ -305,7 +305,10 @@
     }
 
     function findingHtml(f, i, old) {
-      const head = `<span class="wr-chk-type">${ICON.warn(14)}${TYPE[f.type]}</span><p class="wr-chk-msg">${esc(f.message)}</p>`;
+      // G3 P4: numbers in the message with no source, with the step 05 badge.
+      const nums = Array.isArray(f.unsourced) ? f.unsourced : [];
+      const badge = nums.length ? `<span class="check-badge warn">${ICON.warn()}Verify: no source for ${esc(nums.join(', '))}</span>` : '';
+      const head = `<span class="wr-chk-type">${ICON.warn(14)}${TYPE[f.type]}</span><p class="wr-chk-msg">${esc(f.message)}</p>${badge}`;
       if (!f.quote) {
         // An objective gap (decision 1): nothing to select, no Fix.
         return `<div class="wr-chk-find${old ? ' is-old' : ''}" data-chk-finding="${i}">${head}<span class="wr-chk-gap">MISSING FROM THE TEXT</span>

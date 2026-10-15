@@ -3108,6 +3108,8 @@ div.delete-text p { margin: 0; }
 .wr-chk-type { display: inline-flex; align-items: center; gap: var(--space-1); font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); }
 .wr-chk-type svg { color: var(--warning); }
 .wr-chk-msg { margin: 0; font-size: var(--text-md); line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
+/* G3 P4: the step 05 "Verify: no source" badge on an AI finding wraps in the narrow panel (as .ttl-chips). */
+.wr-chk-find .check-badge { white-space: normal; }
 .wr-chk-quote {
   margin: 0; align-self: stretch; padding-left: var(--space-2); border-left: 3px solid var(--stone-2);
   font-family: var(--font-read); font-size: var(--text-md); line-height: 1.55; color: var(--ink-2); overflow-wrap: anywhere;

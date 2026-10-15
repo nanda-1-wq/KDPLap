@@ -270,6 +270,16 @@ const test = async page => {
   await checksTab();
   ok(/Out of date/.test(await txt('.wr-chk-group:last-child')), 'the pen name’s voice changed: out of date');
   st.penVoice = {};
+  // G3 P4: a message with a number with no source shows the step 05 badge; the others none.
+  const findings0 = st.checks[st.s42].findings;
+  st.checks[st.s42].findings = [{ ...FINDINGS[0], message: 'Studies say 45% of readers skip this. Speak to the reader as "you".', unsourced: ['45'] }, FINDINGS[2]];
+  await open(W1, st.s42);
+  await checksTab();
+  await page.waitForSelector('[data-chk-finding="1"]', { timeout: 5000 });
+  ok((await txt('[data-chk-finding="0"] .check-badge.warn')) === 'Verify: no source for 45', `P4: the badge: "${await txt('[data-chk-finding="0"] .check-badge')}"`);
+  ok(!(await has('[data-chk-finding="1"] .check-badge')), 'P4: no badge on a message without a number');
+  ok(await shots('verify-badge') === false, 'P4 badge: no sideways scroll at 900 px');
+  st.checks[st.s42].findings = findings0;
 
   // 10. Research numbers are known: no number row; with no warnings the tab shows no count.
   st.research.sources = [{ id: 'a1000000-0000-4000-8000-000000000001', kind: 'source', body: 'In a small trial, shoulder rolls cut neck pain by 40%.', citation: 'Neck Trial, 2021', created_at: new Date().toISOString() }];
