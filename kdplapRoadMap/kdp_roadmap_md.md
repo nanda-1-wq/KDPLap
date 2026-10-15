@@ -23,7 +23,9 @@ Design: ✅ approved (see `design/`)
   - E10.2 Generate section (streaming): done (0020, generate v16, merged 81a2e34)
   - E10.3 Improve menu: done (0021, generate v18, merged ec664c1)
   - E10.4 Checks tab: done (0022, generate v19, merged cd9966f)
-- [ ] **E11** Export DOCX + Markdown · Settings + AI usage ← next
+- [ ] **PRODUCE gate** (after E10) ← next: G4 owner walk-through, G1 review, G2 clean-up, G3 fixes done (0023, generate v20, live check passed, merged 537d2cd). Results in `docs/reviews/produce-gate-g1.md` to `produce-gate-g3.md`.
+  - Open: G5 (severity, Keep as is, Fix with Custom, Fix major queue; design 22d first), G6 (re-run suites, close the gate)
+- [ ] **E11** Export DOCX + Markdown · Settings + AI usage
 - [ ] **E12** Real test: write one full book, fix what hurts
 
 ## v2 · KDP-ready files
