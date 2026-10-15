@@ -51,17 +51,32 @@ export function voiceParts(raw: unknown): string[] {
 }
 
 /**
+ * The other sections of a chapter as the prompt lists them (<other_sections>):
+ * "<n> <title>" in order, n = the section's place in the chapter. Chapters
+ * only; the introduction and the conclusion have none (G3 P10).
+ */
+export function siblingParts(kind: string, sections: { id: string; title: string | null }[], ownId: string): string[] {
+  if (kind !== "chapter") return [];
+  return sections.map((s, j) => ({ s, j })).filter(({ s }) => s.id !== ownId).map(({ s, j }) => `${j + 1} ${text(s.title)}`);
+}
+
+/**
  * A short fingerprint (16 hex, keyHash, not a security feature) of what the
  * check reads besides the Brief and Research: the version id, the chapter's
  * kind, title and objective, the section title, the positioning lock time,
- * the pen name and its voice. A change to any of them shows the saved result
- * "Out of date". js/section-check-key.js has the same function (Part 2).
+ * the pen name and its voice, and (G3 P10) the word target and the other
+ * sections of the chapter (siblingParts). A change to any of them shows the
+ * saved result "Out of date". js/section-check-key.js has the same function.
  */
 export function sectionCheckKey(p: {
   versionId: string; kind: string; chapterTitle: string | null; objective: string | null; sectionTitle: string | null;
-  lockedAt: string | null; penName: string | null; voice: unknown;
+  lockedAt: string | null; penName: string | null; voice: unknown; wordTarget?: number | null; siblings?: string[];
 }): string {
-  return keyHash([p.versionId, p.kind, text(p.chapterTitle), text(p.objective), text(p.sectionTitle), text(p.lockedAt), text(p.penName), ...voiceParts(p.voice)].join("\u0001"));
+  const target = typeof p.wordTarget === "number" && p.wordTarget > 0 ? String(p.wordTarget) : "";
+  return keyHash([
+    p.versionId, p.kind, text(p.chapterTitle), text(p.objective), text(p.sectionTitle), text(p.lockedAt), text(p.penName), ...voiceParts(p.voice),
+    target, (p.siblings ?? []).map(text).join("\u0002"),
+  ].join("\u0001"));
 }
 
 /** The key of a Write context (the current version must exist). */
@@ -70,6 +85,7 @@ export function checkKeyOf(ctx: WriteContext): string {
   return sectionCheckKey({
     versionId: ctx.current!.id, kind: loc.chapter.kind, chapterTitle: loc.chapter.title, objective: loc.chapter.objective,
     sectionTitle: loc.section.title, lockedAt: ctx.positioning?.locked_at ?? null, penName: ctx.penName ?? null, voice: ctx.pen?.voice,
+    wordTarget: loc.section.word_target, siblings: siblingParts(loc.chapter.kind, loc.chapter.sections, loc.section.id),
   });
 }
 

@@ -94,11 +94,12 @@ Deno.test("sectionCheckKey: 16 hex; each part changes it; Brief and Research edi
   assert(!changed({ ...ctx, brief: { ...ctx.brief, target_reader: "Adults over 70" } }), "Brief");
   assert(!changed({ ...ctx, sources: [] }), "Research");
   assert(!changed({ ...ctx, draft: "Typed." }), "draft");
-  assert(!changed(withChapter((c) => ({ ...c, sections: c.sections.map((s, j) => (j === 1 ? { ...s, word_target: 600 } : s)) }))), "word target");
+  // G3 P10: the word target is in the key now (the prompt sends it).
+  assert(changed(withChapter((c) => ({ ...c, sections: c.sections.map((s, j) => (j === 1 ? { ...s, word_target: 600 } : s)) }))), "word target");
   // Pinned, so a change to the parts or the hash shows (the browser copy must match, Part 2).
   assertEquals(L.sectionCheckKey({ versionId: V_ID, kind: "chapter", chapterTitle: " Upper Body ", objective: "Six moves", sectionTitle: "Shoulder rolls",
     lockedAt: "2026-10-01T09:00:00Z", penName: "Nora Hale", voice: { tones: ["warm", "practical"], reading_level: "general", sample: "Sit tall." } }),
-    L.keyHash([V_ID, "chapter", "Upper Body", "Six moves", "Shoulder rolls", "2026-10-01T09:00:00Z", "Nora Hale", "warm,practical", "general", "", "", "", "Sit tall."].join("\u0001")));
+    L.keyHash([V_ID, "chapter", "Upper Body", "Six moves", "Shoulder rolls", "2026-10-01T09:00:00Z", "Nora Hale", "warm,practical", "general", "", "", "", "Sit tall.", "", ""].join("\u0001")));   // G3 P10: target and siblings (none here)
 });
 
 Deno.test("keyHash: the outline key is unchanged by the split (pinned E9.2 value)", () => {
@@ -292,4 +293,19 @@ Deno.test("section_check: at most 10 unsourced numbers of at most 20 characters"
   const out = L.interpretJob(j, true, msg({ findings: [f("objective", message, "")] }));
   assertEquals(out.check!.findings[0].unsourced, ["41", "42", "43", "44", "45", "46", "47", "48", "49", "50"]);
   assertEquals(L.checkKnown(j.ctx, "Sit 7 times.").endsWith("\nSit 7 times."), true);
+});
+
+Deno.test("checkKeyOf: a sibling title, the siblings' order and the word target change the key (G3 P10)", () => {
+  const ctx = checkCtx();
+  const k = L.checkKeyOf(ctx);
+  const edit = (f: (rows: L.WriteChapterRow[]) => void) => {
+    const c = checkCtx();
+    c.outline = structuredClone(c.outline);
+    f(c.outline);
+    return L.checkKeyOf(c);
+  };
+  assert(edit((o) => { o[4].sections[0].title = "Neck turns"; }) !== k, "sibling renamed");
+  assert(edit((o) => { o[4].sections.reverse(); }) !== k, "siblings moved");
+  assert(edit((o) => { o[4].sections[1].word_target = 600; }) !== k, "target changed");
+  assertEquals(edit((o) => { o[3].sections[0].title = "Elsewhere"; }), k);   // another chapter's section: not read
 });

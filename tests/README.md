@@ -98,7 +98,8 @@ deno test --allow-read tests/selection-in-text.test.js
   120%, never counted), and under 30 ms on a 16,000-word section.
 - `section-check-key.test.js`: the section check fingerprint in the browser
   (`js/section-check-key.js`) and in the function (`lib/section_check.ts`)
-  give the same key, and a pinned value.
+  give the same key, and a pinned value; the word target and the other
+  sections of the chapter are parts of it (G3 P10).
 - `selection-in-text.test.js` (G3 P9): the browser's own selection and context
   (`js/sentences.js` snap and context) on Markdown with bold, italic, list
   items, headings and a marker, and the whole section, all pass the

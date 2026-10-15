@@ -4,13 +4,16 @@
                                tested by tests/section-check-key.test.js)
 
    kdpSectionCheckKey({ versionId, kind, chapterTitle, objective, sectionTitle,
-                        lockedAt, penName, voice }) → 16 hex
+                        lockedAt, penName, voice, wordTarget, siblings }) → 16 hex
+   kdpSectionCheckKey.siblings(kind, sections, ownId) → ['1 Title', ...]
 
    A short fingerprint (a plain hash, not a security feature) of what the AI
    section check reads besides the Brief and Research: the version id, the
    chapter's kind, title and objective, the section title, the positioning
    lock time, the pen name and its voice fields as stored (tones, reading
-   level, perspective, sentences, paragraphs, sample). The generate function
+   level, perspective, sentences, paragraphs, sample), and (G3 P10) the word
+   target and the chapter's other sections as the prompt lists them
+   ("<n> <title>", chapters only). The generate function
    saves the same key with each check (supabase/functions/generate/lib/
    section_check.ts sectionCheckKey); when the key of what is on screen
    differs, the check is "Out of date". The hash is js/outline-key.js's.
@@ -40,9 +43,20 @@
     return [tones, text(j.reading_level), text(j.perspective), text(j.sentences), text(j.paragraphs), text(j.sample)];
   }
 
-  function sectionCheckKey(p) {
-    return keyHash([p.versionId, p.kind, text(p.chapterTitle), text(p.objective), text(p.sectionTitle), text(p.lockedAt), text(p.penName), ...voiceParts(p.voice)].join('\u0001'));
+  /** The chapter's other sections as "<n> <title>" in order (chapters only), as the prompt's <other_sections>. */
+  function siblingParts(kind, sections, ownId) {
+    if (kind !== 'chapter') return [];
+    return (sections || []).map((s, j) => ({ s, j })).filter(({ s }) => s.id !== ownId).map(({ s, j }) => `${j + 1} ${text(s.title)}`);
   }
 
+  function sectionCheckKey(p) {
+    const target = typeof p.wordTarget === 'number' && p.wordTarget > 0 ? String(p.wordTarget) : '';
+    return keyHash([
+      p.versionId, p.kind, text(p.chapterTitle), text(p.objective), text(p.sectionTitle), text(p.lockedAt), text(p.penName), ...voiceParts(p.voice),
+      target, (p.siblings || []).map(text).join('\u0002')
+    ].join('\u0001'));
+  }
+
+  sectionCheckKey.siblings = siblingParts;
   root.kdpSectionCheckKey = sectionCheckKey;
 })(globalThis);
