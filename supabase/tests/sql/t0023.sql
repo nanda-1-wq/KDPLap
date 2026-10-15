@@ -1,5 +1,6 @@
 -- 0023 G3 fixes: the book-level "has writing" the generate function now reads
--- (outline_json, P1) and the optional "unsourced" list on an AI section finding (P4).
+-- (outline_json, P1), write_cut and the 100,000 cut in finish and recover
+-- (P5), and the optional "unsourced" list on an AI section finding (P4).
 -- Run: supabase/tests/sql/run.sh t0023.sql
 \ir helpers.sql
 
@@ -75,6 +76,58 @@ reset role;
 set role service_role;
 select public.section_run_finish(:R2, '', true, 'user_stop', 'stopped', true, 1, 0, true) is not null as f2 \gset
 reset role;
+
+-- ── P5: write_cut, the same cases as cutText (lib.section_write.test.ts) ──
+set role service_role;
+select pg_temp.chk('P5 cut: under the cap: unchanged', public.write_cut('Sit tall.', 20) = 'Sit tall.');
+select pg_temp.chk('P5 cut: the cut at a word end', public.write_cut('Sit tall and breathe slowly now.', 20) = 'Sit tall and breathe');
+select pg_temp.chk('P5 cut: inside a word: back to the last space', public.write_cut('Sit tall and breathing slowly.', 20) = 'Sit tall and');
+select pg_temp.chk('P5 cut: at the space inside a marker: back to the marker start',
+  public.write_cut('Pain drops 40%. [Verify: no source] Then rest.', 25) = 'Pain drops 40%.');
+select pg_temp.chk('P5 cut: inside a word of a marker: back to the marker start',
+  public.write_cut('Pain drops 40%. [Verify: no source] Then rest.', 30) = 'Pain drops 40%.');
+select pg_temp.chk('P5 cut: a whole marker is kept',
+  public.write_cut('Pain drops 40%. [Verify: no source] Then rest.', 36) = 'Pain drops 40%. [Verify: no source]');
+select pg_temp.chk('P5 cut: no whitespace: the hard cut', public.write_cut(repeat('x', 30), 20) = repeat('x', 20));
+select pg_temp.chk('P5 cut: a line break counts as a space', public.write_cut(E'One two.\n\nThree four five six', 12) = 'One two.');
+select pg_temp.chk('P5 cut: a vertical tab counts as a space, the letter v does not',
+  public.write_cut('vvvv' || chr(11) || 'vvvvvvvv', 8) = 'vvvv');
+select pg_temp.chk('P5 cut: null stays null', public.write_cut(null, 20) is null);
+
+-- finish: the joined text over 100,000 with the cut inside a marker.
+select public.section_run_begin(:A, :BOOK1, :S12, :R3, null, 5000, 'm') is not null as b3 \gset
+select public.section_run_finish(:R3, repeat('x', 99990) || ' [Verify: no source] Then rest.', false, 'complete', 'ok', true, 10, 5, false) as f3 \gset
+select pg_temp.chk('P5 finish: capped, partial', (:'f3'::jsonb ->> 'capped')::boolean and (:'f3'::jsonb ->> 'partial')::boolean, :'f3');
+select pg_temp.chk('P5 finish: cut before the marker, no fragment',
+  (select v.content = repeat('x', 99990) from public.section_versions v where v.id = (:'f3'::jsonb ->> 'version_id')::uuid));
+-- recover: a stale run's crash copy over 100,000 with the cut inside a word.
+-- The base is a current version "Rest.", so base + crash copy (99,997) is over 100,000.
+select public.section_run_begin(:A, :BOOK1, :S11, :R5, null, 5000, 'm') is not null as b5 \gset
+select public.section_run_finish(:R5, 'Rest.', false, 'complete', 'ok', true, 10, 5, false) is not null as f5 \gset
+select public.section_run_begin(:A, :BOOK1, :S11, :R4, pg_temp.cur(:S11), 5000, 'm') is not null as b4 \gset
+select public.section_run_beat(:R4, repeat('Sit tall. ', 9999) || 'breathi', 10, 5) is not null as beat4 \gset
+update public.section_runs set heartbeat_at = now() - interval '25 seconds' where run_id = :R4;
+select public.section_run_recover(:S11) as rec4 \gset
+select pg_temp.chk('P5 recover: cut at a word, at most 100,000, ends with a whole sentence',
+  (select char_length(v.content) <= 100000 and v.content like 'Rest.' || E'\n\n' || 'Sit tall.%Sit tall.' and v.partial from public.section_versions v where v.section_id = :S11 and v.version_no = :rec4),
+  (select right(v.content, 30) from public.section_versions v where v.section_id = :S11 and v.version_no = :rec4));
+reset role;
+
+-- The browser cannot call the cut or the run RPCs (grants kept).
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';
+select pg_temp.expect('P5: user: write_cut refused', $q$select public.write_cut('a b', 1)$q$, '42501%');
+select pg_temp.expect('P5: user: section_run_finish refused', format($q$select public.section_run_finish(%L, 'x', false, 'complete', 'ok', true, 1, 1, false)$q$, :R3), '42501%');
+select pg_temp.expect('P5: user: section_run_recover refused', format($q$select public.section_run_recover(%s)$q$, :'S11'), '42501%');
+reset role;
+set role anon;
+select pg_temp.expect('P5: anon: write_cut refused', $q$select public.write_cut('a b', 1)$q$, '42501%');
+reset role;
+select pg_temp.chk('P5: the three functions stay SECURITY INVOKER with search_path ''''',
+  (select bool_and(not p.prosecdef and p.proconfig = array['search_path=""']) from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.proname in ('write_cut', 'section_run_finish', 'section_run_recover')),
+  (select string_agg(p.proname || ' ' || p.prosecdef || ' ' || coalesce(p.proconfig::text, 'null'), '; ') from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.proname in ('write_cut', 'section_run_finish', 'section_run_recover')));
 
 -- ── P4: an AI section finding may carry "unsourced" ──
 select pg_temp.chk('P4: the 0022 shape (3 keys) still passes',

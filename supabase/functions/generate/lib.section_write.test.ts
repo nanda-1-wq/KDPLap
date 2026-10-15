@@ -238,3 +238,32 @@ Deno.test("end policy: what each end saves and counts (owner, E10.2)", () => {
     refusal: { partial: true, status: "failed", counted: false },
   });
 });
+
+// G3 P5: the same cases as write_cut in supabase/tests/sql/t0023.sql (same strings, same results).
+const CUT_CASES: [string, string, number, string][] = [
+  ["under the cap: unchanged", "Sit tall.", 20, "Sit tall."],
+  ["the cut at a word end", "Sit tall and breathe slowly now.", 20, "Sit tall and breathe"],
+  ["inside a word: back to the last space", "Sit tall and breathing slowly.", 20, "Sit tall and"],
+  ["at the space inside a marker: back to the marker start", "Pain drops 40%. [Verify: no source] Then rest.", 25, "Pain drops 40%."],
+  ["inside a word of a marker: back to the marker start", "Pain drops 40%. [Verify: no source] Then rest.", 30, "Pain drops 40%."],
+  ["a whole marker is kept", "Pain drops 40%. [Verify: no source] Then rest.", 36, "Pain drops 40%. [Verify: no source]"],
+  ["no whitespace: the hard cut", "x".repeat(30), 20, "x".repeat(20)],
+  ["a line break counts as a space", "One two.\n\nThree four five six", 12, "One two."],
+];
+
+Deno.test("cutText: never inside a word or a marker (G3 P5)", () => {
+  for (const [name, t, max, want] of CUT_CASES) assertEquals(L.cutText(t, max), want, name);
+});
+
+Deno.test("capText: 100,000 at a word, the marker whole or gone", () => {
+  const unit = "Studies show 40% less pain. [Verify: no source] ";   // 48 characters
+  const t = unit.repeat(2100);                                     // 100,800
+  for (const shift of [0, 7, 13, 20, 33, 40, 47]) {
+    const s = "y".repeat(shift) + " " + t;
+    const c = L.capText(s);
+    assert(c.length <= L.SECTION_MAX_CHARS, `${shift}: ${c.length}`);
+    assert(!/\[Verify(?!: no source\])/.test(c.slice(-30)), `${shift}: a broken marker at the end: ${c.slice(-30)}`);
+    assert(s.startsWith(c) && /\s/.test(s[c.length]), `${shift}: not cut at a word end: ${c.slice(-30)}`);
+    assertEquals(c, c.trimEnd(), String(shift));
+  }
+});

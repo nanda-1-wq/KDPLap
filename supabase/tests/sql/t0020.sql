@@ -202,7 +202,8 @@ select pg_temp.chk('stop before any text: the input counts (answer 3)', (pg_temp
 -- ── Over 100,000 characters: cut and partial ──
 select public.section_run_begin('00000000-0000-4000-8000-00000000000a', 'b0000000-0000-4000-8000-000000000001', :S22, :R6, null, 5000, 'm') is not null as b6 \gset
 select public.section_run_finish(:R6, repeat('word ', 20500), false, 'complete', 'ok', true, 1, 1, false) as f6 \gset
-select pg_temp.chk('too long: cut at 100,000, partial, not current', char_length((pg_temp.ver(:S22, 1)).content) = 100000 and (pg_temp.ver(:S22, 1)).partial
+-- G3 P5 (0023): the cut is at a word, so the trailing space goes: 99,999 characters.
+select pg_temp.chk('too long: cut at 100,000 at a word, partial, not current', (pg_temp.ver(:S22, 1)).content = rtrim(repeat('word ', 20000)) and (pg_temp.ver(:S22, 1)).partial
   and pg_temp.cur(:S22) is null, :'f6');
 
 -- ── Base check and drafts at the claim ──

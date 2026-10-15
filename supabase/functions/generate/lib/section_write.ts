@@ -388,5 +388,26 @@ export function writeKnown(ctx: WriteContext): string {
   return [knownText(ctx), ...outline].join("\n");
 }
 
-/** Text over the section limit is cut there (the save marks it partial). */
-export const capText = (t: string) => (t.length > SECTION_MAX_CHARS ? t.slice(0, SECTION_MAX_CHARS) : t);
+const WS = /[ \t\n\r\f\v]/;
+
+/**
+ * The text cut to at most max characters, never inside a word or a marker
+ * (G3 P5). Same rule as write_cut (0023): unchanged up to max; inside a word,
+ * back to the last whitespace (none: the hard cut stays); a marker that spans
+ * the cut, back to its start; trailing whitespace trimmed.
+ */
+export function cutText(t: string, max: number): string {
+  if (t.length <= max) return t;
+  let at = max;
+  if (!WS.test(t[max - 1] ?? "") && !WS.test(t[max])) {
+    let i = max - 1;
+    while (i >= 0 && !WS.test(t[i])) i--;
+    if (i >= 0) at = i;
+  }
+  const m = t.lastIndexOf(MARKER, at - 1);
+  if (m >= 0 && m + MARKER.length > at) at = m;
+  return t.slice(0, at).replace(/[ \t\n\r\f\v]+$/, "");
+}
+
+/** Text over the section limit is cut there, at a word (the save marks it partial). */
+export const capText = (t: string) => cutText(t, SECTION_MAX_CHARS);

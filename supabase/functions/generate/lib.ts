@@ -53,7 +53,7 @@ export {
   FINDING_KINDS, type FindingKind, interpretOutlineCheck, keyHash, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineCheckKnown, outlineCheckUserMessage, type OutlineFinding, outlineKey, type OutlineRow,
 } from "./lib/outline_check.ts";
 export {
-  capText, cleanSubset, estimateTokens, headingsIn, locateSection, markUnsourced, mdWords, runIsFresh, sentencesOf, tailText, WRITE_SYSTEM, type WriteChapterRow, type WriteContext,
+  capText, cleanSubset, cutText, estimateTokens, headingsIn, locateSection, markUnsourced, mdWords, runIsFresh, sentencesOf, tailText, WRITE_SYSTEM, type WriteChapterRow, type WriteContext,
   writeAim, writeKnown, writeRequest, type WriteSectionRow, writeUserMessage, writeVoice,
 } from "./lib/section_write.ts";
 export {
