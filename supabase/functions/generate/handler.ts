@@ -89,23 +89,25 @@ export function makeHandler(deps: Deps) {
       if (L.isFail(checked)) return fail(checked.fail, checked.extra);
       const job = checked;
 
-      // 4. Limits, before any money is spent. A job with a reserve
-      // (section_write E10.2, section_improve E10.3, section_check E10.4) also reserves what it can
-      // use, plus the user's running Generate runs.
+      // 4. Limits, before any money is spent. Every call reserves what it can
+      // use (G3 P7): section_write, section_improve and section_check their own
+      // job.reserve, every other stage its input estimate + max_tokens
+      // (callReserve), plus the user's running Generate runs.
       const now = deps.now();
       const write = job.stage === "section_write" ? job : null;
-      const reserve = "reserve" in job ? job.reserve : 0;
+      const request = write ? null : L.buildRequest(job);
+      const reserve = "reserve" in job ? job.reserve : L.callReserve(request!);
       const [limit, monthTokens, recent, running] = await Promise.all([
         store.getMonthlyLimit(),
         store.sumCountedTokensSince(userId, L.monthStartUtc(now)),
         store.countCallsSince(userId, new Date(now.getTime() - 60_000).toISOString()),
-        reserve ? store.sumRunningReserves(userId) : Promise.resolve(0),
+        store.sumRunningReserves(userId),
       ]);
       const limitCode = L.limitError({
         monthTokens,
         monthlyLimit: limit ?? L.DEFAULT_MONTHLY_LIMIT,
         callsLastMinute: recent,
-        reserve: reserve ? reserve + running : 0,
+        reserve: reserve + running,
       });
       if (limitCode) return fail(limitCode);
 
@@ -122,8 +124,7 @@ export function makeHandler(deps: Deps) {
         return r.response;
       }
 
-      // 5. The AI call.
-      const request = L.buildRequest(job);
+      // 5. The AI call (the request was built for the reserve).
       let httpOk = false;
       let body: unknown = null;
       try {
@@ -164,7 +165,7 @@ export function makeHandler(deps: Deps) {
           user_id: userId,
           ...("bookId" in input ? { book_id: input.bookId } : {}),
           stage: input.stage,
-          model: request.model,
+          model: request!.model,
           input_tokens: out.inputTokens,
           output_tokens: out.outputTokens,
           status: out.status,

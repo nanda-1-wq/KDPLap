@@ -55,7 +55,8 @@ Deno.test("monthly limit reached is 429 monthly_limit", quiet(async () => {
 }));
 
 Deno.test("no settings row uses the 2,000,000 default", quiet(async () => {
-  const under = setup({ limit: null, monthTokens: 1_999_999 });
+  // G3 P7: bio reserves its size (600 + its input estimate), so the month needs that much room.
+  const under = setup({ limit: null, monthTokens: 1_990_000 });
   assertEquals((await under.handle(post(good))).status, 200);
   const over = setup({ limit: null, monthTokens: 2_000_000 });
   assertEquals((await json(await over.handle(post(good)))).error, "monthly_limit");

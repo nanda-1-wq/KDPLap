@@ -71,3 +71,14 @@ Deno.test("outline_check: the body takes exactly { stage, bookId }", quiet(async
   }
   assertEquals(L.parseInput(JSON.stringify({ stage: "outline_check", bookId: BOOK_ID.toUpperCase() })), { stage: "outline_check", bookId: BOOK_ID });
 }));
+
+Deno.test("outline_check: the call reserves input estimate + 1,500 before it runs, to the token (G3 P7)", quiet(async () => {
+  const job = L.stageDef("outline_check").check(L.parseInput(JSON.stringify(ocid))!, outlineCheckCtx()) as L.Job;
+  const reserve = L.callReserve(L.buildRequest(job));
+  assert(reserve > 1500 && reserve < 20_000, String(reserve));
+  const fits = setup({ limit: 100_000, monthTokens: 100_000 - reserve, provider: checkReply() });
+  assertEquals([(await fits.handle(post(ocid))).status, fits.calls.length], [200, 1]);
+  const over = setup({ limit: 100_000, monthTokens: 100_000 - reserve + 1, provider: checkReply() });
+  const r = await over.handle(post(ocid));
+  assertEquals([r.status, (await json(r)).error, over.calls.length, over.logged.length], [429, "monthly_limit", 0, 0]);
+}));

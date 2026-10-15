@@ -476,6 +476,16 @@ export function buildRequest(job: Job) {
   };
 }
 
+/**
+ * What a call can use, for the monthly limit (G3 P7): the input estimate
+ * (system and user message, 3 characters a token) plus max_tokens. The same
+ * formula section_improve and section_check use for their own reserve.
+ */
+export function callReserve(request: ReturnType<typeof buildRequest>): number {
+  const user = request.messages.map((m) => m.content).join("");
+  return estimateTokens(request.system.length + user.length) + request.max_tokens;
+}
+
 /** Map a reply for a job. The positioning stages need the job's data to check the reply. */
 export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome {
   return stageDef(job.stage).interpret(job, httpOk, body);

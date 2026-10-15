@@ -142,3 +142,13 @@ Deno.test("outline_ideas: a save refused for writing is 409, logged, not counted
     assertEquals([logged[0].status, logged[0].counted], ["ok", false], code);
   }
 }));
+
+Deno.test("outline_ideas: the call reserves its size (8,000 + input) before it runs (G3 P7)", quiet(async () => {
+  const full = setup({ limit: 100_000, monthTokens: 95_000, provider: outlineReply() });   // 5,000 left
+  const r = await full.handle(post(oid));
+  assertEquals([r.status, (await json(r)).error, full.calls.length, full.logged.length], [429, "monthly_limit", 0, 0]);
+  const running = setup({ limit: 100_000, monthTokens: 70_000, running: 20_000, provider: outlineReply() });   // a Generate run holds 20,000
+  assertEquals([(await running.handle(post(oid))).status, running.calls.length], [429, 0]);
+  const room = setup({ limit: 100_000, monthTokens: 80_000, provider: outlineReply() });
+  assertEquals([(await room.handle(post(oid))).status, room.calls.length], [200, 1]);
+}));

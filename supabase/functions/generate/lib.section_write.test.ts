@@ -209,7 +209,7 @@ Deno.test("limits: the reserve keeps the month under the limit (plan example)", 
   const u = { monthlyLimit: 2_000_000, callsLastMinute: 0 };
   assertEquals(L.limitError({ ...u, monthTokens: 1_991_000, reserve: 5000 + 3400 }), null);          // 1,999,400
   assertEquals(L.limitError({ ...u, monthTokens: 1_992_000, reserve: 5000 + 3400 }), "monthly_limit"); // 2,000,400
-  assertEquals(L.limitError({ ...u, monthTokens: 1_999_999 }), null);                                 // other stages: no reserve
+  assertEquals(L.limitError({ ...u, monthTokens: 1_999_999 }), null);                                 // no reserve given (the handler always gives one since G3 P7)
   assertEquals(L.limitError({ ...u, monthTokens: 0, callsLastMinute: 10, reserve: 10 }), "rate_limited");
 });
 

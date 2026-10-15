@@ -67,5 +67,5 @@ export {
 export { sseEvent, ssePing, sseReader, type SseEvent } from "./lib/sse.ts";
 export { endPolicy, type EndReason, openRunCount, startWriteRun, stopAllRuns, type WriteJob, type WriteTiming } from "./lib/write_run.ts";
 export {
-  buildRequest, interpretJob, interpretResponse, isFail, type Job, type RunInfo, STAGE_TABLE, type StageDef, stageDef, type StageFail,
+  buildRequest, callReserve, interpretJob, interpretResponse, isFail, type Job, type RunInfo, STAGE_TABLE, type StageDef, stageDef, type StageFail,
 } from "./lib/stages.ts";

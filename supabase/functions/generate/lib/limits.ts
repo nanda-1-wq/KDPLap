@@ -393,9 +393,10 @@ export function monthStartUtc(now: Date): string {
 
 /**
  * A limit code when the call must not run, or null. Monthly is checked first.
- * reserve (section_write, E10.2; section_improve, E10.3; section_check, E10.4): the most this call can
- * use plus the reserves of the user's running Generate runs; the month may not
- * pass the limit with it.
+ * reserve: the most this call can use (every stage since G3 P7: section_write,
+ * section_improve and section_check their own, the others callReserve) plus the
+ * reserves of the user's running Generate runs; the month may not pass the
+ * limit with it.
  */
 export function limitError(u: { monthTokens: number; monthlyLimit: number; callsLastMinute: number; reserve?: number }): ErrorCode | null {
   if (u.monthTokens >= u.monthlyLimit) return "monthly_limit";
