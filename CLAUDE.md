@@ -60,6 +60,7 @@ Keep them working. Do not change them unless asked.
 - Brand navy and blue are allowed on the logo, the landing page, and the public auth pages only. Never on app buttons or cards.
 - Fonts: IBM Plex Sans (UI), IBM Plex Mono (small labels), Source Serif 4 (editor text only).
 - Minimum 44 px for anything clickable. Visible focus ring: 2 px ink outline, 2 px offset.
+  Accepted exception: the Write editor (4 px) and the Improve menu items (2 px) draw the ring inside, because the scrolling card clips an outside ring.
 - Every screen designs its states: empty, loading or generating, error with retry, locked, needs review.
 - Reference screens: `design/screens/*.html` (open in a browser) and `*.png`. Match them.
 - Logo files: `design/logo/`.
