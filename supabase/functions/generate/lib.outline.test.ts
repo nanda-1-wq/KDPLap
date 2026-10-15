@@ -114,3 +114,13 @@ Deno.test("outline reply: section, introduction and conclusion words stay inside
   assert(o.intro_words >= 0 && o.conclusion_words >= 0);
   assert(o.chapters.every((c) => c.sections.every((s) => s.words >= 0 && s.words <= L.OUTLINE_MAX.sectionWords)));
 });
+
+Deno.test("outlineHasWriting: any section with has_writing true (the 0020 rule, G3 P1)", () => {
+  const rows = (flags: (boolean | undefined)[][]) => flags.map((f) => ({ sections: f.map((has_writing) => ({ has_writing })) }));
+  assertEquals(L.outlineHasWriting([]), false);
+  assertEquals(L.outlineHasWriting(null), false);
+  assertEquals(L.outlineHasWriting(rows([[false, false], [false]])), false);
+  assertEquals(L.outlineHasWriting(rows([[false], [false, true]])), true);
+  assertEquals(L.outlineHasWriting(rows([[undefined]])), false);   // an older row without the key
+  assertEquals(L.outlineHasWriting([{ sections: null }]), false);
+});

@@ -47,7 +47,7 @@ export {
   interpretTitleIdeas, TITLE_SCHEMA, TITLE_SYSTEM, type TitleContext, type TitleIdea, titleIdeasWanted, titleLength, titleUserMessage,
 } from "./lib/title_ideas.ts";
 export {
-  interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineDraft, type OutlineTarget, outlineTarget, outlineUnsourced, outlineUserMessage, promptTocs,
+  interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineDraft, type OutlineTarget, outlineHasWriting, outlineTarget, outlineUnsourced, outlineUserMessage, promptTocs,
 } from "./lib/outline_ideas.ts";
 export {
   FINDING_KINDS, type FindingKind, interpretOutlineCheck, keyHash, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineCheckKnown, outlineCheckUserMessage, type OutlineFinding, outlineKey, type OutlineRow,

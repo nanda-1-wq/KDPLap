@@ -20,7 +20,7 @@ import { hasPositioningText, knownText, type PositioningContext, positioningHasT
 import { helpFields, interpretPositioningHelp, POSITIONING_SCHEMA, POSITIONING_SYSTEM, positioningUserMessage } from "./positioning_help.ts";
 import { DRIFT_SCHEMA, DRIFT_SYSTEM, driftUserMessage, interpretDriftCheck } from "./drift_check.ts";
 import { interpretTitleIdeas, type TitleContext, titleIdeasWanted, TITLE_SCHEMA, TITLE_SYSTEM, titleUserMessage } from "./title_ideas.ts";
-import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineTarget, outlineTarget, outlineUserMessage } from "./outline_ideas.ts";
+import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineTarget, outlineHasWriting, outlineTarget, outlineUserMessage } from "./outline_ideas.ts";
 import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineChapters, outlineCheckKnown, outlineCheckUserMessage, type OutlineRow, outlineKey } from "./outline_check.ts";
 import { locateSection, mdWords, runIsFresh, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
 import type { WriteJob } from "./write_run.ts";
@@ -287,7 +287,7 @@ const sectionWrite: StageDef<"section_write", WriteContext> = {
   check: (input, ctx) => {
     const loc = locateSection(ctx);
     if (!loc) return { fail: "not_found" };
-    const anyWriting = ctx.outline.some((c) => c.sections.some((s) => s.has_writing));
+    const anyWriting = outlineHasWriting(ctx.outline);
     if (!ctx.book.outline_approved_at && !anyWriting) return { fail: "outline_not_approved" };
     if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
     if (!positioningHasTopic(ctx)) return { fail: "not_enough_facts", extra: { missing: "" } };
@@ -329,7 +329,7 @@ const sectionImprove: StageDef<"section_improve", WriteContext> = {
   check: (input, ctx) => {
     const loc = locateSection(ctx);
     if (!loc) return { fail: "not_found" };
-    const anyWriting = ctx.outline.some((c) => c.sections.some((s) => s.has_writing));
+    const anyWriting = outlineHasWriting(ctx.outline);
     if (!ctx.book.outline_approved_at && !anyWriting) return { fail: "outline_not_approved" };
     if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
     if ((ctx.current?.id ?? null) !== input.baseVersionId) return { fail: "version_conflict" };
@@ -389,7 +389,7 @@ const sectionCheck: StageDef<"section_check", WriteContext> = {
   check: (input, ctx) => {
     const loc = locateSection(ctx);
     if (!loc) return { fail: "not_found" };
-    const anyWriting = ctx.outline.some((c) => c.sections.some((s) => s.has_writing));
+    const anyWriting = outlineHasWriting(ctx.outline);
     if (!ctx.book.outline_approved_at && !anyWriting) return { fail: "outline_not_approved" };
     if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
     if (!ctx.current) return { fail: "nothing_to_check" };

@@ -1,7 +1,8 @@
 // generate handler tests: the outline_ideas stage (E9.1).
 // deno test --allow-read=supabase/functions/generate supabase/functions/generate/  (from the repo root)
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { BOOK_ID, json, OUTLINE_OUT, oid, outlineCtx, outlineReply, posRow, post, quiet, setup, USER } from "./test_fakes.ts";
+import * as L from "./lib.ts";
+import { BOOK_ID, json, OUTLINE_OUT, oid, outlineCtx, outlineReply, outlineRows, posRow, post, quiet, setup, USER } from "./test_fakes.ts";
 
 const words = (o: { intro_words: number; conclusion_words: number; chapters: { sections: { words: number }[] }[] }) =>
   o.intro_words + o.conclusion_words + o.chapters.reduce((n, c) => n + c.sections.reduce((m, s) => m + s.words, 0), 0);
@@ -40,6 +41,30 @@ Deno.test("outline_ideas: positioning not locked is 409, no call, no row", quiet
 
 Deno.test("outline_ideas: a book with writing is 409 has_writing, no call", quiet(async () => {
   const { handle, calls, logged } = setup({ outline: outlineCtx({ hasWriting: true }) });
+  const r = await handle(post(oid));
+  assertEquals([r.status, (await json(r)).error, calls.length, logged.length], [409, "has_writing", 0, 0]);
+}));
+
+// G3 P1: "has writing" is the database rule (outline_json has_writing, 0020), as 05 shows it.
+// The rows below are outline_json as it reads in each case.
+const rowsWith = (s: Record<string, unknown>) => {
+  const rows = outlineRows().map((c) => ({ ...c, sections: c.sections.map((x) => ({ ...x, has_writing: false, has_draft: false })) }));
+  rows[3].sections[1] = { ...rows[3].sections[1], ...s };
+  return rows;
+};
+
+Deno.test("outline_ideas: only a discarded partial is not writing, Regenerate runs (owner answer Q5)", quiet(async () => {
+  // A stopped first Generate whose partial was not kept: a version row exists, none is current.
+  const rows = rowsWith({ current_version_id: null, has_writing: false, words: 0 });
+  const { handle, calls, logged } = setup({ outline: outlineCtx({ hasWriting: L.outlineHasWriting(rows) }), provider: outlineReply() });
+  const r = await handle(post(oid));
+  assertEquals([r.status, calls.length, logged.length, logged[0].counted], [200, 1, 1, true]);
+}));
+
+Deno.test("outline_ideas: only a draft is writing, 409 before the AI call", quiet(async () => {
+  // Typed text autosaved as a draft, never saved as a version.
+  const rows = rowsWith({ current_version_id: null, has_writing: true, has_draft: true, draft_words: 40 });
+  const { handle, calls, logged } = setup({ outline: outlineCtx({ hasWriting: L.outlineHasWriting(rows) }), provider: outlineReply() });
   const r = await handle(post(oid));
   assertEquals([r.status, (await json(r)).error, calls.length, logged.length], [409, "has_writing", 0, 0]);
 }));

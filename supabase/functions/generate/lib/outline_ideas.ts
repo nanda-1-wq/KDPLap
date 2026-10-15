@@ -10,8 +10,18 @@ export type OutlineContext = PositioningContext & {
   book: { title: string | null; subtitle: string | null };
   plan: { length_range: string | null; target_words: number | null; chapter_count: number | null };
   tocs: { title: string; toc: string | null; created_at: string }[];
-  hasWriting: boolean;   // any section of the book has a version
+  hasWriting: boolean;   // any section has writing (outlineHasWriting: the database rule)
 };
+
+/**
+ * "Has writing" for a whole book, read the way the database reads it: any
+ * section of outline_json (0018) whose has_writing is true. has_writing is
+ * section_has_writing (0020): a version or a draft with text, or a fresh
+ * Generate run; a partial version only while it is current (G3 P1).
+ */
+export function outlineHasWriting(rows: { sections?: { has_writing?: boolean }[] | null }[] | null | undefined): boolean {
+  return (rows ?? []).some((c) => (c.sections ?? []).some((s) => s.has_writing === true));
+}
 
 /** The word target: min to max (max null = "30K+"), aim = what the prompt asks for. */
 export type OutlineTarget = { min: number; max: number | null; aim: number; source: "range" | "custom" | "default" };

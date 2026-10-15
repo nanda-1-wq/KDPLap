@@ -42,7 +42,7 @@
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
 import type { BriefContext, Competitor, OutlineContext, OutlineRow, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
-import { RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
+import { outlineHasWriting, RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -230,23 +230,27 @@ function openStore(authHeader: string): Store {
 
     // The positioning read, plus what the outline needs: the book title, the
     // Brief's length and chapter count, the competitors' tables of contents
-    // (a second, aliased embed) and whether any section has a version.
+    // (a second, aliased embed) and whether any section has writing: the
+    // database rule (0020 section_has_writing through outline_json, G3 P1),
+    // the same one 05 shows and replace_outline applies.
     async getOutlineContext(bookId) {
-      const data = await readBook(bookId, `${POSITIONING_SELECT}, title, subtitle,
-        plan:book_briefs ( length_range, target_words, chapter_count ),
-        tocs:competitors ( title, toc, created_at ),
-        chapters ( sections ( section_versions!section_versions_section_id_fkey ( count ) ) )`);
+      // The book and the outline in parallel (outline_json reads nothing for a book the caller cannot see).
+      const [data, { data: outline, error }] = await Promise.all([
+        readBook(bookId, `${POSITIONING_SELECT}, title, subtitle,
+          plan:book_briefs ( length_range, target_words, chapter_count ),
+          tocs:competitors ( title, toc, created_at )`),
+        asUser.rpc("outline_json", { p_book_id: bookId }),
+      ]);
       const ctx = data && positioningContext(data);
       if (!ctx) return null;
+      if (error) throw error;
       const plan = one(data.plan) as OutlineContext["plan"] | null;
-      // deno-lint-ignore no-explicit-any
-      const versions = (data.chapters ?? []).flatMap((c: any) => c.sections ?? []).reduce((n: number, s: any) => n + (s.section_versions?.[0]?.count ?? 0), 0);
       return {
         ...ctx,
         book: { title: data.title ?? null, subtitle: data.subtitle ?? null },
         plan: plan ?? { length_range: null, target_words: null, chapter_count: null },
         tocs: (data.tocs ?? []) as OutlineContext["tocs"],
-        hasWriting: versions > 0,
+        hasWriting: outlineHasWriting(outline as WriteChapterRow[] | null),
       };
     },
 
