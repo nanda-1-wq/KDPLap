@@ -2470,6 +2470,9 @@ div.delete-text p { margin: 0; }
 }
 
 /* ── Step 05 Outline (designs 20, 21) ────── */
+/* Raw px left here on purpose (G2 P12): 1 px borders; 2 px icon lifts that line an
+   icon up with the first text line; 6, 10, 18 and 22 px measured from the approved
+   design, between two spacing tokens. A token would move them. */
 
 .otl {
   width: 100%;
@@ -2577,8 +2580,8 @@ div.delete-text p { margin: 0; }
 .otl-add:hover { background: var(--surface); }
 .otl-add:disabled { color: var(--muted); cursor: not-allowed; }
 
-.otl-side { display: flex; flex-direction: column; gap: 18px; position: sticky; top: var(--space-4); }
-.otl-panel { display: flex; flex-direction: column; gap: var(--space-2); padding: 22px; }
+.otl-side { display: flex; flex-direction: column; gap: 18px; /* design 21 */ position: sticky; top: var(--space-4); }
+.otl-panel { display: flex; flex-direction: column; gap: var(--space-2); padding: 22px; /* design 21 */ }
 .otl-big { margin: var(--space-1) 0 0; font-size: var(--text-4xl); font-weight: 700; font-variant-numeric: tabular-nums; }
 .otl-small { margin: 0; font-size: var(--text-sm); line-height: 1.4; color: var(--graphite); }
 .otl-bar { position: relative; height: var(--app-otl-bar-h); margin: var(--space-2) 0; border-radius: var(--radius-pill); background: var(--mist); }
@@ -2618,6 +2621,9 @@ div.delete-text p { margin: 0; }
 .otl-appr-lines[hidden] { display: none; }
 
 /* ── Step 06 Write (designs 22, 23) ──────────── */
+/* Raw px left here on purpose (G2 P12): 1 px borders and badge padding; 2 and 3 px
+   gaps and icon lifts; the menu's 6 and 7 px insets (from design 22b). The inside
+   focus rings are the CLAUDE.md §7 exception. A token would move them. */
 
 /* The steps sidebar folds to a rail on step 06; the toggle opens it again. */
 .rail-toggle {
@@ -2821,7 +2827,7 @@ div.delete-text p { margin: 0; }
 .wr-empty { color: var(--muted); font-style: italic; }
 
 /* Compare versions (design 23) */
-.wr-cmp { width: min(var(--app-dialog-lg-w), calc(100vw - 32px)); }
+.wr-cmp { width: min(var(--app-dialog-lg-w), calc(100vw - var(--space-8))); }
 .wr-cmp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); }
 .wr-cmp-head h2 { margin: var(--space-2) 0 0; font-size: var(--text-xl); font-weight: 600; }
 .wr-cmp-body { max-height: 55vh; overflow-y: auto; font-family: var(--font-read); font-size: var(--text-lg); line-height: var(--leading-read); color: var(--ink); }
@@ -2993,7 +2999,7 @@ div.delete-text p { margin: 0; }
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 7px var(--space-3);
+  padding: 7px var(--space-3);   /* 44 px rows with a 1 px gap (design 22b) */
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
