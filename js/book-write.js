@@ -114,9 +114,16 @@
   const anyWriting = () => allSections().some((x) => hasWriting(x.s));
   const gateOpen = () => !!book.outline_approved_at || anyWriting();
 
+  /** The open section's words, counted once per text (typing reads it in several places, G2 P2). */
+  let counted = { text: null, n: 0 };
+  function curWords() {
+    if (counted.text !== cur.text) counted = { text: cur.text, n: W.count(cur.text) };
+    return counted.n;
+  }
+
   /** Words written in a section: the draft when it is newer than the current version (owner, E10). */
   function sectionWords(s) {
-    if (cur && cur.id === s.id && cur.state === 'ready') return W.count(cur.text);
+    if (cur && cur.id === s.id && cur.state === 'ready') return curWords();
     if (s.has_draft && (!s.version_at || (s.draft_at && s.draft_at > s.version_at))) return s.draft_words || 0;
     return s.words || 0;
   }
@@ -1306,7 +1313,7 @@
     const hint = els.main.querySelector('[data-hint]');
     if (hint) {
       const t = s.word_target || 0;
-      hint.hidden = !!genBlock() || !cur.text.trim() || (t > 0 && W.count(cur.text) >= t) || !!(gen && gen.id === cur.id);
+      hint.hidden = !!genBlock() || !cur.text.trim() || (t > 0 && curWords() >= t) || !!(gen && gen.id === cur.id);
     }
     // The Checks panel follows the same gates (Generate, conflicts, a suggestion open).
     chk.refresh();
@@ -1347,7 +1354,7 @@
     const box = els && els.main.querySelector('[data-words]');
     if (!box || !cur || cur.state !== 'ready') return;
     const hit = findSection(cur.id);
-    const n = W.count(cur.text);
+    const n = curWords();
     const t = hit ? hit.s.word_target || 0 : 0;
     const pct = t ? Math.min(100, Math.round((n / t) * 100)) : 0;
     box.innerHTML = t
@@ -1400,7 +1407,7 @@
     const list = cur.versions || [];
     const items = [];
     if (dirty() && !cur.conflict) {
-      items.push(`<li class="wr-ver is-unsaved"><div class="wr-ver-top"><strong>Unsaved changes</strong><span>${fmt(W.count(cur.text))} words</span></div>
+      items.push(`<li class="wr-ver is-unsaved"><div class="wr-ver-top"><strong>Unsaved changes</strong><span>${fmt(curWords())} words</span></div>
         <p class="wr-ver-meta">A draft. It becomes a version when you save, leave the section, or after 10 minutes.</p></li>`);
     }
     for (const v of list) {
@@ -1576,7 +1583,19 @@
     renderWords();
     renderFoot();
     renderManuscriptCount();
-    if (tab === 'versions') renderSide();
+    if (tab === 'versions') renderUnsavedRow();
+  }
+
+  /**
+   * Typing with the Versions tab open (G2 P2): only the words in the "Unsaved
+   * changes" row change, so only they are written. When the row must appear or
+   * go, the whole panel renders as before. The Checks count in the tab follows
+   * 400 ms after typing stops (chk.onInput), not on every key.
+   */
+  function renderUnsavedRow() {
+    const row = els.side.querySelector('[data-panel-kind="versions"] .wr-vers > .wr-ver.is-unsaved');
+    if (!row || !dirty() || cur.conflict) { renderSide(); return; }
+    row.querySelector('.wr-ver-top > span').textContent = `${fmt(curWords())} words`;
   }
 
   /** Only the words-written line, so typing does not rebuild the list. */

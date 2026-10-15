@@ -147,7 +147,10 @@ used. Suites: `brief` (t-chapters, t-length, t-missing, t-accept-all, t-partial,
 t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from, t-import), `positioning` (t1, t2, t-drift,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
-`write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks). The write
+`write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks,
+t-timing). `t-timing` (G2) types 50 characters into a 16,000-word section at normal and 4x slower
+CPU, with the Versions and the Checks tab open. It prints the time per keystroke as INFO lines
+(never a pass or fail) and checks only that the typing arrives and the panel stays right. The write
 mock answers Generate section through the page's own `fetch` with a stream
 the test drives (`window.__gen.send(event, data)`), because `route.fulfill`
 sends a body all at once. Improve (E10.3) goes the same way so Cancel can
