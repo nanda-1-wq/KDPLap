@@ -156,7 +156,11 @@ t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
 `write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks,
-t-timing). `t-timing` (G2) types 50 characters into a 16,000-word section at normal and 4x slower
+t-timing, t-selection). `t-selection` (G3 P9) makes Improve selections in the real editor across
+bold, italic, list items, headings and a marker, the whole section (also with Ctrl+A), and right
+after typing (the draft is saved first). Pipe it into the function's own rule:
+`tests/browser/run.sh write t-selection.js | deno run tests/browser/write/selection-check.ts`
+(one more PASS per case; exit 1 on a FAIL). `t-timing` (G2) types 50 characters into a 16,000-word section at normal and 4x slower
 CPU, with the Versions and the Checks tab open. It prints the time per keystroke as INFO lines
 (never a pass or fail) and checks only that the typing arrives and the panel stays right. The write
 mock answers Generate section through the page's own `fetch` with a stream

@@ -1,4 +1,5 @@
-// Step 06 Write (E10.3): the Improve menu, every browser case of plan §10.
+// Step 06 Write (E10.3): the Improve menu, every browser case of plan §10,
+// and (G3) a lost connection (P8) and a passage the server did not find (P9).
 // The page's fetch answers section_improve with a reply this test sends
 // (mock.js, window.__imp.reply); apply_suggestion runs the checks of 0021 in
 // the mock. Screenshots at 1440 and 900 px go to tests/browser/shots/write/.
@@ -632,6 +633,14 @@ const test = async page => {
   await waitCard('error');
   ok(/We couldn’t reach KDP Lab\. Check your connection\. Your text is safe\. If the AI had already finished, this call may still count\./.test(await txt('[data-imp] .alert'))
     && !/not counted/.test(await txt('[data-imp] .alert')) && await has('[data-imp-retry]'), `network: may count, Try again: ${await txt('[data-imp] .alert')}`);
+  // G3 P9: the server did not find the passage in the saved section: a warning with Try again, not counted.
+  await page.click('[data-imp-retry]');
+  await until(() => window.__imp.requests.length === 2);
+  await reply(409, { error: 'selection_not_in_text' });
+  await waitCard('error');
+  ok(/We couldn’t find the selected text in your saved section\. Try again\. Your text is safe\. This attempt was not counted in your usage\./.test(await txt('[data-imp] .alert'))
+    && await has('[data-imp] .alert-warning') && await has('[data-imp-retry]'), `selection_not_in_text: ${await txt('[data-imp] .alert')}`);
+  await shots('not-in-text');
 
   return log.join('\n');
 };

@@ -1196,6 +1196,8 @@
       changed: () => { if (active() && cur && cur.state === 'ready') { renderHead(); G.render(); renderFoot(); } },
       sync: onInput,
       saveFirst: improveSaveFirst,
+      // G3 P9: unsaved typing goes out as the draft before an Improve call (nothing is sent when nothing is unsaved).
+      flush: async () => { if (saver && saver.hasUnsaved()) await saver.flush(); },
       hold,
       applied: improveApplied,
       adoptRemote: () => (cur ? adoptRemote(cur.id, null) : undefined),

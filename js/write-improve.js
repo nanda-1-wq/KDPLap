@@ -513,6 +513,10 @@
       const my = ++token;
       imp = { sid: c.id, state: 'loading', action, instruction, at: pick.start, selection: pick.text, sentences: pick.sentences, body, abort: new AbortController(), token: my, result: null, error: null };
       after(`${ACT[action].doing} ${plural(pick.sentences, 'sentence', 'sentences')}.`);
+      // G3 P9: the server checks the passage against the saved draft or version, so the
+      // newest typing is saved first.
+      try { await host.flush(); } catch (err) { /* the server says if the passage is missing */ }
+      if (!imp || imp.token !== my || imp.state !== 'loading') return;   // cancelled meanwhile
       let res;
       try { res = await kdp.improve(body, { signal: imp.abort.signal }); } catch (err) { res = { error: { code: 'network' } }; }
       if (!imp || imp.token !== my || imp.state !== 'loading') return;   // cancelled, or another section
@@ -546,6 +550,7 @@
         outline_not_approved: 'Approve the outline in 05 to use Improve.',
         unauthorized: 'Your session ended. Sign in again, then try again.',
         selection_too_short: 'Select at least 3 words.',
+        selection_not_in_text: 'We couldn’t find the selected text in your saved section. Try again.',
         selection_too_long: `Select up to ${fmt(imp.action === 'expand' ? LIMITS.expandMaxWords : LIMITS.maxWords)} words${imp.action === 'expand' ? ' to expand' : ''}.${err.words ? ` You selected ${fmt(err.words)}.` : ''}`,
         monthly_limit: kdpUi.aiMessage('monthly_limit')[1],
         rate_limited: kdpUi.aiMessage('rate_limited')[1]
@@ -556,7 +561,7 @@
         ? 'Your text is safe. If the AI had already finished, this call may still count.'
         : 'Your text is safe. This attempt was not counted in your usage.';
       const retry = !['positioning_not_locked', 'outline_not_approved', 'unauthorized', 'selection_too_short', 'selection_too_long', 'monthly_limit', 'run_in_progress'].includes(code);
-      const warn = ['monthly_limit', 'rate_limited', 'run_in_progress', 'positioning_not_locked', 'outline_not_approved', 'selection_too_short', 'selection_too_long'].includes(code);
+      const warn = ['monthly_limit', 'rate_limited', 'run_in_progress', 'positioning_not_locked', 'outline_not_approved', 'selection_too_short', 'selection_too_long', 'selection_not_in_text'].includes(code);
       imp.state = 'error';
       imp.error = { line, sub, retry, kind: warn ? 'warning' : 'error', again: 'request' };
       after(`Improve stopped. ${line}`);
