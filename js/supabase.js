@@ -37,6 +37,38 @@ function counted(error, count, msg) {
   return { error: null };
 }
 
+/**
+ * A POST to the generate function with a plain fetch (generateStream, improve,
+ * sectionCheck): the user's JWT and the anon key, like functions.invoke sends.
+ * onSent runs right after the request is handed to the network.
+ * → { res }, or { fail: 'unauthorized' | 'aborted' | 'network' } ('aborted' only when signal aborted it).
+ */
+async function postGenerate(input, { signal, onSent } = {}) {
+  const session = await window.kdp.getSession();
+  if (!session) return { fail: 'unauthorized' };
+  try {
+    const sent = fetch(`${SUPABASE_URL}/functions/v1/generate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      signal
+    });
+    if (onSent) onSent();
+    return { res: await sent };
+  } catch (err) {
+    return { fail: signal && signal.aborted ? 'aborted' : 'network' };
+  }
+}
+
+/** A JSON reply of a stage that is not streamed (improve, sectionCheck): the data, or the error code with words. */
+function generateReply(res, body, stage) {
+  if (res.ok && body && typeof body === 'object' && body.stage === stage) return { data: body, error: null };
+  if (body && typeof body.error === 'string') {
+    return { data: null, error: { code: body.error, words: Number.isInteger(body.words) ? body.words : null } };
+  }
+  return { data: null, error: { code: res.status === 401 ? 'unauthorized' : 'server_error' } };
+}
+
 window.kdp = {
 
   googleEnabled: GOOGLE_ENABLED,
@@ -986,19 +1018,10 @@ window.kdp = {
    *   { error: { code: 'aborted', streamed } } when signal aborted it.
    */
   async generateStream(input, { onEvent, signal } = {}) {
-    const session = await this.getSession();
-    if (!session) return { data: null, error: { code: 'unauthorized' } };
-    let res;
-    try {
-      res = await fetch(`${SUPABASE_URL}/functions/v1/generate`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-        signal
-      });
-    } catch (err) {
-      return { data: null, error: { code: signal && signal.aborted ? 'aborted' : 'network', streamed: false } };
-    }
+    const sent = await postGenerate(input, { signal });
+    if (sent.fail === 'unauthorized') return { data: null, error: { code: 'unauthorized' } };
+    if (sent.fail) return { data: null, error: { code: sent.fail, streamed: false } };
+    const res = sent.res;
     if (!res.ok || !/^text\/event-stream/.test(res.headers.get('content-type') || '')) {
       let body = null;
       try { body = await res.json(); } catch (err) { /* not JSON */ }
@@ -1028,28 +1051,14 @@ window.kdp = {
    * ai_stopped, ai_declined, ai_unavailable, ...), 'network', or 'aborted'.
    */
   async improve(input, { signal } = {}) {
-    const session = await this.getSession();
-    if (!session) return { data: null, error: { code: 'unauthorized' } };
-    let res;
-    try {
-      res = await fetch(`${SUPABASE_URL}/functions/v1/generate`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-        signal
-      });
-    } catch (err) {
-      return { data: null, error: { code: signal && signal.aborted ? 'aborted' : 'network' } };
-    }
+    const sent = await postGenerate(input, { signal });
+    if (sent.fail) return { data: null, error: { code: sent.fail } };
+    const res = sent.res;
     let body = null;
     try { body = await res.json(); } catch (err) {
       if (signal && signal.aborted) return { data: null, error: { code: 'aborted' } };
     }
-    if (res.ok && body && typeof body === 'object' && body.stage === 'section_improve') return { data: body, error: null };
-    if (body && typeof body.error === 'string') {
-      return { data: null, error: { code: body.error, words: Number.isInteger(body.words) ? body.words : null } };
-    }
-    return { data: null, error: { code: res.status === 401 ? 'unauthorized' : 'server_error' } };
+    return generateReply(res, body, 'section_improve');
   },
 
   /**
@@ -1062,27 +1071,11 @@ window.kdp = {
    * pauses autosave until then, extra fix A).
    */
   async sectionCheck(input, { onSent } = {}) {
-    const session = await this.getSession();
-    if (!session) return { data: null, error: { code: 'unauthorized' } };
-    let res;
-    try {
-      const sent = fetch(`${SUPABASE_URL}/functions/v1/generate`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      });
-      if (onSent) onSent();
-      res = await sent;
-    } catch (err) {
-      return { data: null, error: { code: 'network' } };
-    }
+    const sent = await postGenerate(input, { onSent });
+    if (sent.fail) return { data: null, error: { code: sent.fail } };
     let body = null;
-    try { body = await res.json(); } catch (err) { /* not JSON */ }
-    if (res.ok && body && typeof body === 'object' && body.stage === 'section_check') return { data: body, error: null };
-    if (body && typeof body.error === 'string') {
-      return { data: null, error: { code: body.error, words: Number.isInteger(body.words) ? body.words : null } };
-    }
-    return { data: null, error: { code: res.status === 401 ? 'unauthorized' : 'server_error' } };
+    try { body = await sent.res.json(); } catch (err) { /* not JSON */ }
+    return generateReply(sent.res, body, 'section_check');
   },
 
   /**
