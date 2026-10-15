@@ -8,10 +8,11 @@
 
 import { asData, type Outcome, obj, readReply, str } from "./common.ts";
 import { positioningBlock, positioningValues } from "./context.ts";
-import { IMPROVE, IMPROVE_GROWTH, type ImproveAction, MAX_TOKENS, RUN_STALE } from "./limits.ts";
-import { cleanSubset, locateSection, markUnsourced, mdWords, sentencesOf, type WriteContext, writeKnown, writeVoice } from "./section_write.ts";
+import { IMPROVE, IMPROVE_GROWTH, type ImproveAction, MAX_TOKENS } from "./limits.ts";
+import {
+  cleanSubset, locateSection, MARKER, markUnsourced, mdWords, otherSectionsLine, PART, sentencesOf, voiceBlock, type WriteContext, writeKnown, writeVoice,
+} from "./section_write.ts";
 
-const MARKER = "[Verify: no source]";
 
 export type ImproveJob = {
   stage: "section_improve";
@@ -55,12 +56,6 @@ export function improveMaxTokens(action: ImproveAction, words: number): number {
 
 /** The most words a selection may have for this action (Expand 1,000, the others 1,500). */
 export const improveMaxWords = (action: ImproveAction) => (action === "expand" ? IMPROVE.expandMaxWords : IMPROVE.maxWords);
-
-/** A running Generate run that is not stale (RUN_STALE, same rule as 0020 section_run_fresh). */
-export function runIsFresh(run: WriteContext["run"], now = Date.now()): boolean {
-  return !!run && run.state === "running" && Date.parse(run.heartbeat_at) > now - RUN_STALE.heartbeatMs &&
-    Date.parse(run.started_at) > now - RUN_STALE.startedMs;
-}
 
 /* ── Prompt ── */
 
@@ -119,17 +114,11 @@ export function improveTask(action: ImproveAction, words: number): string {
   }
 }
 
-const PART = { intro: "introduction", chapter: "chapter", conclusion: "conclusion" } as const;
-
 export function improveUserMessage(job: Pick<ImproveJob, "ctx" | "action" | "instruction" | "selection" | "before" | "after" | "words">): string {
   const ctx = job.ctx;
   const loc = locateSection(ctx)!;
   const c = loc.chapter;
   const b = ctx.brief;
-  const v = writeVoice(ctx.pen?.voice);
-  const others = c.kind === "chapter"
-    ? c.sections.map((s, j) => ({ s, j })).filter(({ s }) => s.id !== loc.section.id).map(({ s, j }) => `<item>${asData(`${loc.chapterNumber}.${j + 1} ${str(s.title)}`)}</item>`)
-    : [];
   const target = loc.section.word_target && loc.section.word_target > 0 ? String(loc.section.word_target) : "";
   return [
     // A short Brief block (owner decision 1, CLAUDE.md §5).
@@ -138,14 +127,7 @@ export function improveUserMessage(job: Pick<ImproveJob, "ctx" | "action" | "ins
     `<target_reader>${asData(b.target_reader ?? "")}</target_reader>`,
     `<reader_problem>${asData(b.reader_problem ?? "")}</reader_problem>`,
     "</brief>",
-    "<voice>",
-    `<tones>${asData(v.tones.join(", "))}</tones>`,
-    `<reading_level>${asData(v.reading_level)}</reading_level>`,
-    `<perspective>${asData(v.perspective)}</perspective>`,
-    `<sentences>${asData(v.sentences)}</sentences>`,
-    `<paragraphs>${asData(v.paragraphs)}</paragraphs>`,
-    `<sample>${asData(v.sample)}</sample>`,
-    "</voice>",
+    ...voiceBlock(ctx.pen?.voice),
     ...positioningBlock("locked_positioning", positioningValues(ctx.positioning)),
     "<section>",
     `<part>${PART[c.kind]}</part>`,
@@ -155,7 +137,7 @@ export function improveUserMessage(job: Pick<ImproveJob, "ctx" | "action" | "ins
       `<chapter_objective>${asData(str(c.objective))}</chapter_objective>`,
       `<section_number>${loc.number}</section_number>`,
       `<section_title>${asData(str(loc.section.title))}</section_title>`,
-      others.length ? `<other_sections>\n${others.join("\n")}\n</other_sections>` : "<other_sections>(not given)</other_sections>",
+      otherSectionsLine(loc),
     ] : []),
     `<word_target>${asData(target)}</word_target>`,
     "</section>",

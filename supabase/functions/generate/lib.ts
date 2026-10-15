@@ -53,12 +53,12 @@ export {
   FINDING_KINDS, type FindingKind, interpretOutlineCheck, keyHash, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineCheckKnown, outlineCheckUserMessage, type OutlineFinding, outlineKey, type OutlineRow,
 } from "./lib/outline_check.ts";
 export {
-  capText, cleanSubset, estimateTokens, headingsIn, locateSection, markUnsourced, mdWords, sentencesOf, tailText, WRITE_SYSTEM, type WriteChapterRow, type WriteContext,
+  capText, cleanSubset, estimateTokens, headingsIn, locateSection, markUnsourced, mdWords, runIsFresh, sentencesOf, tailText, WRITE_SYSTEM, type WriteChapterRow, type WriteContext,
   writeAim, writeKnown, writeRequest, type WriteSectionRow, writeUserMessage, writeVoice,
 } from "./lib/section_write.ts";
 export {
   IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, type ImproveNotes, type ImproveResult, improveTask, improveUserMessage,
-  improveWords, interpretImprove, newNames, normalizeMarkers, runIsFresh, type StructureChange, structureChange,
+  improveWords, interpretImprove, newNames, normalizeMarkers, type StructureChange, structureChange,
 } from "./lib/section_improve.ts";
 export {
   type CheckArea, type CheckAreas, type CheckJob, checkKeyOf, checkUserMessage, findQuote, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM,

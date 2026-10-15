@@ -12,7 +12,7 @@ import { asData, cleanLine, cutWords, obj, type Outcome, readReply, str } from "
 import { briefAndResearch, positioningBlock, positioningValues } from "./context.ts";
 import { CHECK, CHECK_TYPES, type CheckType } from "./limits.ts";
 import { keyHash } from "./outline_check.ts";
-import { locateSection, type WriteContext, writeVoice } from "./section_write.ts";
+import { locateSection, otherSectionsLine, PART, voiceBlock, withoutShortVoice, type WriteContext, writeVoice } from "./section_write.ts";
 
 export type SectionFinding = { type: CheckType; message: string; quote: string };
 export type CheckArea = "pass" | "issues" | "unclear" | "skipped";
@@ -120,33 +120,13 @@ export const SECTION_CHECK_SCHEMA = {
   additionalProperties: false,
 };
 
-const PART = { intro: "introduction", chapter: "chapter", conclusion: "conclusion" } as const;
-
-// briefAndResearch carries the short <voice> block of the other stages; this stage sends the full one (as section_write).
-function withoutShortVoice(lines: string[]): string[] {
-  const start = lines.indexOf("<voice>");
-  const end = lines.indexOf("</voice>");
-  return start < 0 || end < start ? lines : [...lines.slice(0, start), ...lines.slice(end + 1)];
-}
-
 export function checkUserMessage(ctx: WriteContext): string {
   const loc = locateSection(ctx)!;
   const c = loc.chapter;
-  const v = writeVoice(ctx.pen?.voice);
-  const others = c.kind === "chapter"
-    ? c.sections.map((s, j) => ({ s, j })).filter(({ s }) => s.id !== loc.section.id).map(({ s, j }) => `<item>${asData(`${loc.chapterNumber}.${j + 1} ${str(s.title)}`)}</item>`)
-    : [];
   const target = loc.section.word_target && loc.section.word_target > 0 ? String(loc.section.word_target) : "";
   return [
     ...withoutShortVoice(briefAndResearch(ctx)),
-    "<voice>",
-    `<tones>${asData(v.tones.join(", "))}</tones>`,
-    `<reading_level>${asData(v.reading_level)}</reading_level>`,
-    `<perspective>${asData(v.perspective)}</perspective>`,
-    `<sentences>${asData(v.sentences)}</sentences>`,
-    `<paragraphs>${asData(v.paragraphs)}</paragraphs>`,
-    `<sample>${asData(v.sample)}</sample>`,
-    "</voice>",
+    ...voiceBlock(ctx.pen?.voice),
     ...positioningBlock("locked_positioning", positioningValues(ctx.positioning)),
     "<section>",
     `<part>${PART[c.kind]}</part>`,
@@ -156,7 +136,7 @@ export function checkUserMessage(ctx: WriteContext): string {
       `<chapter_objective>${asData(str(c.objective))}</chapter_objective>`,
       `<section_number>${loc.number}</section_number>`,
       `<section_title>${asData(str(loc.section.title))}</section_title>`,
-      others.length ? `<other_sections>\n${others.join("\n")}\n</other_sections>` : "<other_sections>(not given)</other_sections>",
+      otherSectionsLine(loc),
     ] : []),
     `<word_target>${asData(target)}</word_target>`,
     "</section>",

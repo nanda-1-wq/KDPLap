@@ -6,7 +6,7 @@
 
 import { asData, numbersIn, obj, str, withoutFigures } from "./common.ts";
 import { briefAndResearch, knownText, positioningBlock, type PositioningContext, positioningValues } from "./context.ts";
-import { MAX_TOKENS, SECTION_MAX_CHARS, WRITE } from "./limits.ts";
+import { MAX_TOKENS, RUN_STALE, SECTION_MAX_CHARS, WRITE } from "./limits.ts";
 
 /** One section of outline_json (0016, 0018, 0019 keys). */
 export type WriteSectionRow = {
@@ -63,7 +63,7 @@ export function locateSection(ctx: WriteContext) {
 
 /* ── Words ── */
 
-const MARKER = "[Verify: no source]";
+export const MARKER = "[Verify: no source]";
 
 /** Words in a section's Markdown: the md_word_count rule (0018, 0020) and kdpWords.count. */
 export function mdWords(md: string): number {
@@ -167,11 +167,49 @@ Voice:
 - Follow <voice>: tones, reading level, point of view, sentence and paragraph length. <sample> shows how the author writes. Match its style, never its content.
 - Clear, simple words. Short sentences. Active voice. No em dashes.`;
 
-const PART = { intro: "introduction", chapter: "chapter", conclusion: "conclusion" } as const;
+/* ── Prompt parts shared by section_write, section_improve and section_check ── */
+
+export const PART = { intro: "introduction", chapter: "chapter", conclusion: "conclusion" } as const;
+
+/** The full <voice> block with the writing sample (the other stages send a short one). */
+export function voiceBlock(raw: unknown): string[] {
+  const v = writeVoice(raw);
+  return [
+    "<voice>",
+    `<tones>${asData(v.tones.join(", "))}</tones>`,
+    `<reading_level>${asData(v.reading_level)}</reading_level>`,
+    `<perspective>${asData(v.perspective)}</perspective>`,
+    `<sentences>${asData(v.sentences)}</sentences>`,
+    `<paragraphs>${asData(v.paragraphs)}</paragraphs>`,
+    `<sample>${asData(v.sample)}</sample>`,
+    "</voice>",
+  ];
+}
+
+/** The <other_sections> line: the chapter's other sections as "4.1 Title" items (chapters only). */
+export function otherSectionsLine(loc: NonNullable<ReturnType<typeof locateSection>>): string {
+  const c = loc.chapter;
+  const others = c.kind === "chapter"
+    ? c.sections.map((s, j) => ({ s, j })).filter(({ s }) => s.id !== loc.section.id).map(({ s, j }) => `<item>${asData(`${loc.chapterNumber}.${j + 1} ${str(s.title)}`)}</item>`)
+    : [];
+  return others.length ? `<other_sections>\n${others.join("\n")}\n</other_sections>` : "<other_sections>(not given)</other_sections>";
+}
+
+// briefAndResearch carries the short <voice> block of the other stages; these stages send the full one.
+export function withoutShortVoice(lines: string[]): string[] {
+  const start = lines.indexOf("<voice>");
+  const end = lines.indexOf("</voice>");
+  return start < 0 || end < start ? lines : [...lines.slice(0, start), ...lines.slice(end + 1)];
+}
+
+/** A running Generate run that is not stale (RUN_STALE, same rule as 0020 section_run_fresh). */
+export function runIsFresh(run: WriteContext["run"], now = Date.now()): boolean {
+  return !!run && run.state === "running" && Date.parse(run.heartbeat_at) > now - RUN_STALE.heartbeatMs &&
+    Date.parse(run.started_at) > now - RUN_STALE.startedMs;
+}
 
 export function writeUserMessage(ctx: WriteContext, aim: number): string {
   const loc = locateSection(ctx)!;
-  const v = writeVoice(ctx.pen?.voice);
   const chapters = ctx.outline.filter((c) => c.kind === "chapter");
   const outline = chapters.map((c, i) =>
     `<chapter number="${i + 1}"><title>${asData(str(c.title))}</title><objective>${asData(str(c.objective))}</objective></chapter>`);
@@ -181,20 +219,10 @@ export function writeUserMessage(ctx: WriteContext, aim: number): string {
   const soFar = tailText(own, WRITE.ownTailChars);
   const heads = headingsIn(own);
   const prev = tailText(ctx.previous, WRITE.previousChars);
-  const others = c.kind === "chapter"
-    ? c.sections.map((s, j) => ({ s, j })).filter(({ s }) => s.id !== loc.section.id).map(({ s, j }) => `<item>${asData(`${loc.chapterNumber}.${j + 1} ${str(s.title)}`)}</item>`)
-    : [];
   const hasText = !!soFar;
   return [
-    ...briefAndResearch(ctx).filter((_l, i, all) => !isVoiceLine(all, i)),
-    "<voice>",
-    `<tones>${asData(v.tones.join(", "))}</tones>`,
-    `<reading_level>${asData(v.reading_level)}</reading_level>`,
-    `<perspective>${asData(v.perspective)}</perspective>`,
-    `<sentences>${asData(v.sentences)}</sentences>`,
-    `<paragraphs>${asData(v.paragraphs)}</paragraphs>`,
-    `<sample>${asData(v.sample)}</sample>`,
-    "</voice>",
+    ...withoutShortVoice(briefAndResearch(ctx)),
+    ...voiceBlock(ctx.pen?.voice),
     ...positioningBlock("locked_positioning", positioningValues(ctx.positioning)),
     `<book><title>${asData(str(ctx.book.title))}</title><subtitle>${asData(str(ctx.book.subtitle))}</subtitle></book>`,
     outline.length ? `<outline>\n${outline.join("\n")}\n</outline>` : "<outline>(not given)</outline>",
@@ -206,7 +234,7 @@ export function writeUserMessage(ctx: WriteContext, aim: number): string {
       `<chapter_objective>${asData(str(c.objective))}</chapter_objective>`,
       `<section_number>${loc.number}</section_number>`,
       `<section_title>${asData(str(loc.section.title))}</section_title>`,
-      others.length ? `<other_sections>\n${others.join("\n")}\n</other_sections>` : "<other_sections>(not given)</other_sections>",
+      otherSectionsLine(loc),
     ] : []),
     `<examples>${c.kind === "chapter" && c.include_examples ? "yes" : "no"}</examples>`,
     `<exercise>${c.kind === "chapter" && c.include_exercise && isLast ? "yes" : "no"}</exercise>`,
@@ -217,13 +245,6 @@ export function writeUserMessage(ctx: WriteContext, aim: number): string {
     "",
     hasText ? `Write about ${aim} words to continue this section. Follow the rules.` : `Write about ${aim} words for this section. Follow the rules.`,
   ].join("\n");
-}
-
-// briefAndResearch carries the short <voice> block of the other stages; this stage sends its own.
-function isVoiceLine(all: string[], i: number): boolean {
-  const start = all.indexOf("<voice>");
-  const end = all.indexOf("</voice>");
-  return start >= 0 && i >= start && i <= end;
 }
 
 /** The provider request: streamed, no thinking, low effort, the reply is Markdown text. */

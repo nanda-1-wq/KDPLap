@@ -22,10 +22,10 @@ import { DRIFT_SCHEMA, DRIFT_SYSTEM, driftUserMessage, interpretDriftCheck } fro
 import { interpretTitleIdeas, type TitleContext, titleIdeasWanted, TITLE_SCHEMA, TITLE_SYSTEM, titleUserMessage } from "./title_ideas.ts";
 import { interpretOutline, OUTLINE_SCHEMA, OUTLINE_SYSTEM, type OutlineContext, type OutlineTarget, outlineTarget, outlineUserMessage } from "./outline_ideas.ts";
 import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineChapters, outlineCheckKnown, outlineCheckUserMessage, type OutlineRow, outlineKey } from "./outline_check.ts";
-import { locateSection, mdWords, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
+import { locateSection, mdWords, runIsFresh, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
 import type { WriteJob } from "./write_run.ts";
-import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove, runIsFresh } from "./section_improve.ts";
-import { CHECK, IMPROVE, RUN_STALE, SECTION_MAX_CHARS } from "./limits.ts";
+import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove } from "./section_improve.ts";
+import { CHECK, IMPROVE, SECTION_MAX_CHARS } from "./limits.ts";
 import { checkKeyOf, type CheckJob, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM } from "./section_check.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
@@ -294,9 +294,7 @@ const sectionWrite: StageDef<"section_write", WriteContext> = {
     if ((ctx.current?.id ?? null) !== input.baseVersionId) return { fail: "version_conflict" };
     const draft = ctx.draft ?? "";
     if (draft.trim() && draft !== (ctx.current?.content ?? "")) return { fail: "unsaved_draft" };
-    if (ctx.run && ctx.run.state === "running" && Date.parse(ctx.run.heartbeat_at) > Date.now() - RUN_STALE.heartbeatMs && Date.parse(ctx.run.started_at) > Date.now() - RUN_STALE.startedMs) {
-      return { fail: "run_in_progress" };
-    }
+    if (runIsFresh(ctx.run)) return { fail: "run_in_progress" };
     const own = ctx.current?.content ?? "";
     if (own.length >= SECTION_MAX_CHARS - 1000) return { fail: "section_too_long" };
     const target = loc.section.word_target && loc.section.word_target > 0 ? loc.section.word_target : null;
