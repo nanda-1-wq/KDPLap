@@ -139,8 +139,12 @@
       ai_declined: 'The AI service declined this text.'
     };
 
+    const MAY_COUNT = 'If the AI had already finished, this call may still count.';
+
     function errorOf(e) {
       const code = e.code;
+      // A lost connection may have reached the server, which then counts the call (G3 P8, as 05 after Stop).
+      if (code === 'network') return { title: ERR.network, line: MAY_COUNT, retry: true, warn: false };
       if (ERR[code]) return { title: ERR[code], line: 'Nothing was counted in your usage.', retry: true, warn: false };
       if (code === 'monthly_limit' || code === 'rate_limited') {
         const [, text, retry] = kdpUi.aiMessage(code);

@@ -351,13 +351,25 @@ const setup = async page => {
         const p = imp.pending.shift();
         if (p) p.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
         return !!p;
+      },
+      // G3 P8: the connection is lost (fetch rejects with a TypeError, as a browser does).
+      fail() {
+        const p = imp.pending.shift();
+        if (p) p.reject(new TypeError('Failed to fetch'));
+        return !!p;
       } };
     // E10.4: the AI section check (not streamed). The test answers: window.__chk.reply(status, body);
     // .requests: [{ body, at }] (at: Date.now() when the page sent it).
     const chk = window.__chk = { requests: [], pending: [],
       reply(status, body) {
         const p = chk.pending.shift();
-        if (p) p(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+        if (p) p.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+        return !!p;
+      },
+      // G3 P8: the connection is lost.
+      fail() {
+        const p = chk.pending.shift();
+        if (p) p.reject(new TypeError('Failed to fetch'));
         return !!p;
       } };
     const orig = window.fetch;
@@ -366,7 +378,7 @@ const setup = async page => {
       const sent = JSON.parse(init.body);
       if (sent.stage === 'section_check') {
         chk.requests.push({ body: sent, at: Date.now() });
-        return new Promise((resolve) => chk.pending.push(resolve));
+        return new Promise((resolve, reject) => chk.pending.push({ resolve, reject }));
       }
       if (sent.stage === 'section_improve') {
         imp.requests.push({ body: sent, headers: init.headers });

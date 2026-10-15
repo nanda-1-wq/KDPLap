@@ -245,6 +245,17 @@ const test = async page => {
   await reply(409, { error: 'run_in_progress' });
   await until(() => /being written in another tab/.test((document.querySelector('.wr-chk-group:last-child') || {}).innerText || ''));
   ok(true, 'run_in_progress from the server: the other-tab message');
+  // G3 P8: a lost connection may have reached the server, so the call may count.
+  delete st.runs[st.s42];
+  await open(W1, st.s42);
+  await checksTab();
+  await page.click('[data-chk-run]');
+  await until(() => window.__chk.requests.length === 1);   // a new page: its own request list
+  await g(() => window.__chk.fail());
+  await page.waitForSelector('[data-chk-retry]', { timeout: 3000 });
+  ok(/The AI service did not respond\. If the AI had already finished, this call may still count\. Try again/.test(await txt('.wr-chk-group:last-child'))
+    && !/Nothing was counted/.test(await txt('.wr-chk-group:last-child')), `network: may count: "${await txt('.wr-chk-group:last-child .alert')}"`);
+
 
   // 8. Final with warnings, and the step's state: checks never block (decision 6).
   await page.selectOption('[data-status]', 'final');

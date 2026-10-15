@@ -551,11 +551,14 @@
         rate_limited: kdpUi.aiMessage('rate_limited')[1]
       }[code] || 'The AI service did not respond.';
       // Failures and refusals before the call are not counted (the server writes no usage row).
-      const counted = false;
+      // A lost connection may have reached the server, which then counts it (G3 P8, as 05 after Stop).
+      const sub = code === 'network'
+        ? 'Your text is safe. If the AI had already finished, this call may still count.'
+        : 'Your text is safe. This attempt was not counted in your usage.';
       const retry = !['positioning_not_locked', 'outline_not_approved', 'unauthorized', 'selection_too_short', 'selection_too_long', 'monthly_limit', 'run_in_progress'].includes(code);
       const warn = ['monthly_limit', 'rate_limited', 'run_in_progress', 'positioning_not_locked', 'outline_not_approved', 'selection_too_short', 'selection_too_long'].includes(code);
       imp.state = 'error';
-      imp.error = { line, sub: counted ? '' : 'Your text is safe. This attempt was not counted in your usage.', retry, kind: warn ? 'warning' : 'error', again: 'request' };
+      imp.error = { line, sub, retry, kind: warn ? 'warning' : 'error', again: 'request' };
       after(`Improve stopped. ${line}`);
     }
 

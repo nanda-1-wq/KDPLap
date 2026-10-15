@@ -622,5 +622,16 @@ const test = async page => {
   ok(writes('apply_suggestion').length === nApply + 1 && st.versions.find((v) => v.id === st.sectionOf(st.s42).s.current_version_id).content.includes('sitting. Rest after.'), `Try again after a save error: applied (${writes('apply_suggestion').length - nApply}, ${await txt('[data-imp]')}, ${JSON.stringify(last && last.body.p_full_text.slice(0, 120))})`);
   ok((await imps()).length === 3, 'Try again after a save error makes no new AI call');
 
+  // G3 P8: a lost connection may have reached the server, so the call may count.
+  await open(W1, st.s42);
+  await select('Now lift', 0, 'five times', 3);
+  await openMenu();
+  await page.click('[data-imp-act="improve"]');
+  await until(() => window.__imp.requests.length === 1);
+  await g(() => window.__imp.fail());
+  await waitCard('error');
+  ok(/We couldn’t reach KDP Lab\. Check your connection\. Your text is safe\. If the AI had already finished, this call may still count\./.test(await txt('[data-imp] .alert'))
+    && !/not counted/.test(await txt('[data-imp] .alert')) && await has('[data-imp-retry]'), `network: may count, Try again: ${await txt('[data-imp] .alert')}`);
+
   return log.join('\n');
 };
