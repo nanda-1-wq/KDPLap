@@ -1,6 +1,6 @@
 # PRODUCE gate G3: fixes that change behaviour
 
-Status: 2026-10-15, branch `claude/produce-gate`. **STOP 2 reached:** the server part is built, committed (one commit per finding) and pushed. The browser part and the live check are still to do.
+Status: 2026-10-15, branch `claude/produce-gate`. STOP 2 done: the server part is committed and pushed, and the owner applied 0023 (through Claude chat). STOP 3 done: the browser part is built, every suite is green, and it is committed and pushed after "commit and push". **Next:** the owner deploys generate v20, and the live check runs after "live".
 Plan: `docs/reviews/2026-10-15-g3-plan.md` (with the owner's 3 changes at the top).
 Source: `docs/reviews/produce-gate-g1.md` (P1, P3 to P10, section 7 owner answers) and `docs/reviews/produce-gate-g2.md`.
 
@@ -129,6 +129,82 @@ A 2,000-word reply 25% long (2,500 words) needs about 3,425 tokens at the measur
 - Every saved check shows "Out of date" once after the deploy.
 - Known gap, not in G3: the chapter number is still not in the key (the prompt sends it).
 
-## 5. STOP 3 (next, after the owner's word)
+## 5. STOP 3: the browser part
 
-Browser part: P3 (the editor is read only during "Save and check"), the P4 badge, P8 (the network wording), P9 (flush before Improve, the message, and DOM selection tests across bold, italic, a list item, a heading, a marker and the whole section in `t-improve.js`), and the P10 key in `keyNow` and `t-checks`. All suites green. Then "commit and push". Then the owner deploys generate v20 from the Mac, right before the live check, and the live check runs after "live" ($0.15 at most).
+### 5.1 Per finding
+
+| ID | Files | What changed |
+|---|---|---|
+| P3 | `js/book-write.js`, `js/write-checks.js` | The `pauseDrafts` host entry calls `hold(on ? 2 : 0)`, the same hold Accept uses. From "Save and check" until the check request is sent, the editor is read only (`contenteditable=false`, `aria-readonly=true`, the existing grey style) and autosave is paused. Typing in that window does nothing, so nothing can be lost. Every exit path of `run()` calls `pauseDrafts(false)`. |
+| P4 | `js/write-checks.js`, `css/app.css` (1 rule) | A finding with `unsourced` shows the step 05 badge: `<span class="check-badge warn">⚠ Verify: no source for 45</span>`, after the message. `.check-badge` does not wrap, so one rule lets it wrap inside the narrow panel: `.wr-chk-find .check-badge { white-space: normal; }`, the same as `.ttl-chips .check-badge` in step 04. |
+| P8 | `js/write-checks.js`, `js/write-improve.js` | After a `network` error. AI check: "The AI service did not respond." / "If the AI had already finished, this call may still count." Improve: "We couldn’t reach KDP Lab. Check your connection." / "Your text is safe. If the AI had already finished, this call may still count." Other codes are unchanged. |
+| P9 | `js/write-improve.js`, `js/book-write.js` | Before the Improve call, unsaved typing is saved as the draft (the `flush` host entry; nothing is sent when nothing is unsaved). The new code shows a warning card with Try again: "We couldn’t find the selected text in your saved section. Try again." / "Your text is safe. This attempt was not counted in your usage." |
+| P10 | `js/write-checks.js` | `keyNow` passes `wordTarget` and `siblings` (`kdpSectionCheckKey.siblings`). The browser outline comes from `outline_json`, the same source the server reads. |
+
+### 5.2 Owner change 2: selections made in the real editor
+
+New browser test `tests/browser/write/t-selection.js`, with `tests/browser/write/selection-check.ts`, which runs the function's own `selectionInText` on each request the page sent:
+`tests/browser/run.sh write t-selection.js | deno run tests/browser/write/selection-check.ts`
+
+| Case (selected in the editor) | Request sent | Part of the saved text | Server rule |
+|---|---|---|---|
+| inside bold | PASS | PASS | PASS |
+| across bold and italic | PASS | PASS | PASS |
+| across the marker into a list item | PASS | PASS | PASS |
+| across list items | PASS | PASS | PASS |
+| a list item into a heading | PASS | PASS | PASS |
+| a heading into a paragraph | PASS | PASS | PASS |
+| italic at the end of the section | PASS | PASS | PASS |
+| the whole section (first to last character) | PASS | PASS | PASS |
+| the whole section with Ctrl+A | PASS | PASS | PASS |
+| typed just before Improve (also: the draft is saved before the request) | PASS (+1) | PASS | PASS |
+
+Every case passed, so the rule did not change. One note: a test range set on the editor element itself (`selectNodeContents`) gets no floating Improve button. A real Ctrl+A does get one (the Ctrl+A row above), so this is not a bug a writer meets.
+
+### 5.3 Suites at STOP 3
+
+| Suite | G2 | STOP 2 | STOP 3 |
+|---|---|---|---|
+| Deno `generate` | 277 | 290 | 290 |
+| Helpers (12 files) | 80 | 84 | 84 |
+| SQL | 885 | 924 | 924 |
+| Browser write (10 tests) | 479 | 479 | **491** (t-checks 85 → 95, t-improve 118 → 120) |
+| t-timing | 11 | 11 | 11 |
+| t-selection + server rule (new) | n/a | n/a | **31** (21 browser + 10 server rule) |
+| Browser outline (7 tests) | 226 | 226 | 226 |
+
+All pass, 0 failed.
+
+New browser checks:
+- t-checks +10: P3 read only during the save, typing then adds nothing, editable again after the send; P8 network; P10 current with the new parts, a sibling renamed, a new target; P4 badge, no badge, no sideways scroll.
+- t-improve +2: P8 network, P9 message.
+
+Changed (same count, with the reason):
+- `t-checks` section 6: "the typing during the save is sent as a draft after the call" becomes "typing after the call is sent goes out as a draft". P3: typing during the save is not possible any more, so the test types after the send.
+- `t-checks` `keyOf` helper: passes the target and the siblings (P10).
+- `write/mock.js`: `__chk` and `__imp` get `fail()` (a lost connection). `__chk.pending` holds `{ resolve, reject }`, a helper change.
+
+Screenshots: `tests/browser/shots/write/t-checks-verify-badge-*.png`, `t-improve-not-in-text-*.png`.
+
+### 5.4 Commits (browser part)
+
+| Commit | Finding | Files |
+|---|---|---|
+| `26dde34` | P3 | `js/book-write.js`, `js/write-checks.js`, `t-checks.js` |
+| `bda3682` | P4 browser | `js/write-checks.js`, `css/app.css`, `t-checks.js` |
+| `bc87212` | P8 | `js/write-checks.js`, `js/write-improve.js`, `write/mock.js`, `t-checks.js`, `t-improve.js` |
+| `7d0073e` | P9 browser | `js/write-improve.js`, `js/book-write.js`, `t-improve.js`, `t-selection.js` (new), `selection-check.ts` (new), `tests/README.md` |
+| `5709f1d` | P10 browser | `js/write-checks.js`, `t-checks.js` |
+
+Files shared by several findings were staged hunk by hunk. The mixed blocks in `t-checks.js` and `t-improve.js` were built by hand for the in-between commits. Every staged JS file passed `node --check`. The browser suites ran on the final tree (all green, section 5.3), not on each in-between commit, because the test server on port 5500 serves the working tree.
+
+## 6. Next: deploy and the live check
+
+1. Done: "commit and push".
+2. The owner deploys generate v20 from the Mac (index.ts and lib as on the branch).
+3. After "live", on the test account, test book 4e2dde85, $0.15 at most:
+   - P1: Regenerate after a discarded partial.
+   - P4: an AI check with a number in a message, if one appears.
+   - P6: Generate one section with a 2,000-word aim and read `end_reason`.
+   - P10: an old check shows "Out of date" once.
+   The report will list the `ai_usage` rows used.
