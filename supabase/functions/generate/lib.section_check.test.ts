@@ -295,6 +295,48 @@ Deno.test("section_check: at most 10 unsourced numbers of at most 20 characters"
   assertEquals(L.checkKnown(j.ctx, "Sit 7 times.").endsWith("\nSit 7 times."), true);
 });
 
+/* ── G5 live note 4: the book's own section numbers are not numbers ── */
+
+Deno.test("sectionRefs: chapters 1..n in reading order, sections n.m; no number for the intro and conclusion", () => {
+  const ctx = checkCtx();
+  const refs = L.sectionRefs(ctx.outline);
+  const chapters = ctx.outline.filter((c) => c.kind === "chapter").sort((a, b) => a.position - b.position);
+  assertEquals([...refs.chapters], chapters.map((_, i) => String(i + 1)));
+  assertEquals([...refs.sections], chapters.flatMap((c, i) => c.sections.map((_, j) => `${i + 1}.${j + 1}`)));
+  // Rows out of order still number by position.
+  assertEquals([...L.sectionRefs([...ctx.outline].reverse()).sections], [...refs.sections]);
+});
+
+Deno.test("withoutSectionRefs: the book's own chapter and section numbers only", () => {
+  const refs = { chapters: new Set(["1", "2", "3"]), sections: new Set(["1.1", "1.2", "4.1"]) };
+  const W = (m: string) => L.withoutSectionRefs(m, refs);
+  assertEquals(W("This is the purpose of section 1.2. Keep it here."), "This is the purpose of section #. Keep it here.");
+  assertEquals(W("Move it to 4.1, which covers neck turns."), "Move it to #, which covers neck turns.");
+  assertEquals(W("Chapter 3 explains this; see chapters 2 and Ch. 1.1."), "Chapter # explains this; see chapters # and Ch. #.");
+  // Not this book's: still a number.
+  assertEquals(W("Section 9.9 and chapter 12 say so."), "Section 9.9 and chapter 12 say so.");
+  // A section-shaped number used as an amount stays.
+  assertEquals(W("About 1.2 million women and 1.1% of men."), "About 1.2 million women and 1.1% of men.");
+  assertEquals(W("Version 1.2.3 and $1.2 and 41.2"), "Version 1.2.3 and $1.2 and 41.2");
+});
+
+Deno.test("section_check: a message naming a section gets no Verify badge; real unsourced numbers still do", () => {
+  const j = job() as L.CheckJob;
+  const q = "Chair yoga also helps you lose weight fast, so you can drop a dress size by summer.";
+  const out = L.interpretJob(j, true, msg({ findings: [
+    // The live case (1.1, 2026-10-16): "Verify: no source for 1.2".
+    f("objective", "The section drifts into why reasoning leaves you drained, which is the purpose of section 1.2. Keep it on the body.", ""),
+    f("drift", "Research says 37 of 83 readers want this, which chapter 2 covers. Move it to 2.1.", q),
+    f("objective", "Studies show 45% of readers skip this; section 9.9 does not exist.", ""),
+  ] }));
+  const fs = out.check!.findings;
+  assertEquals(Object.keys(fs[0]).sort(), ["message", "quote", "type"]);
+  assertEquals(fs[1].unsourced, ["37", "83"]);   // a claim: the counts are flagged, chapter 2 and 2.1 are not
+  assertEquals(fs[2].unsourced, ["45", "9.9"]);
+  // Without the outline (old callers) the rule is as before.
+  assertEquals(L.interpretSectionCheck(true, msg({ findings: [fs[0]] }), CHECK_TEXT, true, "").check!.findings[0].unsourced, ["1.2"]);
+});
+
 Deno.test("checkKeyOf: a sibling title, the siblings' order and the word target change the key (G3 P10)", () => {
   const ctx = checkCtx();
   const k = L.checkKeyOf(ctx);

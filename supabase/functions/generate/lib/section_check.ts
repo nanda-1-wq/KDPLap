@@ -13,7 +13,7 @@ import { briefAndResearch, positioningBlock, positioningValues } from "./context
 import { CHECK, CHECK_TYPES, type CheckType } from "./limits.ts";
 import { keyHash } from "./outline_check.ts";
 import { outlineUnsourced } from "./outline_ideas.ts";
-import { locateSection, otherSectionsLine, PART, voiceBlock, withoutShortVoice, type WriteContext, writeKnown, writeVoice } from "./section_write.ts";
+import { locateSection, otherSectionsLine, PART, voiceBlock, withoutShortVoice, type WriteChapterRow, type WriteContext, writeKnown, writeVoice } from "./section_write.ts";
 
 /** unsourced (G3 P4): numbers in the message with no source, only when there is one (0023). */
 export type SectionFinding = { type: CheckType; message: string; quote: string; unsourced?: string[] };
@@ -96,6 +96,35 @@ export function checkKeyOf(ctx: WriteContext): string {
  * already flag it in "In your text").
  */
 export const checkKnown = (ctx: WriteContext, text: string) => [writeKnown(ctx), text].join("\n");
+
+/** This book's chapter and section numbers, as 06 Write shows them: chapters 1..n (intro and conclusion have none), sections "1.2". */
+export type SectionRefs = { chapters: Set<string>; sections: Set<string> };
+
+export function sectionRefs(outline: WriteChapterRow[]): SectionRefs {
+  const refs: SectionRefs = { chapters: new Set(), sections: new Set() };
+  [...outline].filter((c) => c.kind === "chapter").sort((a, b) => a.position - b.position).forEach((c, i) => {
+    refs.chapters.add(String(i + 1));
+    (c.sections ?? []).forEach((_, j) => refs.sections.add(`${i + 1}.${j + 1}`));
+  });
+  return refs;
+}
+
+/**
+ * A message with its references to this book's own chapters and sections
+ * taken out, so "the purpose of section 1.2" or "move it to 4.1" or "chapter 3"
+ * never reads as a number with no source (G5 live note 4). Only numbers this
+ * book has: "section 9.9" in an 8-chapter book is still checked. A bare
+ * "1.2" followed by %, a unit of size or "times" stays a number ("1.2 million").
+ * Chapter numbers are not added to the known numbers, so a real "3 studies" is
+ * still flagged in a book with a chapter 3.
+ */
+export function withoutSectionRefs(message: string, refs: SectionRefs): string {
+  return message
+    .replace(/\b(chapters?|ch\.)(\s+)(\d+)(?:\.(\d+))?\b/gi, (all, word: string, sp: string, n: string, m?: string) =>
+      (m ? refs.sections.has(`${n}.${m}`) : refs.chapters.has(n)) ? `${word}${sp}#` : all)
+    .replace(/(^|[^\d.,$£€])(\d+)\.(\d+)\b(?![.,]?\d)(?!\s*(?:%|percent\b|million\b|billion\b|thousand\b|times\b|x\b))/gi,
+      (all, pre: string, n: string, m: string) => (refs.sections.has(`${n}.${m}`) ? `${pre}#` : all));
+}
 
 /** True when the pen name has any voice field (tones, reading level, point of view, sentences, paragraphs, sample). */
 export function hasVoice(raw: unknown): boolean {
@@ -200,11 +229,12 @@ export function findQuote(raw: string, text: string): string | null {
  * - repeats (same type and quote, or same gap message) are dropped; at most
  *   CHECK.maxFindings, in the model's order.
  * - a number in a message that known (checkKnown) does not have is listed
- *   in the finding's unsourced (G3 P4, the step 05 rule).
+ *   in the finding's unsourced (G3 P4, the step 05 rule); a reference to one
+ *   of the book's own chapters or sections is not a number (G5 live note 4).
  * Areas: issues (kept findings), unclear (only dropped ones), skipped (voice,
  * no voice set), else pass. An empty list is a valid, counted answer.
  */
-export function interpretSectionCheck(httpOk: boolean, body: unknown, text: string, voice: boolean, known = ""): Outcome {
+export function interpretSectionCheck(httpOk: boolean, body: unknown, text: string, voice: boolean, known = "", refs?: SectionRefs): Outcome {
   const { base, out, fail } = readReply(httpOk, body);
   if (fail || !out) return fail!;
   if (!Array.isArray(out.findings)) return { ...base, status: "failed", counted: false, code: "ai_unavailable" };
@@ -229,7 +259,8 @@ export function interpretSectionCheck(httpOk: boolean, body: unknown, text: stri
     seen.add(key);
     if (quote === "") gaps++;
     // The step 05 number rule on the message (G3 P4); the badge shows them.
-    const unsourced = outlineUnsourced(message, known);   // at most 10, each at most 20 characters
+    // A reference to one of this book's sections is not a number (G5 live note 4).
+    const unsourced = outlineUnsourced(refs ? withoutSectionRefs(message, refs) : message, known);   // at most 10, each at most 20 characters
     findings.push(unsourced.length ? { type, message, quote, unsourced } : { type, message, quote });
   }
   const area = (t: CheckType): CheckArea => {

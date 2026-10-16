@@ -62,7 +62,7 @@ export {
 } from "./lib/section_improve.ts";
 export {
   type CheckArea, type CheckAreas, type CheckJob, checkKeyOf, checkKnown, checkUserMessage, findQuote, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM, siblingParts,
-  sectionCheckKey, type SectionCheckResult, type SectionFinding, voiceParts,
+  sectionCheckKey, type SectionCheckResult, type SectionFinding, sectionRefs, type SectionRefs, voiceParts, withoutSectionRefs,
 } from "./lib/section_check.ts";
 export { sseEvent, ssePing, sseReader, type SseEvent } from "./lib/sse.ts";
 export { endPolicy, type EndReason, openRunCount, startWriteRun, stopAllRuns, type WriteJob, type WriteTiming } from "./lib/write_run.ts";
