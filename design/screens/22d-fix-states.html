@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDP Lab · Fix states</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;family=Source+Serif+4:wght@400;600&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../design-tokens.css">
+<!-- PRODUCE gate G5 · 06 Write · Checks tab: severity, Keep as is, Fix with
+     Custom and the Fix major queue (owner answers G4 Q1 to Q7, G5 Q1 to Q5).
+     The right panel at its real width (280 px, design 22) and the Improve card
+     (design 22b). Tokens from design/design-tokens.css only. Ink on paper;
+     functional colors only with an icon and a word, small areas. Every button
+     44 px. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
+  a { color: var(--ink); text-decoration: underline; }
+  :focus-visible, .is-focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .page { max-width: 1440px; padding: var(--space-10) var(--space-12); display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-8) var(--space-6); align-items: start; }
+  .page-head { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-1); }
+  .page-head h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
+  .page-head p { margin: 0; font-size: var(--text-md); color: var(--graphite); max-width: 820px; line-height: 1.5; }
+  .wide { grid-column: span 2; }
+  @media (max-width: 899px) { .page { padding: var(--space-6) var(--space-4); } .wide { grid-column: 1 / -1; } }
+
+  .label { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); text-transform: uppercase; }
+  .state { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+  .state > .label { padding-left: var(--space-1); }
+  .caption { margin: 0; font-size: var(--text-sm); color: var(--graphite); line-height: 1.5; max-width: 280px; }
+  .wide .caption { max-width: 640px; }
+  .caption strong { color: var(--ink); font-weight: 600; }
+
+  /* A wide state: the Improve card (or editor) next to the right panel */
+  .combo { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-start; }
+  .combo > .card, .combo > .ed { flex: 1 1 340px; min-width: 0; }
+  .combo > .side { flex: 0 0 280px; }
+
+  /* The right panel (design 22: 280 px, white, 18 px padding) */
+  .side { width: 100%; max-width: 280px; background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl);
+          padding: 18px; display: flex; flex-direction: column; gap: var(--space-4); }
+  .tabs { display: flex; gap: 6px; }
+  .tab { flex: 1 1 0; min-height: var(--control-h); border-radius: var(--radius-md); font-family: inherit; font-size: var(--text-md);
+         border: 1px solid var(--stone); background: var(--surface); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 var(--space-2); }
+  .tab[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+  .count { font-size: var(--text-xs); font-weight: 600; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill);
+           display: inline-flex; align-items: center; justify-content: center; background: var(--mist); color: var(--ink); }
+  .tab[aria-selected="true"] .count { background: var(--surface); color: var(--ink); }
+  .opt { display: flex; flex-direction: column; gap: var(--space-1); }
+  .opt + .opt { padding-top: var(--space-3); border-top: 1px solid var(--mist); }
+  .opt .when { display: flex; justify-content: space-between; gap: var(--space-2); }
+
+  .group { display: flex; flex-direction: column; gap: var(--space-2); }
+  .group + .group { padding-top: var(--space-4); border-top: 1px solid var(--mist); }
+  .group-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+  .group-head .gh { display: flex; align-items: center; gap: var(--space-2); }
+  .ai-tag { font-family: var(--font-label); font-size: 11px; letter-spacing: 0.06em; color: var(--graphite); border: 1px solid var(--stone-2);
+            border-radius: var(--radius-pill); padding: 0 7px; }
+  .busy { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--ink-2); min-height: var(--control-h); }
+
+  /* A check row */
+  .crow { display: grid; grid-template-columns: 16px 1fr; column-gap: var(--space-2); font-size: var(--text-md); line-height: 1.45; color: var(--ink); }
+  .crow svg { margin-top: 2px; }
+  .crow .warn { color: var(--warning); }
+  .crow .ok { color: var(--success); }
+  .crow .neutral { color: var(--graphite); }
+  .crow .txt { min-width: 0; overflow-wrap: anywhere; }
+  .crow .sub { display: block; font-size: var(--text-sm); color: var(--graphite); }
+  .linkbtn { min-height: var(--control-h); padding: 0 var(--space-1); margin: -10px 0 -8px; border: none; background: transparent; font-family: inherit;
+             font-size: var(--text-sm); color: var(--ink); text-decoration: underline; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .linkbtn[disabled] { color: var(--muted); text-decoration: none; cursor: default; }
+  /* The hit area stays 44 px, but the ring hugs the word, so it never covers the rows above or below. */
+  .linkbtn:focus-visible, .linkbtn.is-focus { outline: none; }
+  .linkbtn:focus-visible > .lbl, .linkbtn.is-focus > .lbl { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+  /* A fold row: "2 minor (voice) · Show", "1 kept · Show" */
+  .fold { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); color: var(--ink-2); }
+  .fold svg { color: var(--graphite); flex-shrink: 0; }
+  .fold .txt { flex: 1 1 auto; min-width: 0; }
+  .fold .linkbtn { margin: -12px 0; }
+
+  /* AI check */
+  .help { margin: 0; font-size: var(--text-sm); color: var(--graphite); line-height: 1.5; }
+  .help-last { padding-top: var(--space-2); border-top: 1px solid var(--mist); }
+  .meta { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--graphite); flex-wrap: wrap; }
+  .meta .linkbtn { margin: -12px 0; }
+  .btn { min-height: var(--control-h); padding: 0 var(--space-4); display: inline-flex; align-items: center; justify-content: center;
+         gap: var(--space-2); border-radius: var(--radius-md); font-family: inherit; font-size: var(--text-md);
+         border: 1px solid var(--stone); background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .btn-full { width: 100%; }
+  .btn-sm { font-size: var(--text-sm); padding: 0 var(--space-3); }
+  .btn-primary { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+  .btn-text { border-color: transparent; background: transparent; text-decoration: underline; padding: 0 var(--space-2); }
+  .btn[disabled] { background: var(--surface-2); border-color: var(--stone); color: var(--muted); cursor: default; }
+  .btn-text[disabled] { background: transparent; border-color: transparent; text-decoration: none; }
+  .btn.is-pressed { background: var(--mist); border-color: var(--ink); }
+  .why { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); font-size: var(--text-sm); color: var(--graphite); line-height: 1.45; }
+  .why svg { margin-top: 2px; }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--stone); border-top-color: var(--ink); flex-shrink: 0; }
+
+  /* A finding */
+  .finding { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--stone); border-radius: var(--radius-lg); }
+  .finding.is-old { opacity: 0.65; }
+  .finding.is-now { border: 2px solid var(--ink); padding: 11px; }
+  .ftype { display: flex; align-items: center; gap: 6px; font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); }
+  .ftype svg { color: var(--warning); }
+  .ftype.minor svg { color: var(--graphite); }
+  .now { align-self: flex-start; font-family: var(--font-label); color: var(--ink); border: 1px solid var(--ink); border-radius: var(--radius-pill); padding: 0 7px; font-size: 11px; letter-spacing: 0.06em; }
+  .fmsg { margin: 0; font-size: var(--text-md); line-height: 1.45; color: var(--ink); }
+  .quote { margin: 0; font-family: var(--font-read); font-size: var(--text-md); line-height: 1.55; color: var(--ink-2);
+           border-left: 3px solid var(--stone-2); padding-left: var(--space-2);
+           display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .gap-tag { align-self: flex-start; font-family: var(--font-label); font-size: 11px; letter-spacing: 0.06em; color: var(--graphite);
+             background: var(--surface-2); border: 1px dashed var(--stone-2); border-radius: var(--radius-sm); padding: 2px 6px; }
+  .fnote { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); font-size: var(--text-sm); color: var(--graphite); line-height: 1.45; margin: 0; }
+  .fnote svg { margin-top: 2px; }
+  .facts { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+  /* Kept list */
+  .kept { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); background: var(--surface-2); border-radius: var(--radius-lg); }
+  .kept-item { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--stone); }
+  .kept-item:first-of-type { border-top: none; padding-top: 0; }
+  .kept-item .fmsg { color: var(--ink-2); font-size: var(--text-sm); }
+  .kept-item .quote { font-size: var(--text-sm); -webkit-line-clamp: 2; }
+  .kept-item .row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+  .kept-item .linkbtn { margin: -12px 0; }
+
+  /* Alerts */
+  .alert { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-lg); font-size: var(--text-md); line-height: 1.5; }
+  .alert svg { margin-top: 3px; }
+  .alert p { margin: 0; }
+  .alert-error { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger); }
+  .alert-error p { color: var(--danger) !important; }
+  .alert-warning { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--ink); }
+  .alert-warning svg { color: var(--warning); }
+  .alert .acts { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
+
+  /* Improve card (design 22b) */
+  .card { background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl);
+          padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
+  .card h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+  .card p { margin: 0; font-size: var(--text-base); line-height: 1.5; color: var(--ink-2); }
+  .card .small { font-size: var(--text-sm); color: var(--graphite); }
+  .row { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+  .head-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+  .cost { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); font-size: var(--text-sm); color: var(--ink-2); line-height: 1.45;
+          padding: var(--space-2) var(--space-3); background: var(--surface-2); border-radius: var(--radius-sm); }
+  .cost svg { margin-top: 2px; color: var(--graphite); }
+  .passage { font-family: var(--font-read); font-size: var(--text-base); line-height: 1.6; color: var(--ink-2); background: var(--surface-2);
+             border-left: 3px solid var(--stone-2); padding: var(--space-2) var(--space-3); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+  .diff { font-family: var(--font-read); font-size: var(--text-lg); line-height: var(--leading-read); color: var(--ink); }
+  .del { background: var(--danger-bg); color: var(--danger); text-decoration: line-through; }
+  .ins { background: var(--success-bg); color: var(--success); text-decoration: underline; }
+  .legend { display: flex; gap: var(--space-4); font-size: var(--text-sm); color: var(--graphite); }
+  .legend span { display: inline-flex; gap: 6px; align-items: center; }
+  .sw { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; line-height: 1; }
+  .sw-del { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger); }
+  .sw-ins { background: var(--success-bg); border: 1px solid var(--success); color: var(--success); }
+
+  /* Queue list */
+  .qlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--mist); border-radius: var(--radius-lg); }
+  .qlist li { display: grid; grid-template-columns: 20px 1fr auto; gap: var(--space-2); align-items: start; padding: var(--space-2) var(--space-3);
+              font-size: var(--text-md); line-height: 1.45; color: var(--ink-2); border-top: 1px solid var(--mist); }
+  .qlist li:first-child { border-top: none; }
+  .qlist .n { font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); padding-top: 2px; }
+  .qlist .what { min-width: 0; }
+  .qlist .what .sub { display: block; font-size: var(--text-sm); color: var(--graphite); }
+  .qlist .st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--graphite); white-space: nowrap; }
+  .qlist .st.ok { color: var(--success); }
+  .qlist .st.now { color: var(--ink); font-weight: 600; }
+  .qlist li.is-now { background: var(--surface-2); color: var(--ink); }
+
+  /* Custom box (design 22b, 6) */
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+  .field label { font-size: var(--text-md); font-weight: 500; }
+  .field textarea { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.45; color: var(--ink); min-height: 88px; resize: none; width: 100%;
+                    border: 1px solid var(--stone-2); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); }
+  .field textarea.is-focus { border-color: var(--ink); }
+  .field .chars { font-size: var(--text-xs); color: var(--graphite); align-self: flex-end; font-family: var(--font-label); }
+  .caret { display: inline-block; width: 1px; height: 1.1em; background: var(--ink); vertical-align: -2px; margin-left: 1px; }
+  .fake-area { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.45; color: var(--ink); min-height: 88px;
+               border: 1px solid var(--ink); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* Editor excerpt and the Custom popover (design 22b, 1 and 6) */
+  .ed { border: 1px solid var(--stone); border-radius: var(--radius-xl); background: var(--surface); display: flex; flex-direction: column; }
+  .tools { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--stone); }
+  .tool { width: var(--control-h); height: var(--control-h); display: inline-flex; align-items: center; justify-content: center;
+          border: none; background: transparent; border-radius: var(--radius-sm); color: var(--ink); font-family: inherit; font-size: var(--text-md); font-weight: 600; }
+  .tool-sep { width: 1px; height: 24px; background: var(--stone); margin: 0 var(--space-1); }
+  .tool-improve { width: auto; padding: 0 var(--space-3); gap: var(--space-2); font-weight: 500; border: 1px solid var(--stone); }
+  .text { padding: var(--space-4) var(--space-5) var(--space-2); font-family: var(--font-read); font-size: var(--text-lg); line-height: var(--leading-read); color: var(--ink); }
+  .text p { margin: 0 0 var(--space-3); }
+  .sel { background: var(--mist); box-shadow: 0 0 0 2px var(--mist); }
+  .menu { background: var(--surface); border: 1px solid var(--stone-2); border-radius: var(--radius-lg); padding: 6px;
+          display: flex; flex-direction: column; gap: var(--space-2); box-shadow: var(--shadow-menu); width: calc(100% - 2 * var(--space-5)); max-width: 320px;
+          margin: 0 var(--space-5) var(--space-5); }
+  .menu-head { padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--graphite); border-bottom: 1px solid var(--mist); }
+  .menu-head strong { color: var(--ink); font-weight: 600; }
+  .menu .field, .menu .row, .menu .mnote { padding: 0 var(--space-3); }
+  .menu .row { padding-bottom: var(--space-1); }
+  .mnote { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--graphite); line-height: 1.45; }
+
+  .nowrap { white-space: nowrap; }
+
+  /* Label options (Q3) */
+  .labels { display: flex; flex-direction: column; gap: var(--space-2); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></g></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></g></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></symbol>
+  <symbol id="skip" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6l7 6-7 6M14 6v12"/></g></symbol>
+  <symbol id="eye-off" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4.5 9 6-.3.8-1.2 2.3-2.6 3.6M6.4 7.6C4.6 8.9 3.4 10.7 3 12c.5 1.5 4 6 9 6 1.6 0 3-.4 4.2-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></g></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></g></symbol>
+</svg>
+
+<main class="page">
+  <header class="page-head">
+    <span class="label">PRODUCE gate G5 · 06 Write · Checks tab and Improve card</span>
+    <h1>Fix states</h1>
+    <p>Severity comes from the finding type, set by our code: drift and objective are major, voice is minor. "Keep as is" hides a finding, and it stays hidden on later checks when the type and the exact quote match. "Fix" opens Custom in Improve with the finding pre-filled. "Fix major" opens the major findings one at a time as normal suggestions. Code checks ("In your text") keep their look from 22c.</p>
+  </header>
+
+  <!-- 1. Mixed results -->
+  <section class="state" aria-label="Mixed results">
+    <span class="label">1 · Mixed results, minor folded</span>
+    <div class="side">
+      <div class="tabs" role="tablist" aria-label="Section tools">
+        <button class="tab" role="tab" aria-selected="false">Versions</button>
+        <button class="tab" role="tab" aria-selected="true" aria-label="Checks, 3 to review">Checks <span class="count" aria-hidden="true">3</span></button>
+        <button class="tab" role="tab" aria-selected="false">Brief</button>
+      </div>
+      <div class="group" role="group" aria-labelledby="g1">
+        <div class="group-head"><span class="gh"><span class="label" id="g1">AI check</span><span class="ai-tag">AI</span></span></div>
+        <div class="meta"><span>AI check of v4 · 2 min ago</span><button class="linkbtn">Check again</button></div>
+        <div class="finding">
+          <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Drift · Major</span>
+          <p class="fmsg">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.</p>
+          <p class="quote">"Chair yoga also helps you lose weight fast, so you can drop a dress size by summer."</p>
+          <div class="facts"><button class="btn btn-sm" aria-label="Fix with AI: drift"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No objective problems found</span></div>
+        <div class="fold"><svg width="16" height="16"><use href="#info"/></svg><span class="txt">2 minor (voice)</span><button class="linkbtn" aria-expanded="false">Show</button></div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">Major findings first, in text order. Minor folds into one row. Count (Q1, major only): 2 text warnings (not drawn) + 1 major = 3.</p>
+  </section>
+
+  <!-- 1 · Q1 and Q3 options -->
+  <section class="state" aria-label="Count and label options">
+    <span class="label">1 · Options: tab count (Q1) and label (Q3)</span>
+    <div class="side">
+      <div class="opt">
+        <span class="when label"><span>A · Major only</span><span>Chosen</span></span>
+        <div class="tabs"><button class="tab" role="tab" aria-selected="false">Versions</button><button class="tab" role="tab" aria-selected="true">Checks <span class="count">3</span></button><button class="tab" role="tab" aria-selected="false">Brief</button></div>
+      </div>
+      <div class="opt">
+        <span class="when label"><span>B · Major and minor</span></span>
+        <div class="tabs"><button class="tab" role="tab" aria-selected="false">Versions</button><button class="tab" role="tab" aria-selected="true">Checks <span class="count">5</span></button><button class="tab" role="tab" aria-selected="false">Brief</button></div>
+      </div>
+      <div class="opt labels">
+        <span class="when label"><span>Fix · Chosen</span></span>
+        <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        <span class="when label"><span>Fix with AI</span></span>
+        <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix with AI</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        <span class="when label"><span>Fix with Improve · wraps</span></span>
+        <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix with Improve</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+      </div>
+    </div>
+    <p class="caption">B counts rows the writer cannot see while minor is folded. "Fix" keeps both buttons on one row; its name for screen readers is "Fix with AI: drift".</p>
+  </section>
+
+  <!-- 2. Minor shown -->
+  <section class="state" aria-label="Minor shown">
+    <span class="label">2 · Minor shown</span>
+    <div class="side">
+      <div class="group" role="group" aria-labelledby="g2">
+        <div class="group-head"><span class="gh"><span class="label" id="g2">AI check</span><span class="ai-tag">AI</span></span></div>
+        <div class="meta"><span>AI check of v4 · 2 min ago</span><button class="linkbtn">Check again</button></div>
+        <div class="finding">
+          <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Drift · Major</span>
+          <p class="fmsg">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.</p>
+          <p class="quote">"Chair yoga also helps you lose weight fast, so you can drop a dress size by summer."</p>
+          <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No objective problems found</span></div>
+        <div class="fold"><svg width="16" height="16"><use href="#info"/></svg><span class="txt">2 minor (voice)</span><button class="linkbtn is-focus" aria-expanded="true"><span class="lbl">Hide</span></button></div>
+        <div class="finding">
+          <span class="ftype minor"><svg width="14" height="14"><use href="#info"/></svg>Voice · Minor</span>
+          <p class="fmsg">This sentence is long and formal. Split it and speak to the reader as "you".</p>
+          <p class="quote">"This gentle yet powerful movement serves as a wonderful foundation for everything that follows."</p>
+          <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="finding">
+          <span class="ftype minor"><svg width="14" height="14"><use href="#info"/></svg>Voice · Minor</span>
+          <p class="fmsg">"Optimal" sounds clinical next to your warm, plain voice. Use a simpler word.</p>
+          <p class="quote">"Repeat for optimal mobility of the shoulder joint."</p>
+          <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">Minor uses the info icon in gray and the word "Minor". The open or closed choice is kept for the section while the page is open.</p>
+  </section>
+
+  <!-- 3a. One kept -->
+  <section class="state" aria-label="One finding kept">
+    <span class="label">3a · One kept</span>
+    <div class="side">
+      <div class="group" role="group" aria-labelledby="g3a">
+        <div class="group-head"><span class="gh"><span class="label" id="g3a">AI check</span><span class="ai-tag">AI</span></span></div>
+        <div class="meta"><span>AI check of v4 · 2 min ago</span><button class="linkbtn">Check again</button></div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No objective problems found</span></div>
+        <div class="fold"><svg width="16" height="16"><use href="#info"/></svg><span class="txt">2 minor (voice)</span><button class="linkbtn">Show</button></div>
+        <div class="fold"><svg width="16" height="16"><use href="#eye-off"/></svg><span class="txt">1 kept</span><button class="linkbtn is-focus" aria-expanded="false"><span class="lbl">Show</span></button></div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">The drift row is gone. Focus moves to "1 kept · Show". Screen readers hear "Kept. It stays hidden on later checks." Keep is a save, not an AI call. Tab count drops to 2.</p>
+  </section>
+
+  <!-- 3b. Kept list -->
+  <section class="state" aria-label="Kept list shown">
+    <span class="label">3b · Kept list shown, with Undo</span>
+    <div class="side">
+      <div class="group" role="group" aria-labelledby="g3b">
+        <div class="group-head"><span class="gh"><span class="label" id="g3b">AI check</span><span class="ai-tag">AI</span></span></div>
+        <div class="meta"><span>AI check of v4 · 2 min ago</span><button class="linkbtn">Check again</button></div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No objective problems found</span></div>
+        <div class="fold"><svg width="16" height="16"><use href="#info"/></svg><span class="txt">2 minor (voice)</span><button class="linkbtn">Show</button></div>
+        <div class="fold"><svg width="16" height="16"><use href="#eye-off"/></svg><span class="txt">1 kept</span><button class="linkbtn" aria-expanded="true">Hide</button></div>
+        <div class="kept" role="group" aria-labelledby="k3">
+          <span class="label" id="k3">Kept: hidden on later checks</span>
+          <div class="kept-item">
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Drift · Major</span>
+            <p class="fmsg">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.</p>
+            <p class="quote">"Chair yoga also helps you lose weight fast, so you can drop a dress size by summer."</p>
+            <div class="row"><span class="help">Kept today</span><button class="linkbtn" aria-label="Undo keep: drift">Undo</button></div>
+          </div>
+        </div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">Undo puts the finding back in its place and in the count. Kept items live only here, in this section's Checks tab (Q4). They survive new versions and new checks.</p>
+  </section>
+
+  <!-- 4. After Check again -->
+  <section class="state" aria-label="After Check again">
+    <span class="label">4 · After "Check again"</span>
+    <div class="side">
+      <div class="group" role="group" aria-labelledby="g4">
+        <div class="group-head"><span class="gh"><span class="label" id="g4">AI check</span><span class="ai-tag">AI</span></span></div>
+        <div class="meta"><span>AI check of v6 · just now</span><button class="linkbtn">Check again</button></div>
+        <div class="finding">
+          <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+          <p class="fmsg">The title promises both ways, but the forward roll has no count. Say how many times.</p>
+          <p class="quote">"Next, reverse the direction. Roll your shoulders forward and down."</p>
+          <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No drift found</span></div>
+        <div class="fold"><svg width="16" height="16"><use href="#info"/></svg><span class="txt">1 minor (voice)</span><button class="linkbtn">Show</button></div>
+        <div class="fold"><svg width="16" height="16"><use href="#eye-off"/></svg><span class="txt">1 kept</span><button class="linkbtn">Show</button></div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">The AI found the weight-loss line again (same type, same quote), so our code hid it. A drift found only in kept items shows "No drift found". The new objective finding shows like any other, with no "New" tag.</p>
+  </section>
+
+  <!-- 5. Fix on one finding -->
+  <section class="state wide" aria-label="Fix on one finding">
+    <span class="label">5 · Fix: Custom open, pre-filled</span>
+    <div class="combo">
+      <div class="ed">
+        <div class="tools" role="toolbar" aria-label="Formatting">
+          <button class="tool" aria-label="Bold">B</button>
+          <button class="tool" aria-label="Italic"><i>I</i></button>
+          <button class="tool" aria-label="Bulleted list"><svg width="16" height="16"><use href="#list"/></svg></button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button class="tool tool-improve" aria-haspopup="menu" aria-expanded="true"><svg width="16" height="16"><use href="#sparkle"/></svg>Improve</button>
+        </div>
+        <div class="text">
+          <p>Roll slowly and keep your back against the chair. <span class="sel">Chair yoga also helps you lose weight fast, so you can drop a dress size by summer.</span></p>
+        </div>
+        <div class="menu" role="dialog" aria-label="Custom instruction">
+          <div class="menu-head"><strong>1 sentence</strong> · 17 words</div>
+          <div class="field">
+            <label for="c5">What should change?</label>
+            <div class="fake-area" id="c5" role="textbox" aria-multiline="true">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.<span class="caret" aria-hidden="true"></span></div>
+            <span class="chars">94 / 300</span>
+          </div>
+          <div class="row"><button class="btn btn-primary"><svg width="16" height="16"><use href="#sparkle"/></svg>Send</button><button class="btn">Back</button></div>
+          <p class="mnote">Nothing is sent until you press Send. Edit the words first if you like.</p>
+        </div>
+      </div>
+      <div class="side">
+        <div class="group" role="group" aria-labelledby="g5">
+          <div class="group-head"><span class="gh"><span class="label" id="g5">AI check</span><span class="ai-tag">AI</span></span></div>
+          <div class="finding">
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Drift · Major</span>
+            <p class="fmsg">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.</p>
+            <p class="quote">"Chair yoga also helps you lose weight fast, so you can drop a dress size by summer."</p>
+            <div class="facts"><button class="btn btn-sm is-pressed" aria-expanded="true"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Fix selects the quote, opens the Improve menu straight on Custom, and puts the message in the box with the cursor at the end. The message is at most 300 characters, the same cap as an instruction. Back goes to the action menu; Esc closes. Send runs the usual Custom request: one call, the usual suggestion card with diff, Accept and Reject. No re-check after Accept.</p>
+  </section>
+
+  <!-- 6. Fix major button -->
+  <section class="state" aria-label="Fix major button">
+    <span class="label">6 · "Fix major (3)" on the header</span>
+    <div class="side">
+      <div class="group" role="group" aria-labelledby="g6">
+        <div class="group-head"><span class="gh"><span class="label" id="g6">AI check</span><span class="ai-tag">AI</span></span>
+          <button class="btn btn-sm is-focus" aria-describedby="c6"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix major (3)</button></div>
+        <div class="cost" id="c6"><svg width="16" height="16"><use href="#info"/></svg><span>Up to 3 AI calls, about $0.01 to $0.02 each.</span></div>
+        <div class="meta"><span>AI check of v4 · 2 min ago</span><button class="linkbtn">Check again</button></div>
+        <div class="finding">
+          <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Drift · Major</span>
+          <p class="fmsg">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.</p>
+          <p class="quote">"Chair yoga also helps you lose weight fast, so you can drop a dress size by summer."</p>
+          <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="finding">
+          <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+          <p class="fmsg">This part is about neck turns, which 4.1 covers. Keep this section on shoulder rolls.</p>
+          <p class="quote">"Turn your head slowly to the right, then to the left, and keep your shoulders still."</p>
+          <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="finding">
+          <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+          <p class="fmsg">The safety note comes after the steps. Move it before the first roll.</p>
+          <p class="quote">"If you feel a sharp pain, stop at once and rest."</p>
+          <div class="facts"><button class="btn btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="fold"><svg width="16" height="16"><use href="#info"/></svg><span class="txt">2 minor (voice)</span><button class="linkbtn">Show</button></div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">N = major findings whose quote is in the text, not kept, in a check that is not out of date. The cost line uses the same N.</p>
+  </section>
+
+  <!-- 6 · no button / off -->
+  <section class="state" aria-label="Fix major hidden or off">
+    <span class="label">6 · Fix major: hidden or off</span>
+    <div class="side">
+      <div class="opt">
+        <span class="when label"><span>1 major with a quote</span></span>
+        <div class="group-head"><span class="gh"><span class="label">AI check</span><span class="ai-tag">AI</span></span></div>
+        <p class="help">No Fix major button. Use Fix on the finding.</p>
+      </div>
+      <div class="opt">
+        <span class="when label"><span>Improve is off</span></span>
+        <div class="group-head"><span class="gh"><span class="label">AI check</span><span class="ai-tag">AI</span></span>
+          <button class="btn btn-sm" disabled aria-describedby="w6b"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix major (3)</button></div>
+        <div class="why" id="w6b"><svg width="16" height="16"><use href="#info"/></svg><span>Accept or reject the suggestion first.</span></div>
+      </div>
+      <div class="opt">
+        <span class="when label"><span>Check out of date</span></span>
+        <div class="group-head"><span class="gh"><span class="label">AI check</span><span class="ai-tag">AI</span></span></div>
+        <p class="help">No Fix major button. Check again first.</p>
+      </div>
+    </div>
+    <p class="caption">Off uses Improve's own reasons (22c, 11): "Wait for the section to finish writing.", "Choose which text to keep first.", "Lock the positioning in 03 to use Improve."</p>
+  </section>
+
+  <!-- 7a. Queue: item ready -->
+  <section class="state wide" aria-label="Queue running, item ready">
+    <span class="label">7a · Queue running: item ready</span>
+    <div class="combo">
+      <div class="card" aria-labelledby="q7a">
+        <span class="label">Fix major · 1 of 3</span>
+        <div class="cost"><svg width="16" height="16"><use href="#info"/></svg><span>Up to 3 AI calls, about $0.01 to $0.02 each.</span></div>
+        <ol class="qlist" aria-label="Fix major queue">
+          <li class="is-now"><span class="n">1</span><span class="what">Drift</span><span class="st now">Now</span></li>
+          <li><span class="n">2</span><span class="what">Objective</span><span class="st">Waiting</span></li>
+          <li><span class="n">3</span><span class="what">Objective</span><span class="st">Waiting</span></li>
+        </ol>
+        <h2 id="q7a">Fix 1 of 3: drift</h2>
+        <div class="passage">Chair yoga also helps you lose weight fast, so you can drop a dress size by summer.</div>
+        <div class="field">
+          <label for="c7">What should change?</label>
+          <div class="fake-area" id="c7" role="textbox" aria-multiline="true">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.<span class="caret" aria-hidden="true"></span></div>
+          <span class="chars">94 / 300</span>
+        </div>
+        <div class="row"><button class="btn btn-primary btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Send</button><button class="btn btn-sm"><svg width="16" height="16"><use href="#skip"/></svg>Skip</button><button class="btn btn-sm btn-text">Stop</button></div>
+        <p class="small">Skip moves to the next item. Nothing is sent. Stop ends Fix major; accepted changes stay.</p>
+      </div>
+      <div class="side">
+        <div class="group" role="group" aria-labelledby="g7a">
+          <div class="group-head"><span class="gh"><span class="label" id="g7a">AI check</span><span class="ai-tag">AI</span></span>
+            <span class="busy" role="status">Fixing 1 of 3</span></div>
+          <div class="finding is-now">
+            <span class="now">Fixing now</span>
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Drift · Major</span>
+            <p class="fmsg">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.</p>
+          </div>
+          <div class="finding">
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+            <p class="fmsg">This part is about neck turns, which 4.1 covers. Keep this section on shoulder rolls.</p>
+            <div class="facts"><button class="btn btn-sm" disabled aria-describedby="w7a"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+            <p class="fnote" id="w7a"><svg width="16" height="16"><use href="#info"/></svg><span>Finish or stop Fix major first.</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Each item opens as Custom, pre-filled with the finding and editable, in the Improve card. The quote is selected in the editor. <strong>Editor during the queue:</strong> between items the editor is editable. While a call runs it is read only, with the same look as Accept (22b, 11). State 8 covers a quote that changed. Keep as is on a waiting item takes it out of the queue ("1 of 2").</p>
+  </section>
+
+  <!-- 7b. Queue: suggestion -->
+  <section class="state wide" aria-label="Queue running, suggestion">
+    <span class="label">7b · Queue running: suggestion</span>
+    <div class="card" aria-labelledby="q7b">
+      <span class="label">Fix major · 1 of 3</span>
+      <div class="head-row"><h2 id="q7b">Fix 1 of 3: 17 → 14 words</h2><span class="small">Just now</span></div>
+      <div class="diff">Roll slowly and keep your back against the chair. <span class="del">Chair yoga also helps you lose weight fast, so you can drop a dress size by summer.</span> <span class="ins">Moving every day keeps your shoulders loose and helps you sit up with ease.</span></div>
+      <div class="legend"><span><span class="sw sw-del" aria-hidden="true">−</span>Removed</span><span><span class="sw sw-ins" aria-hidden="true">+</span>Added</span></div>
+      <div class="row"><button class="btn btn-primary">Accept</button><button class="btn btn-text">Reject</button><button class="btn btn-text">Stop</button></div>
+      <p class="small">Accept saves a new version, then item 2 opens. Reject keeps your text and moves to item 2. The notes from 22b, 9 (source, marks, names, structure) show here when they apply.</p>
+    </div>
+    <p class="caption">Skip is on the item (7a), Reject is on the suggestion (Q5): one word for each step. "Try again" is left out in the queue; Reject then Fix on the finding does the same. No re-check between items.</p>
+  </section>
+
+  <!-- 8. Skipped: quote gone -->
+  <section class="state wide" aria-label="Queue item skipped">
+    <span class="label">8 · Item skipped: its quote is gone</span>
+    <div class="combo">
+      <div class="card" aria-labelledby="q8">
+        <span class="label">Fix major · 3 of 3</span>
+        <ol class="qlist" aria-label="Fix major queue">
+          <li><span class="n">1</span><span class="what">Drift</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>Accepted</span></li>
+          <li><span class="n">2</span><span class="what">Objective<span class="sub">Its text changed after an earlier Accept.</span></span><span class="st"><svg width="14" height="14"><use href="#skip"/></svg>Skipped</span></li>
+          <li class="is-now"><span class="n">3</span><span class="what">Objective</span><span class="st now">Now</span></li>
+        </ol>
+        <h2 id="q8">Fix 3 of 3: objective</h2>
+        <div class="passage">If you feel a sharp pain, stop at once and rest.</div>
+        <div class="field">
+          <label for="c8">What should change?</label>
+          <div class="fake-area" id="c8" role="textbox" aria-multiline="true">The safety note comes after the steps. Move it before the first roll.<span class="caret" aria-hidden="true"></span></div>
+          <span class="chars">71 / 300</span>
+        </div>
+        <div class="row"><button class="btn btn-primary btn-sm"><svg width="16" height="16"><use href="#sparkle"/></svg>Send</button><button class="btn btn-sm"><svg width="16" height="16"><use href="#skip"/></svg>Skip</button><button class="btn btn-sm btn-text">Stop</button></div>
+      </div>
+      <div class="side">
+        <div class="group" role="group" aria-labelledby="g8">
+          <div class="group-head"><span class="gh"><span class="label" id="g8">AI check</span><span class="ai-tag">AI</span></span>
+            <span class="busy" role="status">Fixing 3 of 3</span></div>
+          <div class="finding is-old">
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+            <p class="fmsg">This part is about neck turns, which 4.1 covers. Keep this section on shoulder rolls.</p>
+            <div class="facts"><button class="btn btn-sm" disabled aria-describedby="w8"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+            <p class="fnote" id="w8"><svg width="16" height="16"><use href="#info"/></svg><span>This text is no longer in the section.</span></p>
+          </div>
+          <div class="finding is-now">
+            <span class="now">Fixing now</span>
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+            <p class="fmsg">The safety note comes after the steps. Move it before the first roll.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Before an item opens, our code looks for its exact quote in the current text. Item 2's quote overlapped item 1's passage, so it is skipped by itself: no call, nothing counted. Screen readers hear "Item 2 skipped. Its text changed after an earlier Accept."</p>
+  </section>
+
+  <!-- 9. Queue done -->
+  <section class="state wide" aria-label="Queue done">
+    <span class="label">9 · Queue done</span>
+    <div class="combo">
+      <div class="card" role="status" aria-labelledby="q9">
+        <span class="label">Fix major · done</span>
+        <h2 id="q9">2 accepted, 1 skipped</h2>
+        <ol class="qlist" aria-label="Fix major results">
+          <li><span class="n">1</span><span class="what">Drift</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>Accepted</span></li>
+          <li><span class="n">2</span><span class="what">Objective<span class="sub">Its text changed after an earlier Accept.</span></span><span class="st"><svg width="14" height="14"><use href="#skip"/></svg>Skipped</span></li>
+          <li><span class="n">3</span><span class="what">Objective</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>Accepted</span></li>
+        </ol>
+        <p>Each Accept saved a new version. Run the AI check again to see what is left.</p>
+        <div class="row"><button class="btn btn-sm is-focus">Close</button></div>
+      </div>
+      <div class="side">
+        <div class="group" role="group" aria-labelledby="g9">
+          <div class="group-head"><span class="gh"><span class="label" id="g9">AI check</span><span class="ai-tag">AI</span></span></div>
+          <div class="alert alert-warning"><svg width="16" height="16"><use href="#clock"/></svg>
+            <div><p><strong>Out of date.</strong> The text, the chapter, the positioning or the voice changed since this check.</p>
+              <div class="acts"><button class="btn btn-sm">Check again</button></div></div></div>
+          <div class="meta"><span>AI check of v4 · 6 min ago</span></div>
+          <div class="finding is-old">
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Drift · Major</span>
+            <p class="fmsg">Weight loss is not in the Brief or the locked positioning. Cut it, or tie it to moving safely.</p>
+            <div class="facts"><button class="btn btn-sm" disabled aria-describedby="w9"><svg width="16" height="16"><use href="#sparkle"/></svg>Fix</button><button class="btn btn-sm btn-text">Keep as is</button></div>
+            <p class="fnote" id="w9"><svg width="16" height="16"><use href="#info"/></svg><span>This text is no longer in the section.</span></p>
+          </div>
+          <div class="fold"><svg width="16" height="16"><use href="#info"/></svg><span class="txt">2 more major, 2 minor (voice)</span><button class="linkbtn">Show</button></div>
+          <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+        </div>
+      </div>
+    </div>
+    <p class="caption">One "Check again" only: the one in the Out of date alert (the meta line drops its link). Old findings stay muted and are not counted (22c, 10). No check runs by itself. Close returns focus to the Checks tab.</p>
+  </section>
+
+  <!-- 10a. Stopped: month limit -->
+  <section class="state" aria-label="Queue stopped by the month limit">
+    <span class="label">10a · Stopped: month limit</span>
+    <div class="card" aria-labelledby="q10a">
+      <span class="label">Fix major · 2 of 3</span>
+      <h2 id="q10a">Fix major stopped</h2>
+      <div class="alert alert-warning" role="alert"><svg width="16" height="16"><use href="#warn"/></svg>
+        <div><p>You have used this month’s AI allowance. It resets on <span class="nowrap">November 1</span>.</p></div></div>
+      <ol class="qlist" aria-label="Fix major results">
+        <li><span class="n">1</span><span class="what">Drift</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>Accepted</span></li>
+        <li><span class="n">2</span><span class="what">Objective</span><span class="st">Not sent</span></li>
+        <li><span class="n">3</span><span class="what">Objective</span><span class="st">Not sent</span></li>
+      </ol>
+      <p>1 accepted before the stop. The rest were not sent. This refusal was not counted.</p>
+      <div class="row"><button class="btn btn-sm">Close</button></div>
+    </div>
+    <p class="caption">The server refused item 2 before any AI call. No Try again (as 22c, 12).</p>
+  </section>
+
+  <!-- 10b. Stopped: network -->
+  <section class="state" aria-label="Queue stopped by a network error">
+    <span class="label">10b · Stopped: network error</span>
+    <div class="card" aria-labelledby="q10b">
+      <span class="label">Fix major · 2 of 3</span>
+      <h2 id="q10b">Fix major stopped</h2>
+      <div class="alert alert-error" role="alert"><svg width="16" height="16"><use href="#x"/></svg>
+        <div><p><strong>We couldn’t reach KDP Lab. Check your connection.</strong></p><p>Your text is safe. If the AI had already finished, this call may still count.</p></div></div>
+      <ol class="qlist" aria-label="Fix major results">
+        <li><span class="n">1</span><span class="what">Drift</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>Accepted</span></li>
+        <li class="is-now"><span class="n">2</span><span class="what">Objective</span><span class="st now">Failed</span></li>
+        <li><span class="n">3</span><span class="what">Objective</span><span class="st">Waiting</span></li>
+      </ol>
+      <div class="row"><button class="btn btn-primary btn-sm">Try again</button><button class="btn btn-sm btn-text">Stop</button></div>
+      <p class="small">Try again sends item 2 again. Stop keeps item 1's change.</p>
+    </div>
+    <p class="caption">Same wording as Improve after a lost connection (G3 P8). Other errors use Improve's lines; "Too many requests" has Try again.</p>
+  </section>
+
+  <!-- 11. Objective gap -->
+  <section class="state" aria-label="Objective gap">
+    <span class="label">11 · Objective gap (no quote)</span>
+    <div class="side">
+      <div class="group" role="group" aria-labelledby="g11">
+        <div class="group-head"><span class="gh"><span class="label" id="g11">AI check</span><span class="ai-tag">AI</span></span></div>
+        <div class="meta"><span>AI check of v4 · 2 min ago</span><button class="linkbtn">Check again</button></div>
+        <div class="finding">
+          <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+          <p class="fmsg">The title promises both ways, but the text never shows the forward roll.</p>
+          <span class="gap-tag">Missing from the text</span>
+          <p class="fnote"><svg width="16" height="16"><use href="#info"/></svg><span>Nothing to select. Add this part yourself.</span></p>
+          <div class="facts"><button class="btn btn-sm btn-text">Keep as is</button></div>
+        </div>
+        <div class="fold"><svg width="16" height="16"><use href="#eye-off"/></svg><span class="txt">1 kept</span><button class="linkbtn" aria-expanded="true">Hide</button></div>
+        <div class="kept" role="group" aria-labelledby="k11">
+          <span class="label" id="k11">Kept</span>
+          <div class="kept-item">
+            <span class="ftype"><svg width="14" height="14"><use href="#warn"/></svg>Objective · Major</span>
+            <p class="fmsg">The section never says how long to rest between rolls.</p>
+            <span class="gap-tag">Missing from the text</span>
+            <div class="row"><span class="help">For this check only</span><button class="linkbtn">Undo</button></div>
+          </div>
+        </div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">Q2, option A (chosen): a gap can be kept for this check only, because it has no quote to match. The next check may bring it back. A gap never counts for Fix major. Option B: no "Keep as is" on a gap at all.</p>
+  </section>
+
+  <!-- 12. Empty -->
+  <section class="state" aria-label="No open AI findings">
+    <span class="label">12 · No open AI findings</span>
+    <div class="side">
+      <div class="group" role="group" aria-labelledby="g12a">
+        <div class="group-head"><span class="gh"><span class="label" id="g12a">AI check</span><span class="ai-tag">AI</span></span></div>
+        <div class="meta"><span>AI check of v6 · just now</span><button class="linkbtn">Check again</button></div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No open AI findings</span></div>
+        <div class="fold"><svg width="16" height="16"><use href="#eye-off"/></svg><span class="txt">2 kept</span><button class="linkbtn">Show</button></div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+      <div class="group" role="group" aria-labelledby="g12b">
+        <div class="group-head"><span class="gh"><span class="label" id="g12b">AI check · nothing found</span><span class="ai-tag">AI</span></span></div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No objective problems found</span></div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No voice problems found</span></div>
+        <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span class="txt">No drift found</span></div>
+        <p class="help help-last">Checks are advice, not a score. They never block Final or Next.</p>
+      </div>
+    </div>
+    <p class="caption">Top: every finding kept. The pass rows give way to one line, so "found" never hides what was kept. Bottom: the AI found nothing (as 22c, 4) plus the help line. No tab count in either.</p>
+  </section>
+</main>
+</body>
+</html>
