@@ -258,6 +258,19 @@ const test = async page => {
   ok((await txt('#wrImpTitle')) === '1 stopped, 2 not sent' && st.writes.filter((w) => w.fn === 'apply_suggestion').length === 1, 'Stop on the suggestion: nothing applied');
   await page.click('[data-q-close]');
 
+  // ── While the queue runs, no AI check can start (G5 live note 3) ──
+  st.sectionOf(S).s.needs_review = true;
+  await fresh();
+  ok(await page.$eval('[data-chk-review]', (b) => b.disabled) && (await txt('#wrChkReviewWhy')) === 'Finish or stop Fix major first.', `Needs review: Run AI check off with the reason: "${await txt('#wrChkReviewWhy')}"`);
+  ok(!(await has('.wr-chk-group:last-child [data-chk-run]:not([disabled])')), 'the panel offers no Check again');
+  await page.click('[data-q-stop]');
+  await cardIs('q-done');
+  ok(!(await page.$eval('[data-chk-review]', (b) => b.disabled)) && !(await has('#wrChkReviewWhy')) && await has('.wr-chk-meta [data-chk-run]'), 'the queue ended: Run AI check and Check again on');
+  await page.click('[data-q-close]');
+  st.sectionOf(S).s.needs_review = false;
+  await open(W1, S);
+  await checksTab();
+
   // ── Leaving the section while the queue runs ──
   await page.click('[data-chk-fixmajor]');
   await cardIs('q-item');

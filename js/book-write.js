@@ -1205,7 +1205,8 @@
       otherRun: () => { if (cur) { cur.otherRun = true; if (active()) { renderHead(); G.render(); imp.refresh(); } } },
       confirm: confirmDialog,
       // G5: the Checks tab follows Improve (Fix off while a suggestion is open, the Fix major queue).
-      checksChanged: () => { if (chk) chk.refresh(); },
+      // The Needs review alert's Run AI check is off while a Fix major queue runs (G5 live note 3).
+      checksChanged: () => { if (chk) chk.refresh(); if (active()) renderNotes(); },
       announce
     });
     chk = kdpWriteChecks.create({

@@ -141,7 +141,9 @@
       gen_here: 'Wait for the section to finish writing.',
       other_tab: 'This section is being written in another tab or window.',
       positioning: 'Lock the positioning in 03 to run the AI check.',
-      checking: 'The AI check is running.'
+      checking: 'The AI check is running.',
+      // A new check would replace the one the Fix major queue came from (G5 live note 3).
+      queue: 'Finish or stop Fix major first.'
     };
 
     /** Why the AI check is off for the open section ('' when it can run), and the words for it. */
@@ -151,6 +153,7 @@
       if (w === 'conflict' || w === 'gen_here' || w === 'other_tab' || w === 'loading') return [w, WHY[w]];
       if (!host.posLocked()) return ['positioning', WHY.positioning];
       if (running[cur().id]) return ['checking', WHY.checking];
+      if (queueNow()) return ['queue', WHY.queue];
       const n = W.count(cur().text);
       if (n < LIMITS.minWords) return ['short', 'Write at least 50 words to run the AI check.'];
       if (n > LIMITS.maxWords) return ['long', `The AI check reads up to ${fmt(LIMITS.maxWords)} words. This section has ${fmt(n)}.`];
