@@ -139,6 +139,7 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0022` section checks (server only, the owner, book and version guard, the findings shape with objective gaps, the areas shape, the fingerprint, the upsert, the cascades, advice only),
 `t0021` Improve suggestions (server only, the owner and version guards, the checks, the replaced version guard, apply_suggestion: once, 1 hour, the base rules, save_version then apply_suggestion, the draft, a fresh run, the text check, 100,000, Needs review, Reviewed and Final kept, a book delete),
 `t0023` G3 fixes (the book-level "has writing" outline_ideas reads: a discarded partial is not writing, a draft and a fresh run are; write_cut and the 100,000 cut in finish and recover, never inside a word or a marker, the same cases as cutText; an AI section finding with the optional unsourced list; the grants),
+`t0024` kept findings (Keep as is: own select, insert and delete, no update; type, message, quote and check_at shape; a gap only from the current check; older gaps removed; at most 50 per section; the unique keys; the cascades; advice only),
 `rls_cross_user` (user B against user A's rows in every table).
 
 ## Browser (mocked, playwright-cli)

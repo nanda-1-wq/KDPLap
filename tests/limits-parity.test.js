@@ -284,3 +284,16 @@ Deno.test("AI section check: the browser, the server and 0022 (owner, E10.4)", (
   const types = [...read("js/write-checks.js").match(/const TYPE = \{([^}]*)\}/)[1].matchAll(/(\w+): '/g)].map((m) => m[1]);
   assertEquals(types, [...L.CHECK_TYPES]);
 });
+
+Deno.test("Keep as is: 0024 kept findings match the AI check (PRODUCE G5, design 22d)", () => {
+  const f = M("0024_kept_findings.sql");
+  const text = read(f);
+  const quoted = (s) => [...s.matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  // The same three types, message and quote caps as 0022 and the server.
+  assertEquals(quoted(text.match(/check \(type in \(([^)]*)\)\)/)[1]), [...L.CHECK_TYPES]);
+  assertEquals(one(f, String.raw`check \(char_length\(message\) <= (\d+)`), L.CHECK.messageChars);
+  assertEquals(one(f, String.raw`check \(char_length\(quote\) <= (\d+)\)`), L.CHECK.quoteChars);
+  assertEquals(/when quote = '' then type = 'objective'/.test(text), true, "0024: an empty quote only for objective (as 0022)");
+  // At most 50 kept rows per section.
+  assertEquals(one(f, String.raw`where k\.section_id = new\.section_id\) >= (\d+)`), 50);
+});
