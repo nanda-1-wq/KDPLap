@@ -341,7 +341,9 @@
       const r = row();
       const i = r ? r.findings.findIndex((f) => R.keptOf(f, [k], r.checked_at)) : -1;
       const side = host.els() && host.els().side;
-      const back = side && (side.querySelector(`[data-chk-keep="${i}"]`) || side.querySelector('[data-chk-fold="kept"]') || side.querySelector('[data-tab="checks"]'));
+      // The finding's own button; when it is folded away, the fold row it is in (G5 live note 2).
+      const back = side && (side.querySelector(`[data-chk-keep="${i}"]`) || (i >= 0 && side.querySelector('[data-chk-fold="minor"]'))
+        || side.querySelector('[data-chk-fold="kept"]') || side.querySelector('[data-tab="checks"]'));
       if (back) back.focus();
       host.announce('Keep undone. The finding is back.');
     }

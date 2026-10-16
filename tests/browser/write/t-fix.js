@@ -267,5 +267,21 @@ const test = async page => {
   await page.click('[data-chk-fold="kept"]');
   ok(/Kept yesterday Undo/.test(await txt('.wr-chk-kept')), `Try again: hidden again; "Kept yesterday": "${await txt('.wr-chk-kept')}"`);
 
+  // ── Undo of a minor finding while the minor row is folded: focus on that row's Show (G5 live note 2) ──
+  st.kept[S] = [];
+  await seed(S, [VOICE, VOICE2, DRIFT], { objective: 'pass', voice: 'issues', drift: 'issues' }, T1);
+  await open(W1, S);
+  await checksTab();
+  await page.click('[data-chk-fold="minor"]');
+  await page.click('[data-chk-keep="0"]');
+  await until(() => !document.querySelector('[data-chk-finding="0"]'));
+  await page.click('[data-chk-fold="minor"]');
+  ok((await txt('.wr-chk-fold')) === '1 minor (voice) Show', `minor folded again: "${await txt('.wr-chk-fold')}"`);
+  if (await page.$eval('[data-chk-fold="kept"]', (b) => b.getAttribute('aria-expanded')) !== 'true') await page.click('[data-chk-fold="kept"]');
+  await page.click('.wr-chk-kept [data-chk-undo]');
+  await until(() => !document.querySelector('.wr-chk-kept'));
+  await page.waitForTimeout(200);
+  ok((await focused()) === 'data-chk-fold=minor' && (await txt('.wr-chk-fold')) === '2 minor (voice) Show', `Undo with minor folded: focus on its Show: ${await focused()}`);
+
   return log.join('\n');
 };
