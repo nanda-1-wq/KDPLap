@@ -714,7 +714,8 @@
       imp = null;
       host.applied(res.data, full, my.action, { at, selection: my.selection, output: my.result.text, before: md });   // releases the hold after the editor text is in
       // Fix major: the next item opens (design 22d, 7b). No re-check.
-      if (my.queued && inQueue()) { itemDone('accepted'); return; }
+      // The save is said first: the next item's message would replace host.applied's (G5 live note 1).
+      if (my.queued && inQueue()) { itemDone('accepted', 'Accepted. Saved as a new version.'); return; }
       after();
     }
 

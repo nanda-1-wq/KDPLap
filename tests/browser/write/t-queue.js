@@ -151,7 +151,7 @@ const test = async page => {
   ok(st.writes.filter((w) => w.fn === 'apply_suggestion').length === 1 && await imps() === 2, 'Accept saved a version; nothing sent for item 2');
   ok(JSON.stringify(await rows()) === JSON.stringify(['1 Objective Accepted', '2 Objective Its text changed after an earlier Accept. Skipped', '3 Drift Now', '4 Objective Waiting']), `queue: ${JSON.stringify(await rows())}`);
   ok((await txt('.wr-q .chip-label')) === 'FIX MAJOR · 3 OF 4' && (await txt('#wrImpTitle')) === 'Fix 3 of 4: drift', 'item 3 opens');
-  ok((await live()) === 'Item 2 skipped. Its text changed after an earlier Accept. Fix 3 of 4: drift.', `screen reader: "${await live()}"`);
+  ok((await live()) === 'Accepted. Saved as a new version. Item 2 skipped. Its text changed after an earlier Accept. Fix 3 of 4: drift.', `screen reader: the save first, then the skip and the next item: "${await live()}"`);
   ok(/Fixing 3 of 4/.test(await ai()) && await page.$eval('[data-chk-finding="2"]', (f) => f.classList.contains('is-old')) && /This text is no longer in the section\./.test(await txt('[data-chk-finding="2"]')), 'panel: item 2 muted, "This text is no longer in the section."');
   ok(!(await has('[data-chk-finding="1"]')) && await has('[data-chk-finding="3"].is-now') && !(await has('.wr-chk-alert')), 'panel: item 1 (accepted) gone, item 3 now, no Out of date yet');
   ok(await shots('skipped') === false, 'skipped: no sideways scroll at 900 px');
