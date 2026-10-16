@@ -61,7 +61,13 @@ deno test --allow-read tests/sentences.test.js
 deno test --allow-read tests/text-checks.test.js
 deno test --allow-read tests/section-check-key.test.js
 deno test --allow-read tests/selection-in-text.test.js
+deno test tests/finding-rules.test.js
 ```
+
+- `finding-rules.test.js` (G5, design 22d): severity from the type, Keep as is
+  matching (type + exact quote; a gap by message on its own check, timestamps
+  compared to the microsecond), what the Checks tab shows, the Fix major N
+  rule and the tab count.
 
 - `outline-checks.test.js`: the step 05 code checks and the shared words and
   pages helper (`js/word-budget.js`, about 250 words a page).
@@ -157,7 +163,9 @@ t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
 `write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks,
-t-timing, t-selection). `t-selection` (G3 P9) makes Improve selections in the real editor across
+t-timing, t-selection, t-fix, t-queue). `t-fix` (G5, design 22d) covers severity, the minor fold,
+Keep as is and Undo, a kept gap (its check_at sent exactly as read, to the microsecond) and Fix
+on Custom; `t-queue` the Fix major queue, every state from 6 to 10b. `t-selection` (G3 P9) makes Improve selections in the real editor across
 bold, italic, list items, headings and a marker, the whole section (also with Ctrl+A), and right
 after typing (the draft is saved first). Pipe it into the function's own rule:
 `tests/browser/run.sh write t-selection.js | deno run tests/browser/write/selection-check.ts`

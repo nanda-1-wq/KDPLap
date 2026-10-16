@@ -294,6 +294,10 @@ Deno.test("Keep as is: 0024 kept findings match the AI check (PRODUCE G5, design
   assertEquals(one(f, String.raw`check \(char_length\(message\) <= (\d+)`), L.CHECK.messageChars);
   assertEquals(one(f, String.raw`check \(char_length\(quote\) <= (\d+)\)`), L.CHECK.quoteChars);
   assertEquals(/when quote = '' then type = 'objective'/.test(text), true, "0024: an empty quote only for objective (as 0022)");
-  // At most 50 kept rows per section.
+  // At most 50 kept rows per section, in 0024 and the browser (js/finding-rules.js).
   assertEquals(one(f, String.raw`where k\.section_id = new\.section_id\) >= (\d+)`), 50);
+  assertEquals(jsConst("js/finding-rules.js", "KEPT_MAX"), 50);
+  // The three types, in the server's order, in the browser's severity map.
+  const sev = read("js/finding-rules.js").match(/const SEVERITY = \{([^}]*)\}/)[1];
+  assertEquals([...sev.matchAll(/(\w+): '/g)].map((m) => m[1]), [...L.CHECK_TYPES]);
 });

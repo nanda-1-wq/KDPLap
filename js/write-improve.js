@@ -22,11 +22,22 @@
    imp.toolbarHtml() · imp.render() · imp.refresh() · imp.onInput()
    imp.busy() (loading, open or applying) · imp.genWhy() · imp.confirmLeave()
    imp.reset() · imp.sectionId()
-   imp.openFor(start, end) (E10.4 "Fix with Improve"): selects that Markdown
-     range of the section in the editor and opens the menu at the toolbar's
-     Improve button. No AI call until the writer picks an action. Returns ''
-     when the menu opened, else why not ('missing' when the range is gone).
+   imp.openFor(start, end, { ask }) (E10.4 "Fix with Improve", G5 "Fix"):
+     selects that Markdown range of the section in the editor and opens the
+     menu at the toolbar's Improve button. With ask (design 22d, 5): straight
+     on Custom, the box pre-filled and editable; Back goes to the action menu,
+     Esc closes. No AI call until the writer sends. Returns '' when the menu
+     opened, else why not ('missing' when the range is gone).
    imp.offText() → Improve's own off reason as words, or ''.
+
+   Fix major (PRODUCE G5, design 22d, 6 to 10): a queue of major findings,
+   one at a time, each as a normal Custom suggestion pre-filled with the
+   finding (Send / Skip / Stop, then Accept / Reject / Stop). Before each item
+   our code looks for its exact quote in the text; when it is gone the item
+   is skipped (no call). The editor is read only only while a call runs. No
+   re-check between items.
+   imp.queueStart(items) items: [{ i, type, message, quote }]; '' or why not
+   imp.queue() → { sid, state, k, items } or null · imp.queueRemove(i)
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -67,7 +78,17 @@
      */
     let imp = null;
     let token = 0;
-    let menu = null;          // { el, anchor, pick, custom }
+    /**
+     * The Fix major queue of one section (design 22d):
+     * { sid, state: 'item' | 'call' | 'failed' | 'end', k (the item open now), ask,
+     *   items: [{ i, type, message, quote, status: 'waiting' | 'now' | 'accepted' | 'rejected'
+     *            | 'skipped' | 'nochange' | 'failed' | 'notsent' | 'stopped', why,
+     *            skip: '' | 'gone' (its quote is not in the text) | 'short' | 'long' }],
+     *   error: { line, sub, retry, kind } ('failed', or 'end' after a refusal),
+     *   end: { kind: 'done' | 'refused', midCall } }
+     */
+    let fq = null;
+    let menu = null;          // { el, anchor, pick, custom, fix }
     let lastRange = null;     // the editor's last selection (the toolbar button uses it)
     let pointerDown = false;
     let boundEditor = null;
@@ -78,6 +99,12 @@
     const card = () => (els() ? els().main.querySelector('.wr-card') : null);
     const mine = () => !!imp && !!cur() && imp.sid === cur().id;
     const busy = () => mine() && (imp.state === 'loading' || imp.state === 'review' || imp.state === 'applying');
+    /** A Fix major queue of the open section that has not ended. */
+    const queueOn = () => !!fq && !!cur() && fq.sid === cur().id && fq.state !== 'end';
+    /** The queue's card shows (also its end card, until Close). */
+    const queueMine = () => !!fq && !!cur() && fq.sid === cur().id;
+    /** The queue item the call or the open card is for. */
+    const inQueue = () => queueOn() && fq.state === 'call';
     /** Why Accept waits ('' when it can go). An unlocked positioning does not stop it (the version gets Needs review). */
     const acceptWhy = () => { const w = host.why(); return w === 'positioning' || w === 'other_tab' ? '' : w; };
 
@@ -87,6 +114,7 @@
     function offWhy() {
       const why = host.why();
       if (why) return why;
+      if (queueOn()) return 'queue';
       if (busy()) return 'open';
       return '';
     }
@@ -96,6 +124,7 @@
       other_tab: 'This section is being written in another tab or window.',
       conflict: 'Choose which text to keep first.',
       open: 'Accept or reject the suggestion first.',
+      queue: 'Finish or stop Fix major first.',
       loading: 'Improve turns on when the section is ready.'
     };
 
@@ -166,12 +195,18 @@
       if (!reg) return;
       reg.delete(HIGHLIGHT);
       const ed = editor();
-      if (!ed || !busy() || typeof Highlight !== 'function') return;
-      const at = locate(cur().text);
+      if (!ed || typeof Highlight !== 'function') return;
+      let at = -1, len = 0;
+      if (busy()) { at = locate(cur().text); len = imp.selection.length; }
+      else if (queueOn() && fq.state === 'item') {
+        // A queue item waiting for Send: its sentences, where they are now (design 22d, 7a).
+        const x = itemPick(fq.items[fq.k]);
+        if (x.pick) { at = x.pick.start; len = x.pick.end - x.pick.start; }
+      }
       if (at < 0) return;
       const map = MD.fromDomMap(ed);
       if (map.md !== cur().text) return;
-      const p = map.domPoint(at, 'start'), q = map.domPoint(at + imp.selection.length, 'end');
+      const p = map.domPoint(at, 'start'), q = map.domPoint(at + len, 'end');
       if (!p || !q) return;
       try {
         const r = document.createRange();
@@ -342,6 +377,8 @@
       menu = null;
       m.el.remove();
       if (m.anchor && m.anchor.isConnected) m.anchor.setAttribute('aria-expanded', 'false');
+      // The finding's Fix shows pressed only while its menu is open (22d, 5).
+      if (m.fromFix && host.checksChanged) host.checksChanged();
       if (focusEditor) {
         const ed = editor();
         if (ed && ed.getAttribute('contenteditable') === 'true') {
@@ -396,12 +433,15 @@
           <div class="wr-imp-field-actions">
             <button type="button" class="btn btn-primary btn-sm" data-imp-send disabled>${SPARKLE()}Send</button>
             <button type="button" class="btn btn-secondary btn-sm" data-imp-back>Back</button>
-          </div>`;
+          </div>
+          ${menu.fix ? '<p class="wr-imp-mnote">Nothing is sent until you press Send. Edit the words first if you like.</p>' : ''}`;
         const box = el.querySelector('[data-imp-ask]');
         box.value = menu.ask || '';
         countAsk();
         placeMenu();
         box.focus();
+        // Fix (design 22d, 5): the cursor at the end of the finding's words.
+        box.setSelectionRange(box.value.length, box.value.length);
         return;
       }
       el.setAttribute('role', 'menu');
@@ -458,7 +498,8 @@
       if (!menu) return;
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (menu.custom) { menu.custom = false; renderMenu(); return; }
+        // Opened by Fix, Esc closes (design 22d, 5); Back still goes to the action menu.
+        if (menu.custom && !menu.fix) { menu.custom = false; renderMenu(); return; }
         closeMenu(true);
         return;
       }
@@ -506,12 +547,16 @@
     /** Asks the server for a suggestion. pick: a passage in cur.text (from the menu or a retry). */
     async function request(action, instruction, pick) {
       const c = cur();
-      if (!c || offWhy() || !pick) return;
+      // A queue item sends from its own card (the queue gates the rest of Improve).
+      if (!c || host.why() || busy() || (queueOn() && !inQueue()) || !pick) return;
       const ctx = S.context(c.text, pick.start, pick.end);
       const body = { stage: 'section_improve', bookId: host.book().id, sectionId: c.id, baseVersionId: c.base || null, action, selection: pick.text, before: ctx.before, after: ctx.after };
       if (action === 'custom') body.instruction = instruction;
       const my = ++token;
-      imp = { sid: c.id, state: 'loading', action, instruction, at: pick.start, selection: pick.text, sentences: pick.sentences, body, abort: new AbortController(), token: my, result: null, error: null };
+      const queued = inQueue();
+      imp = { sid: c.id, state: 'loading', action, instruction, at: pick.start, selection: pick.text, sentences: pick.sentences, body, abort: new AbortController(), token: my, result: null, error: null, queued };
+      // Fix major: the editor is read only while the call runs (design 22d, 7a; the look of Accept).
+      if (queued) host.hold(1);
       after(`${ACT[action].doing} ${plural(pick.sentences, 'sentence', 'sentences')}.`);
       // G3 P9: the server checks the passage against the saved draft or version, so the
       // newest typing is saved first.
@@ -521,7 +566,8 @@
       try { res = await kdp.improve(body, { signal: imp.abort.signal }); } catch (err) { res = { error: { code: 'network' } }; }
       if (!imp || imp.token !== my || imp.state !== 'loading') return;   // cancelled, or another section
       imp.abort = null;
-      if (res.error) return refused(res.error);
+      if (queued) host.hold(0);
+      if (res.error) return queued ? queueFailed(res.error) : refused(res.error);
       const d = res.data;
       if (d.unchanged) {
         imp.state = 'nochange';
@@ -539,6 +585,15 @@
       if (code === 'version_conflict') { imp = null; after(); host.adoptRemote(); return; }
       if (code === 'not_found') { imp = null; after(); host.reload(); return; }
       if (code === 'run_in_progress') host.otherRun();
+      const e = errorOf(err, imp.action);
+      imp.state = 'error';
+      imp.error = { ...e, again: 'request' };
+      after(`Improve stopped. ${e.line}`);
+    }
+
+    /** The words for a refused or failed request: { line, sub, retry, kind }. */
+    function errorOf(err, action) {
+      const code = err.code;
       const line = {
         ai_unavailable: 'The AI service did not respond.',
         ai_stopped: 'The AI service stopped.',
@@ -551,7 +606,7 @@
         unauthorized: 'Your session ended. Sign in again, then try again.',
         selection_too_short: 'Select at least 3 words.',
         selection_not_in_text: 'We couldn’t find the selected text in your saved section. Try again.',
-        selection_too_long: `Select up to ${fmt(imp.action === 'expand' ? LIMITS.expandMaxWords : LIMITS.maxWords)} words${imp.action === 'expand' ? ' to expand' : ''}.${err.words ? ` You selected ${fmt(err.words)}.` : ''}`,
+        selection_too_long: `Select up to ${fmt(action === 'expand' ? LIMITS.expandMaxWords : LIMITS.maxWords)} words${action === 'expand' ? ' to expand' : ''}.${err.words ? ` You selected ${fmt(err.words)}.` : ''}`,
         monthly_limit: kdpUi.aiMessage('monthly_limit')[1],
         rate_limited: kdpUi.aiMessage('rate_limited')[1]
       }[code] || 'The AI service did not respond.';
@@ -562,9 +617,7 @@
         : 'Your text is safe. This attempt was not counted in your usage.';
       const retry = !['positioning_not_locked', 'outline_not_approved', 'unauthorized', 'selection_too_short', 'selection_too_long', 'monthly_limit', 'run_in_progress'].includes(code);
       const warn = ['monthly_limit', 'rate_limited', 'run_in_progress', 'positioning_not_locked', 'outline_not_approved', 'selection_too_short', 'selection_too_long', 'selection_not_in_text'].includes(code);
-      imp.state = 'error';
-      imp.error = { line, sub, retry, kind: warn ? 'warning' : 'error', again: 'request' };
-      after(`Improve stopped. ${line}`);
+      return { line, sub, retry, kind: warn ? 'warning' : 'error' };
     }
 
     /** Try again: the same action and passage (where it is now), the same instruction. */
@@ -598,6 +651,8 @@
     /** Reject: nothing is written. The passage is selected again. */
     function reject() {
       if (!imp || imp.state !== 'review') return;
+      // Fix major: Reject keeps the text and moves to the next item (design 22d, 7b).
+      if (imp.queued && inQueue()) { imp = null; itemDone('rejected', 'Suggestion rejected. Your text did not change.'); return; }
       const at = locate(cur().text);
       const len = imp.selection.length;
       imp = null;
@@ -658,6 +713,8 @@
       if (res.error) { host.hold(0); return applyFailed(my, res.error, full); }
       imp = null;
       host.applied(res.data, full, my.action, { at, selection: my.selection, output: my.result.text, before: md });   // releases the hold after the editor text is in
+      // Fix major: the next item opens (design 22d, 7b). No re-check.
+      if (my.queued && inQueue()) { itemDone('accepted'); return; }
       after();
     }
 
@@ -670,8 +727,9 @@
         if (imp !== my) return;
         if (!r.error && r.data && r.data.version && r.data.version.content === full) {
           imp = null;
-          after();
           host.reload();
+          if (my.queued && inQueue()) { itemDone('accepted', 'The change was already saved.'); return; }
+          after();
           host.announce('The change was already saved.');
           return;
         }
@@ -698,6 +756,307 @@
       my.state = 'error';
       my.error = { line, sub, retry: !!retry, kind: m === 'suggestion_expired' || m === 'run_in_progress' ? 'warning' : 'error', again: retry || 'request', saveError: true };
       after(line);
+    }
+
+    /* ── Fix major queue (design 22d) ──────── */
+
+    const SKIP_WHY = {
+      gone: 'Its text changed after an earlier Accept.',
+      // Owner wording (G5 STOP 3).
+      short: 'Under 3 words, too short to fix.',
+      changed: 'The text changed while the AI was working.'
+    };
+    const STATUS = { waiting: 'Waiting', now: 'Now', accepted: 'Accepted', rejected: 'Rejected', skipped: 'Skipped', nochange: 'No change', failed: 'Failed', notsent: 'Not sent', stopped: 'Stopped' };
+    const TYPE_NAME = { objective: 'Objective', voice: 'Voice', drift: 'Drift' };
+    const SKIP = (s = 14) => svg(s, '<path d="M5 6l7 6-7 6M14 6v12"/>');
+
+    /** An item's passage now: { pick } (its exact quote, snapped to whole sentences), or { skip, why }. */
+    function itemPick(it) {
+      const md = cur() ? cur().text : '';
+      const at = it && it.quote ? md.indexOf(it.quote) : -1;
+      const snap = at < 0 ? null : S.snap(md, at, at + it.quote.length);
+      // Gone: after an Accept in this queue (22d, 8), or the writer changed it between items.
+      if (!snap) return { skip: 'gone', why: fq && fq.items.some((x) => x.status === 'accepted') ? SKIP_WHY.gone : 'This text is no longer in the section.' };
+      const pick = { ...snap, words: W.count(snap.text) };
+      if (pick.words < LIMITS.minWords) return { skip: 'short', why: SKIP_WHY.short };
+      const why = actionWhy(pick, 'custom');
+      return why ? { skip: 'long', why } : { pick };
+    }
+
+    const countOf = (st) => fq.items.filter((x) => x.status === st).length;
+
+    /** "2 accepted, 1 skipped". */
+    function summary() {
+      const parts = [['accepted', 'accepted'], ['rejected', 'rejected'], ['skipped', 'skipped'], ['nochange', 'with no change'], ['stopped', 'stopped'], ['notsent', 'not sent']]
+        .map(([st, words]) => [countOf(st), words]).filter(([n]) => n).map(([n, words]) => `${fmt(n)} ${words}`);
+      return parts.join(', ') || 'Nothing changed';
+    }
+
+    /** Starts the queue (items in text order, from the Checks tab). '' when it started, else why not. */
+    function queueStart(items) {
+      const why = offWhy();
+      if (why) return why;
+      if (!Array.isArray(items) || !items.length) return 'missing';
+      if (menu) closeMenu(false);
+      fq = { sid: cur().id, state: 'item', k: -1, ask: '', error: null, end: null,
+        items: items.map((x) => ({ i: x.i, type: x.type, message: x.message, quote: x.quote, status: 'waiting', why: '', skip: '' })) };
+      nextItem('');
+      return '';
+    }
+
+    /** The open item ends; the next one opens. */
+    function itemDone(status, say = '', why = '', skip = '') {
+      const it = fq.items[fq.k];
+      if (it) { it.status = status; it.why = why; it.skip = skip; }
+      nextItem(say);
+    }
+
+    /** Opens the next waiting item whose quote is still in the text; the others are skipped with no call (22d, 8). */
+    function nextItem(say) {
+      const said = say ? [say] : [];
+      for (;;) {
+        const k = fq.items.findIndex((x) => x.status === 'waiting');
+        if (k < 0) {
+          fq.state = 'end';
+          fq.end = { kind: 'done', midCall: false };
+          fq.k = -1;
+          said.push(`Fix major done. ${summary()}.`);
+          after(said.join(' '));
+          return;
+        }
+        const it = fq.items[k];
+        const x = itemPick(it);
+        if (x.skip) {
+          it.status = 'skipped';
+          it.why = x.why;
+          it.skip = x.skip;
+          said.push(`Item ${k + 1} skipped. ${x.why}`);
+          continue;
+        }
+        it.status = 'now';
+        Object.assign(fq, { k, state: 'item', ask: it.message.slice(0, LIMITS.instructionChars), error: null });
+        said.push(`Fix ${k + 1} of ${fq.items.length}: ${it.type}.`);
+        after(said.join(' '));
+        return;
+      }
+    }
+
+    /** Send: the item as a normal Custom request, the quote looked up again first (the writer may have typed). */
+    function queueSend() {
+      if (!queueOn() || fq.state !== 'item') return;
+      const it = fq.items[fq.k];
+      const text = (fq.ask || '').trim();
+      if (!text || text.length > LIMITS.instructionChars) return;
+      if (host.why() || busy()) { host.announce(WHY_TEXT[host.why()] || WHY_TEXT.loading); return; }
+      const x = itemPick(it);
+      if (x.skip) { itemDone('skipped', `Item ${fq.k + 1} skipped. ${x.why}`, x.why, x.skip); return; }
+      fq.state = 'call';
+      request('custom', text, x.pick);
+    }
+
+    /** Stop: the queue ends; accepted changes stay. A call in flight is aborted and counts (as Cancel). */
+    function queueStop() {
+      if (!queueOn()) return;
+      if (imp && imp.queued && imp.state === 'applying') return;
+      let mid = false;
+      if (imp && imp.queued) {
+        if (imp.state === 'loading') { if (imp.abort) imp.abort.abort(); mid = true; host.hold(0); }
+        imp = null;
+      }
+      fq.items.forEach((x) => {
+        if (x.status === 'now') x.status = mid || fq.state === 'call' ? 'stopped' : 'notsent';
+        else if (x.status === 'waiting' || x.status === 'failed') x.status = 'notsent';
+      });
+      Object.assign(fq, { state: 'end', end: { kind: 'done', midCall: mid }, k: -1, error: null });
+      after(`Fix major stopped. ${summary()}.`);
+    }
+
+    /** A queue call that failed or was refused (design 22d, 10a and 10b). */
+    function queueFailed(err) {
+      const code = err.code;
+      imp = null;
+      const e = code === 'version_conflict' ? { line: 'This section was saved in another tab.', sub: '', retry: false, kind: 'warning' }
+        : code === 'not_found' ? { line: 'This section was removed in 05 Outline.', sub: '', retry: false, kind: 'warning' }
+        : errorOf(err, 'custom');
+      if (code === 'run_in_progress') host.otherRun();
+      if (e.retry) {
+        fq.items[fq.k].status = 'failed';
+        Object.assign(fq, { state: 'failed', error: e });
+        after(`Fix major stopped. ${e.line}`);
+        return;
+      }
+      // No Try again (the month limit, a refusal before the call): the queue ends; nothing more is sent.
+      const at = fq.k;
+      fq.items.forEach((x) => { if (x.status === 'now' || x.status === 'waiting') x.status = 'notsent'; });
+      Object.assign(fq, { state: 'end', end: { kind: 'refused', at }, k: -1, error: e });
+      after(`Fix major stopped. ${e.line}`);
+      if (code === 'version_conflict') host.adoptRemote();
+      if (code === 'not_found') host.reload();
+    }
+
+    /** Try again after a failed call (10b): the same item, the same words. */
+    function queueRetry() {
+      if (!queueOn() || fq.state !== 'failed') return;
+      fq.items[fq.k].status = 'now';
+      Object.assign(fq, { state: 'item', error: null });
+      queueSend();
+      if (fq && fq.state === 'item') after();
+    }
+
+    /** Next item, after "The text changed" or "No changes suggested". */
+    function queueNext() {
+      if (!inQueue() || !imp) return;
+      const st = imp.state;
+      if (st !== 'changed' && st !== 'nochange') return;
+      imp = null;
+      if (st === 'changed') itemDone('skipped', `Item ${fq.k + 1} skipped. ${SKIP_WHY.changed}`, SKIP_WHY.changed);
+      else itemDone('nochange', `Item ${fq.k + 1}: no changes suggested.`);
+    }
+
+    function queueClose() {
+      if (!queueMine() || fq.state !== 'end') return;
+      fq = null;
+      after();
+      // Close returns focus to the Checks tab (design 22d, 9).
+      const tab = els() && els().side.querySelector('[data-tab="checks"]');
+      if (tab) tab.focus();
+    }
+
+    /** "Keep as is" on a waiting item takes it out of the queue ("1 of 2", 22d 7a). */
+    function queueRemove(i) {
+      if (!queueOn()) return false;
+      const j = fq.items.findIndex((x) => x.i === i && x.status === 'waiting');
+      if (j < 0) return false;
+      fq.items.splice(j, 1);
+      if (fq.k > j) fq.k--;
+      renderCard();
+      return true;
+    }
+
+    function countQueueAsk(box) {
+      fq.ask = box.value;
+      const card = box.closest('.wr-imp');
+      card.querySelector('[data-q-count]').textContent = `${fmt(box.value.length)} / ${LIMITS.instructionChars}`;
+      card.querySelector('[data-q-send]').disabled = !box.value.trim();
+    }
+
+    function qlistHtml(label) {
+      const rows = fq.items.map((x, j) => {
+        const now = x.status === 'now' || x.status === 'failed';
+        const ico = x.status === 'accepted' ? ICON.check(14) : x.status === 'skipped' ? SKIP(14) : '';
+        const cls = x.status === 'accepted' ? ' is-ok' : now ? ' is-now' : '';
+        return `<li${now ? ' class="is-now"' : ''} data-q-item="${j}"><span class="wr-q-n">${j + 1}</span>
+          <span class="wr-q-what">${TYPE_NAME[x.type] || x.type}${x.why ? `<span class="wr-q-sub">${esc(x.why)}</span>` : ''}</span>
+          <span class="wr-q-st${cls}">${ico}${STATUS[x.status]}</span></li>`;
+      }).join('');
+      return `<ol class="wr-q-list" aria-label="${label}">${rows}</ol>`;
+    }
+
+    function queueHtml() {
+      const n = fq.items.length;
+      const k = fq.k;
+      const it = fq.items[k];
+      const genWhy = `<p class="sr-only" id="wrImpGenWhy">${esc(genWhy2())}</p>`;
+      const L = (text) => `<div class="chip-label">${esc(text)}</div>`;
+      const cost = `<div class="wr-q-cost">${INFO(16)}<span>Up to ${plural(n, 'AI call', 'AI calls')}, about $0.01 to $0.02 each.</span></div>`;
+      const stop = (focus) => `<button type="button" class="link-btn wr-imp-text-btn" data-q-stop${focus ? ' data-imp-focus' : ''}>Stop</button>`;
+      const accepted = countOf('accepted');
+      if (fq.state === 'end') {
+        if (fq.end.kind === 'refused') {
+          const e = fq.error;
+          return `<section class="wr-imp wr-q" aria-labelledby="wrImpTitle" data-imp-card="q-refused">${L(`FIX MAJOR · ${fq.end.at + 1} OF ${n}`)}
+            <h3 id="wrImpTitle">Fix major stopped</h3>
+            <div class="alert ${e.kind === 'warning' ? 'alert-warning' : 'alert-error'}" role="alert">${e.kind === 'warning' ? ICON.warn(16) : ICON.x(16)}<div><p class="alert-text">${esc(e.line)}</p></div></div>
+            ${qlistHtml('Fix major results')}
+            <p>${accepted ? `${fmt(accepted)} accepted before the stop. ` : ''}The rest were not sent. This refusal was not counted.</p>
+            <div class="wr-imp-actions"><button type="button" class="btn btn-secondary btn-sm" data-q-close data-imp-focus>Close</button></div></section>`;
+        }
+        const text = accepted ? 'Each Accept saved a new version. Run the AI check again to see what is left.' : 'Your text did not change.';
+        return `<section class="wr-imp wr-q" role="status" aria-labelledby="wrImpTitle" data-imp-card="q-done">${L('FIX MAJOR · DONE')}
+          <h3 id="wrImpTitle">${esc(summary())}</h3>
+          ${qlistHtml('Fix major results')}
+          <p>${text}${fq.end.midCall ? ' The tokens already used count toward your usage.' : ''}</p>
+          <div class="wr-imp-actions"><button type="button" class="btn btn-secondary btn-sm" data-q-close data-imp-focus>Close</button></div></section>`;
+      }
+      const head = L(`FIX MAJOR · ${k + 1} OF ${n}`);
+      if (fq.state === 'failed') {
+        const e = fq.error;
+        const keep = accepted === 1 ? ` Stop keeps item ${fq.items.findIndex((x) => x.status === 'accepted') + 1}’s change.` : accepted ? ' Stop keeps the accepted changes.' : '';
+        return `<section class="wr-imp wr-q" aria-labelledby="wrImpTitle" data-imp-card="q-failed">${head}
+          <h3 id="wrImpTitle">Fix major stopped</h3>
+          <div class="alert ${e.kind === 'warning' ? 'alert-warning' : 'alert-error'}" role="alert">${e.kind === 'warning' ? ICON.warn(16) : ICON.x(16)}<div><p class="alert-text"><strong>${esc(e.line)}</strong></p>${e.sub ? `<p class="alert-text">${esc(e.sub)}</p>` : ''}</div></div>
+          ${qlistHtml('Fix major queue')}
+          <div class="wr-imp-actions"><button type="button" class="btn btn-primary btn-sm" data-q-retry data-imp-focus>Try again</button>${stop(false)}</div>
+          <p class="wr-imp-small">Try again sends item ${k + 1} again.${keep}</p>${genWhy}</section>`;
+      }
+      if (fq.state === 'item') {
+        const x = itemPick(it);
+        const passage = x.pick ? x.pick.text : it.quote;
+        return `<section class="wr-imp wr-q" aria-labelledby="wrImpTitle" data-imp-card="q-item">${head}${cost}
+          ${qlistHtml('Fix major queue')}
+          <h3 id="wrImpTitle">Fix ${k + 1} of ${n}: ${esc(it.type)}</h3>
+          <div class="wr-imp-passage">${esc(MD.toPlain(passage))}</div>
+          <div class="wr-imp-field wr-q-field">
+            <label for="wrQAsk">What should change?</label>
+            <textarea id="wrQAsk" class="text-input" maxlength="${LIMITS.instructionChars}" rows="3" data-q-ask data-imp-focus aria-describedby="wrQCount">${esc(fq.ask)}</textarea>
+            <span class="wr-imp-count" id="wrQCount" data-q-count>${fmt(fq.ask.length)} / ${LIMITS.instructionChars}</span>
+          </div>
+          <div class="wr-imp-actions">
+            <button type="button" class="btn btn-primary btn-sm" data-q-send${fq.ask.trim() ? '' : ' disabled'}>${SPARKLE()}Send</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-q-skip>${SKIP(16)}Skip</button>
+            ${stop(false)}
+          </div>
+          <p class="wr-imp-small">Skip moves to the next item. Nothing is sent. Stop ends Fix major; accepted changes stay.</p>${genWhy}</section>`;
+      }
+      // fq.state 'call': the suggestion of the open item.
+      if (!mine() || !imp.queued) return '';
+      const s = imp.state;
+      if (s === 'loading') {
+        return `<section class="wr-imp wr-q" role="status" aria-labelledby="wrImpTitle" data-imp-card="q-loading">${head}
+          ${qlistHtml('Fix major queue')}
+          <div class="wr-imp-row"><span class="wr-imp-spin" aria-hidden="true"></span><h3 id="wrImpTitle">Fixing ${k + 1} of ${n}…</h3></div>
+          <div class="wr-imp-passage">${esc(MD.toPlain(imp.selection))}</div>
+          <p class="wr-imp-small">The editor is read only while the AI works.</p>
+          <div class="wr-imp-actions">${stop(true)}</div>${genWhy}</section>`;
+      }
+      if (s === 'review' || s === 'applying') {
+        const r = imp.result;
+        const applying = s === 'applying';
+        const last = !fq.items.some((x, j) => j > k && x.status === 'waiting');
+        const off = applying || !!acceptWhy();
+        return `<section class="wr-imp wr-q" aria-labelledby="wrImpTitle" data-imp-card="q-${s}">${head}
+          <div class="wr-imp-head-row"><h3 id="wrImpTitle">Fix ${k + 1} of ${n}: ${fmt(W.count(imp.selection))} → ${fmt(W.count(r.text))} words</h3><span class="wr-imp-small">Just now</span></div>
+          ${applying ? '<div class="wr-imp-row" role="status"><span class="wr-imp-spin" aria-hidden="true"></span><span>Saving…</span></div>' : `<div class="wr-imp-diff" tabindex="0" aria-label="Changes" data-imp-diff>${diffHtml(imp.selection, r.text)}</div>
+          <div class="wr-cmp-legend"><span class="wr-leg-del">${ICON.x(12)}Removed</span><span class="wr-leg-add">${ICON.plus.replace('width="18" height="18"', 'width="12" height="12"')}Added</span></div>
+          ${notesHtml()}`}
+          <div class="wr-imp-actions">
+            <button type="button" class="btn btn-primary btn-sm" data-imp-accept data-imp-focus${off ? ' disabled' : ''}>Accept</button>
+            <button type="button" class="link-btn wr-imp-text-btn" data-imp-reject${applying ? ' disabled' : ''}>Reject</button>
+            <button type="button" class="link-btn wr-imp-text-btn" data-q-stop${applying ? ' disabled' : ''}>Stop</button>
+          </div>
+          <p class="wr-imp-small">${applying ? 'The editor is read only for a moment.' : last ? 'Accept saves a new version. Reject keeps your text.' : `Accept saves a new version, then item ${k + 2} opens. Reject keeps your text and moves to item ${k + 2}.`}</p>
+          ${genWhy}</section>`;
+      }
+      if (s === 'changed' || s === 'nochange') {
+        const changed = s === 'changed';
+        return `<section class="wr-imp wr-q" aria-labelledby="wrImpTitle" data-imp-card="q-${s}">${head}
+          <h3 id="wrImpTitle">${changed ? 'The text changed' : 'No changes suggested'}</h3>
+          ${changed ? `<div class="alert alert-warning" role="alert">${ICON.warn(16)}<p class="alert-text"><strong>Check this:</strong> the selected text changed while the AI was working, so the suggestion was not used.</p></div>` : '<p>The text already does this. Nothing was saved. This request counts toward your usage.</p>'}
+          ${changed && imp.result ? `<div class="sr-only" data-imp-text>${esc(imp.result.text)}</div>` : ''}
+          <div class="wr-imp-actions">
+            ${changed && imp.result ? `<button type="button" class="btn btn-secondary btn-sm" data-imp-copy>${COPY()}Copy suggestion</button>` : ''}
+            <button type="button" class="btn btn-primary btn-sm" data-q-next data-imp-focus>Next item</button>${stop(false)}
+          </div>${genWhy}</section>`;
+      }
+      if (s === 'error') {
+        const e = imp.error;
+        return `<section class="wr-imp wr-q" aria-labelledby="wrImpTitle" data-imp-card="q-error">${head}
+          <h3 id="wrImpTitle">Fix major stopped</h3>
+          <div class="alert ${e.kind === 'warning' ? 'alert-warning' : 'alert-error'}" role="alert">${e.kind === 'warning' ? ICON.warn(16) : ICON.x(16)}<div><p class="alert-text"><strong>${esc(e.line)}</strong></p>${e.sub ? `<p class="alert-text">${esc(e.sub)}</p>` : ''}</div></div>
+          ${qlistHtml('Fix major queue')}
+          <div class="wr-imp-actions">${e.retry ? '<button type="button" class="btn btn-primary btn-sm" data-imp-retry data-imp-focus>Try again</button>' : ''}${stop(!e.retry)}</div>${genWhy}</section>`;
+      }
+      return '';
     }
 
     /* ── Cards ─────────────────────────────── */
@@ -739,6 +1098,7 @@
     }
 
     function cardHtml() {
+      if (queueMine()) return queueHtml();
       if (!mine()) return '';
       const L = `<div class="chip-label">${esc(label())}</div>`;
       // Why Generate is off (its aria-describedby). Shown in the loading card (design 22b, 7); the suggestion card only reads it out (9).
@@ -804,6 +1164,7 @@
 
     /** Why Generate is off because of Improve (decision 8), or ''. */
     function genWhy2() {
+      if (queueOn()) return 'Finish or stop Fix major first.';
       if (!busy()) return '';
       return imp.state === 'loading' ? 'Wait for Improve to finish.' : 'Accept or reject the suggestion first.';
     }
@@ -815,7 +1176,7 @@
       const had = box.contains(document.activeElement);
       box.innerHTML = cardHtml();
       const gen = e.main.querySelector('[data-generate]');
-      if (gen) { if (busy()) gen.setAttribute('aria-describedby', 'wrImpGenWhy'); else gen.removeAttribute('aria-describedby'); }
+      if (gen) { if (busy() || queueOn()) gen.setAttribute('aria-describedby', 'wrImpGenWhy'); else gen.removeAttribute('aria-describedby'); }
       if (had) { const f = box.querySelector('[data-imp-focus]'); if (f) f.focus(); }
     }
 
@@ -825,12 +1186,18 @@
       renderCard();
       paint();
       refresh();
+      // The Checks tab follows the Fix major queue (design 22d, 7a and 8).
+      if (host.checksChanged) host.checksChanged();
       if (say) host.announce(say);
       // The card's main button takes focus, unless the writer is typing in the editor.
       const f = els() && els().main.querySelector('[data-imp] [data-imp-focus]');
       const ed = editor();
       const typing = !!ed && ed.contains(document.activeElement);
-      if (f && say && !typing) f.focus();
+      if (f && say && !typing) {
+        f.focus();
+        // A queue item's box: the cursor at the end of the finding's words.
+        if (f.tagName === 'TEXTAREA') f.setSelectionRange(f.value.length, f.value.length);
+      }
     }
 
     /* ── Events ────────────────────────────── */
@@ -861,7 +1228,13 @@
       closeMenu(false);
     }, true);
     document.addEventListener('keydown', (e) => { if (menu && menu.el.contains(e.target)) menuKey(e); });
-    document.addEventListener('input', (e) => { if (menu && menu.custom && e.target.matches && e.target.matches('[data-imp-ask]')) countAsk(); });
+    document.addEventListener('input', (e) => {
+      if (menu && menu.custom && e.target.matches && e.target.matches('[data-imp-ask]')) countAsk();
+      if (fq && e.target.matches && e.target.matches('[data-q-ask]')) countQueueAsk(e.target);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (fq && e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.matches && e.target.matches('[data-q-ask]')) { e.preventDefault(); queueSend(); }
+    });
     // The buttons keep the editor's selection.
     document.addEventListener('mousedown', (e) => { if (e.target.closest && e.target.closest('[data-imp-open], [data-imp-float]')) e.preventDefault(); });
     document.addEventListener('click', (e) => {
@@ -870,13 +1243,19 @@
       if (t.hasAttribute('data-imp-open') || t.hasAttribute('data-imp-float')) { if (menu && menu.anchor === t) closeMenu(true); else openMenu(t); return; }
       if (t.dataset.impAct) { pickAction(t.dataset.impAct); return; }
       if (t.hasAttribute('data-imp-send')) { send(); return; }
-      if (t.hasAttribute('data-imp-back')) { menu.custom = false; renderMenu(); return; }
+      if (t.hasAttribute('data-imp-back')) { menu.custom = false; menu.fix = false; renderMenu(); return; }
       if (t.hasAttribute('data-imp-cancel')) { cancel(); return; }
       if (t.hasAttribute('data-imp-close')) { close(); return; }
       if (t.hasAttribute('data-imp-accept')) { accept(); return; }
       if (t.hasAttribute('data-imp-reject')) { reject(); return; }
       if (t.hasAttribute('data-imp-again')) { again(); return; }
       if (t.hasAttribute('data-imp-copy')) { copySuggestion(); return; }
+      if (t.hasAttribute('data-q-send')) { queueSend(); return; }
+      if (t.hasAttribute('data-q-skip')) { if (queueOn() && fq.state === 'item') itemDone('skipped', `Item ${fq.k + 1} skipped.`); return; }
+      if (t.hasAttribute('data-q-stop')) { queueStop(); return; }
+      if (t.hasAttribute('data-q-retry')) { queueRetry(); return; }
+      if (t.hasAttribute('data-q-next')) { queueNext(); return; }
+      if (t.hasAttribute('data-q-close')) { queueClose(); return; }
       if (t.hasAttribute('data-imp-retry')) {
         if (imp && imp.error && imp.error.again === 'accept' && imp.result) { imp.state = 'review'; accept(); } else again();
       }
@@ -897,12 +1276,16 @@
     function onInput() {
       if (menu) closeMenu(false);
       clearGap();
-      if (busy()) { cancelAnimationFrame(paintRaf); paintRaf = requestAnimationFrame(paint); }
+      if (busy() || queueOn()) { cancelAnimationFrame(paintRaf); paintRaf = requestAnimationFrame(paint); }
       refresh();
     }
 
-    /** "Fix with Improve" (E10.4): select md[start, end) in the editor, then open the menu (it snaps to whole sentences). */
-    function openFor(start, end) {
+    /**
+     * "Fix" (E10.4, G5): select md[start, end) in the editor, then open the menu (it snaps to
+     * whole sentences). With ask: straight on Custom with the words in the box (design 22d, 5),
+     * when Custom is on for the passage; else the action menu with its note, as before.
+     */
+    function openFor(start, end, { ask } = {}) {
       const why = offWhy();
       if (why) return why;
       const ed = editor();
@@ -929,10 +1312,23 @@
       const btn = els().main.querySelector('[data-imp-open]');
       if (!btn) return 'loading';
       openMenu(btn);
-      return menu ? '' : 'missing';
+      if (!menu) return 'missing';
+      if (ask && !actionWhy(menu.pick, 'custom')) {
+        Object.assign(menu, { custom: true, fix: true, fromFix: true, ask: String(ask).slice(0, LIMITS.instructionChars) });
+        renderMenu();
+      }
+      return '';
     }
 
     async function confirmLeave() {
+      if (queueOn()) {
+        if (imp && imp.queued && imp.state === 'applying') return false;
+        const yes = await host.confirm({ title: 'Leave and stop Fix major?', text: 'Accepted changes stay.', ok: 'Leave', cancel: 'Stay' });
+        if (!yes) return false;
+        if (imp && imp.queued && imp.state === 'loading') host.hold(0);
+        reset();
+        return true;
+      }
       if (!busy()) return true;
       if (imp.state === 'applying') return false;
       const yes = await host.confirm({
@@ -949,6 +1345,7 @@
     function reset() {
       if (imp && imp.abort) imp.abort.abort();
       imp = null;
+      fq = null;
       if (menu) { menu.el.remove(); menu = null; }
       if (window.CSS && CSS.highlights) CSS.highlights.delete(HIGHLIGHT);
     }
@@ -958,13 +1355,17 @@
       render,
       refresh,
       onInput,
-      busy,
+      busy: () => busy() || queueOn(),
       genWhy: genWhy2,
       confirmLeave,
       reset,
       openFor,
       offText: () => { const w = offWhy(); return w ? (WHY_TEXT[w] || WHY_TEXT.loading) : ''; },
-      sectionId: () => (imp ? imp.sid : null)
+      sectionId: () => (imp ? imp.sid : fq ? fq.sid : null),
+      queueStart,
+      queueRemove,
+      queue: () => (queueMine() ? fq : null),
+      fixMenuOpen: () => !!(menu && menu.fromFix)
     };
   }
 

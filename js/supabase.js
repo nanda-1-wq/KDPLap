@@ -1093,6 +1093,43 @@ window.kdp = {
   },
 
   /**
+   * "Keep as is" (PRODUCE G5, 0024 kept_findings): the section's kept
+   * findings, newest first: [{ id, type, message, quote, check_at, created_at }].
+   */
+  async listKeptFindings(sectionId) {
+    const { data, error } = await window.sb
+      .from('kept_findings')
+      .select('id, type, message, quote, check_at, created_at')
+      .eq('section_id', sectionId)
+      .order('created_at', { ascending: false });
+    return { data: error ? null : (data || []), error };
+  },
+
+  /**
+   * Keep one finding as it is. checkAt: only for an objective gap (empty
+   * quote), the check's checked_at exactly as the database sent it (never
+   * rebuilt with Date: Postgres keeps microseconds). data: the new row, or
+   * null with `kept: true` when it was already kept (23505, another tab or a
+   * double click). error.message: 'kept_limit' (50 per section),
+   * 'kept_gap_not_in_check' (a newer check replaced this one).
+   */
+  async keepFinding({ sectionId, type, message, quote, checkAt }) {
+    const { data, error } = await window.sb
+      .from('kept_findings')
+      .insert({ section_id: sectionId, type, message, quote, check_at: quote ? null : checkAt })
+      .select('id, type, message, quote, check_at, created_at')
+      .single();
+    if (error && error.code === '23505') return { data: null, kept: true, error: null };
+    return { data: error ? null : data, error };
+  },
+
+  /** Undo a keep. A row that is already gone counts as undone. */
+  async unkeepFinding(id) {
+    const { error } = await window.sb.from('kept_findings').delete().eq('id', id);
+    return { error };
+  },
+
+  /**
    * Accept a suggestion (0021 apply_suggestion): a new current version with
    * source = the action. base = the current version (Accept saves typed text
    * as a version first, so it is never null); fullText = the section's text

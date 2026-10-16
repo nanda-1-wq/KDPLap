@@ -1204,6 +1204,8 @@
       reload: () => (cur ? openSection(cur.id, { keepNote: true }) : undefined),
       otherRun: () => { if (cur) { cur.otherRun = true; if (active()) { renderHead(); G.render(); imp.refresh(); } } },
       confirm: confirmDialog,
+      // G5: the Checks tab follows Improve (Fix off while a suggestion is open, the Fix major queue).
+      checksChanged: () => { if (chk) chk.refresh(); },
       announce
     });
     chk = kdpWriteChecks.create({

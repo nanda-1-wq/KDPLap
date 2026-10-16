@@ -3069,7 +3069,7 @@ div.delete-text p { margin: 0; }
 .wr-chk-group { display: flex; flex-direction: column; gap: var(--space-2); }
 .wr-chk-group + .wr-chk-group { padding-top: var(--space-4); border-top: 1px solid var(--mist); }
 .wr-chk-h { margin: 0; font-weight: 500; }
-.wr-chk-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.wr-chk-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-2); }
 .wr-chk-ai { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.06em; color: var(--graphite); border: 1px solid var(--stone-2); border-radius: var(--radius-pill); padding: 0 var(--space-2); }
 .wr-crow { display: grid; grid-template-columns: var(--space-4) minmax(0, 1fr); column-gap: var(--space-2); font-size: var(--text-md); line-height: 1.45; color: var(--ink); }
 .wr-chk-ico { display: inline-flex; margin-top: 2px; color: var(--graphite); }
@@ -3123,3 +3123,48 @@ div.delete-text p { margin: 0; }
 .wr-chk-acts { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
 .wr-chk-acts .btn { color: var(--ink); }
 .wr-chk-small { font-size: var(--text-sm); }
+
+/* ── Step 06 Checks tab: severity, Keep as is, Fix major (PRODUCE G5, design 22d) ─── */
+.wr-chk-gh { display: inline-flex; align-items: center; gap: var(--space-2); }
+.wr-chk-type.is-minor svg { color: var(--graphite); }
+.wr-chk-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.wr-chk-keep { min-height: var(--control-h); margin: 0; padding: 0 var(--space-2); font-size: var(--text-md); }
+.wr-chk-keep:disabled { color: var(--muted); text-decoration: none; cursor: default; }
+.wr-chk-fixmajor { color: var(--ink); }
+.wr-chk-fix.is-pressed { background: var(--mist); border-color: var(--ink); }
+.wr-chk-err { color: var(--danger); }
+/* A fold row: "2 minor (voice) · Show", "1 kept · Show". */
+.wr-chk-fold { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); color: var(--ink-2); }
+.wr-chk-fold-text { flex: 1 1 auto; min-width: 0; }
+/* The hit area stays 44 px; the ring hugs the word, so it never covers the rows above or below (22d). */
+.wr-chk-link:has(> .lbl):focus-visible { outline: none; }
+.wr-chk-link:focus-visible > .lbl { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--radius-sm); }
+.wr-chk-link:disabled { color: var(--muted); text-decoration: none; cursor: default; }
+/* The kept list (22d, 3b and 11). */
+.wr-chk-kept { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); background: var(--surface-2); border-radius: var(--radius-lg); }
+.wr-chk-kept-item { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--stone); }
+.wr-chk-kept > .chip-label + .wr-chk-kept-item { padding-top: 0; border-top: none; }
+.wr-chk-kept-item .wr-chk-msg { font-size: var(--text-sm); color: var(--ink-2); }
+.wr-chk-kept-item .wr-chk-quote { font-size: var(--text-sm); -webkit-line-clamp: 2; }
+.wr-chk-kept-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); align-self: stretch; }
+/* Fix major: the cost line, the queue's status, the item open now (22d, 6 to 8). */
+.wr-chk-cost, .wr-q-cost { display: grid; grid-template-columns: var(--space-4) minmax(0, 1fr); gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--text-sm); line-height: 1.45; color: var(--ink-2); }
+.wr-chk-cost svg, .wr-q-cost svg { margin-top: 2px; color: var(--graphite); }
+.wr-chk-busy { display: inline-flex; align-items: center; min-height: var(--control-h); font-size: var(--text-sm); color: var(--ink-2); }
+.wr-chk-find.is-now { border: 2px solid var(--ink); padding: calc(var(--space-3) - 1px); }
+.wr-chk-now { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.06em; color: var(--ink); border: 1px solid var(--ink); border-radius: var(--radius-pill); padding: 0 var(--space-2); }
+.wr-chk-help-last { padding-top: var(--space-2); border-top: 1px solid var(--mist); }
+
+/* Improve: the note under Custom when Fix opened it (22d, 5), and the Fix major card (22d, 7a to 10b). */
+.wr-imp-mnote { margin: 0 var(--space-3) var(--space-2); font-size: var(--text-sm); line-height: 1.45; color: var(--graphite); }
+.wr-q .wr-q-field { padding: 0; }
+.wr-q-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--mist); border-radius: var(--radius-lg); }
+.wr-q-list li { display: grid; grid-template-columns: var(--space-5) minmax(0, 1fr) auto; gap: var(--space-2); align-items: start; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--mist); font-size: var(--text-md); line-height: 1.45; color: var(--ink-2); }
+.wr-q-list li:first-child { border-top: none; }
+.wr-q-list li.is-now { background: var(--surface-2); color: var(--ink); }
+.wr-q-n { padding-top: 2px; font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); }
+.wr-q-what { min-width: 0; overflow-wrap: anywhere; }
+.wr-q-sub { display: block; font-size: var(--text-sm); color: var(--graphite); }
+.wr-q-st { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); color: var(--graphite); white-space: nowrap; }
+.wr-q-st.is-ok { color: var(--success); }
+.wr-q-st.is-now { color: var(--ink); font-weight: 600; }

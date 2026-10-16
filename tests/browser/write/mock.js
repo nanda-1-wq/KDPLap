@@ -123,6 +123,8 @@ const setup = async page => {
     // E10.4: section_checks rows by section id; Research rows for the number check; the pen voice;
     // timeline: [what, ms] for order checks (save_version, draft writes; the page logs the check call).
     checks: {}, research: { competitors: [], sources: [], insights: null }, penVoice: {}, timeline: [],
+    // G5: 0024 kept_findings rows by section id (newest first, as listKeptFindings reads them).
+    kept: {},
     addVersion: (sid, content, source, extra) => addVersion(sectionOf(sid).s, content, source, { created_at: now(), ...extra }),
     sectionOf: (sid) => sectionOf(sid)
   };
@@ -310,6 +312,37 @@ const setup = async page => {
       if (mode('checkLoadError')) return json(r, 500, { message: 'mock' });
       const row = store.checks[eq('section_id')];
       return json(r, 200, row ? [copy(row)] : []);
+    }
+    // G5: Keep as is (0024 kept_findings), with the checks of its guard.
+    if (path === '/rest/v1/kept_findings' && method === 'GET') {
+      if (mode('keptLoadError')) return json(r, 500, { message: 'mock' });
+      return json(r, 200, copy(store.kept[eq('section_id')] || []));
+    }
+    if (path === '/rest/v1/kept_findings' && method === 'POST') {
+      const p = body();
+      store.writes.push({ table: 'kept_findings', body: p });
+      if (mode('keepDelay')) await delay(mode('keepDelay'));
+      if (mode('keepError')) return json(r, 500, { message: 'mock' });
+      const list = store.kept[p.section_id] = store.kept[p.section_id] || [];
+      if (list.length >= 50 || mode('keptLimit')) return fail(r, 'P0001', 'kept_limit');
+      const chkRow = store.checks[p.section_id];
+      if (!p.quote) {
+        // The guard compares the timestamps in Postgres: here the exact string the page read stands for it.
+        if (!chkRow || p.check_at !== chkRow.checked_at || !chkRow.findings.some((f) => f.quote === '' && f.message === p.message)) return fail(r, 'P0001', 'kept_gap_not_in_check');
+        store.kept[p.section_id] = list.filter((k) => k.quote || k.check_at === p.check_at);
+      }
+      const dup = store.kept[p.section_id].some((k) => (p.quote ? k.quote === p.quote && k.type === p.type : !k.quote && k.check_at === p.check_at && k.message === p.message));
+      if (dup) return json(r, 409, { code: '23505', message: 'duplicate key value violates unique constraint "kept_findings_quote_key"', details: '' });
+      const row = { id: uid('9'), type: p.type, message: p.message, quote: p.quote, check_at: p.quote ? null : p.check_at, created_at: now() };
+      store.kept[p.section_id].unshift(row);
+      const single = /vnd\.pgrst\.object/.test(req.headers()['accept'] || '');
+      return json(r, 201, single ? copy(row) : [copy(row)]);
+    }
+    if (path === '/rest/v1/kept_findings' && method === 'DELETE') {
+      store.writes.push({ table: 'kept_findings', del: eq('id') });
+      if (mode('undoError')) return json(r, 500, { message: 'mock' });
+      for (const sid of Object.keys(store.kept)) store.kept[sid] = store.kept[sid].filter((k) => k.id !== eq('id'));
+      return json(r, 204);
     }
     if (path === '/rest/v1/competitors' && method === 'GET') return json(r, 200, copy(store.research.competitors));
     if (path === '/rest/v1/research_sources' && method === 'GET') return json(r, 200, copy(store.research.sources));

@@ -1,7 +1,7 @@
-// Step 06 Write (E10.4): the Checks tab (designs 22, 22c). The code checks
-// while typing (debounced), Show, the tab count (never the words row), the AI
+// Step 06 Write (E10.4): the Checks tab (designs 22, 22c; G5 22d labels). The code checks
+// while typing (debounced), Show, the tab count (never the words row, never minor), the AI
 // check (mock.js window.__chk answers it): never run, Checking, findings with
-// Fix with Improve (no AI call until an action), an objective gap with no Fix,
+// Fix (Custom pre-filled, no AI call until Send), an objective gap with no Fix,
 // pass / skipped / unclear rows, quote gone, out of date (a save, an unlock, a
 // voice change, a sibling renamed, a new word target), Save and check (the
 // editor read only and autosave paused until the call is sent, G3 P3), the
@@ -122,24 +122,28 @@ const test = async page => {
   await result(st.s42, FINDINGS, { objective: 'issues', voice: 'issues', drift: 'issues' });
   await page.waitForSelector('[data-chk-finding="2"]', { timeout: 5000 });
   ok(/^AI check of v3 · just now Check again$/.test(await txt('.wr-chk-meta')), `meta: "${await txt('.wr-chk-meta')}"`);
-  ok((await txt('[data-chk-finding="0"]')) === `VOICE ${FINDINGS[0].message} “Keep your neck long and your chin level.” Fix with Improve`, `voice finding, the quote as plain text: "${await txt('[data-chk-finding="0"]')}"`);
-  ok((await txt('[data-chk-finding="1"] .wr-chk-type')) === 'DRIFT', 'drift finding');
+  // G5 (22d): voice is minor, folded into one row until Show.
+  ok(!(await has('[data-chk-finding="0"]')) && (await txt('.wr-chk-fold')) === '1 minor (voice) Show', `voice folded: "${await txt('.wr-chk-fold')}"`);
+  await page.click('[data-chk-fold="minor"]');
+  ok((await txt('[data-chk-finding="0"]')) === `Voice · Minor ${FINDINGS[0].message} “Keep your neck long and your chin level.” Fix Keep as is`, `voice finding, the quote as plain text: "${await txt('[data-chk-finding="0"]')}"`);
+  ok((await txt('[data-chk-finding="1"] .wr-chk-type')) === 'Drift · Major', 'drift finding');
   const gap = await txt('[data-chk-finding="2"]');
-  ok(gap === `OBJECTIVE ${FINDINGS[2].message} MISSING FROM THE TEXT Nothing to select. Add this part yourself.` && !(await has('[data-chk-finding="2"] [data-chk-fix]')), `objective gap, no Fix, no Generate in the hint: "${gap}"`);
-  ok((await tabLabel()) === 'Checks 4', `tab count = 1 claim + 3 findings: "${await tabLabel()}"`);
-  ok((await tabName())[0] === 'Checks, 4 to review', `accessible name follows the count: "${(await tabName())[0]}"`);
+  ok(gap === `Objective · Major ${FINDINGS[2].message} Missing from the text Nothing to select. Add this part yourself. Keep as is` && !(await has('[data-chk-finding="2"] [data-chk-fix]')), `objective gap, no Fix, no Generate in the hint: "${gap}"`);
+  ok((await tabLabel()) === 'Checks 3', `tab count = 1 claim + 2 major (minor never counts): "${await tabLabel()}"`);
+  ok((await tabName())[0] === 'Checks, 3 to review', `accessible name follows the count: "${(await tabName())[0]}"`);
   ok(!(await has('[data-chk-area]')), 'no pass rows when every area has issues');
   ok(await shots('result') === false, 'result: no sideways scroll at 900 px');
 
-  // 3. Fix with Improve: the quote is selected, the Improve menu opens, no AI call.
+  // 3. Fix: the quote is selected, Improve opens on Custom with the finding (22d, 5), no AI call.
   const imps0 = await g(() => window.__imp.requests.length);
   await page.click('[data-chk-fix="0"]');
-  await page.waitForSelector('[data-imp-menu]', { timeout: 3000 });
-  ok((await selected()) === 'Keep your neck long and your chin level.', `Fix selects the quote's sentence: "${await selected()}"`);
-  ok(await g(() => window.__imp.requests.length) === imps0 && (await chks()).length === 1, 'no AI call until an action is picked');
+  await page.waitForSelector('[data-imp-menu] [data-imp-ask]', { timeout: 3000 });
+  ok(await g(() => document.querySelector('[data-imp-ask]').value) === FINDINGS[0].message, 'Custom is pre-filled with the finding');
+  ok(await g(() => window.__imp.requests.length) === imps0 && (await chks()).length === 1, 'no AI call until Send');
   ok(await g(() => document.querySelector('[data-imp-open]').getAttribute('aria-expanded') === 'true'), 'the menu opens at the toolbar Improve button');
   await page.keyboard.press('Escape');
-  ok(!(await has('[data-imp-menu]')), 'Esc closes the menu');
+  ok(!(await has('[data-imp-menu]')), 'Esc closes the menu (opened by Fix)');
+  ok((await selected()) === 'Keep your neck long and your chin level.', `Fix selected the quote's sentence: "${await selected()}"`);
 
   // 4. Quote gone and out of date: the writer changes the quoted sentence.
   await g((q) => {
@@ -310,6 +314,7 @@ const test = async page => {
   await open(W1, st.s42);
   await checksTab();
   await page.waitForSelector('[data-chk-finding="1"]', { timeout: 5000 });
+  await page.click('[data-chk-fold="minor"]');
   ok((await txt('[data-chk-finding="0"] .check-badge.warn')) === 'Verify: no source for 45', `P4: the badge: "${await txt('[data-chk-finding="0"] .check-badge')}"`);
   ok(!(await has('[data-chk-finding="1"] .check-badge')), 'P4: no badge on a message without a number');
   ok(await shots('verify-badge') === false, 'P4 badge: no sideways scroll at 900 px');
@@ -386,9 +391,11 @@ const test = async page => {
   ok(await shots('needs-review') === false, 'needs review: no sideways scroll at 900 px');
   st.sectionOf(st.s42).s.needs_review = false;
 
-  // 14. Fix off while a suggestion is open (Improve's own reason).
+  // 14. Fix off while a suggestion is open (Improve's own reason). Minor is folded on a new page.
+  await page.click('[data-chk-fold="minor"]');
   await page.click('[data-chk-fix="0"]');
-  await page.waitForSelector('[data-imp-menu]', { timeout: 3000 });
+  await page.waitForSelector('[data-imp-menu] [data-imp-back]', { timeout: 3000 });
+  await page.click('[data-imp-back]');
   await page.click('[data-imp-act="improve"]');
   await until(() => window.__imp.requests.length >= 1);
   const ireq = await g(() => window.__imp.requests.slice(-1)[0].body);
@@ -408,7 +415,7 @@ const test = async page => {
   ok(/We couldn’t load the last AI check\. Try again/.test(await txt('.wr-chk-group:last-child')), 'load error: the message and Try again');
   modes.checkLoadError = false;
   await page.click('[data-chk-reload]');
-  await page.waitForSelector('[data-chk-finding="0"]', { timeout: 5000 });
+  await page.waitForSelector('[data-chk-fold="minor"]', { timeout: 5000 });
   ok(true, 'Try again loads the saved check');
 
   return log.join('\n');
