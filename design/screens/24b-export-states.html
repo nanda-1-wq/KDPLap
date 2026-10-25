@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDP Lab · Export states</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;family=Source+Serif+4:wght@400;600&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../design-tokens.css">
+<!-- E11 · Export dialog (replaces design 24). Plan: docs/reviews/2026-10-25-e11-plan.md.
+     Owner decisions 2026-10-25: Verify marks warn with a required tick (never block);
+     About the author offered, off by default; page numbers centered in the footer from
+     the first chapter, none on the front matter; Contents is a linked list, no page numbers.
+     The dialog at its real width (600 px, app.css --app-dialog-w). Tokens from
+     design/design-tokens.css only. Ink on paper; functional colors only with an icon
+     and a word, small areas. Every control 44 px. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
+  a { color: var(--ink); text-decoration: underline; }
+  :focus-visible, .is-focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .page { max-width: 1440px; padding: var(--space-10) var(--space-12); display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(600px, 1fr)); gap: var(--space-10) var(--space-6); align-items: start; }
+  .page-head { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-1); }
+  .page-head h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
+  .page-head p { margin: 0; font-size: var(--text-md); color: var(--graphite); max-width: 900px; line-height: 1.5; }
+  .full { grid-column: 1 / -1; }
+  @media (max-width: 899px) { .page { padding: var(--space-6) var(--space-4); grid-template-columns: minmax(0, 1fr); } }
+
+  .label { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); text-transform: uppercase; }
+  .state { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+  .state > .label { padding-left: var(--space-1); }
+  .caption { margin: 0; font-size: var(--text-sm); color: var(--graphite); line-height: 1.5; max-width: 600px; }
+  .caption strong { color: var(--ink); font-weight: 600; }
+
+  /* The dialog (app.css .dialog, design 03) */
+  .dlg { width: 100%; max-width: 600px; background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-2xl);
+         padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); }
+  .dlg.part { padding-top: var(--space-5); }
+  .dlg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); }
+  .dlg-head .who { display: flex; gap: 14px; align-items: center; min-width: 0; }
+  .dlg-head h2 { margin: 0 0 4px; font-size: var(--text-2xl); font-weight: 600; }
+  .dlg-head p { margin: 0; font-size: var(--text-base); color: var(--graphite); }
+  .icon-btn { width: var(--control-h); height: var(--control-h); flex-shrink: 0; border: none; background: transparent; border-radius: var(--radius-md);
+              color: var(--graphite); display: inline-flex; align-items: center; justify-content: center; }
+  .dlg-foot { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+              padding-top: var(--space-4); border-top: 1px solid var(--mist); }
+  .dlg-foot .why { margin-right: auto; }
+  .more { font-size: var(--text-sm); color: var(--graphite); font-style: italic; text-align: center; padding: var(--space-1) 0;
+          border: 1px dashed var(--stone-2); border-radius: var(--radius-md); }
+
+  /* Placeholder cover (app.css .cover-ph.mini) */
+  .cover { width: 40px; height: 60px; flex-shrink: 0; border-radius: 3px 5px 5px 3px; background: var(--mist); box-shadow: var(--shadow-cover);
+           padding: 5px 4px 4px 5px; display: flex; flex-direction: column; color: var(--ink-2); overflow: hidden; }
+  .cover .t { font-size: 6px; font-weight: 700; line-height: 1.1; text-transform: uppercase; }
+  .cover .r { height: 1px; width: 12px; background: var(--stone-2); margin: 3px 0 auto; }
+  .cover .p { font-family: var(--font-label); font-size: 5px; letter-spacing: 0.06em; color: var(--graphite); text-transform: uppercase; white-space: nowrap; }
+
+  .group { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+  .group > legend { padding: 0 0 var(--space-2); }
+
+  /* Format choices (design 24) */
+  .choice { display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-height: 64px; border: 1px solid var(--stone); border-radius: var(--radius-lg); }
+  .choice.is-on { border: 2px solid var(--ink); padding: 11px 15px; }
+  .choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); flex-shrink: 0; }
+  .choice .txt { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .choice .name { font-size: var(--text-base); font-weight: 500; }
+  .choice .sub { font-size: var(--text-sm); color: var(--graphite); line-height: 1.4; }
+  .choice.soon { border-style: dashed; border-color: var(--stone-2); color: var(--muted); min-height: var(--control-h); }
+  .choice.soon .sub { color: var(--muted); }
+  .soon-tag { font-size: var(--text-xs); padding: 2px 8px; border: 1px solid var(--stone-2); border-radius: var(--radius-pill); white-space: nowrap; }
+
+  /* Fields */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > label, .field > .flabel { font-size: var(--text-base); font-weight: 500; }
+  .select { height: var(--control-h); padding: 0 var(--space-3); border: 1px solid var(--stone-2); border-radius: var(--radius-md); background: var(--surface);
+            font-family: inherit; font-size: var(--text-base); color: var(--ink); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+  .select svg { color: var(--graphite); flex-shrink: 0; }
+  .help { margin: 0; font-size: var(--text-sm); color: var(--graphite); line-height: 1.5; }
+
+  /* Book parts: checkbox rows */
+  .tick { display: grid; grid-template-columns: 20px 1fr auto; gap: var(--space-3); align-items: center; min-height: var(--control-h); padding: 0 var(--space-1); }
+  .tick + .tick { border-top: 1px solid var(--mist); }
+  .tick .box { width: 18px; height: 18px; border: 2px solid var(--ink); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; background: var(--surface); }
+  .tick .box.on { background: var(--ink); color: var(--surface); }
+  .tick .box.off-locked { border-color: var(--stone-2); background: var(--surface-2); color: var(--muted); }
+  .tick .name { font-size: var(--text-base); }
+  .tick .name .sub { display: block; font-size: var(--text-sm); color: var(--graphite); line-height: 1.4; }
+  .tick .side-note { font-size: var(--text-sm); color: var(--graphite); white-space: nowrap; }
+  .tick.locked .name { color: var(--ink-2); }
+
+  /* Layout facts */
+  .facts { background: var(--surface-2); border: 1px solid var(--stone); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4);
+           display: flex; flex-direction: column; gap: var(--space-2); }
+  .fact { display: grid; grid-template-columns: 112px 1fr; gap: var(--space-3); font-size: var(--text-md); line-height: 1.45; }
+  .fact + .fact { padding-top: var(--space-2); border-top: 1px solid var(--mist); }
+  .fact .k { color: var(--graphite); }
+  .fact .v { color: var(--ink); min-width: 0; }
+  .fact .v .link { margin-left: var(--space-2); }
+  .link { font-size: var(--text-md); font-weight: 500; display: inline-flex; align-items: center; min-height: var(--control-h); margin: -12px 0; }
+
+  /* Page strip: which pages get a number */
+  .pages { display: flex; gap: 6px; flex-wrap: wrap; padding: var(--space-2) 0 var(--space-1); }
+  .pg { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 52px; }
+  .sheet { width: 40px; height: 60px; background: var(--surface); border: 1px solid var(--stone-2); border-radius: 2px; position: relative;
+           display: flex; flex-direction: column; align-items: center; padding: 6px 4px; gap: 3px; }
+  .sheet i { display: block; height: 2px; width: 100%; background: var(--mist); }
+  .sheet i.h { width: 70%; height: 3px; background: var(--stone-2); }
+  .sheet .no { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-family: var(--font-label); font-size: 8px; color: var(--ink); }
+  .sheet.front { background: var(--surface-2); border-style: dashed; }
+  .pg .cap { font-size: 11px; color: var(--graphite); text-align: center; line-height: 1.2; }
+  .pg.gap { width: 20px; justify-content: center; color: var(--graphite); font-size: var(--text-md); padding-top: 22px; }
+
+  /* Rows with an icon */
+  .crow { display: grid; grid-template-columns: 16px 1fr; column-gap: var(--space-2); font-size: var(--text-md); line-height: 1.45; color: var(--ink); }
+  .crow svg { margin-top: 2px; }
+  .ok { color: var(--success); }
+  .warn { color: var(--warning); }
+  .neutral { color: var(--graphite); }
+  .crow .sub { display: block; font-size: var(--text-sm); color: var(--graphite); }
+
+  /* Alerts (22d) */
+  .alert { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-lg); font-size: var(--text-md); line-height: 1.5; }
+  .alert svg { margin-top: 3px; }
+  .alert p { margin: 0; }
+  .alert .body { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+  .alert-error { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger); }
+  .alert-warning { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--ink); }
+  .alert-warning > svg { color: var(--warning); }
+  .alert-success { background: var(--success-bg); border: 1px solid var(--success); color: var(--ink); }
+  .alert-success > svg { color: var(--success); }
+  .alert-info { background: var(--surface-2); border: 1px solid var(--stone); color: var(--ink); }
+  .alert-info > svg { color: var(--graphite); }
+  .alert .acts { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+  /* Mark list inside the warning */
+  .marks { list-style: none; margin: 0; padding: 0; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); }
+  .marks li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); min-height: var(--control-h); font-size: var(--text-md); }
+  .marks li + li { border-top: 1px solid var(--mist); }
+  .marks .sec { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: var(--control-h); display: flex; align-items: center; flex: 1 1 auto; }
+  .marks .sec .t { overflow: hidden; text-overflow: ellipsis; }
+  .marks .n { font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); margin-right: 6px; }
+  .marks .cnt { color: var(--graphite); font-size: var(--text-sm); white-space: nowrap; }
+
+  .ack { display: grid; grid-template-columns: 20px 1fr; gap: var(--space-3); align-items: center; min-height: var(--control-h); padding: var(--space-2) var(--space-3);
+         border: 1px solid var(--stone-2); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-md); line-height: 1.45; }
+  .ack .box { width: 18px; height: 18px; border: 2px solid var(--ink); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
+  .ack .box.on { background: var(--ink); color: var(--surface); }
+
+  /* Other notes list */
+  .notes { display: flex; flex-direction: column; gap: var(--space-2); }
+
+  /* AI note (advice only) */
+  .ainote { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); padding: var(--space-3); background: var(--surface-2); border-radius: var(--radius-md);
+            font-size: var(--text-sm); color: var(--ink-2); line-height: 1.5; }
+  .ainote svg { margin-top: 2px; color: var(--graphite); }
+  .ainote p { margin: 0; }
+  .ainote p + p { margin-top: var(--space-1); }
+  .ainote strong { color: var(--ink); font-weight: 600; }
+  .ai-tag { font-family: var(--font-label); font-size: 11px; letter-spacing: 0.06em; color: var(--graphite); border: 1px solid var(--stone-2); border-radius: var(--radius-pill); padding: 0 7px; }
+  .split { display: flex; height: 8px; border-radius: var(--radius-pill); overflow: hidden; background: var(--mist); margin: var(--space-2) 0 var(--space-1); }
+  .split span { display: block; height: 100%; }
+  .split .a { background: var(--ink); }
+  .split .b { background: var(--graphite); opacity: 0.55; }
+  .keyrow { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: var(--text-sm); color: var(--graphite); }
+  .keyrow span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .sw.a { background: var(--ink); } .sw.b { background: var(--graphite); opacity: 0.55; } .sw.c { background: var(--mist); border: 1px solid var(--stone-2); }
+
+  /* Buttons */
+  .btn { min-height: var(--control-h); padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+         border-radius: var(--radius-md); font-family: inherit; font-size: var(--text-base); border: 1px solid var(--stone); background: var(--surface);
+         color: var(--ink); cursor: pointer; white-space: nowrap; text-decoration: none; }
+  .btn-sm { font-size: var(--text-md); padding: 0 var(--space-3); }
+  .btn-primary { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+  .btn-text { border-color: transparent; background: transparent; text-decoration: underline; padding: 0 var(--space-2); }
+  .btn[disabled] { background: var(--surface-2); border-color: var(--stone); color: var(--muted); cursor: default; }
+  .why { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); font-size: var(--text-sm); color: var(--graphite); line-height: 1.45; max-width: 300px; }
+  .why svg { margin-top: 2px; }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--stone); border-top-color: var(--ink); flex-shrink: 0; display: inline-block; }
+  .btn-primary .spin { border-color: var(--graphite); border-top-color: var(--surface); }
+  .btn.is-busy { background: var(--ink-hover); border-color: var(--ink-hover); color: var(--surface); }
+
+  /* Progress steps */
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--mist); border-radius: var(--radius-lg); }
+  .steps li { display: grid; grid-template-columns: 16px 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4); font-size: var(--text-md); color: var(--ink-2); }
+  .steps li + li { border-top: 1px solid var(--mist); }
+  .steps li.is-now { color: var(--ink); font-weight: 600; background: var(--surface-2); }
+  .steps li.todo { color: var(--muted); }
+  .steps .st { font-size: var(--text-sm); color: var(--graphite); font-weight: 400; }
+  .bar { height: 6px; border-radius: var(--radius-pill); background: var(--mist); overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--ink); }
+
+  /* Empty */
+  .empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-3); padding: var(--space-6) var(--space-4);
+           border: 2px dashed var(--stone-2); border-radius: var(--radius-xl); }
+  .empty .ico { width: 56px; height: 56px; border-radius: 50%; background: var(--mist); display: flex; align-items: center; justify-content: center; color: var(--ink-2); }
+  .empty h3 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+  .empty p { margin: 0; font-size: var(--text-base); color: var(--graphite); line-height: 1.5; max-width: 380px; }
+
+  /* Success file row */
+  .file { display: grid; grid-template-columns: 36px 1fr; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4);
+          border: 1px solid var(--stone); border-radius: var(--radius-lg); }
+  .file .doc { width: 36px; height: 44px; border: 1px solid var(--stone-2); border-radius: 3px; display: flex; align-items: flex-end; justify-content: center;
+               font-family: var(--font-label); font-size: 9px; color: var(--graphite); padding-bottom: 4px; background: var(--surface-2); }
+  .file .nm { font-size: var(--text-base); font-weight: 500; overflow-wrap: anywhere; }
+  .file .sub { font-size: var(--text-sm); color: var(--graphite); }
+
+  /* Books cards (app.css .book-card, design 01) */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--space-4); }
+  .book-card { background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl); padding: 18px; display: flex; gap: 18px; position: relative; }
+  .cover-lg { width: 92px; height: 138px; flex-shrink: 0; border-radius: 3px 5px 5px 3px; background: var(--mist); box-shadow: var(--shadow-cover);
+              padding: 10px 8px 9px 9px; display: flex; flex-direction: column; color: var(--ink-2); }
+  .cover-lg .t { font-size: var(--text-xs); font-weight: 700; line-height: 1.15; text-transform: uppercase; }
+  .cover-lg .r { height: 1px; width: 24px; background: var(--stone-2); margin: 6px 0 auto; }
+  .cover-lg .p { font-family: var(--font-label); font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--graphite); }
+  .book-body { flex-grow: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .book-title { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.3; padding-right: var(--space-8); }
+  .book-pen { font-size: var(--text-md); color: var(--graphite); }
+  .book-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+  .grow { flex-grow: 1; min-height: var(--space-3); }
+  .pbar { height: 6px; border-radius: 3px; background: var(--mist); overflow: hidden; }
+  .pbar span { display: block; height: 100%; background: var(--ink); }
+  .book-meta { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); color: var(--graphite); }
+  .pill { padding: 3px 10px; border-radius: var(--radius-pill); background: var(--mist); font-size: var(--text-sm); font-weight: 500; }
+  .badge { display: inline-flex; align-items: center; gap: var(--space-1); padding: 3px 9px; border-radius: var(--radius-pill); border: 1px solid currentColor;
+           font-size: var(--text-xs); font-weight: 600; }
+  .badge-success { color: var(--success); background: var(--success-bg); }
+  .badge-neutral { color: var(--ink-2); background: var(--surface-2); border-color: var(--stone-2); }
+  .card-menu-btn { position: absolute; top: 8px; right: 8px; }
+
+  /* Book header + card menu */
+  .book-head { min-height: 80px; padding: var(--space-3) var(--space-6); background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl);
+               display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+  .book-head .center { text-align: center; min-width: 0; flex: 1 1 200px; }
+  .book-head h3 { margin: 2px 0 0; font-size: var(--text-2xl); font-weight: 600; }
+  .book-head .right { display: flex; gap: var(--space-3); align-items: center; }
+  .menu { width: 232px; background: var(--surface); border: 1px solid var(--stone-2); border-radius: var(--radius-lg); padding: 6px; box-shadow: var(--shadow-menu);
+          display: flex; flex-direction: column; }
+  .menu-item { min-height: var(--control-h); display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); border-radius: var(--radius-md);
+               font-size: var(--text-base); color: var(--ink); background: transparent; border: none; font-family: inherit; text-align: left; text-decoration: none; }
+  .menu-item.is-focus { background: var(--paper); outline-offset: -2px; }
+  .menu-item.danger { color: var(--danger); }
+  .menu-sep { height: 1px; background: var(--mist); margin: 4px 0; }
+  .combo { display: flex; gap: var(--space-6); flex-wrap: wrap; align-items: flex-start; }
+  .combo > .book-head { flex: 1 1 520px; }
+
+  .busy { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--ink-2); min-height: var(--control-h); }
+  .mono { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.04em; }
+  .nowrap { white-space: nowrap; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></g></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></g></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></g></symbol>
+  <symbol id="pen" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></g></symbol>
+  <symbol id="doc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></g></symbol>
+  <symbol id="open" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6"/></g></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="dots" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></g></symbol>
+</svg>
+
+<main class="page">
+  <header class="page-head">
+    <span class="label">E11 · Export dialog · replaces design 24</span>
+    <h1>Export states</h1>
+    <p>Export builds the file in the browser from each section's current saved version, in outline order. Unsaved edits are never in the file. Open "Verify: no source" marks never leave silently: the dialog lists them and asks for a tick. In the file the marks are removed and the sentence stays. Page size comes from the Brief; Export only reads it. The dialog is 600 px wide; on short screens its body scrolls and the footer stays.</p>
+  </header>
+
+  <!-- 1. Ready -->
+  <section class="state" aria-label="Ready">
+    <span class="label">1 · Ready: all Final, no open marks</span>
+    <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="t1">
+      <div class="dlg-head">
+        <div class="who">
+          <div class="cover" aria-hidden="true"><span class="t">Chair Yoga for Seniors Over 60</span><span class="r"></span><span class="p">Nora Hale</span></div>
+          <div><h2 id="t1">Export book</h2><p>Chair Yoga for Seniors Over 60 · Nora Hale</p></div>
+        </div>
+        <button class="icon-btn" aria-label="Close"><svg width="20" height="20"><use href="#x"/></svg></button>
+      </div>
+
+      <fieldset class="group">
+        <legend class="label">Format</legend>
+        <label class="choice is-on"><input type="radio" name="f1" checked><span class="txt"><span class="name">Word document (.docx)</span><span class="sub">Opens in Word, Google Docs and Pages. KDP accepts it for ebooks and paperbacks.</span></span></label>
+        <label class="choice"><input type="radio" name="f1"><span class="txt"><span class="name">Markdown (.md)</span><span class="sub">Plain text backup with headings.</span></span></label>
+        <div class="choice soon" aria-disabled="true"><span class="txt"><span class="name">Print PDF, EPUB, Google Drive</span></span><span class="soon-tag">Coming in v2</span></div>
+      </fieldset>
+
+      <div class="field">
+        <label for="inc1">Include</label>
+        <div class="select" id="inc1" role="combobox" aria-expanded="false" tabindex="0"><span>All sections with text (12)</span><svg width="16" height="16"><use href="#chev"/></svg></div>
+        <p class="help">12 Final. The other choice is "Final only".</p>
+      </div>
+
+      <fieldset class="group">
+        <legend class="label">Book parts</legend>
+        <div>
+          <div class="tick"><span class="box on"><svg width="12" height="12"><use href="#check"/></svg></span><span class="name">Title page<span class="sub">Title, subtitle and pen name</span></span><span></span></div>
+          <div class="tick"><span class="box on"><svg width="12" height="12"><use href="#check"/></svg></span><span class="name">Copyright page<span class="sub">"Copyright © 2026 Nora Hale. All rights reserved." and a short disclaimer. Edit it in Word.</span></span><span></span></div>
+          <div class="tick"><span class="box on"><svg width="12" height="12"><use href="#check"/></svg></span><span class="name">Contents<span class="sub">A linked list of chapters. No page numbers.</span></span><span></span></div>
+          <div class="tick"><span class="box on"><svg width="12" height="12"><use href="#check"/></svg></span><span class="name">Introduction</span><span class="side-note">1 section</span></div>
+          <div class="tick locked"><span class="box off-locked"><svg width="12" height="12"><use href="#check"/></svg></span><span class="name">Chapters<span class="sub">Always in the file</span></span><span class="side-note">7 chapters</span></div>
+          <div class="tick"><span class="box on"><svg width="12" height="12"><use href="#check"/></svg></span><span class="name">Conclusion</span><span class="side-note">1 section</span></div>
+          <div class="tick"><span class="box"></span><span class="name">About the author<span class="sub">Nora Hale's bio from Pen Names</span></span><span class="side-note">Off</span></div>
+        </div>
+      </fieldset>
+
+      <div class="group">
+        <span class="label">Layout</span>
+        <div class="facts">
+          <div class="fact"><span class="k">Page size</span><span class="v"><strong>6 × 9 in</strong>, from the Brief <a class="link" href="#">Change in Brief</a></span></div>
+          <div class="fact"><span class="k">Chapters</span><span class="v">Each chapter starts on a new page. Chapter title, then its sections as headings.</span></div>
+          <div class="fact"><span class="k">Page numbers</span><span class="v">Centered in the footer, from 1 on the Introduction. The title, copyright and contents pages have none.
+            <div class="pages" aria-hidden="true">
+              <span class="pg"><span class="sheet front"><i class="h"></i></span><span class="cap">Title</span></span>
+              <span class="pg"><span class="sheet front"><i></i><i></i></span><span class="cap">©</span></span>
+              <span class="pg"><span class="sheet front"><i class="h"></i><i></i><i></i><i></i></span><span class="cap">Contents</span></span>
+              <span class="pg"><span class="sheet"><i class="h"></i><i></i><i></i><i></i><span class="no">1</span></span><span class="cap">Intro</span></span>
+              <span class="pg"><span class="sheet"><i class="h"></i><i></i><i></i><i></i><span class="no">5</span></span><span class="cap">Ch 1</span></span>
+              <span class="pg gap">…</span>
+              <span class="pg"><span class="sheet"><i class="h"></i><i></i><i></i><span class="no">142</span></span><span class="cap">End</span></span>
+            </div></span></div>
+          <div class="fact"><span class="k">Text</span><span class="v">Georgia 11 pt, 1.15 lines, first-line indent. Word styles for title and headings, so KDP and Word read the structure.</span></div>
+        </div>
+      </div>
+
+      <div class="crow"><svg class="ok" width="16" height="16"><use href="#check"/></svg><span>Ready. All 12 sections are Final. No open Verify marks.</span></div>
+
+      <div class="ainote">
+        <svg width="16" height="16"><use href="#info"/></svg>
+        <div>
+          <p><strong>For KDP's AI question</strong> <span class="ai-tag">Advice only</span></p>
+          <div class="split" role="img" aria-label="AI first draft 78% of words, AI edits only 15%, your own text 7%"><span class="a" style="width:78%"></span><span class="b" style="width:15%"></span></div>
+          <div class="keyrow"><span><i class="sw a"></i>AI first draft: 9 sections</span><span><i class="sw b"></i>AI edits only: 2</span><span><i class="sw c"></i>Your own text: 1</span></div>
+          <p>KDP asks if your book has AI-generated content. Text an AI wrote counts, even after your edits. AI edits of your own text are AI-assisted, which KDP does not ask about. This is a help, not legal advice.</p>
+          <p><a class="link" href="#">KDP content guidelines</a></p>
+        </div>
+      </div>
+
+      <div class="dlg-foot">
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary"><svg width="18" height="18"><use href="#down"/></svg>Export .docx</button>
+      </div>
+    </div>
+    <p class="caption"><strong>Book parts:</strong> Introduction and Conclusion show only when the outline has them; About the author only when the pen name has a bio, off by default. Chapters cannot be turned off. <strong>Copyright page, full text</strong> (year = the export year, name = the pen name): "Copyright © 2026 Nora Hale. All rights reserved. No part of this book may be reproduced without written permission from the author, except for short quotes in reviews. The information in this book is for general education only. It is not medical, legal or financial advice. Talk to a qualified professional before you start any new exercise or health practice." <strong>Page numbers</strong> start on the first chapter: the Introduction, or Chapter 1 when there is none. The front matter is its own Word section with an empty footer. <strong>AI note:</strong> a section is "AI first draft" when its history has a Generate version, "AI edits only" when it has Improve, Expand, Shorten, Humanize or Custom but no Generate. The bar is by words in the exported text.</p>
+  </section>
+
+  <!-- 2a. Warnings -->
+  <section class="state" aria-label="Warnings, tick not set">
+    <span class="label">2a · Check before export: marks, tick not set</span>
+    <div class="dlg part" role="dialog" aria-modal="true" aria-label="Export book">
+      <p class="more">Header, Format, Include, Book parts and Layout as in state 1</p>
+      <div class="alert alert-warning" role="group" aria-labelledby="w2">
+        <svg width="16" height="16"><use href="#warn"/></svg>
+        <div class="body">
+          <p id="w2"><strong>Warning: 3 open Verify marks.</strong> These sentences have a number or claim with no source in your Research.</p>
+          <ul class="marks" aria-label="Sections with open marks">
+            <li><a class="sec" href="#"><span class="n">2.1</span><span class="t">Shoulder rolls</span></a><span class="cnt">2 marks</span></li>
+            <li><a class="sec" href="#"><span class="n">4.3</span><span class="t">Breathing while you stretch</span></a><span class="cnt">1 mark</span></li>
+            <li><a class="sec" href="#"><span class="n">3.2</span><span class="t">Seated twists</span></a><span class="cnt">1 number, no mark</span></li>
+          </ul>
+          <p>Each link opens the section in 06 Write. In the file the marks are removed and the sentences stay.</p>
+        </div>
+      </div>
+      <label class="ack"><span class="box"></span><span>Export with 3 open marks. I will check them before I publish.</span></label>
+
+      <div class="notes" role="group" aria-label="Other notes">
+        <div class="crow"><svg class="neutral" width="16" height="16"><use href="#info"/></svg><span>2 sections are Draft and 1 is Reviewed. They are in the file.<span class="sub">Choose "Final only" to leave them out.</span></span></div>
+        <div class="crow"><svg class="neutral" width="16" height="16"><use href="#info"/></svg><span>3 sections have no text: 6.1, 6.2, 6.3. They are left out.</span></div>
+        <div class="crow"><svg class="warn" width="16" height="16"><use href="#warn"/></svg><span>Needs review: chapter 4. The positioning changed after it was written.</span></div>
+        <div class="crow"><svg class="neutral" width="16" height="16"><use href="#info"/></svg><span>2.4 has unsaved edits. The file uses v6, its last saved version.</span></div>
+        <div class="crow"><svg class="neutral" width="16" height="16"><use href="#info"/></svg><span>1.3 ends where a Generate was stopped (partial text).</span></div>
+      </div>
+
+      <div class="dlg-foot">
+        <span class="why" id="why2"><svg width="16" height="16"><use href="#info"/></svg><span>Tick the box above to export.</span></span>
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary" disabled aria-describedby="why2"><svg width="18" height="18"><use href="#down"/></svg>Export .docx</button>
+      </div>
+    </div>
+    <p class="caption">Only open marks need the tick (decision 1: warn, never block). The count adds "[Verify: no source]" marks in the exported text and claim numbers with no source and no mark (the "number" rule from the Checks tab). Old marks in odd places, like mid-word or after "1.", are counted and removed too. The other notes never block. The tick resets when the dialog opens again.</p>
+  </section>
+
+  <!-- 2b. Tick set -->
+  <section class="state" aria-label="Warnings, tick set">
+    <span class="label">2b · Tick set: Export on</span>
+    <div class="dlg part" role="dialog" aria-modal="true" aria-label="Export book">
+      <p class="more">Warning and mark list as in 2a</p>
+      <label class="ack"><span class="box on is-focus"><svg width="12" height="12"><use href="#check"/></svg></span><span>Export with 3 open marks. I will check them before I publish.</span></label>
+      <div class="dlg-foot">
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary"><svg width="18" height="18"><use href="#down"/></svg>Export .docx</button>
+      </div>
+    </div>
+    <p class="caption">The ring sits on the box; the whole row is the 44 px target. Screen readers hear the warning title as the group name.</p>
+  </section>
+
+  <!-- 3. Final only -->
+  <section class="state" aria-label="Include Final only">
+    <span class="label">3 · Include: Final only</span>
+    <div class="dlg part" role="dialog" aria-modal="true" aria-label="Export book">
+      <p class="more">Header and Format as in state 1</p>
+      <div class="field">
+        <label for="inc3">Include</label>
+        <div class="select is-focus" id="inc3" role="combobox" aria-expanded="false" tabindex="0"><span>Final only (9 of 12)</span><svg width="16" height="16"><use href="#chev"/></svg></div>
+      </div>
+      <div class="alert alert-info" role="status">
+        <svg width="16" height="16"><use href="#info"/></svg>
+        <div class="body">
+          <p><strong>Left out: 3 sections that are not Final.</strong></p>
+          <p>2.2 Neck stretches (Draft) · 3.4 Ankle circles (Draft) · 5.1 Standing with support (Reviewed)</p>
+          <p>Chapter 5 has no Final section, so it is left out with its title. The contents list follows.</p>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary"><svg width="18" height="18"><use href="#down"/></svg>Export .docx</button>
+      </div>
+    </div>
+    <p class="caption">Marks, AI note and page numbers count only what is in the file, so they change with this choice.</p>
+  </section>
+
+  <!-- 4. Markdown -->
+  <section class="state" aria-label="Markdown chosen">
+    <span class="label">4 · Markdown chosen</span>
+    <div class="dlg part" role="dialog" aria-modal="true" aria-label="Export book">
+      <p class="more">Header as in state 1</p>
+      <fieldset class="group">
+        <legend class="label">Format</legend>
+        <label class="choice"><input type="radio" name="f4"><span class="txt"><span class="name">Word document (.docx)</span><span class="sub">Opens in Word, Google Docs and Pages. KDP accepts it for ebooks and paperbacks.</span></span></label>
+        <label class="choice is-on"><input type="radio" name="f4" checked><span class="txt"><span class="name">Markdown (.md)</span><span class="sub">Plain text backup with headings.</span></span></label>
+      </fieldset>
+      <div class="group">
+        <span class="label">Layout</span>
+        <div class="facts">
+          <div class="fact"><span class="k">File</span><span class="v">One .md file, same order and same book parts as the Word file.</span></div>
+          <div class="fact"><span class="k">Headings</span><span class="v"><span class="mono"># Title</span>, then <span class="mono">#</span> for each chapter and <span class="mono">##</span> for each section. Headings inside a section become <span class="mono">###</span>.</span></div>
+          <div class="fact"><span class="k">Pages</span><span class="v">No page size and no page numbers in Markdown.</span></div>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary"><svg width="18" height="18"><use href="#down"/></svg>Export .md</button>
+      </div>
+    </div>
+    <p class="caption">Verify marks are removed the same way, and the tick from 2a applies to Markdown too. Markdown exports are recorded but do not change the "DOCX exported" badge (state 10).</p>
+  </section>
+
+  <!-- 5. Empty -->
+  <section class="state" aria-label="Nothing to export">
+    <span class="label">5 · Empty: no section has text</span>
+    <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="t5">
+      <div class="dlg-head">
+        <div class="who">
+          <div class="cover" aria-hidden="true"><span class="t">Sleep Better After 50</span><span class="r"></span><span class="p">Nora Hale</span></div>
+          <div><h2 id="t5">Export book</h2><p>Sleep Better After 50 · Nora Hale</p></div>
+        </div>
+        <button class="icon-btn" aria-label="Close"><svg width="20" height="20"><use href="#x"/></svg></button>
+      </div>
+      <div class="empty">
+        <div class="ico" aria-hidden="true"><svg width="26" height="26"><use href="#doc"/></svg></div>
+        <h3>Nothing to export yet</h3>
+        <p>No section has saved text. Write at least one section in 06 Write, then come back.</p>
+        <a class="btn" href="#">Go to 06 Write<svg width="18" height="18"><use href="#arrow"/></svg></a>
+      </div>
+      <div class="dlg-foot">
+        <span class="why" id="why5"><svg width="16" height="16"><use href="#info"/></svg><span>Write a section first.</span></span>
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary" disabled aria-describedby="why5"><svg width="18" height="18"><use href="#down"/></svg>Export .docx</button>
+      </div>
+    </div>
+    <p class="caption">Same when "Final only" leaves nothing: "No section is Final yet. Choose All sections with text, or mark sections Final in 06 Write." The Format and Include rows stay hidden in the empty book case, so there is one clear next step.</p>
+  </section>
+
+  <!-- 6. Locked -->
+  <section class="state" aria-label="A section is being written">
+    <span class="label">6 · Locked: a section is being written now</span>
+    <div class="dlg part" role="dialog" aria-modal="true" aria-label="Export book">
+      <p class="more">Header, Format, Include, Book parts and Layout as in state 1</p>
+      <div class="alert alert-warning" role="status">
+        <svg width="16" height="16"><use href="#clock"/></svg>
+        <div class="body">
+          <p><strong>Writing now: 3.2 Seated twists.</strong> Generate is still running for this section.</p>
+          <p>Wait for it to finish, or export now with v4, its last saved version. The new text will not be in the file.</p>
+          <div class="acts"><span class="busy"><span class="spin" aria-hidden="true"></span>Checking again in a few seconds</span></div>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary"><svg width="18" height="18"><use href="#down"/></svg>Export with v4</button>
+      </div>
+    </div>
+    <p class="caption">A run in this or another tab counts while its heartbeat is fresh (the 0020 rule). When it ends, the alert goes away and the button reads "Export .docx" again; the new version is used. Export never stops or waits on the run by itself.</p>
+  </section>
+
+  <!-- 7. Building -->
+  <section class="state" aria-label="Building the file">
+    <span class="label">7 · Building the file</span>
+    <div class="dlg part" role="dialog" aria-modal="true" aria-label="Export book" aria-busy="true">
+      <p class="more">Header as in state 1; Format, Include and Book parts are read only while building</p>
+      <ol class="steps" role="status" aria-label="Export progress">
+        <li><svg class="ok" width="16" height="16"><use href="#check"/></svg><span>Loading the Word tool</span><span class="st">Done</span></li>
+        <li><svg class="ok" width="16" height="16"><use href="#check"/></svg><span>Reading 12 sections</span><span class="st">Done</span></li>
+        <li class="is-now"><span class="spin" aria-hidden="true"></span><span>Building the file</span><span class="st">Chapter 5 of 7</span></li>
+        <li class="todo"><span></span><span>Saving to your downloads</span><span class="st"></span></li>
+      </ol>
+      <div class="bar" role="img" aria-label="About 70% done"><span style="width:70%"></span></div>
+      <div class="dlg-foot">
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary is-busy" aria-disabled="true"><span class="spin" aria-hidden="true"></span>Building…</button>
+      </div>
+    </div>
+    <p class="caption">The Word tool (a library from a CDN, pinned with SRI) loads only when you export, once per page. No AI call, nothing counted. Cancel stops the build; nothing is saved or recorded. Markdown skips step 1.</p>
+  </section>
+
+  <!-- 8. Errors -->
+  <section class="state" aria-label="Export failed">
+    <span class="label">8 · Error with retry</span>
+    <div class="dlg part" role="dialog" aria-modal="true" aria-label="Export book">
+      <p class="more">8a · The Word tool did not load</p>
+      <div class="alert alert-error" role="alert">
+        <svg width="16" height="16"><use href="#x"/></svg>
+        <div class="body">
+          <p><strong>Error: we couldn't load the Word tool.</strong> Check your connection and try again.</p>
+          <p>Your book is safe. Markdown export still works without it.</p>
+          <div class="acts"><button class="btn btn-sm is-focus">Try again</button><button class="btn btn-sm btn-text">Export .md instead</button></div>
+        </div>
+      </div>
+      <p class="more">8b · Reading the book failed</p>
+      <div class="alert alert-error" role="alert">
+        <svg width="16" height="16"><use href="#x"/></svg>
+        <div class="body">
+          <p><strong>Error: we couldn't read your book.</strong> Check your connection and try again.</p>
+          <p>Your text is safe. Nothing was exported.</p>
+          <div class="acts"><button class="btn btn-sm">Try again</button></div>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn">Cancel</button>
+        <button class="btn btn-primary" disabled><svg width="18" height="18"><use href="#down"/></svg>Export .docx</button>
+      </div>
+    </div>
+    <p class="caption">Try again repeats the failed step only. Your choices in the dialog stay. Focus moves to Try again. If the file could not be built for another reason: "We couldn't build the file. Try again. If it keeps failing, export Markdown."</p>
+  </section>
+
+  <!-- 9. Success -->
+  <section class="state" aria-label="Exported">
+    <span class="label">9 · Success: file downloaded</span>
+    <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="t9">
+      <div class="dlg-head">
+        <div class="who">
+          <div class="cover" aria-hidden="true"><span class="t">Chair Yoga for Seniors Over 60</span><span class="r"></span><span class="p">Nora Hale</span></div>
+          <div><h2 id="t9">Book exported</h2><p>Chair Yoga for Seniors Over 60 · Nora Hale</p></div>
+        </div>
+        <button class="icon-btn" aria-label="Close"><svg width="20" height="20"><use href="#x"/></svg></button>
+      </div>
+      <div class="alert alert-success" role="status">
+        <svg width="16" height="16"><use href="#check"/></svg>
+        <div class="body"><p><strong>Done.</strong> The file is in your downloads.</p></div>
+      </div>
+      <div class="file">
+        <span class="doc" aria-hidden="true">DOCX</span>
+        <span><span class="nm">chair-yoga-for-seniors-over-60.docx</span><br><span class="sub">6 × 9 in · 12 sections · 9,640 words · 3 open marks removed</span></span>
+      </div>
+      <p class="help">The Books page now shows "DOCX exported Oct 25". If you change the text later, it shows "Changed since export".</p>
+      <div class="dlg-foot">
+        <button class="btn">Export again</button>
+        <button class="btn btn-primary is-focus">Done</button>
+      </div>
+    </div>
+    <p class="caption">The export is recorded after the file is handed to the browser. If that record fails, the file is still fine: the alert adds "We couldn't record this export, so the Books badge may be missing." with Try again (record only, no new file).</p>
+  </section>
+
+  <!-- 10. Books card badges -->
+  <section class="state full" aria-label="Books card badges">
+    <span class="label">10 · Books page: export badge</span>
+    <div class="cards">
+      <article class="book-card">
+        <div class="cover-lg" aria-hidden="true"><span class="t">Chair Yoga for Seniors Over 60</span><span class="r"></span><span class="p">Nora Hale</span></div>
+        <div class="book-body">
+          <h3 class="book-title">Chair Yoga for Seniors Over 60</h3>
+          <span class="book-pen">Nora Hale</span>
+          <div class="book-tags"><span class="pill">Write</span><span class="badge badge-success"><svg width="12" height="12"><use href="#check"/></svg>DOCX exported</span></div>
+          <span class="grow"></span>
+          <div class="pbar" role="img" aria-label="96% of planned words"><span style="width:96%"></span></div>
+          <div class="book-meta"><span>9,640 of 10,000 words</span><span>Exported Oct 25</span></div>
+        </div>
+        <button class="icon-btn card-menu-btn" aria-label="Actions for Chair Yoga for Seniors Over 60"><svg width="20" height="20"><use href="#dots"/></svg></button>
+      </article>
+      <article class="book-card">
+        <div class="cover-lg" aria-hidden="true"><span class="t">Budget Smart for College Students</span><span class="r"></span><span class="p">Sam Carter</span></div>
+        <div class="book-body">
+          <h3 class="book-title">Budget Smart for College Students</h3>
+          <span class="book-pen">Sam Carter</span>
+          <div class="book-tags"><span class="pill">Write</span><span class="badge badge-neutral"><svg width="12" height="12"><use href="#info"/></svg>Changed since export</span></div>
+          <span class="grow"></span>
+          <div class="pbar" role="img" aria-label="71% of planned words"><span style="width:71%"></span></div>
+          <div class="book-meta"><span>8,520 of 12,000 words</span><span>Exported Oct 20</span></div>
+        </div>
+        <button class="icon-btn card-menu-btn" aria-label="Actions for Budget Smart for College Students"><svg width="20" height="20"><use href="#dots"/></svg></button>
+      </article>
+    </div>
+    <p class="caption"><strong>Fresh:</strong> the last DOCX export matches the book now. <strong>Changed since export:</strong> a section in the file has a new current version, or the title, subtitle, pen name, page size or book parts changed. Gray with an info icon: it is a note, not a problem. The key compares the exported list of sections and versions with today's; no time stamps. Never exported: no badge and the meta line shows "Edited …" as today.</p>
+  </section>
+
+  <!-- 11. Entry points -->
+  <section class="state full" aria-label="Where Export opens">
+    <span class="label">11 · Entry points: book header and card menu</span>
+    <div class="combo">
+      <header class="book-head">
+        <button class="btn"><svg width="18" height="18"><use href="#back"/></svg>Back</button>
+        <div class="center"><span class="label">Step 06 · Write · Chapter 2 of 7</span><h3>Chair Yoga for Seniors Over 60</h3></div>
+        <div class="right">
+          <button class="btn is-focus" aria-haspopup="dialog"><svg width="18" height="18"><use href="#down"/></svg>Export</button>
+          <button class="btn btn-primary">Next<svg width="18" height="18"><use href="#arrow"/></svg></button>
+        </div>
+      </header>
+      <div class="menu" role="menu" aria-label="Actions for Chair Yoga for Seniors Over 60">
+        <a class="menu-item" role="menuitem" href="#"><svg width="16" height="16"><use href="#open"/></svg>Open</a>
+        <button class="menu-item" role="menuitem"><svg width="16" height="16"><use href="#pen"/></svg>Rename</button>
+        <button class="menu-item is-focus" role="menuitem" aria-haspopup="dialog"><svg width="16" height="16"><use href="#down"/></svg>Export</button>
+        <div class="menu-sep" role="separator"></div>
+        <button class="menu-item danger" role="menuitem"><svg width="16" height="16"><use href="#trash"/></svg>Delete</button>
+      </div>
+    </div>
+    <p class="caption">"Export" sits left of Next on every step of the book (as design 22), secondary style. The Books card ⋯ menu gets "Export" after Rename. Both open the same dialog; closing it returns focus to the button or the ⋯ menu button.</p>
+  </section>
+</main>
+</body>
+</html>
