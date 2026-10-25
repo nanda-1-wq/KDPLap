@@ -18,15 +18,18 @@
 --                bio, include and parts.
 --    Row Level Security: a user reads and adds only their own rows, on their
 --    own books. No update and no delete (privileges revoked); rows go with
---    their book or user (cascade), and the guard keeps the newest 20.
+--    their book or user (cascade), and the guard keeps the newest 20 per
+--    format.
 --    A guard trigger, for every role (the service role bypasses RLS):
 --      a. user_id is the book's owner (P0001 "export_owner"; a book the
 --         caller cannot see is left to the insert policy, 42501);
 --      b. every version is a version of a section of this book, owned by
 --         the same user, with no repeats (P0001 "export_version_not_in_book");
 --      c. snapshot is set from the database;
---      d. at most 20 exports per book: older rows are removed (the book row
---         is locked so two tabs cannot pass the cap together).
+--      d. at most 20 exports per book and format: older rows of the same
+--         format are removed, so Markdown backups never push out the DOCX
+--         export the Books badge reads (the book row is locked so two tabs
+--         cannot pass the cap together).
 -- 3. export_json(book): everything the Export dialog reads, in one read.
 -- 4. export_badges(): the Books page badge. The last DOCX export per book
 --    and whether the book changed since (the rule lives only here).
@@ -174,12 +177,15 @@ begin
     'bio_md5', md5(coalesce(v_bio, '')),
     'include', new.include,
     'parts', new.parts);
-  -- d. Keep the newest 19 older rows, so the book has at most 20 with this one.
+  -- d. Keep the newest 19 older rows of this format, so the book has at most
+  -- 20 per format with this one.
   delete from public.book_exports e
    where e.book_id = new.book_id
+     and e.format = new.format
      and e.user_id = new.user_id
      and e.id not in (select e2.id from public.book_exports e2
                        where e2.book_id = new.book_id
+                         and e2.format = new.format
                        order by e2.created_at desc, e2.id desc
                        limit 19);
   return new;
@@ -187,7 +193,7 @@ end;
 $$;
 
 comment on function public.book_exports_guard() is
-  'Trigger (E11): book_exports.user_id is the book''s owner (P0001 "export_owner"); every version belongs to this book (P0001 "export_version_not_in_book"); sets the snapshot from the database; keeps the newest 20 exports per book.';
+  'Trigger (E11): book_exports.user_id is the book''s owner (P0001 "export_owner"); every version belongs to this book (P0001 "export_version_not_in_book"); sets the snapshot from the database; keeps the newest 20 exports per book and format.';
 
 create trigger book_exports_guard
   before insert on public.book_exports
@@ -207,7 +213,9 @@ revoke execute on function public.book_exports_guard() from public, anon, authen
 --             sections in order: id, position, title, status, needs_review,
 --             version (id, version_no, content, partial, word_count) or null,
 --             ai ("draft": the history has a Generate version; "edits": it
---             has Improve, Expand, Shorten, Humanize or Custom; else "none"),
+--             has an Improve menu version (Edit and format, Improve, Expand,
+--             Shorten, Humanize, Custom); else "none": only manual saves and
+--             restores, which are not AI),
 --             unsaved (a draft that differs from the saved version),
 --             run (started_at, heartbeat_at) while a Generate run is "running"
 --   now       the server time, for the run freshness rule (0020)
@@ -265,7 +273,7 @@ as $$
                                                 where h.section_id = s.id and h.source = 'generate') then 'draft'
                                   when exists (select 1 from public.section_versions h
                                                 where h.section_id = s.id
-                                                  and h.source in ('improve', 'expand', 'shorten', 'humanize', 'custom')) then 'edits'
+                                                  and h.source in ('edit_format', 'improve', 'expand', 'shorten', 'humanize', 'custom')) then 'edits'
                                   else 'none' end,
                           'unsaved', coalesce(btrim(d.content) <> btrim(coalesce(v.content, '')), false),
                           'run', case when r.state = 'running' then jsonb_build_object(

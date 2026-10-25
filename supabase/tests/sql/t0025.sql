@@ -32,6 +32,7 @@
 \set S22 '''d0000000-0000-4000-8000-000000000005'''
 \set SC '''d0000000-0000-4000-8000-000000000006'''
 \set SX '''d0000000-0000-4000-8000-000000000007'''
+\set SY '''d0000000-0000-4000-8000-000000000008'''
 \set SB '''d0000000-0000-4000-8000-00000000000b'''
 \set SCC '''d0000000-0000-4000-8000-00000000000c'''
 \set VI1 '''f0000000-0000-4000-8000-000000000001'''
@@ -45,6 +46,9 @@
 \set V12R '''f0000000-0000-4000-8000-000000000009'''
 \set V21 '''f0000000-0000-4000-8000-00000000000a'''
 \set VIN '''f0000000-0000-4000-8000-00000000000d'''
+\set VXR '''f0000000-0000-4000-8000-00000000000e'''
+\set VY1 '''f0000000-0000-4000-8000-00000000000f'''
+\set VY2 '''f0000000-0000-4000-8000-000000000010'''
 \set VB '''f0000000-0000-4000-8000-00000000000b'''
 \set VCC '''f0000000-0000-4000-8000-00000000000c'''
 
@@ -80,6 +84,7 @@ insert into public.sections (id, user_id, chapter_id, position, title, status) v
   (:S22, :A, :C2, 2, 'Twist two', 'reviewed'),
   (:SC, :A, :CC, 1, 'Keep going', 'final'),
   (:SX, :A, :CX, 1, 'Other', 'draft'),
+  (:SY, :A, :CX, 2, 'Edited', 'draft'),
   (:SB, :B, :CB, 1, 'B section', 'draft'),
   (:SCC, :C, :CCC, 1, 'C section', 'draft');
 insert into public.section_versions (id, user_id, section_id, version_no, content, source) values
@@ -91,6 +96,9 @@ insert into public.section_versions (id, user_id, section_id, version_no, conten
   (:V22B, :A, :S22, 2, E'  \n ', 'manual'),
   (:VC, :A, :SC, 1, 'The end.', 'custom'),
   (:VX, :A, :SX, 1, 'Other book text.', 'manual'),
+  (:VXR, :A, :SX, 2, 'Other book text.', 'restore'),
+  (:VY1, :A, :SY, 1, 'Edited text.', 'manual'),
+  (:VY2, :A, :SY, 2, 'Edited text, formatted.', 'edit_format'),
   (:VB, :B, :SB, 1, 'B text.', 'manual'),
   (:VCC, :C, :SCC, 1, 'C text.', 'manual');
 update public.sections set current_version_id = :VI1 where id = :SI;
@@ -99,6 +107,7 @@ update public.sections set current_version_id = :V12 where id = :S12;
 update public.sections set current_version_id = :V22B where id = :S22;
 update public.sections set current_version_id = :VC where id = :SC;
 update public.sections set current_version_id = :VX where id = :SX;
+update public.sections set current_version_id = :VY2 where id = :SY;
 update public.sections set current_version_id = :VB where id = :SB;
 update public.sections set current_version_id = :VCC where id = :SCC;
 insert into public.section_drafts (section_id, user_id, content, base_version_id) values
@@ -112,6 +121,8 @@ insert into public.user_settings (user_id) values (:A), (:B);
 
 create function pg_temp.nexp(b uuid) returns bigint language sql security definer as $$
   select count(*) from public.book_exports where book_id = b $$;
+create function pg_temp.nfmt(b uuid, f text) returns bigint language sql security definer as $$
+  select count(*) from public.book_exports where book_id = b and format = f $$;
 create function pg_temp.badge(b uuid) returns text language sql as $$
   select coalesce((select changed::text from public.export_badges() where book_id = b), 'none') $$;
 grant execute on all functions in schema pg_temp to public;
@@ -238,6 +249,8 @@ select pg_temp.chk('ai: a Generate version in the history is "draft"', (:'j'::js
 select pg_temp.chk('ai: Improve with no Generate is "edits"', (:'j'::jsonb -> 'chapters' -> 1 -> 'sections' -> 0 ->> 'ai') = 'edits');
 select pg_temp.chk('ai: Custom with no Generate is "edits"', (:'j'::jsonb -> 'chapters' -> 3 -> 'sections' -> 0 ->> 'ai') = 'edits');
 select pg_temp.chk('ai: manual only is "none"', (:'j'::jsonb -> 'chapters' -> 1 -> 'sections' -> 1 ->> 'ai') = 'none');
+select pg_temp.chk('ai: Edit and format (the Improve menu) is "edits"', (public.export_json(:BOOK2) -> 'chapters' -> 0 -> 'sections' -> 1 ->> 'ai') = 'edits');
+select pg_temp.chk('ai: manual and restore only is "none" (not AI)', (public.export_json(:BOOK2) -> 'chapters' -> 0 -> 'sections' -> 0 ->> 'ai') = 'none');
 select pg_temp.chk('unsaved: a draft that differs', (:'j'::jsonb -> 'chapters' -> 1 -> 'sections' -> 1 ->> 'unsaved') = 'true');
 select pg_temp.chk('unsaved: a draft equal but for spaces is not', (:'j'::jsonb -> 'chapters' -> 3 -> 'sections' -> 0 ->> 'unsaved') = 'false');
 select pg_temp.chk('unsaved: no draft is not', (:'j'::jsonb -> 'chapters' -> 1 -> 'sections' -> 0 ->> 'unsaved') = 'false');
@@ -372,22 +385,42 @@ select pg_temp.chk('intro off: a chapter section still does', pg_temp.badge(:BOO
 :OWNER
 update public.sections set current_version_id = :V12 where id = :S12;
 
--- ── 7. The newest 20 per book ──
-select pg_temp.chk('before: 5 exports of book 1', pg_temp.nexp(:BOOK1) = 5, pg_temp.nexp(:BOOK1)::text);
+-- ── 7. The newest 20 per book and format ──
+select pg_temp.chk('before: book 1 has 4 DOCX and 1 Markdown export', pg_temp.nfmt(:BOOK1, 'docx') = 4 and pg_temp.nfmt(:BOOK1, 'md') = 1,
+  pg_temp.nfmt(:BOOK1, 'docx') || ' docx, ' || pg_temp.nfmt(:BOOK1, 'md') || ' md');
 :ASA
+select pg_temp.expect('book 2: one DOCX export',
+  format($q$insert into public.book_exports (book_id, format, include, parts, versions) values (%L, 'docx', 'all', %L, array[%L, %L]::uuid[])$q$, :BOOK2, :ALL, :VX, :VY2), 'OK 1');
+select pg_temp.chk('book 2: its badge is fresh', pg_temp.badge(:BOOK2) = 'false', pg_temp.badge(:BOOK2));
 select format($q$insert into public.book_exports (book_id, format, include, parts, versions, created_at) values (%L, 'md', 'all', %L, array[%L]::uuid[], %L)$q$,
-              :BOOK1, :ALL, :V11B, timestamptz '2030-01-01 00:00+00' + n * interval '1 minute')
-  from generate_series(1, 16) n \gexec
+              :BOOK2, :ALL, :VX, timestamptz '2030-01-01 00:00+00' + n * interval '1 minute')
+  from generate_series(1, 20) n \gexec
+select pg_temp.chk('book 2: 1 DOCX then 20 Markdown: all 21 kept', pg_temp.nfmt(:BOOK2, 'docx') = 1 and pg_temp.nfmt(:BOOK2, 'md') = 20,
+  pg_temp.nfmt(:BOOK2, 'docx') || ' docx, ' || pg_temp.nfmt(:BOOK2, 'md') || ' md');
+select pg_temp.chk('book 2: the DOCX badge is still there and fresh', pg_temp.badge(:BOOK2) = 'false', pg_temp.badge(:BOOK2));
+select pg_temp.expect('book 2: a 21st Markdown export',
+  format($q$insert into public.book_exports (book_id, format, include, parts, versions, created_at) values (%L, 'md', 'all', %L, array[%L]::uuid[], '2031-01-01 00:00+00')$q$, :BOOK2, :ALL, :VX), 'OK 1');
 :OWNER
-select pg_temp.chk('21 exports recorded, 20 kept', pg_temp.nexp(:BOOK1) = 20, pg_temp.nexp(:BOOK1)::text);
-select pg_temp.chk('the oldest one was removed (the first DOCX)',
-  not exists (select 1 from public.book_exports where book_id = :BOOK1 and snapshot ->> 'include' = 'all' and format = 'docx' and parts ->> 'about' = 'false' and parts ->> 'intro' = 'true'));
+select pg_temp.chk('book 2: Markdown pruned to 20, the oldest Markdown gone, the DOCX kept',
+  pg_temp.nfmt(:BOOK2, 'md') = 20 and pg_temp.nfmt(:BOOK2, 'docx') = 1
+  and not exists (select 1 from public.book_exports where book_id = :BOOK2 and created_at = timestamptz '2030-01-01 00:01+00'),
+  pg_temp.nfmt(:BOOK2, 'docx') || ' docx, ' || pg_temp.nfmt(:BOOK2, 'md') || ' md');
+:ASA
+select pg_temp.chk('book 2: the badge is still there', pg_temp.badge(:BOOK2) = 'false', pg_temp.badge(:BOOK2));
+select format($q$insert into public.book_exports (book_id, format, include, parts, versions, created_at) values (%L, 'docx', 'all', %L, array[%L, %L, %L]::uuid[], %L)$q$,
+              :BOOK1, :ALL, :V11B, :V12, :VC, timestamptz '2030-01-01 00:00+00' + n * interval '1 minute')
+  from generate_series(1, 17) n \gexec
+:OWNER
+select pg_temp.chk('book 1: 21 DOCX recorded, 20 kept; its 1 Markdown untouched', pg_temp.nfmt(:BOOK1, 'docx') = 20 and pg_temp.nfmt(:BOOK1, 'md') = 1,
+  pg_temp.nfmt(:BOOK1, 'docx') || ' docx, ' || pg_temp.nfmt(:BOOK1, 'md') || ' md');
+select pg_temp.chk('book 1: the oldest DOCX was removed',
+  not exists (select 1 from public.book_exports where book_id = :BOOK1 and snapshot ->> 'include' = 'all' and format = 'docx' and parts ->> 'about' = 'false' and parts ->> 'intro' = 'true' and created_at < '2030-01-01'));
 select pg_temp.chk('B''s export is untouched', pg_temp.nexp(:BOOKB) = 1);
 
 -- ── 8. Cascades ──
-insert into public.book_exports (user_id, book_id, format, include, parts, versions) values (:A, :BOOK2, 'docx', 'all', :ALL, array[:VX]::uuid[]);
+insert into public.book_exports (user_id, book_id, format, include, parts, versions) values (:A, :BOOK2, 'docx', 'all', :ALL, array[:VX, :VY2]::uuid[]);
 insert into public.book_exports (user_id, book_id, format, include, parts, versions) values (:C, :BOOKC, 'docx', 'all', :ALL, array[:VCC]::uuid[]);
-select pg_temp.chk('the owner (no RLS) records exports too, through the same guard', pg_temp.nexp(:BOOK2) = 1 and pg_temp.nexp(:BOOKC) = 1);
+select pg_temp.chk('the owner (no RLS) records exports too, through the same guard', pg_temp.nfmt(:BOOK2, 'docx') = 2 and pg_temp.nexp(:BOOKC) = 1);
 select pg_temp.expect('the owner cannot record an export for another user''s book',
   format($q$insert into public.book_exports (user_id, book_id, format, include, parts, versions) values (%L, %L, 'docx', 'all', %L, array[%L]::uuid[])$q$, :B, :BOOK2, :ALL, :VX), 'P0001 export_owner%');
 delete from public.books where id = :BOOK2;
