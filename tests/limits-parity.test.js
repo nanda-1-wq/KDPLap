@@ -301,3 +301,24 @@ Deno.test("Keep as is: 0024 kept findings match the AI check (PRODUCE G5, design
   const sev = read("js/finding-rules.js").match(/const SEVERITY = \{([^}]*)\}/)[1];
   assertEquals([...sev.matchAll(/(\w+): '/g)].map((m) => m[1]), [...L.CHECK_TYPES]);
 });
+
+Deno.test("Export and usage: 0025 matches the server and the version sources (E11)", () => {
+  const f = M("0025_export_settings.sql");
+  const text = read(f);
+  const quoted = (s) => [...s.matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  // usage_month: the default limit before the settings row exists = the server's = 0001's.
+  assertEquals(one(f, String.raw`where s\.user_id = \(select auth\.uid\(\)\)\), (\d+)\)`), L.DEFAULT_MONTHLY_LIMIT);
+  assertEquals(one(M("0001_v1_data_model.sql"), String.raw`monthly_token_limit\s+int not null default (\d+)`), L.DEFAULT_MONTHLY_LIMIT);
+  // export_json "ai": generate is a first draft; the other AI sources are edits.
+  // Together with manual, edit_format and restore they are every source in 0001.
+  const edits = quoted(text.match(/h\.source in \(([^)]*)\)/)[1]);
+  assertEquals(edits, ["improve", "expand", "shorten", "humanize", "custom"]);
+  assertEquals(/h\.source = 'generate'/.test(text), true, "0025: generate marks an AI first draft");
+  const all = quoted(read(M("0001_v1_data_model.sql")).match(/check \(source in \(([^)]*)\)\)/)[1]);
+  assertEquals([...all].sort(), ["manual", "generate", "edit_format", "restore", ...edits].sort());
+  // Names: 1 to 60 characters (the Settings field, js/settings.js, adds its own case at STOP 3).
+  assertEquals(one(f, String.raw`char_length\(display_name\) between 1 and (\d+)`), 60);
+  // An export holds 1 to 2,000 versions; the newest 20 per book are kept (19 older + the new one).
+  assertEquals(one(f, String.raw`cardinality\(versions\) between 1 and (\d+)`), 2000);
+  assertEquals(one(f, String.raw`limit (\d+)\)`) + 1, 20);
+});

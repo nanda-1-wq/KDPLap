@@ -47,6 +47,10 @@ insert into public.section_checks (section_id, user_id, book_id, version_id, are
    'a6000000-0000-4000-8000-000000000001', '{"objective": "pass", "voice": "pass", "drift": "pass"}', 2, '0123456789abcdef', now());
 insert into public.kept_findings (user_id, section_id, type, message, quote) values
   ('00000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-000000000001', 'drift', 'Kept A', 'Writing A');
+insert into public.book_exports (user_id, book_id, format, include, parts, versions) values
+  ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'docx', 'all',
+   '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}',
+   array['a6000000-0000-4000-8000-000000000001']::uuid[]);
 
 -- The tables under test: every table in public.
 create temp table rls_tables as
@@ -67,7 +71,7 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('21 public tables (0024: kept_findings)', (select count(*) from rls_tables) = 21, (select count(*) from rls_tables)::text);
+select pg_temp.chk('22 public tables (0025: book_exports)', (select count(*) from rls_tables) = 22, (select count(*) from rls_tables)::text);
 select pg_temp.chk('RLS on for every public table', not exists (
   select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
 select pg_temp.chk('A has a row in every table', (select bool_and(n > 0) from (
@@ -82,10 +86,11 @@ select pg_temp.chk(t || ': B reads 0 of A''s rows',
 -- outline_checks (0017) and section_checks (0022) give the browser no write privilege at all,
 -- section_versions (0018) no update or delete, section_runs (0020) and
 -- section_suggestions (0021) no delete (their update goes through RLS: 0
--- rows), and kept_findings (0024) no update: refused, not 0 rows.
-select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings') then '42501%' else 'OK 0' end)
+-- rows), kept_findings (0024) no update, and book_exports (0025) no update
+-- and no delete: refused, not 0 rows.
+select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -121,6 +126,11 @@ select pg_temp.expect('outline_checks: on A''s book refused (server only)', $q$i
 select pg_temp.expect('section_checks: on A''s section refused (server only)', $q$insert into public.section_checks (section_id, user_id, book_id, areas, words, inputs_key, checked_at) values ('a5000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', '{"objective": "pass", "voice": "pass", "drift": "pass"}', 0, '0123456789abcdef', now())$q$, '42501%');
 select pg_temp.expect('section_checks: B cannot insert a check as B (server only)', $q$insert into public.section_checks (section_id, user_id, book_id, areas, words, inputs_key, checked_at) values ('a5000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000b', 'b3000000-0000-4000-8000-000000000001', '{"objective": "pass", "voice": "pass", "drift": "pass"}', 0, '0123456789abcdef', now())$q$, '42501%');
 select pg_temp.expect('kept_findings: on A''s section refused', $q$insert into public.kept_findings (section_id, type, message, quote) values ('a5000000-0000-4000-8000-000000000001', 'drift', 'X', 'Writing A')$q$, '42501%');
+select pg_temp.expect('book_exports: B cannot record an export of A''s book', $q$insert into public.book_exports (book_id, format, include, parts, versions) values ('a3000000-0000-4000-8000-000000000001', 'docx', 'all', '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}', array['a6000000-0000-4000-8000-000000000001']::uuid[])$q$, '42501%');
+select pg_temp.expect('export_json: A''s book reads as null', $q$select 1 where public.export_json('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('export_badges: none of A''s books', $q$select 1 from public.export_badges() where book_id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('usage_month: none of A''s tokens', $q$select 1 where (public.usage_month() ->> 'tokens')::int = 0$q$, 'OK 1');
+select pg_temp.expect('user_settings: B cannot set A''s display name', $q$update public.user_settings set display_name = 'B' where user_id = '00000000-0000-4000-8000-00000000000a'$q$, 'OK 0');
 select pg_temp.expect('approve_outline: A''s book reads as not found', $q$select public.approve_outline('a3000000-0000-4000-8000-000000000001')$q$, 'P0002 book_not_found%');
 select pg_temp.expect('user_settings: B''s settings with A''s pen name refused', $q$insert into public.user_settings (default_pen_name_id) values ('a1000000-0000-4000-8000-000000000001')$q$, '42501%');
 
