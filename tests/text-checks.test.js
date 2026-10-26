@@ -178,6 +178,54 @@ const ENDINGS = [
   "One.\n\n[Verify: no source]", "That is real progress. In the next", "Para one.\n\nAlso done. Then half",
 ];
 
+Deno.test("mention row (E12 Part 3): every listed phrase, any case and spacing, in paragraphs and list items", () => {
+  const FLAGGED = [
+    "The next section shows you how to start.",
+    "In the next chapter, you will build the routine.",
+    "In the following section, we try it in bed.",
+    "The following chapter covers the evening.",
+    "You will learn more later in this book.",
+    "This comes back later in the book.",
+    "We return to it later in this chapter.",
+    "In section 3.1, you met four quick practices.",
+    "Section 2 shows the steps.",
+    "Chapter 5.2 will show you where they fit.",
+    "See chapter 4 for the full routine.",
+    "THE NEXT  SECTION has more.",
+    "Read the next\tchapter first.",
+  ];
+  for (const t of FLAGGED) {
+    const row = T.check(t, {}).rows.find((r) => r.code === "mention");
+    assert(row, t);
+    assertEquals([row.kind, row.text, row.sub], ["warn", "Mentions another part of the book", "Cut it, or say what that part covers."], t);
+    assertEquals(row.sents.map((x) => x.text), [t.replace(/\s+/g, " ")], t);
+  }
+  const ALLOWED = [
+    "You met this earlier in this book.", "Go back to the breathing practice earlier in this chapter.", "Take the next step slowly.",
+    "The next morning, try it again.", "Do the following steps in order.", "Rest for a section of the routine.", "This chapter is short.",
+    "The next sections are short.", "Later in the day, rest.", "Step 2 is the long exhale.",
+  ];
+  for (const t of ALLOWED) assertEquals(T.check(t, {}).rows.some((r) => r.code === "mention"), false, t);
+  // A list item is checked; a heading is not.
+  const item = T.check("- Then read the next section.", {}).rows.find((r) => r.code === "mention");
+  assertEquals(item.sents.length, 1);
+  assertEquals(T.check("## What the next chapter covers\n\nRest well.", {}).rows.some((r) => r.code === "mention"), false);
+});
+
+Deno.test("mention row (E12 Part 3): one entry per sentence, Show on the sentence, counted, after the ending row", () => {
+  const md = "Breathe out slowly. The next section, like the next chapter, shows more.\n\nRest well. In section 3.1 you met it. Then stop and";
+  const out = T.check(md, {});
+  const row = out.rows.find((r) => r.code === "mention");
+  assertEquals(row.sents.map((x) => x.text), ["The next section, like the next chapter, shows more.", "In section 3.1 you met it."]);
+  for (const x of row.sents) assertEquals(md.slice(x.start, x.end), x.text);
+  assertEquals(row.ranges, row.sents.map((x) => ({ start: x.start, end: x.end })));
+  assertEquals(out.rows.map((r) => r.code), ["ending", "mention"]);
+  assertEquals(out.warnings, 2);
+  // A marked sentence is matched on its words, without the mark.
+  const marked = T.check("The next chapter proves it." + M, {}).rows.find((r) => r.code === "mention");
+  assertEquals(marked.sents[0].text, "The next chapter proves it.");
+});
+
 Deno.test("ending row (E12 M9): a warning with Show on the cut piece, counted; none when the text ends complete", () => {
   const md = "## Rest\n\nIf your body stays tight, be patient with it. Stored tension needs gentle messages of saf";
   const out = T.check(md, {});

@@ -181,6 +181,7 @@ Content:
 - If <section_so_far> has text, continue right after it. If it stops in the middle of a sentence, finish that sentence first. Do not repeat or sum up what it says, and do not reuse the subheadings in <headings_so_far>.
 - If <section_so_far> is empty, start with a new sentence of your own. Never finish a sentence from <previous_section_end>, and do not repeat it.
 - <book_so_far> lists the other written sections of the book with their subheadings. Do not repeat advice, tips or subheadings it shows.
+- If you use a practice from <book_so_far>, name it and refer back to it in one sentence. Do not teach it again.
 - ${NO_NUMBERS} Do not end with a preview of the next section.
 - If <section> says examples: yes, add one short, concrete example: a situation, or "a reader who...". Never give a person a name, an age or a job. Do not give the example its own subheading. If it says examples: no, add no example story; a short "for example" inside a sentence is fine.
 - If <section> says exercise: yes, end with a short exercise for the reader.
@@ -338,7 +339,8 @@ export function writeUserMessage(ctx: WriteContext, aim: number): string {
     heads.length ? `<headings_so_far>\n${heads.map((h) => `<item>${asData(h)}</item>`).join("\n")}\n</headings_so_far>` : "<headings_so_far>(not given)</headings_so_far>",
     `<section_so_far>${hasText ? asData(soFar) : "(not given)"}</section_so_far>`,
     "",
-    hasText ? `Write about ${aim} words to continue this section. Follow the rules.` : `Write about ${aim} words for this section. Follow the rules.`,
+    // E12 Part 3: the live check's closing preview; the rule again where the model reads it last.
+    `Write about ${aim} words ${hasText ? "to continue this section" : "for this section"}. End with a complete sentence. Do not mention or preview the next section or chapter. Follow the rules.`,
   ].join("\n");
 }
 

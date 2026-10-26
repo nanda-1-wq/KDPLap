@@ -8,7 +8,7 @@
 // "Verify: no source" badge on a message (G3 P4), a lost connection (G3 P8),
 // errors and limits, every locked reason, under 50 and over 6,000 words,
 // Research numbers, open marks, the Needs review button, a load error, and
-// Final with warnings, and text that ends mid-sentence (E12 M9). Screenshots at 1440 and 900 px.
+// Final with warnings, text that ends mid-sentence (E12 M9) and a mention of another part (E12 Part 3). Screenshots at 1440 and 900 px.
 const test = async page => {
   const log = globalThis.__log = [];
   const ok = (cond, msg) => log.push(`${cond ? 'PASS' : 'FAIL'} ${msg}`);
@@ -433,6 +433,24 @@ const test = async page => {
   await open(W1, st.s51);
   await checksTab();
   ok(!(await has('[data-chk-row="ending"]')) && (await tabLabel()) === 'Checks', `a full stop: no ending row, no count: "${await tabLabel()}"`);
+
+  // 17. E12 Part 3: a preview and a section number: one warning row, each sentence with its Show, counted.
+  st.addVersion(st.s51, 'Breathe out slowly and let your shoulders drop. The next section shows you how to start. In section 3.1, you met four practices. Rest well before bed.', 'manual');
+  await open(W1, st.s51);
+  await checksTab();
+  ok((await rowText('mention')) === 'Mentions another part of the book Cut it, or say what that part covers. The next section shows you how to start. Show In section 3.1, you met four practices. Show',
+    `mention row: "${await rowText('mention')}"`);
+  ok(await page.$eval('[data-chk-row="mention"] .wr-chk-ico', (i) => i.classList.contains('is-warn')), 'mention: the warning icon');
+  ok((await tabLabel()) === 'Checks 1', `mention: counted once in the tab: "${await tabLabel()}"`);
+  const mshow = page.locator('[data-chk-row="mention"] [data-chk-show]');
+  // Every Show in a sentence list has its own 44 px hit area: none overlaps the next (E12 Part 3 fix).
+  const hits = await page.$$eval('.wr-chk-sents [data-chk-show]', (bs) => bs.map((b) => { const r = b.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), Math.round(r.height)]; }));
+  ok(hits.length === 2 && hits.every((h) => h[2] >= 44) && hits[0][1] <= hits[1][0], `Show hit areas: 44 px each, no overlap: ${JSON.stringify(hits)}`);
+  await mshow.nth(0).click();
+  ok((await selected()) === 'The next section shows you how to start.', `Show 1: "${await selected()}"`);
+  await mshow.nth(1).click();
+  ok((await selected()) === 'In section 3.1, you met four practices.', `Show 2: "${await selected()}"`);
+  ok(await shots('mention') === false, 'mention: no sideways scroll at 900 px');
 
   return log.join('\n');
 };

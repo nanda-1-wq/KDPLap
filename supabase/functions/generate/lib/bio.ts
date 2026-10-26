@@ -29,7 +29,7 @@ Rules for the bio:
 - You may rephrase the facts and link them with plain words, but every claim must come from a fact.
 - Do not add traits, feelings or reasons the facts don't state.
 - Do not describe the author's books, their style or what they do for readers. You may say the author writes about the topic in <niche>. Never use the word "niche".
-- Use the full pen name in the first sentence. After that, use the first name. Use he, she or they only when the facts show which one fits. Never use initials or fragments.
+- Use the full pen name in the first sentence. After that, use he or she when the first name or the facts clearly show it; otherwise use the first name. Never use initials or fragments.
 - If credentials are "(not given)", do not suggest any qualification or professional expertise.
 - Do not promise results.
 - Write only in third person. Never address the reader as 'you'.

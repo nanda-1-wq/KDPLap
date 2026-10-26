@@ -100,11 +100,12 @@ Deno.test("buildRequest: bio uses Sonnet 5.5, small max_tokens, schema output", 
   // E12 M6: no claims about the books, no word "niche", a pronoun only from the facts.
   assertStringIncludes(r.system, "Do not describe the author's books, their style or what they do for readers.");
   assertStringIncludes(r.system, 'Never use the word "niche".');
-  assertStringIncludes(r.system, "Use he, she or they only when the facts show which one fits.");
+  // E12 Part 3 (owner): he or she when the first name or the facts clearly show it; otherwise the first name.
+  assertStringIncludes(r.system, "use he or she when the first name or the facts clearly show it; otherwise use the first name.");
   assertStringIncludes(r.system, "too thin to write at least 40 words");
   assert(!r.system.includes("he/she"), "no guessed pronoun");
   assertStringIncludes(r.system, "Do not add traits, feelings or reasons the facts don't state.");
-  assertStringIncludes(r.system, "- Use the full pen name in the first sentence. After that, use the first name. Use he, she or they only when the facts show which one fits. Never use initials or fragments.");
+  assertStringIncludes(r.system, "- Use the full pen name in the first sentence. After that, use he or she when the first name or the facts clearly show it; otherwise use the first name. Never use initials or fragments.");
   assertStringIncludes(r.system, "- Write only in third person. Never address the reader as 'you'.");
   assert(!r.system.includes("Never shorten it."));
   assert(!r.system.includes("using the pen name."));

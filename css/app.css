@@ -3082,7 +3082,8 @@ div.delete-text p { margin: 0; }
   flex-shrink: 0;
 }
 .wr-chk-sents { list-style: none; margin: var(--space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; align-self: stretch; }
-.wr-chk-sents li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-left: 2px solid var(--stone-2); padding-left: var(--space-2); }
+/* Each sentence row is as tall as Show's 44 px hit area, so two Show links never overlap (E12 Part 3). */
+.wr-chk-sents li { min-height: var(--control-h); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-left: 2px solid var(--stone-2); padding-left: var(--space-2); }
 .wr-chk-sent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-read); font-size: var(--text-sm); color: var(--ink-2); }
 .wr-chk-more { font-size: var(--text-sm); color: var(--graphite); border-left: none !important; }
 .wr-chk-help { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }

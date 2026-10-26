@@ -120,7 +120,10 @@ deno test --allow-read tests/user-name.test.js
   known text is the server's `writeKnown`, the numbers row holds exactly the
   sentences that rule marks; text that ends mid-sentence (E12 M9: the row,
   Show on the cut piece, and the same answer as the server's
-  `endsMidSentence` and `completeEnd`); open marks, repeated phrases (3 to 6 words, 3+
+  `endsMidSentence` and `completeEnd`); mentions of another part of the book
+  (E12 Part 3: "next section", "next chapter", "following section", "following
+  chapter", "later in this book", "later in the book", "later in this chapter",
+  and "section" or "chapter" with a number; back references are allowed); open marks, repeated phrases (3 to 6 words, 3+
   times, the longest, never common words only), the same opener (paragraphs
   only; a heading or a list resets), words vs the target (under 80%, over
   120%, never counted), and under 30 ms on a 16,000-word section.

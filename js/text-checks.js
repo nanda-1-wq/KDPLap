@@ -10,6 +10,7 @@
        marks    open " [Verify: no source]" marks: one row, each sentence listed
        number   claim numbers with no source and no mark (the server's rule)
        ending   the text ends mid-sentence (E12 M9; "Show" selects the cut piece)
+       mention  sentences that preview or number another part of the book (E12 Part 3)
        repeat   phrases of 3 to 6 words used 3 or more times (at most 5 rows)
        opener   3 or more sentences in a row that start with the same word
        words    under 80% or over 120% of the section's word target
@@ -150,6 +151,12 @@
     return { start: at + lead, end: at + piece.length - trail, text: piece.trim() };
   }
 
+  /* ── Mentions another part of the book (E12 Part 3) ── */
+
+  // A preview or a section or chapter number: the file has no section numbers and no
+  // previews. Back references ("earlier in this book") are fine. Whole words, any case.
+  const MENTION = /\b(?:next\s+(?:section|chapter)|following\s+(?:section|chapter)|later\s+in\s+(?:this|the)\s+book|later\s+in\s+this\s+chapter|(?:section|chapter)\s+\d+(?:\.\d+)?)\b/i;
+
   /* ── Lines and sentences with their offsets ── */
 
   const HEADING = /^#{1,6}[ \t]+/;
@@ -279,7 +286,7 @@
     return rows;
   }
 
-  /* ── All six ── */
+  /* ── All seven ── */
 
   function check(md, opts = {}) {
     const text = String(md || '');
@@ -330,10 +337,21 @@
         ranges: [{ start: cut.start, end: cut.end }], sents: [] });
     }
 
-    // 4. Repeated phrases. 5. Same opener.
+    // 4. Mentions another part of the book (E12 Part 3): paragraphs and list items, each sentence once.
+    const mentions = [];
+    for (const l of lines) {
+      if (l.kind !== 'para' && l.kind !== 'item') continue;
+      for (const st of l.sents) if (MENTION.test(clean(st.text))) mentions.push(st);
+    }
+    if (mentions.length) {
+      rows.push({ code: 'mention', kind: 'warn', text: 'Mentions another part of the book', sub: 'Cut it, or say what that part covers.',
+        ranges: mentions.map((st) => ({ start: st.start, end: st.end })), sents: mentions.map((st) => ({ start: st.start, end: st.end, text: clean(st.text) })) });
+    }
+
+    // 5. Repeated phrases. 6. Same opener.
     rows.push(...repeats(text, lines), ...openers(text, lines));
 
-    // 6. Words vs the target (advice, never counted).
+    // 7. Words vs the target (advice, never counted).
     const target = Number(opts.target) || 0;
     if (target > 0) {
       const n = root.kdpWords.count(text);
