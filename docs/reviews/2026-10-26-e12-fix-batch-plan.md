@@ -1,6 +1,6 @@
 # E12 step 2: prompt fix batch plan
 
-Status: STOP 3 reached 2026-10-26. generate v22 deployed by the owner from 83d1b02. Part 2 committed 1f74964 and pushed on `claude/e12`. The live check waits for the owner's "live".
+Status: STOP 3 approved 2026-10-26 with one fix (the neutral summary line, below). Live check in progress (test account only).
 
 ## Context
 The step 1 review (`docs/reviews/2026-10-26-e12-prompt-review.md`, 91e8901) found prompt and rule problems that would hurt a real book. The owner accepted it and chose:
@@ -183,3 +183,5 @@ Commit 1f74964 on `claude/e12`. Browser only: no server change, no migration, no
 | `export-cut-two-900.png` | Export dialog at 900 with two cut sections |
 
 Also re-shot: `design/screens/12-pen-name-detail.png`.
+
+**STOP 3 fix (owner):** when the "ends mid-sentence" note shows, the summary line above it is neutral: the info icon, and no "Ready." ("All 10 sections are Final. No open Verify marks."). Without the note it is unchanged ("Ready. …" with the green check). `t-cut` checks both, 9 → 12. Export suite: t-cut 12, t-export 63. The three export screenshots were shot again.

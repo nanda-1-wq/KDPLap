@@ -1,7 +1,8 @@
 // E12 M9 (owner decision 4): the Export dialog's note for sections whose text
 // ends mid-sentence. A warning like "Needs review": it never blocks, needs no
 // tick, and the download still works. "Final only" leaves out a section that
-// is not in the file, and its note with it. Screenshots at 1440 and 900.
+// is not in the file, and its note with it. With the note, the summary line
+// is neutral: the info icon and no "Ready." (owner, STOP 3). Screenshots at 1440 and 900.
 // Run: tests/browser/run.sh export t-cut.js
 const test = async (page) => {
   const out = globalThis.__log = [];
@@ -22,6 +23,11 @@ const test = async (page) => {
     await page.locator('.exp-dialog [data-exp-go]').waitFor({ timeout: 10000 });
   }
   const notes = () => page.locator('.exp-notes').innerText().then((t) => t.replace(/\s+/g, ' ').trim()).catch(() => '');
+  /** The summary line above the notes: its text, and whether it has the green check or the info icon. */
+  const summary = () => page.evaluate(() => {
+    const row = [...document.querySelectorAll('.exp-dialog .exp-crow')].find((r) => /No open Verify marks\./.test(r.textContent));
+    return row ? { text: row.textContent.replace(/\s+/g, ' ').trim(), check: !!row.querySelector('.save-ok'), info: !!row.querySelector(':scope > svg') } : null;
+  });
   async function tallShot(name) {
     const vp = page.viewportSize();
     await page.setViewportSize({ width: vp.width, height: 2200 });
@@ -35,7 +41,10 @@ const test = async (page) => {
   ok('cut: the note names both sections', (await notes()).includes(NOTE), await notes());
   ok('cut: the warning icon, like Needs review', await page.locator('.exp-notes .exp-crow', { hasText: 'mid-sentence' }).locator('.exp-warn svg').count() === 1);
   ok('cut: no tick box (it never blocks)', await page.locator('.exp-dialog [data-exp-ack]').count() === 0);
-  ok('cut: Export is on, with the Ready line', !(await page.locator('.exp-dialog [data-exp-go]').isDisabled()) && (await T('.exp-dialog')).includes('Ready.'));
+  ok('cut: Export is on', !(await page.locator('.exp-dialog [data-exp-go]').isDisabled()));
+  const s1 = await summary();
+  ok('cut: the summary line is neutral: no "Ready.", the info icon, no green check', s1 && s1.text === 'All 10 sections are Final. No open Verify marks.' && s1.info && !s1.check, s1);
+  ok('cut: "Ready." is nowhere in the dialog', !(await T('.exp-dialog')).includes('Ready.'));
   await tallShot('t-cut-dialog-1440');
   // The download still works.
   const dl = page.waitForEvent('download', { timeout: 15000 });
@@ -65,6 +74,8 @@ const test = async (page) => {
   // None cut: no note.
   await open(1440, []);
   ok('none cut: no mid-sentence note', !(await notes()).includes('mid-sentence'), await notes());
+  const s0 = await summary();
+  ok('none cut: "Ready." with the green check', s0 && s0.text === 'Ready. All 10 sections are Final. No open Verify marks.' && s0.check && !s0.info, s0);
 
   return out.join('\n');
 };

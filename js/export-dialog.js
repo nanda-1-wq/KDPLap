@@ -290,7 +290,11 @@
   function dynamicHtml(m) {
     const ready = !m.empty && !m.openMarks;
     const allFinal = m.sections.every((s) => s.status === 'final');
-    const readyLine = ready ? `<div class="exp-crow">${`<span class="save-ok">${ICON.check(16)}</span>`}<span>Ready. ${allFinal ? `All ${plural(m.sections.length, 'section')} ${m.sections.length === 1 ? 'is' : 'are'} Final.` : `${plural(m.sections.length, 'section')} in the file.`} No open Verify marks.</span></div>` : '';
+    const summary = `${allFinal ? `All ${plural(m.sections.length, 'section')} ${m.sections.length === 1 ? 'is' : 'are'} Final.` : `${plural(m.sections.length, 'section')} in the file.`} No open Verify marks.`;
+    // E12 STOP 3 (owner): with the "ends mid-sentence" note the line is neutral: the info icon, no "Ready.".
+    const readyLine = !ready ? '' : m.cut.length
+      ? `<div class="exp-crow">${IC.info}<span>${summary}</span></div>`
+      : `<div class="exp-crow"><span class="save-ok">${ICON.check(16)}</span><span>Ready. ${summary}</span></div>`;
     const emptyFinal = m.empty && m.include === 'final'
       ? `<div class="alert exp-info" role="status">${IC.info}<div class="alert-text"><p><strong>No section is Final yet.</strong> Choose All sections with text, or mark sections Final in 06 Write.</p></div></div>` : '';
     return `${emptyFinal}${finalOnlyHtml(m)}${layoutHtml(m)}${runningHtml(m)}${marksHtml(m)}${readyLine}${notesHtml(m)}${aiHtml(m)}`;
