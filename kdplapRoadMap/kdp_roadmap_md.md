@@ -24,8 +24,8 @@ Design: ✅ approved (see `design/`)
   - E10.3 Improve menu: done (0021, generate v18, merged ec664c1)
   - E10.4 Checks tab: done (0022, generate v19, merged cd9966f)
 - [x] **PRODUCE gate** (after E10): G4 owner walk-through, G1 review, G2 clean-up, G3 fixes (0023, generate v20), G5 severity, Keep as is, Fix, Fix major (0024, generate v21), G6 all suites green on main. Merged bec800e. Results in `docs/reviews/produce-gate-g1.md` to `produce-gate-g5.md` (G4 answers in g1 section 7).
-- [ ] **E11** Export DOCX + Markdown · Settings + AI usage ← next
-- [ ] **E12** Real test: write one full book, fix what hurts
+- [x] **E11** Export DOCX + Markdown · Settings + AI usage: Export dialog (DOCX built in the browser with docx 9.5.1, Markdown), Settings, name-only sidebar, Books badge, 0025 live (20261025213500). Merged 1c9b932. Plans and results in `docs/reviews/2026-10-25-e11-plan.md` and `2026-10-25-e11-build-plan.md`.
+- [ ] **E12** Real test: write one full book, fix what hurts ← next
 
 ## v2 · KDP-ready files
 07 Quality Control · 08 Format · 09 Cover (full wrap) · Print PDF · EPUB ·
