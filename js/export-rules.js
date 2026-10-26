@@ -119,7 +119,7 @@
       notFinal: [],     // with text but not Final: left out under "Final only"
       noText: [],       // no saved text: always left out
       droppedChapters: [],
-      needsReview: [], unsaved: [], partial: [], running: [],
+      needsReview: [], unsaved: [], partial: [], running: [], cut: [],
       marks: { total: 0, numbers: 0, sections: [] },
       ai: { draft: 0, edits: 0, own: 0, words: { draft: 0, edits: 0, own: 0 } },
       words: 0
@@ -147,6 +147,8 @@
         if (s.needs_review) out.needsReview.push(item);
         if (s.unsaved) out.unsaved.push({ ...item, versionNo: v.version_no });
         if (v.partial) out.partial.push(item);
+        // E12 M9: text that ends mid-sentence (a warning, never blocking; the Checks tab's rule).
+        if (root.kdpTextChecks && root.kdpTextChecks.ending(v.content)) out.cut.push(item);
         if (fresh(s.run, data.now)) out.running.push({ ...item, versionNo: v.version_no });
         // Marks.
         const m = markCount(v.content), nb = numberCount(v.content, known);

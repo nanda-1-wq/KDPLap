@@ -59,8 +59,10 @@
 
   const options = (key) => `<option value="">Not set</option>${P.CHOICES[key].map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}`;
 
-  function selectField(key, text) {
-    return `<div class="field"><label for="v-${key}">${text}</label><select class="select select-block" id="v-${key}" data-choice="${key}">${options(key)}</select></div>`;
+  /** A voice choice. An optional help line goes under the select, so the selects in a row stay level. */
+  function selectField(key, text, hint) {
+    const help = hint ? `<span class="field-hint" id="v-${key}-hint">${hint}</span>` : '';
+    return `<div class="field"><label for="v-${key}">${text}</label><select class="select select-block" id="v-${key}" data-choice="${key}"${hint ? ` aria-describedby="v-${key}-hint"` : ''}>${options(key)}</select>${help}</div>`;
   }
 
   /** A visible but disabled AI action, with its reason as visible text. */
@@ -154,7 +156,7 @@
             </div>
             <div class="field-pair">
               ${selectField('reading_level', 'Reading level')}
-              ${selectField('perspective', 'Perspective')}
+              ${selectField('perspective', 'Point of view in your books', 'The bio is always third person.')}
               ${selectField('sentences', 'Sentences')}
               ${selectField('paragraphs', 'Paragraphs')}
             </div>

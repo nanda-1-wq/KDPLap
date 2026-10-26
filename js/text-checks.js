@@ -9,6 +9,7 @@
      rows, in this order (every offset is in md, so "Show" can select it):
        marks    open " [Verify: no source]" marks: one row, each sentence listed
        number   claim numbers with no source and no mark (the server's rule)
+       ending   the text ends mid-sentence (E12 M9; "Show" selects the cut piece)
        repeat   phrases of 3 to 6 words used 3 or more times (at most 5 rows)
        opener   3 or more sentences in a row that start with the same word
        words    under 80% or over 120% of the section's word target
@@ -278,7 +279,7 @@
     return rows;
   }
 
-  /* ── All five ── */
+  /* ── All six ── */
 
   function check(md, opts = {}) {
     const text = String(md || '');
@@ -322,10 +323,17 @@
       });
     }
 
-    // 3. Repeated phrases. 4. Same opener.
+    // 3. Ends mid-sentence (E12 M9): a stopped Generate, or a cut by hand.
+    const cut = ending(text);
+    if (cut) {
+      rows.push({ code: 'ending', kind: 'warn', text: 'The section ends mid-sentence.', sub: 'Finish the last sentence or cut it.',
+        ranges: [{ start: cut.start, end: cut.end }], sents: [] });
+    }
+
+    // 4. Repeated phrases. 5. Same opener.
     rows.push(...repeats(text, lines), ...openers(text, lines));
 
-    // 5. Words vs the target (advice, never counted).
+    // 6. Words vs the target (advice, never counted).
     const target = Number(opts.target) || 0;
     if (target > 0) {
       const n = root.kdpWords.count(text);

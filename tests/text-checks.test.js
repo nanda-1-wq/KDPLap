@@ -141,7 +141,7 @@ Deno.test("same opener: 3 in a row in paragraphs; a heading or a list resets", (
 });
 
 Deno.test("words vs target: under 80% and over 120% only; info, never counted", () => {
-  const w = (n) => Array.from({ length: n }, (_, i) => `word${i}`).join(" ");
+  const w = (n) => Array.from({ length: n }, (_, i) => `word${i}`).join(" ") + ".";   // a full stop: no "ends mid-sentence" row (E12 M9)
   const at = (n) => T.check(w(n), { known: "", target: 100 }).rows.filter((x) => x.code === "words");
   assertEquals(at(79).map((x) => [x.kind, x.text, x.sub]), [["info", "79 of 100 words", "Under 80% of the target."]]);
   assertEquals(at(80), []);
@@ -177,6 +177,21 @@ const ENDINGS = [
   "(see below)", "## Heading", "- an item with no period", "1. an item", "Text.\n\n", "", "Para.\n\nmessages of saf",
   "One.\n\n[Verify: no source]", "That is real progress. In the next", "Para one.\n\nAlso done. Then half",
 ];
+
+Deno.test("ending row (E12 M9): a warning with Show on the cut piece, counted; none when the text ends complete", () => {
+  const md = "## Rest\n\nIf your body stays tight, be patient with it. Stored tension needs gentle messages of saf";
+  const out = T.check(md, {});
+  const row = out.rows.find((r) => r.code === "ending");
+  assertEquals([row.kind, row.text, row.sub], ["warn", "The section ends mid-sentence.", "Finish the last sentence or cut it."]);
+  assertEquals(md.slice(row.ranges[0].start, row.ranges[0].end), "Stored tension needs gentle messages of saf");
+  assertEquals(row.sents, []);
+  assertEquals(out.warnings, 1);
+  assertEquals(T.check("## Rest\n\nBe patient with it.", {}).rows.some((r) => r.code === "ending"), false);
+  assertEquals(T.check("- Breathe in\n- Breathe out", {}).rows.some((r) => r.code === "ending"), false);
+  // The order: open marks, numbers, then the ending, then repeats.
+  const both = T.check("Studies show 40% sit all day." + M + " Then sit and", {});
+  assertEquals(both.rows.map((r) => r.code), ["marks", "ending"]);
+});
 
 Deno.test("ending: the same answer as the server's endsMidSentence, and the cut piece completeEnd removes", () => {
   for (const md of ENDINGS) {

@@ -75,7 +75,8 @@ deno test --allow-read tests/user-name.test.js
 - E11 (designs 24b and 25b): `export-rules.test.js` is the Export dialog's
   include rule (the cases in `tests/fixtures/export-include.json`, shared with
   the SQL test `t_export_include`), counts, notes, run freshness, the AI note,
-  Verify marks (the old v15 places too), the copyright text and the file name.
+  Verify marks (the old v15 places too), the sections that end mid-sentence
+  (E12 M9, a note only), the copyright text and the file name.
   `export-build.test.js` checks the exact Markdown and opens a real .docx
   (docx 9.5.1 from `tests/browser/.cache/`, its SRI checked; unzipped by
   `tests/lib/unzip.js`): page sizes, page numbers only in the body and from 1,
@@ -117,7 +118,9 @@ deno test --allow-read tests/user-name.test.js
   E10.4): the number rule gives the same text as the server's
   `markUnsourced` (the E10.2 marker rows, read as data, and more), the
   known text is the server's `writeKnown`, the numbers row holds exactly the
-  sentences that rule marks; open marks, repeated phrases (3 to 6 words, 3+
+  sentences that rule marks; text that ends mid-sentence (E12 M9: the row,
+  Show on the cut piece, and the same answer as the server's
+  `endsMidSentence` and `completeEnd`); open marks, repeated phrases (3 to 6 words, 3+
   times, the longest, never common words only), the same opener (paragraphs
   only; a heading or a list resets), words vs the target (under 80%, over
   120%, never counted), and under 30 ms on a 16,000-word section.
@@ -184,8 +187,10 @@ t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
 `write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks,
-t-timing, t-selection, t-fix, t-queue), and for E11 `settings` (t-settings, t-footer), `export`
-(t-export) and `books` (t-badge). The three E11 suites share `tests/browser/shared/e11.js`
+t-timing, t-selection, t-fix, t-queue), for E11 `settings` (t-settings, t-footer), `export`
+(t-export, and t-cut for E12 M9: the "ends mid-sentence" note never blocks) and `books` (t-badge),
+and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).
+The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every
 downloaded Blob in `window.__blobs`. `t-export` covers 24b states 1 to 9 and the header entry,

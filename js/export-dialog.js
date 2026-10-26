@@ -242,6 +242,8 @@
     }
     if (m.noText.length) out.push(row(IC.info, `${plural(m.noText.length, 'section has', 'sections have')} no text: ${esc(listWords(m.noText.map(shortLabel)))}. ${m.noText.length === 1 ? 'It is' : 'They are'} left out.`));
     if (m.needsReview.length) out.push(row(`<span class="exp-warn">${ICON.warn(16)}</span>`, `Needs review: ${esc(listWords(m.needsReview.map((x) => x.chapter ? x.label : shortLabel(x))))}. The positioning changed after it was written.`));
+    // E12 M9: a warning like Needs review; it never blocks and needs no tick.
+    if (m.cut.length) out.push(row(`<span class="exp-warn">${ICON.warn(16)}</span>`, `${esc(listWords(m.cut.map(shortLabel)))} ${m.cut.length === 1 ? 'ends' : 'end'} mid-sentence. Finish or cut the last sentence before you publish.`));
     if (m.unsaved.length === 1) out.push(row(IC.info, `${esc(shortLabel(m.unsaved[0]))} has unsaved edits. The file uses v${m.unsaved[0].versionNo}, its last saved version.`));
     else if (m.unsaved.length > 1) out.push(row(IC.info, `${esc(listWords(m.unsaved.map(shortLabel)))} have unsaved edits. The file uses their last saved versions.`));
     if (m.partial.length) out.push(row(IC.info, `${esc(listWords(m.partial.map(shortLabel)))} ${m.partial.length === 1 ? 'ends' : 'end'} where a Generate was stopped (partial text).`));

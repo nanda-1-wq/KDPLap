@@ -102,6 +102,20 @@ Deno.test("model: Verify marks and numbers with no source", () => {
   assertEquals(m.openMarks, 3);
 });
 
+Deno.test("model: sections that end mid-sentence (E12 M9), in the file only, a note that never blocks", () => {
+  assertEquals(R.model(BOOK, { include: "all", format: "docx" }).cut, []);
+  const cut = structuredClone(BOOK);
+  cut.chapters[1].sections[2].version.content = "Rest well. Then lie down and let the";   // 1.3, partial and cut
+  cut.chapters[3].sections[0].version.content = "Hold the chair. Then do this:";           // 3.1, a colon is not an end
+  cut.chapters[4].sections[0].version.content = "The end. [Verify: no source]";            // a mark after a full sentence is complete
+  cut.chapters[2].sections[0].version = v("v21", "Twist and");                              // 2.1 is Draft, still in the file
+  const m = R.model(cut, { include: "all", format: "docx" });
+  assertEquals(m.cut.map((x) => x.label), ["1.3 Rest", "2.1 Twist one", "3.1 With support"]);
+  assertEquals(m.partial.map((x) => x.label), ["1.3 Rest"]);   // the partial note stays
+  // Final only: the cut sections that are not Final are not in the file, so no note.
+  assertEquals(R.model(cut, { include: "final", format: "docx" }).cut, []);
+});
+
 Deno.test("model: Final only leaves out the rest, and chapters with no Final section", () => {
   const m = R.model(BOOK, { include: "final", format: "docx" });
   assertEquals(R.versionIds(m), ["vi", "v11", "vc"]);

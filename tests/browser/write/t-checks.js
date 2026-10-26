@@ -8,7 +8,7 @@
 // "Verify: no source" badge on a message (G3 P4), a lost connection (G3 P8),
 // errors and limits, every locked reason, under 50 and over 6,000 words,
 // Research numbers, open marks, the Needs review button, a load error, and
-// Final with warnings. Screenshots at 1440 and 900 px.
+// Final with warnings, and text that ends mid-sentence (E12 M9). Screenshots at 1440 and 900 px.
 const test = async page => {
   const log = globalThis.__log = [];
   const ok = (cond, msg) => log.push(`${cond ? 'PASS' : 'FAIL'} ${msg}`);
@@ -417,6 +417,22 @@ const test = async page => {
   await page.click('[data-chk-reload]');
   await page.waitForSelector('[data-chk-fold="minor"]', { timeout: 5000 });
   ok(true, 'Try again loads the saved check');
+
+  // 16. E12 M9: text that ends mid-sentence (a stopped Generate kept as Final): a warning row,
+  // counted in the tab, Show selects the cut piece; a full stop clears it.
+  st.addVersion(st.s51, 'Breathe out slowly and let your shoulders drop. If your body stays tight, be patient with it. Stored tension needs gentle messages of saf', 'manual');
+  await open(W1, st.s51);
+  await checksTab();
+  ok((await rowText('ending')) === 'The section ends mid-sentence. Finish the last sentence or cut it. Show', `ending row: "${await rowText('ending')}"`);
+  ok(await page.$eval('[data-chk-row="ending"] .wr-chk-ico', (i) => i.classList.contains('is-warn')), 'ending: the warning icon');
+  ok((await tabLabel()) === 'Checks 1', `ending: counted in the tab: "${await tabLabel()}"`);
+  await page.click('[data-chk-row="ending"] [data-chk-show]');
+  ok((await selected()) === 'Stored tension needs gentle messages of saf', `Show selects the cut piece: "${await selected()}"`);
+  ok(await shots('ending') === false, 'ending: no sideways scroll at 900 px');
+  st.addVersion(st.s51, 'Breathe out slowly and let your shoulders drop. If your body stays tight, be patient with it. Stored tension needs gentle messages of safety.', 'manual');
+  await open(W1, st.s51);
+  await checksTab();
+  ok(!(await has('[data-chk-row="ending"]')) && (await tabLabel()) === 'Checks', `a full stop: no ending row, no count: "${await tabLabel()}"`);
 
   return log.join('\n');
 };
