@@ -1,6 +1,6 @@
 # E12 step 2: prompt fix batch plan
 
-Status: STOP 3 approved 2026-10-26 with one fix (the neutral summary line, below). Live check in progress (test account only).
+Status: live check done 2026-10-26 on generate v22 and f358e86 (test account only). Results in section 8; screenshots in docs/reviews/e12-live/ (no email visible: the footer shows "Your account"). Part 3 (the 3 fails) is planned in docs/reviews/2026-10-26-e12-part3-plan.md.
 
 ## Context
 The step 1 review (`docs/reviews/2026-10-26-e12-prompt-review.md`, 91e8901) found prompt and rule problems that would hurt a real book. The owner accepted it and chose:
@@ -185,3 +185,47 @@ Commit 1f74964 on `claude/e12`. Browser only: no server change, no migration, no
 Also re-shot: `design/screens/12-pen-name-detail.png`.
 
 **STOP 3 fix (owner):** when the "ends mid-sentence" note shows, the summary line above it is neutral: the info icon, and no "Ready." ("All 10 sections are Final. No open Verify marks."). Without the note it is unchanged ("Ready. …" with the green check). `t-cut` checks both, 9 → 12. Export suite: t-cut 12, t-export 63. The three export screenshots were shot again.
+
+## 8. Live check (2026-10-26, test account 1e117c74, book 4e2dde85)
+
+`ai_usage` max id: **220 before, 227 after**. All 7 calls were ok and counted.
+
+| Row | Stage | In | Out | Cost |
+|---:|---|---:|---:|---:|
+| 221 | bio | 1,174 | 176 | $0.0041 |
+| 222 | section_write (section 1) | 6,304 | 512 | $0.0177 |
+| 223 | section_write (section 2) | 6,216 | 580 | $0.0182 |
+| 224 | section_check (section 2) | 4,800 | 188 | $0.0115 |
+| 225 | section_improve (Expand) | 3,347 | 201 | $0.0087 |
+| 226 | section_improve (Shorten) | 3,317 | 102 | $0.0077 |
+| 227 | section_improve (Humanize) | 3,353 | 127 | $0.0080 |
+| | **Total** | 28,511 | 1,886 | **$0.0759** (plan: about $0.08) |
+
+| Step | Expected | Result | Evidence |
+|---|---|---|---|
+| 0 | Elena Vance's point of view set to Second person | Pass | The label "Point of view in your books" and the help line show; the database has `perspective = second` |
+| 1 | Bio: no claim about her books | Pass | "She writes about somatic self-regulation and embodied wellness for women." ("Her books keep things short…" is gone) |
+| 1 | Bio: no word "niche" | Pass | |
+| 1 | Bio: 40 to 150 words | Pass | 75 words; discarded, the old bio stays |
+| 1 | Bio: a pronoun only when the facts show one (M6) | **Fail** | The facts give no pronoun for Elena; the bio says "She" 3 times ("She enjoys yoga and nature meditation.") |
+| 2 | "Live check: Unwind Before Sleep", 2 sections of 300 words, Examples on, approved again | Pass | Approved with the expected warning "6 chapters. Your Brief says 5." |
+| 3 | Section 1: no example | Pass | No person or story in 307 words |
+| 3 | Section 2: one example, no name, age, job or "An example" heading | Pass | "A reader who used to scroll her phone in bed tried this instead. The first night, she felt silly." |
+| 3 | "You" throughout | Pass | "You may have noticed that the evening is when your body gets loudest." |
+| 3 | No section or chapter numbers | Pass | Section 1: "You already know several of them from earlier in this book." |
+| 3 | No "Picture:" lines | Pass | |
+| 3 | No closing preview | **Fail** in section 1, pass in section 2 | Section 1 ends: "The next section shows you how to string them together so winding down becomes simple and easy to repeat." |
+| 3 | `<book_so_far>`: no repeat of earlier subheadings | **Partly** | No subheading copied word for word, but section 2's "## Minute two: the long exhale" and "## Minute three: the warm belly hold" re-teach "Practice 1: The long exhale" (3.1) and "Release 6: The warm belly hold" (4.2) |
+| 3 | Count AI Verify marks | 0 in both | Section 1 has a claim with no mark: "Your nervous system does not switch off like a lamp. It winds down in stages, and it needs cues that you are safe." |
+| 3 | Length | Pass | 307 and 323 words for 300 (102%, 108%); 1.67 and 1.80 tokens a word; both complete |
+| 4 | AI check: no point-of-view voice finding | Pass | Voice area "pass" ("No voice problems found"). Findings: objective ("…promises two practices, but this section teaches three…") and drift ("…that sleep will come is a bigger promise…") |
+| 5 | Expand 130 to 160% | Pass | 75 → 114 words (152%); the example has no name: "Picture a reader who answers messages until she turns off the light." |
+| 5 | Shorten 55 to 75% | Pass | 75 → 48 words (64%) |
+| 5 | Humanize | Pass | 75 → 66 words (88%); drops the empty opener "Here is the plain version of what is happening." |
+| 5 | All three rejected | Pass | `used_at` is null for all 3; no new version |
+| 6 | 3.1 and 4.1: "The section ends mid-sentence." with Show on the cut piece | Pass | Show selects "In the next" (3.1) and "Stored tension often needs repeated, gentle messages of saf" (4.1) |
+| 6 | Export: the mid-sentence note | Pass | "3.1 and 4.1 end mid-sentence. Finish or cut the last sentence before you publish."; closed, no export row |
+| 6 | Export: the neutral summary line | Not shown live | The book has 82 open Verify marks, so the dialog has no summary line at all. `t-cut` covers it. |
+| 7 | Delete the Live check chapter if the app allows it | Not allowed | "This chapter has writing, so it can't be deleted." The chapter stays in this test book. |
+
+**State after the check:** 8 chapters, 57 versions (55 + 2). The outline is approved (15:40 UTC). Elena Vance's point of view is Second person. Her old bio is unchanged. There are no drafts, no applied suggestions and no exports.
