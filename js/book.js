@@ -326,6 +326,14 @@
   }
 
   backBtn.addEventListener('click', () => go(step - 1));
+  // Export (design 24b): on every step. Typed text is saved as a draft first;
+  // the dialog exports saved versions and says when a section has unsaved edits.
+  const exportBtn = document.querySelector('[data-export]');
+  if (exportBtn) exportBtn.addEventListener('click', () => {
+    if (!book || !window.kdpExport) return;
+    if (MODULES[step] && MODULES[step].flush) MODULES[step].flush();
+    kdpExport.open(bookId, { opener: exportBtn });
+  });
   nextBtn.addEventListener('click', () => {
     if (nextBtn.disabled) return;
     const n = step + 1;

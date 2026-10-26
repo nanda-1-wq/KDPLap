@@ -15,28 +15,59 @@
   <div class="app">
     <aside class="sidebar" data-shell></aside>
 
+    <!-- Design 25b. Settings saves by itself; the monthly AI limit is read only. -->
     <main class="app-main">
       <header class="page-head">
         <div>
           <h1>Settings</h1>
-          <p>Your account and defaults.</p>
+          <p>Your account, defaults for new books and AI usage.</p>
         </div>
       </header>
 
-      <div class="center-state">
-        <div class="state-box">
-          <div class="state-icon" aria-hidden="true" data-icon="settings"></div>
-          <div class="chip-label">COMING IN E11</div>
-          <h2>Settings are on their way</h2>
-          <p>This page is built in task E11, with your defaults.</p>
-            <div class="settings-usage" aria-live="polite" data-usage>
-              <div class="stat-label">AI USAGE THIS MONTH</div>
-              <div class="skel skel-line"></div>
+      <div class="set-cols">
+        <div class="set-col" data-account>
+          <section class="panel set-card" aria-labelledby="accTitle">
+            <h2 class="panel-title" id="accTitle">Account</h2>
+            <div class="alert alert-error" role="alert" data-account-error hidden>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              <div class="alert-text">We couldn't load your settings. Reload the page to try again.</div>
             </div>
-            <p class="account-line">Signed in as <strong id="accountEmail"></strong></p>
-            <div class="state-actions">
-              <button type="button" class="btn btn-secondary" id="logoutBtn">Log out</button>
+            <div class="field set-field">
+              <div class="set-top"><label class="field-label" for="nameInput">Name</label><span class="save-state" role="status" data-name-save></span></div>
+              <input class="text-input" id="nameInput" type="text" autocomplete="name" spellcheck="false" aria-describedby="nameHelp nameError" />
+              <div class="set-bottom"><p class="field-hint" id="nameHelp">Shown in the sidebar. Leave it empty to use your Google name.</p><span class="set-chars" data-name-count aria-hidden="true">0 / 60</span></div>
+              <p class="field-error set-error" id="nameError" hidden></p>
             </div>
+            <div class="set-row"><span class="set-k">Email</span><span class="set-v"><span data-email></span><span class="ro-tag">Read only</span></span></div>
+            <div class="set-row" data-password-row hidden>
+              <span class="set-k">Password</span>
+              <button type="button" class="btn btn-secondary btn-sm" data-password>Change password</button>
+              <p class="set-note" role="status" data-password-note hidden></p>
+            </div>
+            <div class="set-row"><span class="set-k">Session</span><button type="button" class="btn btn-secondary btn-sm" id="logoutBtn">Log out</button></div>
+          </section>
+
+          <section class="panel set-card" aria-labelledby="defTitle">
+            <h2 class="panel-title" id="defTitle">Defaults for new books</h2>
+            <div class="field set-field">
+              <div class="set-top"><label class="field-label" for="penSelect" data-pen-label>Pen name</label><span class="save-state" role="status" data-pen-save></span><a class="text-link set-link" href="pen-names.html" data-pen-link>Manage pen names</a></div>
+              <select class="select select-block" id="penSelect" aria-describedby="penHelp"><option value="">None</option></select>
+              <p class="field-hint" id="penHelp">New books start with this pen name. It is the same as the "Default" tag on Pen Names.</p>
+            </div>
+            <div class="field set-field">
+              <div class="set-top"><label class="field-label" for="trimSelect">Trim size</label><span class="save-state" role="status" data-trim-save></span></div>
+              <select class="select select-block" id="trimSelect" aria-describedby="trimHelp"></select>
+              <p class="field-hint" id="trimHelp">Used for new books only. Change a book's size in its Brief.</p>
+            </div>
+            <div class="set-row"><span class="set-k">Book language</span><span class="set-v">English<span class="ro-tag">More in v2</span></span></div>
+          </section>
+        </div>
+
+        <div class="set-col">
+          <section class="panel set-card" aria-labelledby="useTitle">
+            <div class="set-usage-head"><h2 class="panel-title" id="useTitle" tabindex="-1">AI usage this month</h2><span class="field-hint" data-resets></span></div>
+            <div class="set-usage" data-usage-body aria-live="polite"></div>
+          </section>
         </div>
       </div>
     </main>
@@ -49,38 +80,8 @@
   <script src="../js/ui.js"></script>
   <script src="../js/shell.js"></script>
   <script src="../js/new-book.js"></script>
-  <script>
-  (async function () {
-    const user = await kdpShell.init({ active: 'settings' });
-    if (!user) return;
-    document.querySelector('[data-icon]').innerHTML = kdpShell.icon('settings', 26);
-    document.getElementById('accountEmail').textContent = user.email || '';
-
-    // AI usage this month (counted calls only, from the 1st in UTC, like the server).
-    const usageEl = document.querySelector('[data-usage]');
-    try {
-      const [settings, usage] = await Promise.all([kdp.ensureUserSettings(user.id), kdp.getMonthUsage()]);
-      if (settings.error || !settings.data || usage.error) throw new Error('usage');
-      const limit = settings.data.monthly_token_limit;
-      const pct = limit > 0 ? Math.min(100, Math.round((usage.tokens / limit) * 100)) : 100;
-      const now = new Date();
-      const resets = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
-        .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-      const fmt = (n) => n.toLocaleString('en-US');
-      usageEl.innerHTML = `<div class="stat-label">AI USAGE THIS MONTH</div>
-        <p class="settings-usage-line"><strong data-usage-tokens>${fmt(usage.tokens)}</strong> of ${fmt(limit)} tokens · Resets ${resets}</p>
-        <div class="bar" role="img" aria-label="${pct}% of this month's AI allowance used"><span style="width: ${pct}%"></span></div>`;
-    } catch (err) {
-      usageEl.innerHTML = '<div class="stat-label">AI USAGE THIS MONTH</div><p class="settings-usage-line">Not available right now.</p>';
-    }
-    const logoutBtn = document.getElementById('logoutBtn');
-    logoutBtn.addEventListener('click', async () => {
-      logoutBtn.disabled = true;
-      logoutBtn.textContent = 'Logging out…';
-      await kdp.signOut();
-      location.replace('../login.html');
-    });
-  })();
-  </script>
+  <script src="../js/autosave.js"></script>
+  <script src="../js/usage-rules.js"></script>
+  <script src="../js/settings.js"></script>
 </body>
 </html>

@@ -8,6 +8,15 @@
      const user = await kdpShell.init({ active: 'books', root: '../' });
    init() guards the page (redirects to sign-in) and fills the sidebar.
    Reference: design/screens/01 and 07.
+
+   The footer shows the user's name only, never the email (owner rule,
+   2026-10-25; design 25b, 6). nameOf(settings, user): the name set in
+   Settings (user_settings.display_name), else the Google profile name
+   (user_metadata.full_name or name; email sign-up saves full_name too),
+   else "Your account". The avatar letter follows the same name. Until the
+   name is known the footer shows the avatar circle and a gray line; a copy
+   per tab (sessionStorage) paints it at once on the next page.
+   kdpShell.setName(settings, user) repaints it after Settings saves.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -55,11 +64,10 @@
       </nav>
       <div class="sidebar-spacer"></div>
       ${navItem({ key: 'settings', label: 'Settings', href: 'app/settings.html', icon: 'settings' }, active, root)}
-      <div class="user-block">
-        <div class="avatar" aria-hidden="true" data-user-initial></div>
+      <div class="user-block" data-user-block>
+        <div class="avatar is-loading" aria-hidden="true" data-user-initial></div>
         <div class="user-text">
-          <span class="user-name" data-user-name></span>
-          <span class="user-email" data-user-email></span>
+          <span class="user-name" data-user-name><span class="skel skel-line user-skel" aria-hidden="true"></span><span class="sr-only">Loading your name</span></span>
         </div>
       </div>`;
   }
@@ -73,14 +81,56 @@
       ${innerHtml}<span class="tip" role="tooltip">Coming next</span></button>`;
   }
 
-  function fillUser(el, user) {
-    const email = user.email || '';
-    const name = ((user.user_metadata && user.user_metadata.full_name) || '').trim();
-    el.querySelector('[data-user-name]').textContent = name || email;
-    const emailEl = el.querySelector('[data-user-email]');
-    emailEl.textContent = name ? email : '';
-    emailEl.hidden = !name;
-    el.querySelector('[data-user-initial]').textContent = (name || email || '?').charAt(0).toUpperCase();
+  const FALLBACK = 'Your account';
+  const clean = (v) => (typeof v === 'string' ? v.trim() : '');
+
+  /** { name, fallback } from the Settings row and the auth user. Never the email. */
+  function nameOf(settings, user) {
+    const own = clean(settings && settings.display_name);
+    if (own) return { name: own, fallback: false };
+    const meta = (user && user.user_metadata) || {};
+    const profile = clean(meta.full_name) || clean(meta.name);
+    if (profile) return { name: profile, fallback: false };
+    return { name: FALLBACK, fallback: true };
+  }
+
+  const cacheKey = (user) => `kdp-name:${user.id}`;
+  function readCache(user) {
+    try { const v = JSON.parse(sessionStorage.getItem(cacheKey(user)) || 'null'); return v && typeof v.name === 'string' ? v : null; } catch (e) { return null; }
+  }
+  function writeCache(user, v) {
+    try { sessionStorage.setItem(cacheKey(user), JSON.stringify(v)); } catch (e) { /* private window: no cache */ }
+  }
+
+  function paintName(el, v) {
+    const nameEl = el.querySelector('[data-user-name]');
+    const initial = el.querySelector('[data-user-initial]');
+    nameEl.textContent = v.name;
+    nameEl.title = v.name;
+    nameEl.classList.toggle('is-fallback', !!v.fallback);
+    initial.classList.remove('is-loading');
+    initial.textContent = v.name.charAt(0).toUpperCase();
+  }
+
+  let shellEl = null, shellUser = null;
+
+  async function fillUser(el, user) {
+    const cached = readCache(user);
+    if (cached) paintName(el, cached);
+    let settings = null;
+    try { const res = await kdp.ensureUserSettings(user.id); settings = res.error ? null : res.data; } catch (e) { settings = null; }
+    // The settings read failed and nothing was cached: the profile name or the fallback.
+    const v = settings || !cached ? nameOf(settings, user) : cached;
+    paintName(el, v);
+    writeCache(user, v);
+  }
+
+  /** Settings saved a name: repaint the footer and the cache. */
+  function setName(settings) {
+    if (!shellEl || !shellUser) return;
+    const v = nameOf(settings, shellUser);
+    paintName(shellEl, v);
+    writeCache(shellUser, v);
   }
 
   // One shared tooltip text for screen readers (visual tips are per button).
@@ -106,10 +156,12 @@
     if (window.kdpNewBook) kdpNewBook.setRoot(root);
     const user = await kdp.requireAuth(`${root}login.html`);
     if (!user) return null;
+    shellEl = el;
+    shellUser = user;
     fillUser(el, user);
     ensureTipText();
     return user;
   }
 
-  window.kdpShell = { init, comingNextButton, icon };
+  window.kdpShell = { init, comingNextButton, icon, nameOf, setName };
 })();

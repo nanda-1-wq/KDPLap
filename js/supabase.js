@@ -31,6 +31,9 @@ function oneRow(data, error, msg) {
   if (!data.length) return { data: null, error: notFound(msg) };
   return { data: data[0], error: null };
 }
+// The settings row, read once per page (ensureUserSettings); updateSettings replaces it.
+let settingsRead = null, settingsFor = null;
+
 function counted(error, count, msg) {
   if (error) return { error };
   if (!count) return { error: notFound(msg) };
@@ -99,9 +102,10 @@ window.kdp = {
     return window.sb.auth.resend({ type: 'signup', email });
   },
 
-  async resetPassword(email) {
+  async resetPassword(email, page = 'reset-password.html') {
     // Resolved against the current page, so it also works under a sub-path (GitHub Pages).
-    const redirectTo = new URL('reset-password.html', location.href).href;
+    // From app/settings.html the page is '../reset-password.html'.
+    const redirectTo = new URL(page, location.href).href;
     return window.sb.auth.resetPasswordForEmail(email, { redirectTo });
   },
 
@@ -1176,29 +1180,90 @@ window.kdp = {
     return { data: data || null, error };
   },
 
-  /** Tokens used since the 1st of this month, UTC, like the server (counted AI calls only). */
-  async getMonthUsage() {
-    const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-    const { data, error } = await window.sb
-      .from('ai_usage')
-      .select('input_tokens, output_tokens')
-      .eq('counted', true)
-      .gte('created_at', monthStart);
-    if (error) return { tokens: 0, error };
-    const tokens = data.reduce((sum, r) => sum + r.input_tokens + r.output_tokens, 0);
-    return { tokens, error: null };
+  /**
+   * This month's AI usage (0025 usage_month): counted tokens from the 1st,
+   * UTC, summed on the server, the limit, and the split by stage and model.
+   * data: { month_start, resets, limit, tokens, by_stage: [{ stage, model, calls, input, output }] }
+   */
+  async getUsageMonth() {
+    const { data, error } = await window.sb.rpc('usage_month');
+    return { data: error ? null : data, error };
   },
 
-  /** The user's settings row. Created with defaults on first visit. */
-  async ensureUserSettings(userId) {
-    const read = () => window.sb.from('user_settings').select('*').maybeSingle();
-    const { data, error } = await read();
-    if (error || data) return { data, error };
-    // Missing: insert a row with the table defaults. If another tab created it
-    // first (duplicate key 23505), just read it again.
-    const ins = await window.sb.from('user_settings').insert({ user_id: userId });
-    if (ins.error && ins.error.code !== '23505') return { data: null, error: ins.error };
-    return read();
+  /** The newest AI calls (counted or not), with the book's title. Own rows only (RLS). */
+  async listLastCalls(limit = 10) {
+    const { data, error } = await window.sb
+      .from('ai_usage')
+      .select('id, stage, model, input_tokens, output_tokens, status, counted, created_at, book_id, books ( title )')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(limit);
+    return { data: error ? null : (data || []), error };
+  },
+
+  /** Settings fields: display_name, default_trim, default_pen_name_id. Returns the saved row. */
+  async updateSettings(userId, fields) {
+    const { data, error } = await window.sb
+      .from('user_settings')
+      .update(fields)
+      .eq('user_id', userId)
+      .select('*');
+    if (error) return { data: null, error };
+    if (!data || !data.length) return { data: null, error: notFound('Settings not found.') };
+    settingsRead = Promise.resolve({ data: data[0], error: null });
+    settingsFor = userId;
+    return { data: data[0], error: null };
+  },
+
+  /**
+   * Everything the Export dialog reads for one book, in one read (0025
+   * export_json). data is null when the book is not the user's.
+   */
+  async getExportData(bookId) {
+    const { data, error } = await window.sb.rpc('export_json', { p_book_id: bookId });
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: notFound('Book not found.') };
+    return { data, error: null };
+  },
+
+  /**
+   * Records an export (0025 book_exports). The guard checks every version and
+   * sets the snapshot from the database. versionIds: the exported versions in
+   * book order (the same list export_badges compares with).
+   */
+  async recordExport({ bookId, format, include, parts, versionIds }) {
+    const { data, error } = await window.sb
+      .from('book_exports')
+      .insert({ book_id: bookId, format, include, parts, versions: versionIds })
+      .select('id, created_at');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /** The Books badge: [{ book_id, exported_at, changed }] (0025 export_badges). */
+  async listExportBadges() {
+    const { data, error } = await window.sb.rpc('export_badges');
+    return { data: error ? null : (data || []), error };
+  },
+
+  /**
+   * The user's settings row. Created with defaults on first visit. One read
+   * per page: the sidebar, Books and Settings share it (a failed read is
+   * not kept, so the next call tries again).
+   */
+  ensureUserSettings(userId) {
+    if (settingsRead && settingsFor === userId) return settingsRead;
+    settingsFor = userId;
+    settingsRead = (async () => {
+      const read = () => window.sb.from('user_settings').select('*').maybeSingle();
+      const { data, error } = await read();
+      if (error || data) return { data, error };
+      // Missing: insert a row with the table defaults. If another tab created it
+      // first (duplicate key 23505), just read it again.
+      const ins = await window.sb.from('user_settings').insert({ user_id: userId });
+      if (ins.error && ins.error.code !== '23505') return { data: null, error: ins.error };
+      return read();
+    })();
+    settingsRead.then((r) => { if (r.error) settingsRead = null; }, () => { settingsRead = null; });
+    return settingsRead;
   }
 };
