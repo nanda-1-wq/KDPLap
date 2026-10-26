@@ -1,7 +1,8 @@
 /* generate lib: positioning_help: prompt and reply.
    Moved from lib.ts in Batch B1 without changes. lib.ts re-exports the public names. */
 
-import { cleanLine, cleanList, type Outcome, readReply, str, STRING_LIST, unsourcedNumbers } from "./common.ts";
+import { cleanLine, cleanList, type Outcome, readReply, str, STRING_LIST } from "./common.ts";
+import { unsourcedNumbers } from "./numbers.ts";
 import { briefAndResearch, isListField, positioningBlock, type PositioningContext, positioningValues } from "./context.ts";
 import { POS_LIST_MAX, POS_TEXT_MAX, POSITIONING_FIELDS, type PositioningField } from "./limits.ts";
 
@@ -19,7 +20,7 @@ The fields:
 
 Rules:
 - Stay inside the Brief: the same topic, the same reader, the same problem. Do not add a new audience, a new goal or a new angle that the Brief and the research do not support.
-- Facts about the world come only from the research sources (kind "source"). Do not state statistics, percentages, study results, prices, medical claims or expert claims unless a source says them. Choices about the book itself (length of a routine, a week-by-week plan, photos, large print) are fine.
+- Facts about the world come only from the research sources (kind "source"). Do not state statistics, percentages, study results, prices, medical claims or expert claims unless a source says them. Choices about the book itself (length of a routine, a week-by-week plan, large print) are fine. Promise pictures or photos only when the Brief says the book has them.
 - The promise must be realistic for a short practical book. No guaranteed results, no cures.
 - If a current value is given, stay consistent with it. Suggest a clearer version, not a different book.
 - Do not copy competitor titles or their wording.

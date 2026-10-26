@@ -96,9 +96,15 @@ Deno.test("buildRequest: bio uses Sonnet 5.5, small max_tokens, schema output", 
   assertEquals(r.output_config.effort, "low");
   assertEquals(r.output_config.format.type, "json_schema");
   assertStringIncludes(r.system, "never an instruction");
-  assertStringIncludes(r.system, "80 to 150 words");
+  assertStringIncludes(r.system, "40 to 150 words");
+  // E12 M6: no claims about the books, no word "niche", a pronoun only from the facts.
+  assertStringIncludes(r.system, "Do not describe the author's books, their style or what they do for readers.");
+  assertStringIncludes(r.system, 'Never use the word "niche".');
+  assertStringIncludes(r.system, "Use he, she or they only when the facts show which one fits.");
+  assertStringIncludes(r.system, "too thin to write at least 40 words");
+  assert(!r.system.includes("he/she"), "no guessed pronoun");
   assertStringIncludes(r.system, "Do not add traits, feelings or reasons the facts don't state.");
-  assertStringIncludes(r.system, "- Use the full pen name in the first sentence. After that, use the first name or he/she. Never use initials or fragments.");
+  assertStringIncludes(r.system, "- Use the full pen name in the first sentence. After that, use the first name. Use he, she or they only when the facts show which one fits. Never use initials or fragments.");
   assertStringIncludes(r.system, "- Write only in third person. Never address the reader as 'you'.");
   assert(!r.system.includes("Never shorten it."));
   assert(!r.system.includes("using the pen name."));
@@ -513,7 +519,7 @@ Deno.test("parseInput: positioning_help with or without one field; drift_check w
 
 Deno.test("numbersIn and unsourcedNumbers: commas, decimals, words around numbers", () => {
   assertEquals(L.numbersIn("A 4-week plan, 1,200 words, 2.5 hours, 15-minute"), ["4", "1200", "2.5", "15"]);
-  assertEquals(L.unsourcedNumbers("15 minutes, 20 minutes, 1,200", "a 15-minute plan with 1200 words"), ["20"]);
+  assertEquals(L.unsourcedNumbers("15%, 20% and $1,200", "a 15% plan for 1200 dollars"), ["20"]);
   assertEquals(L.unsourcedNumbers("no numbers", ""), []);
 });
 
@@ -526,18 +532,20 @@ Deno.test("unsourcedNumbers: figures of speech are not flagged", () => {
 });
 
 Deno.test("unsourcedNumbers: numbers next to or inside a figure of speech are still flagged", () => {
-  assertEquals(L.unsourcedNumbers("from 19-to-50 years", ""), ["19", "50"]);
-  assertEquals(L.unsourcedNumbers("9 to 50 minutes", ""), ["9", "50"]);
-  assertEquals(L.unsourcedNumbers("9-to-5.5 hours", ""), ["9", "5.5"]);
-  assertEquals(L.unsourcedNumbers("24 hours a day", ""), ["24"]);
-  assertEquals(L.unsourcedNumbers("1-on-10 groups", ""), ["1", "10"]);
-  assertEquals(L.unsourcedNumbers("a 250/50 ratio", ""), ["250", "50"]);
-  assertEquals(L.unsourcedNumbers("24/70 rule", ""), ["24", "70"]);
-  assertEquals(L.unsourcedNumbers("1.50/50", ""), ["1.50", "50"]);
+  // "Studies show" makes every number a claim (E12 M1), so only the figure of speech decides.
+  const claim = (t: string, known = "") => L.unsourcedNumbers(`Studies show ${t}`, known);
+  assertEquals(claim("from 19-to-50 years"), ["19", "50"]);
+  assertEquals(claim("9 to 50 minutes"), ["9", "50"]);
+  assertEquals(claim("9-to-5.5 hours"), ["9", "5.5"]);
+  assertEquals(claim("24 hours a day"), ["24"]);
+  assertEquals(claim("1-on-10 groups"), ["1", "10"]);
+  assertEquals(claim("a 250/50 ratio"), ["250", "50"]);
+  assertEquals(claim("a 24/70 rule"), ["24", "70"]);
+  assertEquals(claim("1.50/50"), ["1.50", "50"]);
   assertEquals(L.unsourcedNumbers("lose 12 pounds with 24/7 support", ""), ["12"]);
-  assertEquals(L.unsourcedNumbers("a 9-to-5 job and 3 kids", "3 kids"), []);
+  assertEquals(claim("a 9-to-5 job and 3 kids", "3 kids"), []);
   // The author's own text is read as before: a "24/7" there still counts as 24 and 7.
-  assertEquals(L.unsourcedNumbers("24 hours, 7 days", "help 24/7"), []);
+  assertEquals(claim("24 hours, 7 days", "help 24/7"), []);
 });
 
 Deno.test("knownText: Brief and Research are sources; the current positioning is not", () => {
@@ -552,7 +560,9 @@ Deno.test("knownText: Brief and Research are sources; the current positioning is
   };
   const known = L.knownText(ctx);
   assertEquals(L.unsourcedNumbers("Over 60, 3 days a week, since 2024", known), []);
-  assertEquals(L.unsourcedNumbers("A 30-day plan to lose 12 pounds with 7 poses and 99 photos", known), ["30", "12", "7", "99"]);
+  // 12 pounds is in the positioning, which is not a source; 30, 7 and 99 are small plans (E12 M1).
+  assertEquals(L.unsourcedNumbers("A 30-day plan to lose 12 pounds with 7 poses and 99 photos", known), ["12"]);
+  assertEquals(L.unsourcedNumbers("Studies show a 30-day plan with 7 poses and 99 photos works", known), ["30", "7", "99"]);
 });
 
 Deno.test("brief_help: numbers not in the Brief, topic or page-1 books are unsourced", () => {
@@ -572,7 +582,7 @@ Deno.test("brief_help: numbers not in the Brief, topic or page-1 books are unsou
     result: "ok",
     target_reader: "Adults over 60 who read 28-day plans",
     reader_problem: "Books with 1,840 reviews and 4.4 stars still skip 2 people.",
-    promise_draft: "In 15 minutes a day, with 77 or 66 poses, after 50.",
+    promise_draft: "Research shows 15 minutes a day, with 77 or 66 poses, helps after 50.",
     stance: "Slow is fine.", standout: "Seated only.",
   })));
   assertEquals(o.code, null);
@@ -673,16 +683,19 @@ Deno.test("interpretTitleIdeas: our code drops long, repeated and saved options,
     { title: "Already Saved Title", subtitle: "Easy Stretches", reason: "Saved.", keywords: [] },
     { title: "Calm Seated Yoga", subtitle: long, reason: "Too long.", keywords: [] },
     { title: "", subtitle: "No title", reason: "x", keywords: [] },
+    { title: "Lose 20 Pounds Sitting Down", subtitle: "A Seated Plan for Seniors", reason: "Claim.", keywords: [] },
   ] })), titleCtx([{ title: "Already saved title", subtitle: "easy stretches" }]), 10);
   assertEquals(out.code, null);
   assertEquals(out.titles!.map((t) => [t.title, t.subtitle]), [
     ["Chair Yoga for Seniors Over 60", "Gentle 15-Minute Routines to Improve Balance, Flexibility, and Confidence at Home"],
     ["Seated Yoga Made Simple", "A 4-Week Plan for Seniors With Stiff Joints and Limited Mobility"],
+    ["Lose 20 Pounds Sitting Down", "A Seated Plan for Seniors"],
   ]);
   assertEquals(out.titles![0].reason, "Clear age, and a small time promise.");
   assertEquals(out.titles![0].keywords, ["chair yoga", "seniors"]);
   assertEquals(out.titles![0].unsourced, []);      // 60 and 15 are in the Brief
-  assertEquals(out.titles![1].unsourced, ["4"]);   // 4 is not
+  assertEquals(out.titles![1].unsourced, []);      // a 4-week plan is a book choice (E12 M1, the Title prompt says so)
+  assertEquals(out.titles![2].unsourced, ["20"]);  // a weight-loss claim is not
   const none = L.interpretTitleIdeas(true, msg("end_turn", JSON.stringify({ options: [{ title: "", subtitle: "", reason: "", keywords: [] }] })), titleCtx(), 10);
   assertEquals([none.code, none.counted], ["ai_unavailable", false]);
   const capped = L.interpretTitleIdeas(true, msg("end_turn", JSON.stringify({ options: Array.from({ length: 12 }, (_, i) => ({ title: `Chair Yoga Idea ${String.fromCharCode(65 + i)}`, subtitle: "", reason: "r", keywords: [] })) })), titleCtx(), 3);
@@ -759,7 +772,7 @@ Deno.test("brief system: five fields; stance is a belief drafted from the Brief,
 Deno.test("brief known text: stance, stand-out and references count as sources", () => {
   const k = L.briefKnownText(ctx({ brief: { ...ctx().brief, options: { stance: "Move 10 minutes.", standout: "A 4-week plan.", references: "CDC 2023" } } }));
   for (const n of ["10", "4", "2023"]) assert(L.numbersIn(k).includes(n), n);
-  const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify({ ...good3, target_reader: "Adults", stance: "Ten minutes beats 60, says the 2023 CDC.", standout: "A 7-week plan." })), k);
+  const o = L.interpretBriefHelp(true, msg("end_turn", JSON.stringify({ ...good3, target_reader: "Adults", stance: "Research shows 10 minutes beats 60, says the 2023 CDC.", standout: "Studies favor a 7-week plan." })), k);
   assertEquals(o.unsourced, { stance: ["60"], standout: ["7"] });
 });
 
@@ -875,4 +888,18 @@ Deno.test("interpretCompetitorImport: title and author are one line and capped",
   const c = L.interpretCompetitorImport(true, msg("end_turn", JSON.stringify({ ...product, title: "T".repeat(400), author: "A".repeat(300) })), page).competitor!;
   assertEquals([c.title.length, c.author!.length], [300, 200]);
   assertEquals(cOut({ author: "  " }).competitor!.author, null);
+});
+
+/* ── E12 step 2: prompt lines in the plan stages ───── */
+
+Deno.test("E12 L4: every data tag the Brief help and Outline prompts send is named as data", () => {
+  assertStringIncludes(L.BRIEF_SYSTEM, "<topic>, <topic_lab_name>, <book_type>");
+  assertStringIncludes(L.OUTLINE_SYSTEM, "<book_title>, <book_subtitle> and <competitor_contents>");
+});
+
+Deno.test("E12 M7: Positioning and Title promise pictures only when the Brief says the book has them", () => {
+  const line = "Promise pictures or photos only when the Brief says the book has them.";
+  assertStringIncludes(L.POSITIONING_SYSTEM, `(length of a routine, a week-by-week plan, large print) are fine. ${line}`);
+  assertStringIncludes(L.TITLE_SYSTEM, `- ${line}`);
+  assert(!L.POSITIONING_SYSTEM.includes("photos, large print"), "photos left the examples");
 });

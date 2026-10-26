@@ -36,7 +36,7 @@ export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
 export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000, section_check: 90_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 4200, section_improve: 4096, section_check: 1500 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 4600, section_improve: 4800, section_check: 1500 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -119,9 +119,9 @@ export const MAX_FINDING_QUOTE = 300;
 // Write (step 06, E10): one section's text, in characters (same as js/book-write.js and 0018).
 export const SECTION_MAX_CHARS = 100_000;
 // Generate section (E10.2, stage section_write). Owner: at most 2,000 words a call
-// (max_tokens = min(4,200, ceil(aim × 2.0) + 200), MAX_TOKENS.section_write; G3 P6:
-// 2.0 = 25% over the aim × 1.6 tokens a word, 1.37 measured), a 100 s soft deadline
-// (TIMEOUT_MS.section_write). Same numbers as js/book-write.js.
+// (max_tokens = min(4,600, ceil(aim × 2.2) + 200), MAX_TOKENS.section_write; E12 M5:
+// 1.54 to 1.85 tokens a word measured in 20 runs, median 1.69), a 100 s soft
+// deadline (TIMEOUT_MS.section_write).
 export const WRITE = {
   wordsPerCall: 2000,      // the most one call asks for
   defaultWords: 500,       // a section with no word target
@@ -130,6 +130,8 @@ export const WRITE = {
   sampleChars: 1500,       // the pen name's writing sample in the prompt (answer 6)
   previousChars: 2000,     // the end of the previous section
   ownTailChars: 6000,      // the section's own text when generating the rest
+  soFarChars: 3000,        // <book_so_far>: the other sections' titles and subheadings, nearest first (E12 M8)
+  soFarItemChars: 300,     // one section's item in it
 } as const;
 // The run's timers, in milliseconds (lib/write_run.ts). The tests pass smaller ones.
 /** A run is stale (taken over by the next claim, rule A) when its heartbeat is older than heartbeatMs, or it started over startedMs ago. Same values as 0020 section_run_fresh. */
@@ -152,8 +154,11 @@ export const IMPROVE = {
   outputChars: 25_000,
   maxNames: 5,             // new names shown in the notes
 } as const;
-// max_tokens = min(MAX_TOKENS.section_improve, ceil(words × factor × 1.6) + 200):
-// the factor is the most the action may grow the passage, with a margin.
+// max_tokens = min(MAX_TOKENS.section_improve, ceil(words × factor × 1.9) + 200):
+// the factor is the most the action may grow the passage, with a margin; 1.9
+// tokens a word (E12 M5: Improve output measured 1.76 with its JSON). The cap
+// 4,800 fits Custom at 1,500 words (4,760) and Expand at 1,000 (4,380), not
+// Expand at 1,500 (owner decision 10 keeps its 1,000-word limit).
 export const IMPROVE_GROWTH: Record<ImproveAction, number> = {
   edit_format: 1.15, improve: 1.15, humanize: 1.15, shorten: 0.85, custom: 1.6, expand: 2.2,
 };

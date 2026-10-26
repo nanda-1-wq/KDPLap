@@ -17,7 +17,10 @@
      warnings: the number of 'warn' rows (the Checks tab count; the words row
        is 'info' and never counted, owner decision 6).
    kdpTextChecks.mark(text, known) → { text, flagged }: a copy of the server's
-     markUnsourced (generate/lib/section_write.ts); a parity test runs both.
+     markUnsourced (generate/lib/numbers.ts, E12 step 2); a parity test runs both.
+   kdpTextChecks.ending(md) → null, or { start, end, text } of the cut last
+     piece when the text ends mid-sentence: the server's endsMidSentence
+     (generate/lib/section_write.ts); a parity test runs both.
    kdpTextChecks.knownOf(brief, research, chapters) → the author's sources as
      text: a copy of the server's writeKnown (Brief, Research, the outline).
 ═══════════════════════════════════════════════════ */
@@ -29,18 +32,30 @@
   const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
   const fmt = (n) => Number(n || 0).toLocaleString('en-US');
 
-  /* ── The number rule: the same as generate/lib/common.ts and lib/section_write.ts ── */
+  /* ── The number rule: the same as generate/lib/numbers.ts (E12 step 2: one rule for every stage) ── */
 
   const numbersIn = (s) => [...s.matchAll(/\d+(?:[.,]\d+)*/g)].map((m) => m[0].replace(/,(?=\d{3}\b)/g, ''));
   const FIGURES_OF_SPEECH = /(?<![\d.,/])(?:9(?:-to-| to )5|24\/7\/365|24\/7|24-7|1-on-1|50\/50|20\/20)(?![\d/]|[.,]\d)/gi;
   const withoutFigures = (s) => s.replace(FIGURES_OF_SPEECH, ' ');
   const SECTION_WORDS = /(?:\b(?:sections?|chapters?|parts?|steps?|see)|§)\s*(?:\d+(?:\.\d+)*\s*(?:,|and|or|to|-|–)\s*)*$/i;
-  const CLAIM_WORDS = /\b(?:stud(?:y|ies)|research(?:ers?)?|surveys?|data|evidence)\b/i;
+  const CLAIM_WORDS = /\b(?:stud(?:y|ies)|research(?:ers?)?|surveys?|data|evidence|proven|proves?)\b/i;
+  // A unit counts only in a sentence with a result word (owner, STOP 1 decision 1).
+  const UNITS = new Set(('pound pounds lb lbs kg kgs kilo kilos kilogram kilograms gram grams oz ounce ounces stone ' +
+    'inch inches cm centimeter centimeters centimetre centimetres mm foot feet ft meter meters metre metres mile miles km ' +
+    'kilometer kilometers calorie calories kcal mg ml liter liters litre litres bmi mmhg bpm').split(' '));
+  const RESULT_WORDS = /\b(?:los(?:e|es|ing|t)|drop(?:s|ped|ping)?|cut(?:s|ting)?|reduc(?:e|es|ed|ing)|lower(?:s|ed|ing)?|burn(?:s|ed|t|ing)?|gain(?:s|ed|ing)?|shed(?:s|ding)?|boost(?:s|ed|ing)?|improv(?:e|es|ed|ing)|increas(?:e|es|ed|ing)|decreas(?:e|es|ed|ing))\b/i;
+  // Book parts: a decimal or a number of 100 or more that counts these is a plan ("120 seconds"). Not "times".
+  const PART_WORDS = new Set(('move moves step steps week weeks day days minute minutes chapter chapters month months hour hours ' +
+    'second seconds pose poses exercise exercises routine routines stretch stretches pattern patterns breath breaths ' +
+    'habit habits lesson lessons tip tips way ways part parts session sessions rule rules question questions set sets ' +
+    'rep reps recipe recipes tool tools worksheet worksheets plan plans level levels phase phases stage stages ' +
+    'check checks idea ideas').split(' '));
 
   /** Claim numbers in one sentence that the sources do not have: [{ n, shown }]. */
   function claimNumbers(sentence, have) {
     const s = withoutFigures(sentence).replace(/^(\s*(?:[-*]\s+)?)\d+[.)](?=\s)/, '$1');
     const claim = CLAIM_WORDS.test(s);
+    const result = RESULT_WORDS.test(s);
     const out = [];
     for (const m of s.matchAll(/(?<![A-Za-z\d.,])([$£€]\s*)?(\d+(?:[.,]\d+)*)/g)) {
       const n = m[2].replace(/,(?=\d{3}\b)/g, '');
@@ -59,7 +74,12 @@
         if (/^\s*(?:[ap]\.?m\b|o'clock)/i.test(after) || /^:\d/.test(after) || /\d:$/.test(before)) continue;
         if (decimal && (SECTION_WORDS.test(before) || (/\(\s*$/.test(before) && /^\s*\)/.test(after)))) continue;
       }
-      if (claim || percent || money || decimal || Number(n) >= 100) {
+      const um = rest.match(/^[\s-]*([A-Za-z]+)/);
+      const unit = UNITS.has((um ? um[1] : '').toLowerCase());
+      const words = (rest.match(/[A-Za-z]+/g) || []).slice(0, 2).map((w) => w.toLowerCase());
+      const bw = before.match(/([A-Za-z]+)[\s-]*$/);
+      const part = words.some((w) => PART_WORDS.has(w)) || PART_WORDS.has((bw ? bw[1] : '').toLowerCase());
+      if (claim || percent || money || (unit && result) || ((decimal || Number(n) >= 100) && !part)) {
         const range = after.length - rest.length;
         out.push({ n, shown: m[0] + after.slice(0, range) + (pm && pm[0].trim() === '%' ? '%' : '') });
       }
@@ -102,6 +122,31 @@
     ].map((t) => str(t)).join('\n');
     const outline = (chapters || []).flatMap((c) => [c.title, c.objective, ...(c.sections || []).map((s) => s.title)]).map((t) => str(t));
     return [known, ...outline].join('\n');
+  }
+
+  /* ── Ends mid-sentence (E12 M9): the server's endsMidSentence, line for line ── */
+
+  /**
+   * null when the text ends complete; else the cut last piece of the last
+   * paragraph { start, end, text } (offsets in md). The last line with text
+   * counts: a heading or a list item is complete; a paragraph needs . ! ? or …
+   * at its end, Verify marks, closing quotes, brackets and * or _ aside.
+   */
+  function ending(md) {
+    const text = String(md || '');
+    const lines = text.split('\n');
+    let i = lines.length - 1;
+    while (i >= 0 && !lines[i].split(MARKER).join('').trim()) i--;
+    if (i < 0) return null;
+    const last = lines[i];
+    if (/^\s*#{1,6}\s/.test(last) || /^\s*(?:[-+*]|[0-9]{1,9}[.)])\s/.test(last)) return null;
+    if (/[.!?…]$/.test(last.split(MARKER).join('').replace(/[\s"'”’)\]*_]+$/u, ''))) return null;
+    const from = lines.slice(0, i).reduce((n, l) => n + l.length + 1, 0);
+    const parts = split(last);
+    const piece = parts[parts.length - 1];
+    const at = from + last.length - piece.length;
+    const lead = piece.length - piece.trimStart().length, trail = piece.length - piece.trimEnd().length;
+    return { start: at + lead, end: at + piece.length - trail, text: piece.trim() };
   }
 
   /* ── Lines and sentences with their offsets ── */
@@ -292,5 +337,5 @@
     return { rows, warnings: rows.filter((r) => r.kind === 'warn').length, empty: false };
   }
 
-  root.kdpTextChecks = { check, mark, knownOf };
+  root.kdpTextChecks = { check, mark, knownOf, ending };
 })(globalThis);

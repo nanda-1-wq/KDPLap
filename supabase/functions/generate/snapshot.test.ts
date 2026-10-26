@@ -130,7 +130,7 @@ const cases: [string, Setup, () => Request][] = [
 
   // brief_help
   ["brief_help success", { provider: helpReply() }, () => post(help)],
-  ["brief_help unsourced", { provider: helpReply({ ...three, reader_problem: "Most books have 184 reviews but skip 30 minutes of warm-up.", promise_draft: "A plan for 5 days." }) }, () => post(help)],
+  ["brief_help unsourced", { provider: helpReply({ ...three, reader_problem: "Most books have 184 reviews but skip 30% of the warm-up.", promise_draft: "Studies back a plan for 5 days." }) }, () => post(help)],
   ["brief_help 5501 origin", { provider: helpReply() }, () => post(help, { origin: "http://localhost:5501" })],
   ["brief_help not visible", { brief: null }, () => post(help)],
   ["brief_help no topic", { brief: { ...briefCtx, brief: { ...briefCtx.brief, topic_text: "  " } } }, () => post(help)],

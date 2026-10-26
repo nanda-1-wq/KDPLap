@@ -19,18 +19,19 @@ Deno.test("input: exact keys, uuids, a null or uuid base, more only as true", ()
   assertEquals(L.parseInput(JSON.stringify({ ...base, pad: "x".repeat(3000) })), null);
 });
 
-Deno.test("words per call: at most 2,000 (owner); the target; no target; rule B", () => {
-  assertEquals(L.writeAim(450, 0, false), { aim: 450, maxTokens: 1100 });
-  assertEquals(L.writeAim(450, 310, false), { aim: 140, maxTokens: 480 });
-  assertEquals(L.writeAim(450, 430, false), { aim: 50, maxTokens: 300 });            // at least 50
-  assertEquals(L.writeAim(2500, 0, false), { aim: 2000, maxTokens: 4200 });          // 2,000 a call, max_tokens 4,200 (G3 P6)
-  assertEquals(L.writeAim(10000, 300, false), { aim: 2000, maxTokens: 4200 });
-  assertEquals(L.writeAim(null, 0, false), { aim: 500, maxTokens: 1200 });            // no target
-  assertEquals(L.writeAim(0, 900, false), { aim: 500, maxTokens: 1200 });
+Deno.test("words per call: at most 2,000 (owner); the target; no target; rule B; max_tokens aim × 2.2 + 200 (E12 M5)", () => {
+  assertEquals(L.writeAim(450, 0, false), { aim: 450, maxTokens: 1190 });
+  assertEquals(L.writeAim(450, 310, false), { aim: 140, maxTokens: 508 });
+  assertEquals(L.writeAim(450, 430, false), { aim: 50, maxTokens: 310 });             // at least 50
+  assertEquals(L.writeAim(2500, 0, false), { aim: 2000, maxTokens: 4600 });          // 2,000 a call, max_tokens 4,600
+  assertEquals(L.writeAim(10000, 300, false), { aim: 2000, maxTokens: 4600 });
+  assertEquals(L.writeAim(null, 0, false), { aim: 500, maxTokens: 1300 });            // no target
+  assertEquals(L.writeAim(0, 900, false), { aim: 500, maxTokens: 1300 });
   assertEquals(L.writeAim(450, 450, false), null);                                     // at the target: ask first (rule B)
   assertEquals(L.writeAim(450, 700, false), null);
-  assertEquals(L.writeAim(450, 700, true), { aim: 300, maxTokens: 800 });              // "Write more anyway"
-  assertEquals(L.MAX_TOKENS.section_write, 4200);
+  assertEquals(L.writeAim(450, 700, true), { aim: 300, maxTokens: 860 });              // "Write more anyway"
+  assertEquals(L.writeAim(333, 0, false), { aim: 333, maxTokens: 933 });              // 732.6 rounds up; no float noise
+  assertEquals(L.MAX_TOKENS.section_write, 4600);
   assertEquals(L.TIMEOUT_MS.section_write, 100_000);                                   // the soft deadline
 });
 
@@ -86,6 +87,97 @@ Deno.test("prompt: the Introduction, the last section with an exercise, no previ
   assertStringIncludes(msg, "<previous_section_end>(not written yet)</previous_section_end>");
   const last = L.writeUserMessage(writeCtx({ sectionId: "50000042-0000-4000-8000-000000000000" }), 500);
   assertStringIncludes(last, "<exercise>yes</exercise>");
+});
+
+Deno.test("prompt (E12 step 2): the system rules", () => {
+  const s = L.WRITE_SYSTEM;
+  // The shared parts, once each.
+  for (const part of [L.FORMAT, L.NO_NUMBERS, L.POINT_OF_VIEW, L.STYLE]) assertEquals(s.split(part).length - 1, 1, part.slice(0, 40));
+  // H2: the pen name's point of view, "you" when none is set; steps may always say "you".
+  assertStringIncludes(s, 'If <perspective> is not given, speak to the reader as "you".');
+  assertStringIncludes(s, 'In any point of view, steps, exercises and instructions may speak to the reader as "you".');
+  // M2: sentence length follows the voice; the fixed "Short sentences" line is gone; the stock phrases are named.
+  assertStringIncludes(s, "Sentence length follows <sentences>");
+  assert(!s.includes("Clear, simple words. Short sentences."), "no fixed short sentences");
+  assertStringIncludes(s, '"delve", "unlock" or "game-changer"');
+  // H3: one example, no name, age or job, no subheading of its own.
+  assertStringIncludes(s, "Never give a person a name, an age or a job. Do not give the example its own subheading.");
+  // H1: the sharper mark rule with one example of each.
+  assertStringIncludes(s, 'Mark: "Slow breathing lowers your heart rate within a minute." when no source says so.');
+  assertStringIncludes(s, 'Do not mark: "Breathe out slowly and notice your shoulders."');
+  assertStringIncludes(s, "Do not mark advice, or a sentence that a <source> supports.");
+  // M3, M4, M7, M8, L1, L3.
+  assertStringIncludes(s, 'Never write section or chapter numbers in the text ("section 3.1", "Chapter 4").');
+  assertStringIncludes(s, "Do not end with a preview of the next section.");
+  assertStringIncludes(s, "Never finish a sentence from <previous_section_end>, and do not repeat it.");
+  assertStringIncludes(s, 'No picture notes, image descriptions or placeholders such as "Picture: ...". The book has no images.');
+  assertStringIncludes(s, "<previous_section_end>, <book_so_far>, <headings_so_far>");
+  assertStringIncludes(s, "Do not repeat advice, tips or subheadings it shows.");
+  assertStringIncludes(s, "If <part> is introduction, open the book");
+  assertStringIncludes(s, "If <part> is conclusion, close the book");
+  assertStringIncludes(s, "Do not copy the reader promise word for word.");
+  assert(!s.includes("—"), "no em dashes in the prompt");
+});
+
+Deno.test("examples (E12 H3): one section per chapter, the 2nd, or the 1st when the chapter has one", () => {
+  const base = writeCtx();
+  const ch4 = base.outline[4];
+  const ex = (ctx: L.WriteContext) => L.writeUserMessage(ctx, 300).match(/<examples>(\w+)<\/examples>/)![1];
+  assertEquals(ch4.sections.map((s) => ex(writeCtx({ sectionId: s.id }))), ["no", "yes", "no"]);
+  const one = base.outline.map((c, i) => (i === 4 ? { ...c, sections: [c.sections[2]] } : c));
+  assertEquals(ex(writeCtx({ outline: one, sectionId: ch4.sections[2].id })), "yes");
+  const off = base.outline.map((c, i) => (i === 4 ? { ...c, include_examples: false } : c));
+  assertEquals(ex(writeCtx({ outline: off, sectionId: ch4.sections[1].id })), "no");
+  assertEquals(ex(writeCtx({ sectionId: base.outline[0].sections[0].id })), "no");   // the Introduction
+  assertEquals(L.exampleIndex(ch4), 1);
+});
+
+Deno.test("ends mid-sentence (E12 M4): the last paragraph needs an end mark; headings and list items are complete", () => {
+  for (const [md, want] of [
+    ["Done.", false], ["Done", true], ['She said "stop."', false], ["**Bold end.**", false], ["Really?!", false], ["Wait…", false],
+    ["A claim. [Verify: no source]", false], ["Cut mid sen", true], ["Then do this:", true], ["(see below)", true],
+    ["## Heading", false], ["- an item with no period", false], ["1. an item", false], ["Text.\n\n", false], ["", false],
+    ["Para.\n\nmessages of saf", true], ["One.\n\n[Verify: no source]", false],
+  ] as [string, boolean][]) assertEquals(L.endsMidSentence(md), want, JSON.stringify(md));
+});
+
+Deno.test("completeEnd (E12 M4): a cut text goes back to its last full sentence", () => {
+  assertEquals(L.completeEnd("One. Two. Thr"), "One. Two.");
+  assertEquals(L.completeEnd("Para one.\n\nCut off here"), "Para one.");
+  assertEquals(L.completeEnd("Para one.\n\nAlso done. Then half"), "Para one.\n\nAlso done.");
+  assertEquals(L.completeEnd("## Head\n\nOnly a fragment"), "## Head");
+  assertEquals(L.completeEnd("A claim. [Verify: no source] And then"), "A claim. [Verify: no source]");
+  assertEquals(L.completeEnd("Complete.\n\n"), "Complete.");
+  assertEquals(L.completeEnd("Only a fragment"), "");
+  assertEquals(L.completeEnd(""), "");
+  // In the prompt: the previous section's cut end is never sent.
+  const cut = L.writeUserMessage(writeCtx({ previous: "Full sentence one. Then half a sent" }), 300);
+  assertStringIncludes(cut, "<previous_section_end>Full sentence one.</previous_section_end>");
+  const none = L.writeUserMessage(writeCtx({ previous: "only half a sent" }), 300);
+  assertStringIncludes(none, "<previous_section_end>(not written yet)</previous_section_end>");
+});
+
+Deno.test("book so far (E12 M8): other written sections with their subheadings, nearest first, then in reading order", () => {
+  const base = writeCtx();
+  const order = base.outline.flatMap((c) => c.sections);
+  const at = order.findIndex((s) => s.id === base.sectionId);
+  // Empty, or only this section: not given.
+  assertEquals(L.bookSoFar(writeCtx({ soFar: [] })), "<book_so_far>(not given)</book_so_far>");
+  assertEquals(L.bookSoFar(writeCtx({ soFar: undefined })), "<book_so_far>(not given)</book_so_far>");
+  assertEquals(L.bookSoFar(writeCtx({ soFar: [{ sectionId: base.sectionId, headings: ["Mine"] }] })), "<book_so_far>(not given)</book_so_far>");
+  // Escaped data; the Introduction has no title of its own; no subheadings is the title alone.
+  const small = L.bookSoFar(writeCtx({ soFar: [
+    { sectionId: order[0].id, headings: ["Why <this> book"] },
+    { sectionId: order[at + 1].id, headings: [] },
+  ] }));
+  assertEquals(small, `<book_so_far>\n<item>Introduction: Why &lt;this&gt; book</item>\n<item>${order[at + 1].title}</item>\n</book_so_far>`);
+  // Every other section written, each item about 300 characters: the 10 nearest fit in 3,000.
+  const all = order.map((s, i) => ({ sectionId: s.id, headings: [`H${i} ${"word ".repeat(70)}`] }));
+  const out = L.bookSoFar(writeCtx({ soFar: all }));
+  const kept = [...out.matchAll(/<item>[^<]*?: H(\d+) /g)].map((m) => Number(m[1]));
+  assertEquals(kept, [at - 5, at - 4, at - 3, at - 2, at - 1, at + 1, at + 2, at + 3, at + 4, at + 5]);
+  assert(out.length < 3300, String(out.length));
+  for (const item of out.match(/<item>[^<]*<\/item>/g)!) assert(item.length - 13 <= 300, item.slice(0, 40));
 });
 
 Deno.test("request: streamed, no schema, thinking off, low effort, max_tokens from the words", () => {
@@ -160,7 +252,12 @@ const MARK_ROWS: [string, string, string][] = [
   ["evidence: a small number", "The evidence for 8 short sessions is good.", "The evidence for 8 short sessions is good." + M],
   ["claim words, sourced number", "Research says adults 65 and older need balance work.", "Research says adults 65 and older need balance work."],
   ["claim words, no number", "Research shows that gentle moves help.", "Research shows that gentle moves help."],
-  ["lose 10 pounds", "Some readers lose 10 pounds in the first months.", "Some readers lose 10 pounds in the first months."],
+  ["lose 10 pounds: a unit with a result word (E12 M1)", "Some readers lose 10 pounds in the first months.", "Some readers lose 10 pounds in the first months." + M],
+  ["a unit alone is a plan", "Hold a 5 lb weight in each hand.", "Hold a 5 lb weight in each hand."],
+  ["100 or more counting book parts", "Hold the pose for 120 seconds. Follow the 100-day plan.", "Hold the pose for 120 seconds. Follow the 100-day plan."],
+  ["a decimal counting book parts", "Rest for 2.5 minutes between rounds.", "Rest for 2.5 minutes between rounds."],
+  ["times is not a book part", "Falls are 2.5 times more likely at night.", "Falls are 2.5 times more likely at night." + M],
+  ["proven: a small number", "It is proven to help in 11 weeks.", "It is proven to help in 11 weeks." + M],
   ["research number","Adults 65 and older should do balance training 3 days a week.", "Adults 65 and older should do balance training 3 days a week."],
 ];
 

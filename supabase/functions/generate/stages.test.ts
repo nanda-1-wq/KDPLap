@@ -22,7 +22,7 @@ Deno.test("stage table: section_improve (E10.3) is a normal JSON stage, not stre
   assertEquals(d.stream, undefined);
   assertEquals(typeof d.save, "function");
   assertEquals(L.MODEL_FOR_STAGE.section_improve, "claude-sonnet-5-5");
-  assertEquals([L.TIMEOUT_MS.section_improve, L.MAX_TOKENS.section_improve, L.BODY_BYTES.section_improve], [120_000, 4096, 65_536]);
+  assertEquals([L.TIMEOUT_MS.section_improve, L.MAX_TOKENS.section_improve, L.BODY_BYTES.section_improve], [120_000, 4800, 65_536]);
   // The largest body cap is still the pasted Amazon pages (256 KB).
   assertEquals(L.MAX_BODY_BYTES, 262_144);
 });
@@ -55,9 +55,9 @@ Deno.test("interpretResponse: the stages that need their job throw instead of us
   assertEquals(L.interpretResponse("brief_help", true, brief).code, null);
 });
 
-Deno.test("interpretResponse: brief_help without the job treats every number as unsourced", async () => {
-  const body = await anthropic("end_turn", { result: "ok", target_reader: "Adults over 60", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
-  assertEquals(L.interpretResponse("brief_help", true, body).unsourced, { target_reader: ["60"] });
+Deno.test("interpretResponse: brief_help without the job treats every claim number as unsourced", async () => {
+  const body = await anthropic("end_turn", { result: "ok", target_reader: "Adults over 60, 40% of whom sit all day", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
+  assertEquals(L.interpretResponse("brief_help", true, body).unsourced, { target_reader: ["40"] });
 });
 
 Deno.test("isFail tells a check error from a job", () => {

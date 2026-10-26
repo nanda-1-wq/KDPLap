@@ -6,7 +6,8 @@
    Nothing is saved here: the browser fills the Add competitor form and the
    author saves it. lib.ts re-exports the public names. */
 
-import { asData, numbersIn, oneLine, type Outcome, readReply } from "./common.ts";
+import { asData, oneLine, type Outcome, readReply } from "./common.ts";
+import { numbersIn } from "./numbers.ts";
 import {
   MAX_AUTHOR_CHARS, MAX_BSR, MAX_IMPORT_REVIEWS, MAX_REVIEW_BOX, MAX_REVIEWS, MAX_TITLE_CHARS, MIN_IMPORT_REVIEW_CHARS,
 } from "./limits.ts";

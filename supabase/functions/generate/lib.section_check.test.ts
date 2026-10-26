@@ -332,9 +332,9 @@ Deno.test("section_check: a message naming a section gets no Verify badge; real 
   const fs = out.check!.findings;
   assertEquals(Object.keys(fs[0]).sort(), ["message", "quote", "type"]);
   assertEquals(fs[1].unsourced, ["37", "83"]);   // a claim: the counts are flagged, chapter 2 and 2.1 are not
-  assertEquals(fs[2].unsourced, ["45", "9.9"]);
-  // Without the outline (old callers) the rule is as before.
-  assertEquals(L.interpretSectionCheck(true, msg({ findings: [fs[0]] }), CHECK_TEXT, true, "").check!.findings[0].unsourced, ["1.2"]);
+  // E12 M1: the shared rule never reads "section 9.9" as a claim, in this book or not.
+  assertEquals(fs[2].unsourced, ["45"]);
+  assertEquals(L.interpretSectionCheck(true, msg({ findings: [fs[0]] }), CHECK_TEXT, true, "").check!.findings[0].unsourced, undefined);
 });
 
 Deno.test("checkKeyOf: a sibling title, the siblings' order and the word target change the key (G3 P10)", () => {
@@ -350,4 +350,12 @@ Deno.test("checkKeyOf: a sibling title, the siblings' order and the word target 
   assert(edit((o) => { o[4].sections.reverse(); }) !== k, "siblings moved");
   assert(edit((o) => { o[4].sections[1].word_target = 600; }) !== k, "target changed");
   assertEquals(edit((o) => { o[3].sections[0].title = "Elsewhere"; }), k);   // another chapter's section: not read
+});
+
+Deno.test("prompt (E12 step 2): the voice check reads the book's point of view and the house style", () => {
+  const s = L.SECTION_CHECK_SYSTEM;
+  assertStringIncludes(s, `The author's text follows these voice and style rules:\n- ${L.POINT_OF_VIEW}\n${L.STYLE}`);
+  assertStringIncludes(s, '- voice: a passage that clearly breaks the voice in <voice> (tones, reading level, point of view, sentence and paragraph length) or the rules above.');
+  assertStringIncludes(s, 'Steps, exercises and instructions that speak to the reader as "you" are never a voice problem.');
+  assert(!s.includes("—"), "no em dashes in the prompt");
 });

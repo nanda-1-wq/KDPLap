@@ -63,9 +63,10 @@ export interface Store {
    * section_write (E10.2): the positioning context, the outline (0016
    * outline_json), the section's current version and draft, the previous
    * section's current version and the section's last run, through RLS.
-   * null = not the caller's book or no such section in it.
+   * null = not the caller's book or no such section in it. soFar
+   * (section_write, E12 M8): also the other sections' subheadings.
    */
-  getWriteContext(bookId: string, sectionId: string): Promise<WriteContext | null>;
+  getWriteContext(bookId: string, sectionId: string, opts?: { soFar?: boolean }): Promise<WriteContext | null>;
   /** The reserves of the user's running, fresh Generate runs (0020 section_runs, through RLS). */
   sumRunningReserves(userId: string): Promise<number>;
   /**

@@ -5,7 +5,7 @@
 // server's writeKnown, then repeated phrases, the same opener, words vs the
 // target, open marks, and the speed on a 16,000-word section.
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { markUnsourced, writeKnown } from "../supabase/functions/generate/lib/section_write.ts";
+import { completeEnd, endsMidSentence, markUnsourced, writeKnown } from "../supabase/functions/generate/lib/section_write.ts";
 import { writeCtx } from "../supabase/functions/generate/test_fakes.ts";
 import "../js/word-budget.js";
 import "../js/sentences.js";
@@ -52,6 +52,11 @@ const EXTRA = [
   "## 75% of readers\nHeadings are never marked, 75% of the time.",
   "Wake at 6:30 or 9 a.m. and stretch for 10 minutes.",
   "Already marked: 60% of people." + M + " Next 70% here.",
+  // E12 M1: the shared rule (book parts, units with and without a result word, proven, "times").
+  "Hold the pose for 120 seconds. Follow the 100-day plan. Rest for 2.5 minutes.",
+  "Hold a 5 lb weight. Some readers lose 10 pounds in a month. Burn 300 calories.",
+  "It is proven to help in 11 weeks. Falls are 2.5 times more likely at night.",
+  "Walk 1.5 miles a day. Cut 12 kg of body weight. Since 2019, 7 out of 10 readers stretch.",
 ];
 
 Deno.test("mark: the same text as the server's markUnsourced (E10.2 marker rows and more)", () => {
@@ -164,4 +169,23 @@ Deno.test("speed: under 30 ms on a 16,000-word section", () => {
   for (let i = 0; i < 5; i++) { const t0 = performance.now(); T.check(md, { known: KNOWN, target: 450 }); times.push(performance.now() - t0); }
   times.sort((a, b) => a - b);
   assert(times[2] < 30, `median ${times[2].toFixed(1)} ms for ${words} words`);
+});
+
+// E12 M4/M9: the browser's ending() and the server's endsMidSentence and completeEnd are one rule.
+const ENDINGS = [
+  "Done.", "Done", 'She said "stop."', "**Bold end.**", "Really?!", "Wait…", "A claim." + M, "Cut mid sen", "Then do this:",
+  "(see below)", "## Heading", "- an item with no period", "1. an item", "Text.\n\n", "", "Para.\n\nmessages of saf",
+  "One.\n\n[Verify: no source]", "That is real progress. In the next", "Para one.\n\nAlso done. Then half",
+];
+
+Deno.test("ending: the same answer as the server's endsMidSentence, and the cut piece completeEnd removes", () => {
+  for (const md of ENDINGS) {
+    const e = T.ending(md);
+    assertEquals(e !== null, endsMidSentence(md), JSON.stringify(md));
+    if (!e) continue;
+    assertEquals(md.slice(e.start, e.end), e.text, JSON.stringify(md));
+    // What is left before the cut piece is what the server keeps.
+    assertEquals(md.slice(0, e.start).replace(/\s+$/, ""), completeEnd(md), JSON.stringify(md));
+  }
+  assertEquals(T.ending("That is real progress. In the next"), { start: 23, end: 34, text: "In the next" });
 });

@@ -28,14 +28,15 @@ Rules for the bio:
 - Use ONLY the facts given. Invent nothing: no degrees, certificates, awards, titles, job names, employers, numbers, years, ages, places, family members or achievements that the facts do not state.
 - You may rephrase the facts and link them with plain words, but every claim must come from a fact.
 - Do not add traits, feelings or reasons the facts don't state.
-- Use the full pen name in the first sentence. After that, use the first name or he/she. Never use initials or fragments.
+- Do not describe the author's books, their style or what they do for readers. You may say the author writes about the topic in <niche>. Never use the word "niche".
+- Use the full pen name in the first sentence. After that, use the first name. Use he, she or they only when the facts show which one fits. Never use initials or fragments.
 - If credentials are "(not given)", do not suggest any qualification or professional expertise.
-- The niche says what the books are about. You may say the author writes about it. Do not promise results.
+- Do not promise results.
 - Write only in third person. Never address the reader as 'you'.
-- 80 to 150 words. One or two short paragraphs. Plain text: no heading, no markdown, no quotation marks around the bio.
+- 40 to 150 words. One or two short paragraphs. A short bio is better than an added phrase. Plain text: no heading, no markdown, no quotation marks around the bio.
 - Match the voice: its tones, reading level and sentence length. Use only settings that are given.
 
-If the facts are too thin to write at least 80 words without inventing anything, do not write a bio. Set "result" to "not_enough_facts", leave "bio" empty, and in "missing" say in one short sentence which kind of fact would help.
+If the facts are too thin to write at least 40 words without inventing anything, do not write a bio. Set "result" to "not_enough_facts", leave "bio" empty, and in "missing" say in one short sentence which kind of fact would help.
 Otherwise set "result" to "ok", put the bio in "bio", and leave "missing" empty.`;
 
 export const BIO_SCHEMA = {

@@ -42,7 +42,7 @@
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
 import type { BriefContext, Competitor, OutlineContext, OutlineRow, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
-import { outlineHasWriting, RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
+import { headingsIn, outlineHasWriting, RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -293,8 +293,9 @@ function openStore(authHeader: string): Store {
     // outline (0016 outline_json), the section's current version and draft,
     // the previous section's current version (in reading order) and the
     // section's last run. null = not the caller's book or a section that is
-    // not in it.
-    async getWriteContext(bookId, sectionId) {
+    // not in it. With soFar (section_write, E12 M8) one read takes every
+    // section's current version, for the other sections' subheadings.
+    async getWriteContext(bookId, sectionId, opts) {
       // The book and the outline in parallel (outline_json reads nothing for a book the caller cannot see).
       const [data, { data: outline, error }] = await Promise.all([
         readBook(bookId, `${POSITIONING_SELECT}, title, subtitle, outline_approved_at, pen_name:pen_names ( name )`),
@@ -307,7 +308,8 @@ function openStore(authHeader: string): Store {
       const order = rows.flatMap((c) => c.sections);
       const at = order.findIndex((x) => x.id === sectionId);
       if (at < 0) return null;
-      const ids = [order[at].current_version_id, at > 0 ? order[at - 1].current_version_id : null].filter((x): x is string => !!x);
+      const ids = (opts?.soFar ? order.map((x) => x.current_version_id) : [order[at].current_version_id, at > 0 ? order[at - 1].current_version_id : null])
+        .filter((x): x is string => !!x);
       const [versions, draft, run] = await Promise.all([
         ids.length ? asUser.from("section_versions").select("id, content").in("id", ids) : Promise.resolve({ data: [], error: null }),
         asUser.from("section_drafts").select("content").eq("section_id", sectionId).maybeSingle(),
@@ -326,6 +328,10 @@ function openStore(authHeader: string): Store {
         previous: at > 0 ? text(order[at - 1].current_version_id) ?? "" : "",
         run: (run.data as WriteContext["run"]) ?? null,
         penName: (one(data.pen_name) as { name: string } | null)?.name ?? null,
+        ...(opts?.soFar ? {
+          soFar: order.filter((x, i) => i !== at && (text(x.current_version_id) ?? "").trim())
+            .map((x) => ({ sectionId: x.id, headings: headingsIn(text(x.current_version_id)!) })),
+        } : {}),
       } satisfies WriteContext;
     },
 

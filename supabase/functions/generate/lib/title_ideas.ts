@@ -1,9 +1,10 @@
 /* generate lib: title_ideas: title context, prompt and reply.
    Moved from lib.ts in Batch B1 without changes. lib.ts re-exports the public names. */
 
-import { asData, cleanLine, cleanList, cutWords, obj, type Outcome, readReply, str, STRING_LIST, unsourcedNumbers } from "./common.ts";
+import { asData, cleanLine, cleanList, cutWords, obj, type Outcome, readReply, str, STRING_LIST } from "./common.ts";
+import { unsourcedList } from "./numbers.ts";
 import { briefAndResearch, knownText, listTag, positioningBlock, type PositioningContext, positioningValues } from "./context.ts";
-import { MAX_EXAMPLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, MAX_UNSOURCED, TITLE_IDEAS_PER_CALL, TITLE_MAX } from "./limits.ts";
+import { MAX_EXAMPLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, TITLE_IDEAS_PER_CALL, TITLE_MAX } from "./limits.ts";
 
 /** What title_ideas reads through RLS: the positioning context, the examples and the saved options. */
 export type TitleContext = PositioningContext & {
@@ -39,6 +40,7 @@ Rules:
 - Never use a competitor author's name. Do not copy a competitor title or its wording.
 - No numbers about the world (statistics, percentages, results) unless a research source says them. Choices about the book itself (a 15-minute routine, a 4-week plan) are fine.
 - No promises of cures or guaranteed results.
+- Promise pictures or photos only when the Brief says the book has them.
 - No word used twice in the same option, except small words like "for", "and", "the".
 - Each option should try a different idea, not the same title with small changes.
 - Clear, simple words. No em dashes. No quotation marks around a title. No colon inside the title or the subtitle.
@@ -131,7 +133,7 @@ export function interpretTitleIdeas(httpOk: boolean, body: unknown, ctx: TitleCo
       subtitle,
       reason: cutWords(cleanLine(r.reason), MAX_TITLE_REASON) || null,
       keywords: cleanList(r.keywords, MAX_TITLE_KEYWORDS, true),
-      unsourced: unsourcedNumbers(`${title}\n${subtitle ?? ""}`, known).filter((n) => n.length <= 20).slice(0, MAX_UNSOURCED),
+      unsourced: unsourcedList(`${title}\n${subtitle ?? ""}`, known),
     });
   }
   if (!titles.length) return { ...base, status: "failed", counted: false, code: "ai_unavailable" };

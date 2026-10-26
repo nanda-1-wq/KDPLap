@@ -283,7 +283,8 @@ const outlineCheck: StageDef<"outline_check", OutlineCheckContext> = {
  */
 const sectionWrite: StageDef<"section_write", WriteContext> = {
   stream: true,
-  read: (store, input) => store.getWriteContext(input.bookId, input.sectionId),
+  // soFar: the other sections' subheadings for <book_so_far> (E12 M8).
+  read: (store, input) => store.getWriteContext(input.bookId, input.sectionId, { soFar: true }),
   check: (input, ctx) => {
     const loc = locateSection(ctx);
     if (!loc) return { fail: "not_found" };

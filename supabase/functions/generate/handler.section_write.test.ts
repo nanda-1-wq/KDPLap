@@ -32,7 +32,7 @@ async function run(s: Parameters<typeof setup>[0], body: unknown = wid) {
 }
 
 Deno.test("section_write complete: streamed text, a normal version, counted with the exact tokens", quiet(async () => {
-  const { r, out, begins, finishes, logged, calls, beats } = await run({ streamProvider: slow(TEXT, 15) });
+  const { r, out, begins, finishes, logged, calls, beats, writeReads } = await run({ streamProvider: slow(TEXT, 15) });
   assertEquals(r.status, 200);
   assertEquals(r.headers.get("content-type"), "text/event-stream; charset=utf-8");
   assertEquals(r.headers.get("cache-control"), "no-cache, no-transform");
@@ -56,8 +56,11 @@ Deno.test("section_write complete: streamed text, a normal version, counted with
   });
   // The request: streamed, max_tokens from 450 words.
   const sent = JSON.parse(String(calls[0].init.body));
-  assertEquals([sent.stream, sent.max_tokens, sent.output_config], [true, 1100, { effort: "low" }]);
+  assertEquals([sent.stream, sent.max_tokens, sent.output_config], [true, 1190, { effort: "low" }]);
   assert(!("format" in sent.output_config));
+  // E12 M8: the store reads the other sections' subheadings, and the prompt lists them.
+  assertEquals(writeReads, [{ bookId: BOOK_ID, sectionId: SECTION_ID, opts: { soFar: true } }]);
+  assert((sent.messages[0].content as string).includes("<book_so_far>\n<item>Neck turns and tilts: Neck turns and tilts</item>\n</book_so_far>"));
   // Rule C: the usage row is the run's own (begin and finish); heartbeats add none.
   assertEquals(logged, []);
   assert(beats.every((b) => b.runId === RUN));

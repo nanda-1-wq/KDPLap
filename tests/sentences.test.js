@@ -1,6 +1,6 @@
 // deno test --allow-read tests/sentences.test.js   (from the repo root)
 // The Improve menu's sentence rule (js/sentences.js) against the server's
-// (sentencesOf in generate/lib/section_write.ts), on the E10.2 marker rows
+// (sentencesOf in generate/lib/numbers.ts since E12 step 2), on the E10.2 marker rows
 // (MARK_ROWS in lib.section_write.test.ts, read from that file) and more;
 // then snapping a selection to whole sentences, and the context on each side.
 import { assertEquals } from "jsr:@std/assert@1";
@@ -62,7 +62,7 @@ Deno.test("parity: the browser cuts sentences exactly like the server (E10.2 mar
 });
 
 Deno.test("parity: the same rule text as the server", () => {
-  const server = read("supabase/functions/generate/lib/section_write.ts");
+  const server = read("supabase/functions/generate/lib/numbers.ts");
   const browser = read("js/sentences.js");
   const pick = (src, re) => (src.match(re) || [])[1];
   assertEquals(pick(browser, /const SENTENCE_END = (\/.*\/g);/), pick(server, /const SENTENCE_END = (\/.*\/g);/));

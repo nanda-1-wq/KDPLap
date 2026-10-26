@@ -6,7 +6,7 @@
 import { asData, cleanLine, cutWords, obj, oneLine, type Outcome, readReply, str } from "./common.ts";
 import { briefAndResearch, knownText, positioningBlock, type PositioningContext, positioningValues } from "./context.ts";
 import { MAX_FINDING_QUOTE, MAX_FINDING_WHY, MAX_FINDINGS } from "./limits.ts";
-import { outlineUnsourced } from "./outline_ideas.ts";
+import { unsourcedList } from "./numbers.ts";
 
 /** One chapter row as outline_json (0016) returns it, in order. */
 export type OutlineRow = {
@@ -193,7 +193,7 @@ export function interpretOutlineCheck(httpOk: boolean, body: unknown, chapters: 
     const key = `${kind}\u0000${ids.join(",")}\u0000${norm(quote)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    findings.push({ kind, chapters: ids, quote, why, unsourced: outlineUnsourced(why, known) });
+    findings.push({ kind, chapters: ids, quote, why, unsourced: unsourcedList(why, known) });
   }
   return { ...base, status: "ok", counted: true, code: null, findings };
 }

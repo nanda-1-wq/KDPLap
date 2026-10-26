@@ -12,9 +12,9 @@ Deno.test("positioning_help: all six fields, one counted row with book_id, unsou
   assertEquals(j.stage, "positioning_help");
   assertEquals(j.suggestions.lacks, ["Poses too hard for knee or hip pain", "No plan that grows week by week"]);
   assertEquals(j.suggestions.reader_promise, "After finishing this book, you can follow a safe 20-minute chair routine at home, every day.");
-  // 15 is in the Brief and 3 in a source. 20 and 500 are nowhere. 4 and 5 are only in the
-  // current positioning, which is not a source (Batch A), so they are flagged too.
-  assertEquals(j.unsourced, { reader_promise: ["20"], approach: ["4", "5"], selling_points: ["500"] });
+  // 500 calories is a claim with no source. 20, 4 and 5 count the plan's minutes and weeks,
+  // which the prompt allows (E12 M1: small plain numbers are not claims).
+  assertEquals(j.unsourced, { selling_points: ["500"] });
   assertEquals(logged, [{ user_id: USER, book_id: BOOK_ID, stage: "positioning_help", model: "claude-sonnet-5-5", input_tokens: 520, output_tokens: 190, status: "ok", counted: true }]);
   assertEquals(saves.length, 0);
   const sent = JSON.parse(calls[0].init.body as string);
@@ -31,7 +31,7 @@ Deno.test("positioning_help: figures of speech are not unsourced, real numbers s
     provider: phReply({
       ...draft,
       reader_promise: "After finishing this book, you can keep a 9-to-5 job and still move every day, with 1-on-1 style cues.",
-      approach: "Short seated routines you can do 24/7, at home. A plan for 45 minutes a week.",
+      approach: "Short seated routines you can do 24/7, at home. 45% of readers keep going.",
       selling_points: ["A 50/50 mix of strength and balance", "Safe for stiff knees"],
     }),
   });
@@ -44,7 +44,7 @@ Deno.test("positioning_help with a field: only that card comes back", quiet(asyn
   const r = await handle(post({ ...ph, field: "approach" }));
   const j = await json(r);
   assertEquals([r.status, Object.keys(j.suggestions)], [200, ["approach"]]);
-  assertEquals(j.unsourced, { approach: ["4", "5"] });   // only in the positioning
+  assertEquals(j.unsourced, {});   // 4 weeks and 5 minutes are the plan, not claims (E12 M1)
   assert((JSON.parse(calls[0].init.body as string).messages[0].content as string).endsWith("Write only these fields: approach. Follow the rules."));
 }));
 

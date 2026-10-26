@@ -27,7 +27,7 @@ Deno.test("brief_help success: 200 suggestions only, one counted row with book_i
 }));
 
 Deno.test("brief_help: numbers without a source come back in unsourced", quiet(async () => {
-  const out = { ...three, reader_problem: "Most books have 184 reviews but skip 30 minutes of warm-up.", promise_draft: "A plan for 5 days." };
+  const out = { ...three, reader_problem: "Most books have 184 reviews but skip 30% of the warm-up.", promise_draft: "Studies back a plan for 5 days." };
   const { handle } = setup({ provider: helpReply(out) });
   const j = await json(await handle(post(help)));
   // 184 is a page-1 book; 30 is nowhere; 5 is only in a sponsored book, which the model never sees.

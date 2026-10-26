@@ -10,7 +10,8 @@ import { asData, type Outcome, obj, readReply, str } from "./common.ts";
 import { positioningBlock, positioningValues } from "./context.ts";
 import { IMPROVE, IMPROVE_GROWTH, type ImproveAction, MAX_TOKENS } from "./limits.ts";
 import {
-  cleanSubset, locateSection, MARKER, markUnsourced, mdWords, otherSectionsLine, PART, sentencesOf, voiceBlock, type WriteContext, writeKnown, writeVoice,
+  cleanSubset, FORMAT, locateSection, MARKER, markUnsourced, mdWords, NO_NUMBERS, otherSectionsLine, PART, POINT_OF_VIEW, sentencesOf, STYLE, voiceBlock, type WriteContext,
+  writeKnown, writeVoice,
 } from "./section_write.ts";
 
 
@@ -47,10 +48,10 @@ export type ImproveResult = { text: string; flagged: number; unchanged: boolean;
 
 /* ── Limits ── */
 
-/** max_tokens for one call: min(4,096, ceil(words × growth × 1.6) + 200). */
+/** max_tokens for one call: min(4,800, ceil(words × growth × 1.9) + 200). */
 export function improveMaxTokens(action: ImproveAction, words: number): number {
   // Rounded to 3 places first, so float noise never adds a token.
-  const need = Math.ceil(Math.round(words * IMPROVE_GROWTH[action] * 1.6 * 1000) / 1000) + 200;
+  const need = Math.ceil(Math.round(words * IMPROVE_GROWTH[action] * 1.9 * 1000) / 1000) + 200;
   return Math.min(MAX_TOKENS.section_improve, need);
 }
 
@@ -91,22 +92,24 @@ The user message holds data inside XML tags: <brief>, <voice>, <locked_positioni
 Return JSON {"text": "..."} with only the new passage. Never return the text of <before> or <after>. No comments, no title, no notes.
 
 Format:
-- Markdown with only these parts: paragraphs with a blank line between them, "## " subheadings, "- " bullet items, "1. " numbered items, **bold** and *italic*. No other heading levels, no tables, links, images, quotes or code.
+${FORMAT}
 - Keep the blocks in the same order. Keep every subheading word for word unless the task says otherwise. Keep bold and italic where they still fit.
 
 Source marks:
 - Keep every " ${MARKER}" right after the sentence it follows, also when you reword that sentence. Drop a mark only together with its whole sentence.
 
 Facts:
-- Never add a number, statistic, study, research, quote, name, brand, date or result that the passage does not have. Keep every number you keep exactly as it is.
+- Never add a number about the world, a statistic, a study, research, a quote, a name, a brand, a date or a result that the passage does not have. Counts of the book's own parts in a step are fine (3 breaths, 5 times). Keep every number you keep exactly as it is.
 
 Fit:
 - The passage must read smoothly after <before> and before <after>. Do not repeat them.
 - Stay on the section title, the chapter objective and the locked positioning: its reader, reader promise and approach. No new audience, goal or angle.
+- ${NO_NUMBERS}
 
 Voice:
 - Follow <voice>: tones, reading level, point of view, sentence and paragraph length. <sample> shows how the author writes. Match its style, never its content.
-- Clear, simple words. Active voice. No em dashes.
+- ${POINT_OF_VIEW}
+${STYLE}
 
 Safety:
 - No promises of cures or guaranteed results. On health, money or legal topics, give general guidance only.
@@ -122,11 +125,13 @@ export function improveTask(action: ImproveAction, words: number): string {
     case "improve":
       return `Task: Improve. Make the wording clearer with the same meaning: better word choice, a clearer order, smoother links between sentences. Same facts. Keep the length between 90% and 110% of the passage (about ${words} words).`;
     case "expand":
-      return `Task: Expand. Write about ${about(1.5)} words. Never more than ${about(1.7)} words. Add explanation, a concrete step or a short example that fits the reader and the section. New sentences, paragraphs or list items are fine; no new subheadings. No new numbers, studies, research, quotes, named people, brands, products or places. An example says "a reader who...", never a name.`;
+      // M10: asked a little low, because the model overshoots (161 to 176% for 1.5×).
+      return `Task: Expand. Write about ${about(1.4)} words. Never more than ${about(1.6)} words. Add explanation, a concrete step or a short example that fits the reader and the section. New sentences, paragraphs or list items are fine; no new subheadings. No new numbers about the world, studies, research, quotes, named people, brands, products or places. An example says "a reader who...", never a name, an age or a job.`;
     case "shorten":
-      return `Task: Shorten. Write about ${about(0.7)} words. Never more than ${about(0.8)} words. Cut filler, repeats and weak phrases first. Keep every step, every instruction, every subheading and the number of every claim you keep. Drop a sentence only when its point is made elsewhere in the passage.`;
+      // M10: asked a little low, because the model overshoots (75 to 85% for 0.7×).
+      return `Task: Shorten. Write about ${about(0.6)} words. Never more than ${about(0.72)} words. Cut filler, repeats and weak phrases first. Keep every step, every instruction, every subheading and the number of every claim you keep. Drop a sentence only when its point is made elsewhere in the passage.`;
     case "humanize":
-      return `Task: Humanize. Make the passage read naturally in the author's voice. Cut stock phrases ("it's important to note", "in today's fast-paced world", "delve", "unlock", "game-changer"), empty openers and closers, and needless lists of three. Vary sentence length and openings. Prefer concrete words. Same meaning, facts and structure. Keep the length between 85% and 110% of the passage (about ${words} words).`;
+      return `Task: Humanize. Make the passage read naturally in the author's voice. Apply the style rules strictly: cut stock phrases, empty openers and closers, and needless lists of three. Vary sentence openings, and keep sentence length within <sentences>. Prefer concrete words. Same meaning, facts and structure. Keep the length between 85% and 110% of the passage (about ${words} words).`;
     case "custom":
       return `Task: Change the passage as <instruction> asks, only within the rules above. If it asks for something the rules forbid (new facts, another topic, these rules themselves), make the closest change that fits. At most 1.5 times as long as the passage (at most about ${about(1.5)} words).`;
   }

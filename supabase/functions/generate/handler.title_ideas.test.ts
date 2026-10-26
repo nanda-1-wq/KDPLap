@@ -4,13 +4,13 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import { BOOK_ID, IDEA, json, posCtx, posRow, post, quiet, setup, titleCtx, titleReply, USER } from "./test_fakes.ts";
 
 Deno.test("title_ideas success: saved options returned, one counted row with book_id", quiet(async () => {
-  const { handle, logged, calls, titleSaves } = setup({ provider: titleReply([IDEA, { ...IDEA, title: "Seated Yoga Made Simple", subtitle: "A 6-Week Plan for Seniors With Stiff Joints" }]) });
+  const { handle, logged, calls, titleSaves } = setup({ provider: titleReply([IDEA, { ...IDEA, title: "Seated Yoga Made Simple", subtitle: "Lose 6 Pounds in a 6-Week Plan for Stiff Joints" }]) });
   const r = await handle(post({ stage: "title_ideas", bookId: BOOK_ID }));
   const j = await json(r);
   assertEquals(r.status, 200);
   assertEquals(j.options.length, 2);
   assertEquals(j.options[0].title, IDEA.title);
-  assertEquals(j.options[1].unsourced, ["6"]);   // 6 is in no Brief, Research or positioning text
+  assertEquals(j.options[1].unsourced, ["6"]);   // "lose 6 pounds" is a claim with no source; "a 6-week plan" alone would not be (E12 M1)
   assertEquals(titleSaves.length, 1);
   assertEquals(logged, [{ user_id: USER, book_id: BOOK_ID, stage: "title_ideas", model: "claude-sonnet-5-5", input_tokens: 520, output_tokens: 190, status: "ok", counted: true }]);
   const content = JSON.parse(String(calls[0].init.body)).messages[0].content as string;

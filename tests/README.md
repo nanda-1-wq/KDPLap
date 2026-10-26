@@ -38,6 +38,10 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
   kept (a quote really in the text; an empty quote only for at most 2
   objective gaps), the areas, the saved check and its counted row, the
   refusals before any AI call (with the reserve).
+- `lib.numbers.test.ts` (E12 step 2): the one number rule. A table of
+  phrases runs through every stage's own path (the Write and Improve
+  markers, Brief help, Positioning, Title, Outline, the outline check and the
+  AI section check), and every path gives the same answer.
 - `stages.test.ts`: the stage table.
 - `snapshot.test.ts`: the exact provider request for every stage, and every
   reply and error shape. A refactor must leave

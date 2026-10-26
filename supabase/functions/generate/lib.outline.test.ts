@@ -1,4 +1,4 @@
-// generate lib tests: outline_ideas (E9.1): unsourced numbers, the word target,
+// generate lib tests: outline_ideas (E9.1): unsourced numbers (the shared rule since E12 step 2), the word target,
 // the competitor contents in the prompt, and how a reply is cleaned.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import * as L from "./lib.ts";
@@ -6,7 +6,7 @@ import { OUTLINE_OUT, outlineCtx, TOCS } from "./test_fakes.ts";
 
 // Known: "Adults over 60 ..." (Brief), "15-minute" (Brief), "65", "3", "2023" (a source).
 const known = L.knownText(outlineCtx());
-const flags = (s: string) => L.outlineUnsourced(s, known);
+const flags = (s: string) => L.unsourcedList(s, known);
 
 Deno.test("outline numbers: plain counts of book parts are not flagged (owner rule, E9)", () => {
   for (const s of [
@@ -22,7 +22,7 @@ Deno.test("outline numbers: plain counts of book parts are not flagged (owner ru
   ]) assertEquals(flags(s), [], s);
 });
 
-Deno.test("outline numbers: %, money, weight and measurements are flagged", () => {
+Deno.test("outline numbers: %, money, and weight or measurements with a result word are flagged", () => {
   assertEquals(flags("Why 30% of falls happen at home"), ["30"]);
   assertEquals(flags("Cut stiffness by 40 percent"), ["40"]);
   assertEquals(flags("Save $20 a month on classes"), ["20"]);
@@ -30,6 +30,9 @@ Deno.test("outline numbers: %, money, weight and measurements are flagged", () =
   assertEquals(flags("Drop 5 kg without a gym"), ["5"]);
   assertEquals(flags("Gain 2 inches of reach"), ["2"]);
   assertEquals(flags("Burn 120 calories a session"), ["120"]);
+  // E12 M1 (owner decision 1): a unit alone is a plan, not a claim.
+  assertEquals(flags("Hold a 5 lb weight for 8 rolls"), []);
+  assertEquals(flags("Walk 2 miles a day"), []);
 });
 
 Deno.test("outline numbers: any number near study, research or proven is flagged, counts too", () => {
@@ -39,12 +42,17 @@ Deno.test("outline numbers: any number near study, research or proven is flagged
   assertEquals(flags("Studies show 9 poses work. Then 9 more moves."), ["9"]);   // the second sentence alone would pass
 });
 
-Deno.test("outline numbers: other numbers follow the usual rule (flag unless the Brief or Research has them)", () => {
-  assertEquals(flags("Why Chair Yoga Works After 60"), []);    // 60 is in the Brief
-  assertEquals(flags("Why Chair Yoga Works After 70"), ["70"]);
+Deno.test("outline numbers: small plain numbers pass; 100 or more and decimals are flagged unless they count book parts (E12 M1)", () => {
+  assertEquals(flags("Why Chair Yoga Works After 60"), []);
+  assertEquals(flags("Why Chair Yoga Works After 70"), []);    // a small plain number (was flagged before E12)
   assertEquals(flags("Balance work 3 days a week, as the CDC advises"), []);
-  assertEquals(flags("Moving like you did at 40"), ["40"]);
+  assertEquals(flags("Moving like you did at 40"), []);
   assertEquals(flags("Safe at 9 to 5 desks and 24/7 care homes"), []);   // figures of speech
+  assertEquals(flags("Why 1,000 readers chose chair yoga"), ["1000"]);
+  assertEquals(flags("Chair yoga since 2015"), ["2015"]);
+  assertEquals(flags("Stiffness is 1.5 times more common after 70"), ["1.5"]);   // "times" is not a book part
+  assertEquals(flags("The 100-Day Reset: 120 seconds a morning"), []);
+  assertEquals(flags("A 2.5-minute warm-up"), []);
 });
 
 Deno.test("outline target: a range, 30K+, a custom target, or the default", () => {

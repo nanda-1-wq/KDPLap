@@ -190,9 +190,10 @@ Deno.test("section text: 100,000 characters in the browser, the server and 0018 
 
 Deno.test("Generate section: words per call, max_tokens, the soft deadline, the stale run and 100,000 in 0020 (owner, E10.2)", () => {
   const f = M("0020_generate_section.sql");
-  // 2,000 words a call; max_tokens = 2,000 × 2.0 + 200 (answer 10, G3 P6).
+  // 2,000 words a call; max_tokens = 2,000 × 2.2 + 200 (answer 10, G3 P6, E12 M5).
   assertEquals(L.WRITE.wordsPerCall, 2000);
-  assertEquals(L.MAX_TOKENS.section_write, Math.ceil(L.WRITE.wordsPerCall * 2) + 200);
+  assertEquals(L.MAX_TOKENS.section_write, Math.ceil((L.WRITE.wordsPerCall * 22) / 10) + 200);
+  assertEquals(L.MAX_TOKENS.section_write, 4600);
   // The soft deadline is the stage timeout (100 s).
   assertEquals(L.TIMEOUT_MS.section_write, 100_000);
   assertEquals(L.WRITE_TIMING.softDeadlineMs, L.TIMEOUT_MS.section_write);
@@ -232,14 +233,14 @@ Deno.test("Improve menu: the browser, the server and 0021 (owner, E10.3)", () =>
   // A suggestion lives 1 hour (decision 5).
   assertEquals(one(f, String.raw`now\(\) - interval '(\d+) hour'`), 1);
   // Words: 3 to 1,500, Expand 1,000 (decision 10). Expand stops at 1,000 because 1,500
-  // words would need more than the 4,096 max_tokens cap; Custom at 1,500 fits.
+  // words would need more than the 4,800 max_tokens cap; Custom at 1,500 fits (E12 M5: 1.9 tokens a word).
   assertEquals([L.IMPROVE.minWords, L.IMPROVE.maxWords, L.IMPROVE.expandMaxWords], [3, 1500, 1000]);
-  assertEquals(L.MAX_TOKENS.section_improve, 4096);
-  const need = (a, w) => Math.ceil(w * L.IMPROVE_GROWTH[a] * 1.6) + 200;
-  assertEquals(need("expand", L.IMPROVE.expandMaxWords) <= 4096 && need("expand", L.IMPROVE.maxWords) > 4096, true);
-  for (const a of L.IMPROVE_ACTIONS.filter((x) => x !== "expand")) assertEquals(need(a, L.IMPROVE.maxWords) <= 4096, true, a);
+  assertEquals(L.MAX_TOKENS.section_improve, 4800);
+  const need = (a, w) => Math.ceil(w * L.IMPROVE_GROWTH[a] * 1.9) + 200;
+  assertEquals(need("expand", L.IMPROVE.expandMaxWords) <= 4800 && need("expand", L.IMPROVE.maxWords) > 4800, true);
+  for (const a of L.IMPROVE_ACTIONS.filter((x) => x !== "expand")) assertEquals(need(a, L.IMPROVE.maxWords) <= 4800, true, a);
   // The longest output a call can return fits the 25,000-character column (about 4 characters a token).
-  assertEquals(4096 * 4 < L.IMPROVE.outputChars, true);
+  assertEquals(4800 * 4 < L.IMPROVE.outputChars, true);
   // 64 KB holds the largest request even at 3 bytes a character.
   assertEquals((L.IMPROVE.selectionChars + 2 * L.IMPROVE.contextChars + L.IMPROVE.instructionChars) * 3 + 1024 <= L.BODY_BYTES.section_improve, true);
   assertEquals(L.TIMEOUT_MS.section_improve, 120_000);

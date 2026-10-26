@@ -101,21 +101,21 @@ Deno.test("checks: the gates, in order, before any money is spent", () => {
   assertEquals(job({}, { ...ctx, draft: IMPROVE_TEXT + " Typed." }).stage, "section_improve");
 });
 
-Deno.test("max_tokens: min(4,096, ceil(words × growth × 1.6) + 200) per action", () => {
+Deno.test("max_tokens: min(4,800, ceil(words × growth × 1.9) + 200) per action (E12 M5)", () => {
   const mt = (action: L.ImproveAction, w: number) => L.improveMaxTokens(action, w);
-  assertEquals([mt("edit_format", 150), mt("improve", 150), mt("humanize", 150)], [476, 476, 476]);
-  assertEquals([mt("shorten", 150), mt("custom", 150), mt("expand", 150)], [404, 584, 728]);
-  assertEquals([mt("improve", 1500), mt("shorten", 1500), mt("custom", 1500)], [2960, 2240, 4040]);
-  assertEquals(mt("expand", 1000), 3720);   // growth 2.2 (live check: Expand wrote about 2 times)
-  assertEquals(mt("expand", 1500), 4096);   // 5,480 is over the cap: why Expand stops at 1,000 words
-  assertEquals(mt("custom", 3000), 4096);
-  assertEquals(L.MAX_TOKENS.section_improve, 4096);
+  assertEquals([mt("edit_format", 150), mt("improve", 150), mt("humanize", 150)], [528, 528, 528]);
+  assertEquals([mt("shorten", 150), mt("custom", 150), mt("expand", 150)], [443, 656, 827]);
+  assertEquals([mt("improve", 1500), mt("shorten", 1500), mt("custom", 1500)], [3478, 2623, 4760]);
+  assertEquals(mt("expand", 1000), 4380);   // growth 2.2 (live check: Expand wrote about 2 times)
+  assertEquals(mt("expand", 1500), 4800);   // 6,470 is over the cap: why Expand stops at 1,000 words
+  assertEquals(mt("custom", 3000), 4800);
+  assertEquals(L.MAX_TOKENS.section_improve, 4800);
   const j = job({ selection: words(1000), action: "expand" });
-  assertEquals([j.maxTokens, j.reserve], [3720, j.inputEstimate + 3720]);
+  assertEquals([j.maxTokens, j.reserve], [4380, j.inputEstimate + 4380]);
   assertEquals(j.inputEstimate, L.estimateTokens(L.IMPROVE_SYSTEM.length + j.user.length));
   // The request carries the job's max_tokens; the schema is { text }.
   const req = L.buildRequest(j);
-  assertEquals([req.max_tokens, req.model, req.output_config.effort], [3720, "claude-sonnet-5-5", "low"]);
+  assertEquals([req.max_tokens, req.model, req.output_config.effort], [4380, "claude-sonnet-5-5", "low"]);
   assertEquals(req.output_config.format.schema, L.IMPROVE_SCHEMA);
   assertEquals(req.thinking, { type: "between_tools" });
   assert(!("stream" in req));
@@ -185,11 +185,16 @@ Deno.test("prompt: the six task blocks", () => {
   assertStringIncludes(t("edit_format"), "Task: Edit and format. Fix grammar, spelling, punctuation and readability.");
   assertStringIncludes(t("edit_format"), "In subheadings, fix spelling only. Keep the length between 90% and 110% of the passage (about 200 words).");
   assertStringIncludes(t("improve"), "Same facts. Keep the length between 90% and 110% of the passage (about 200 words).");
-  assertStringIncludes(t("expand"), "Task: Expand. Write about 300 words. Never more than 340 words.");
-  assertStringIncludes(t("expand"), 'no new subheadings. No new numbers, studies, research, quotes, named people, brands, products or places. An example says "a reader who...", never a name.');
-  assertStringIncludes(t("shorten"), "Task: Shorten. Write about 140 words. Never more than 160 words.");
+  // E12 M10: asked a little low, because the model overshoots in both directions.
+  assertStringIncludes(t("expand"), "Task: Expand. Write about 280 words. Never more than 320 words.");
+  // E12 H3 and L2: no name, age or job; no new numbers about the world.
+  assertStringIncludes(t("expand"), 'no new subheadings. No new numbers about the world, studies, research, quotes, named people, brands, products or places. An example says "a reader who...", never a name, an age or a job.');
+  assertStringIncludes(t("shorten"), "Task: Shorten. Write about 120 words. Never more than 144 words.");
   assertStringIncludes(t("shorten"), "Keep every step, every instruction, every subheading and the number of every claim you keep.");
-  assertStringIncludes(t("humanize"), '"delve", "unlock", "game-changer"');
+  // E12 M2: the stock-phrase list is in the shared style rules (the system text).
+  assertStringIncludes(t("humanize"), "Apply the style rules strictly: cut stock phrases, empty openers and closers, and needless lists of three.");
+  assertStringIncludes(t("humanize"), "keep sentence length within <sentences>");
+  assertStringIncludes(L.IMPROVE_SYSTEM, '"delve", "unlock" or "game-changer"');
   assertStringIncludes(t("humanize"), "Same meaning, facts and structure. Keep the length between 85% and 110% of the passage (about 200 words).");
   assertStringIncludes(t("custom"), "Task: Change the passage as <instruction> asks, only within the rules above.");
   assertStringIncludes(t("custom"), "(at most about 300 words)");
@@ -362,4 +367,15 @@ Deno.test("check: a passage that is not in the section is selection_not_in_text,
   assertEquals(check({ selection: "Roll your hips in a slow circle, five times each way." }, improveCtx()), { fail: "selection_not_in_text" });
   assertEquals(check({ before: "Keep both feet flat on the floor" }, improveCtx()), { fail: "selection_not_in_text" });
   assertEquals("fail" in check({}, improveCtx()), false);   // the design 22b passage is in IMPROVE_TEXT
+});
+
+Deno.test("prompt (E12 step 2): the shared rules in the Improve system text", () => {
+  const s = L.IMPROVE_SYSTEM;
+  for (const part of [L.FORMAT, L.NO_NUMBERS, L.POINT_OF_VIEW, L.STYLE]) assertEquals(s.split(part).length - 1, 1, part.slice(0, 40));
+  // L2: counts of the book's own parts are fine in a new step; numbers about the world are not.
+  assertStringIncludes(s, "Never add a number about the world, a statistic, a study, research, a quote, a name, a brand, a date or a result that the passage does not have. Counts of the book's own parts in a step are fine (3 breaths, 5 times).");
+  // M7 and M3 come with FORMAT and NO_NUMBERS; M2: the fixed style line is gone.
+  assertStringIncludes(s, "No picture notes, image descriptions or placeholders");
+  assert(!s.includes("- Clear, simple words. Active voice. No em dashes."), "the old style line");
+  assert(!s.includes("—"), "no em dashes in the prompt");
 });

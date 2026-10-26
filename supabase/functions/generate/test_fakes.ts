@@ -147,6 +147,8 @@ export const writeCtx = (extra: Partial<WriteContext> = {}): WriteContext => {
     draft: null,
     previous: "## Neck turns and tilts\n\nTurn your head slowly to the right, then to the left. Keep your shoulders still. " + "Breathe out as you turn. ".repeat(120) + "End each turn back at the center.",
     run: null,
+    // The other written section (4.1, the previous one) and its subheading, for <book_so_far> (E12 M8).
+    soFar: [{ sectionId: rows[4].sections[0].id, headings: ["Neck turns and tilts"] }],
     ...extra,
   };
 };
@@ -325,6 +327,7 @@ export function setup(s: Setup = {}) {
   const finishes: RunFinish[] = [];
   const suggestionSaves: SuggestionSave[] = [];
   const sectionCheckSaves: SectionCheckSave[] = [];
+  const writeReads: { bookId: string; sectionId: string; opts?: { soFar?: boolean } }[] = [];
   const runs: Promise<unknown>[] = [];
   let finishTries = 0;
   const store: Store = {
@@ -366,7 +369,10 @@ export function setup(s: Setup = {}) {
       if (s.checkSaveThrows) return Promise.reject({ code: "23514" });
       return Promise.resolve({ checked_at: save.checkedAt.replace("Z", "+00:00").replace(".000", ""), inputs_key: save.inputsKey });
     },
-    getWriteContext: (id, sectionId) => Promise.resolve(s.write === undefined ? (id === BOOK_ID && sectionId === SECTION_ID ? writeCtx() : null) : s.write),
+    getWriteContext: (id, sectionId, opts) => {
+      writeReads.push({ bookId: id, sectionId, ...(opts ? { opts } : {}) });
+      return Promise.resolve(s.write === undefined ? (id === BOOK_ID && sectionId === SECTION_ID ? writeCtx() : null) : s.write);
+    },
     sumRunningReserves: () => Promise.resolve(s.running ?? 0),
     beginSectionRun: (a) => {
       begins.push(a);
@@ -422,7 +428,7 @@ export function setup(s: Setup = {}) {
   });
   /** Waits for every run handed to waitUntil (the save happens there). */
   const settle = () => Promise.all(runs);
-  return { handle, logged, calls, saves, titleSaves, outlineSaves, checkSaves, begins, beats, finishes, runs, settle, suggestionSaves, sectionCheckSaves };
+  return { handle, logged, calls, saves, titleSaves, outlineSaves, checkSaves, begins, beats, finishes, runs, settle, suggestionSaves, sectionCheckSaves, writeReads };
 }
 
 export function anthropic(stop: string, out: unknown, status = 200) {
