@@ -1,0 +1,52 @@
+{
+  "about": "E11 include rule, shared by tests/export-rules.test.js (the dialog's kdpExportRules) and supabase/tests/sql/t_export_include.sql (export_badges in 0025). For every case the dialog must pick exactly `expected` (section keys, in file order), and an export recorded with that list must read as not changed. Content null = no version. `running` = a Generate run is going on (the section is still in the file, with its saved version). Version ids are the section keys in JS and md5(case || ':' || key)::uuid in SQL.",
+  "books": {
+    "main": [
+      { "key": "i", "kind": "intro", "position": 1, "sections": [
+        { "key": "i1", "position": 1, "status": "final", "content": "Intro text." }
+      ] },
+      { "key": "c1", "kind": "chapter", "position": 2, "sections": [
+        { "key": "c1a", "position": 2, "status": "draft", "content": "Second by position." },
+        { "key": "c1b", "position": 1, "status": "final", "content": "First by position, stopped early.", "partial": true }
+      ] },
+      { "key": "c2", "kind": "chapter", "position": 3, "sections": [
+        { "key": "c2a", "position": 1, "status": "draft", "content": " \n\t \r\n" },
+        { "key": "c2b", "position": 2, "status": "reviewed", "content": null },
+        { "key": "c2c", "position": 3, "status": "reviewed", "content": "Being written right now.", "running": true },
+        { "key": "c2d", "position": 4, "status": "draft", "content": " " }
+      ] },
+      { "key": "c3", "kind": "chapter", "position": 4, "sections": [
+        { "key": "c3a", "position": 1, "status": "draft", "content": null }
+      ] },
+      { "key": "cc", "kind": "conclusion", "position": 5, "sections": [
+        { "key": "cc1", "position": 1, "status": "final", "content": "The end. [Verify: no source]" }
+      ] }
+    ],
+    "shuffled": [
+      { "key": "b2", "kind": "chapter", "position": 2, "sections": [
+        { "key": "b2b", "position": 2, "status": "final", "content": "B2, second." },
+        { "key": "b2a", "position": 1, "status": "final", "content": "B2, first." }
+      ] },
+      { "key": "b1", "kind": "chapter", "position": 1, "sections": [
+        { "key": "b1a", "position": 1, "status": "draft", "content": "B1, only." }
+      ] }
+    ]
+  },
+  "cases": [
+    { "name": "all-sections-all-parts", "book": "main", "include": "all",
+      "parts": { "title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false },
+      "expected": ["i1", "c1b", "c1a", "c2c", "c2d", "cc1"] },
+    { "name": "final-only", "book": "main", "include": "final",
+      "parts": { "title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false },
+      "expected": ["i1", "c1b", "cc1"] },
+    { "name": "intro-and-conclusion-off", "book": "main", "include": "all",
+      "parts": { "title": false, "copyright": false, "contents": false, "intro": false, "conclusion": false, "about": false },
+      "expected": ["c1b", "c1a", "c2c", "c2d"] },
+    { "name": "final-only-no-intro", "book": "main", "include": "final",
+      "parts": { "title": true, "copyright": true, "contents": true, "intro": false, "conclusion": true, "about": true },
+      "expected": ["c1b", "cc1"] },
+    { "name": "order-by-position", "book": "shuffled", "include": "all",
+      "parts": { "title": true, "copyright": true, "contents": true, "intro": false, "conclusion": false, "about": false },
+      "expected": ["b1a", "b2a", "b2b"] }
+  ]
+}

@@ -4,7 +4,9 @@
 #   tests/browser/run.sh <suite> <test.js>
 #   tests/browser/run.sh title t1.js
 # Suites: brief (step 01), research (step 02), positioning (step 03),
-# title (step 04), outline (step 05), write (step 06), delete (Delete book dialog).
+# title (step 04), outline (step 05), write (step 06), delete (Delete book dialog),
+# settings (E11 Settings and the sidebar name), export (E11 Export dialog),
+# books (E11 Books badge and card menu).
 # A suite's mock.js defines setup(page); each test file defines test(page).
 set -euo pipefail
 HERE=${0:A:h}
@@ -32,11 +34,24 @@ WANT=$(grep -A1 'supabase-js@2.49.4/dist/umd/supabase.js' "$ROOT/app/topic-lab.h
 GOT="sha384-$(openssl dgst -sha384 -binary "$SB" | base64)"
 [[ $GOT == "$WANT" ]] || { rm -f "$SB"; echo "run.sh: supabase-js hash mismatch"; exit 1; }
 
+# docx 9.5.1 (the Export dialog's Word tool), checked against the SRI hash in js/export-dialog.js.
+DX=$CACHE/docx-9.5.1.js
+if [[ ! -s $DX ]]; then
+  curl -fsSL https://cdn.jsdelivr.net/npm/docx@9.5.1/dist/index.iife.js -o "$DX"
+fi
+WANT=$(grep -o "DOCX_SRI = 'sha384-[^']*'" "$ROOT/js/export-dialog.js" | grep -o "sha384-[^']*")
+GOT="sha384-$(openssl dgst -sha384 -binary "$DX" | base64)"
+[[ $GOT == "$WANT" ]] || { rm -f "$DX"; echo "run.sh: docx hash mismatch"; exit 1; }
+
 # Old file versions some tests load to prove a fixed bug (from git, never edited).
 [[ -s $CACHE/old-book-positioning.js ]] || git -C "$ROOT" show 32f9dfa:js/book-positioning.js > "$CACHE/old-book-positioning.js"
 [[ -s $CACHE/old-book-brief.js ]] || git -C "$ROOT" show 32f9dfa:js/book-brief.js > "$CACHE/old-book-brief.js"
 
 MOCK=""; [[ -f $HERE/$SUITE/mock.js ]] && MOCK=$(cat "$HERE/$SUITE/mock.js")
+# A suite's mock may start with "// shared: <name>": tests/browser/shared/<name>.js goes first (E11 suites).
+SHARED=$(print -r -- "$MOCK" | sed -n '1s#^// shared: \([a-z0-9-]*\)$#\1#p')
+[[ -n $SHARED ]] && MOCK="$(cat "$HERE/shared/$SHARED.js")
+$MOCK"
 CODE="async page => { const CACHE = '$CACHE'; const SHOTS = '$SHOTS';
 $MOCK
 $(cat "$HERE/$SUITE/$FILE")

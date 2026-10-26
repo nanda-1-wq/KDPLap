@@ -62,7 +62,22 @@ deno test --allow-read tests/text-checks.test.js
 deno test --allow-read tests/section-check-key.test.js
 deno test --allow-read tests/selection-in-text.test.js
 deno test tests/finding-rules.test.js
+deno test --allow-read tests/export-rules.test.js
+deno test --allow-read tests/export-build.test.js
+deno test --allow-read tests/usage-rules.test.js
+deno test --allow-read tests/user-name.test.js
 ```
+
+- E11 (designs 24b and 25b): `export-rules.test.js` is the Export dialog's
+  include rule (the cases in `tests/fixtures/export-include.json`, shared with
+  the SQL test `t_export_include`), counts, notes, run freshness, the AI note,
+  Verify marks (the old v15 places too), the copyright text and the file name.
+  `export-build.test.js` checks the exact Markdown and opens a real .docx
+  (docx 9.5.1 from `tests/browser/.cache/`, its SRI checked; unzipped by
+  `tests/lib/unzip.js`): page sizes, page numbers only in the body and from 1,
+  chapter page breaks, bookmarks and links, no marks, lists and styles. Run any
+  browser suite once first, so the cache holds docx. `usage-rules.test.js` is
+  the Settings usage card; `user-name.test.js` the sidebar name rule.
 
 - `finding-rules.test.js` (G5, design 22d): severity from the type, Keep as is
   matching (type + exact quote; a gap by message on its own check, timestamps
@@ -146,6 +161,8 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0021` Improve suggestions (server only, the owner and version guards, the checks, the replaced version guard, apply_suggestion: once, 1 hour, the base rules, save_version then apply_suggestion, the draft, a fresh run, the text check, 100,000, Needs review, Reviewed and Final kept, a book delete),
 `t0023` G3 fixes (the book-level "has writing" outline_ideas reads: a discarded partial is not writing, a draft and a fresh run are; write_cut and the 100,000 cut in finish and recover, never inside a word or a marker, the same cases as cutText; an AI section finding with the optional unsourced list; the grants),
 `t0024` kept findings (Keep as is: own select, insert and delete, no update; type, message, quote and check_at shape; a gap only from the current check; older gaps removed; at most 50 per section; the unique keys; the cascades; advice only),
+`t0025` export and settings (display_name, book_exports with its guard and the newest 20 per book and format, export_json, export_badges and its "changed" rule, usage_month),
+`t_export_include` (E11: the fixture cases from `tests/fixtures/export-include.json`, recorded with the dialog's own list, read as not changed by export_badges; run from the repo root),
 `rls_cross_user` (user B against user A's rows in every table).
 
 ## Browser (mocked, playwright-cli)
@@ -163,7 +180,13 @@ t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
 `write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks,
-t-timing, t-selection, t-fix, t-queue). `t-fix` (G5, design 22d) covers severity, the minor fold,
+t-timing, t-selection, t-fix, t-queue), and for E11 `settings` (t-settings, t-footer), `export`
+(t-export) and `books` (t-badge). The three E11 suites share `tests/browser/shared/e11.js`
+(a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
+Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every
+downloaded Blob in `window.__blobs`. `t-export` covers 24b states 1 to 9 and the header entry,
+opens the real download, and records the fixture cases through the dialog. `t-footer` checks the
+name-only footer on four pages. `t-fix` (G5, design 22d) covers severity, the minor fold,
 Keep as is and Undo, a kept gap (its check_at sent exactly as read, to the microsecond) and Fix
 on Custom; `t-queue` the Fix major queue, every state from 6 to 10b. `t-selection` (G3 P9) makes Improve selections in the real editor across
 bold, italic, list items, headings and a marker, the whole section (also with Ctrl+A), and right
@@ -181,7 +204,7 @@ section check (E10.4) is answered the same way: `window.__chk.reply(status,
 body)`; `__store.checks` holds the saved checks, `__store.research` the
 Research rows, `__store.penVoice` the pen voice, and `__store.timeline` the
 times of version and draft writes (to check that autosave waits). The runner caches supabase-js (checked
-against the app's SRI hash) and two old file versions from git in
+against the app's SRI hash), docx 9.5.1 (checked against the SRI in `js/export-dialog.js`) and two old file versions from git in
 `tests/browser/.cache/`. Screenshots go to `tests/browser/shots/`. Both
 folders are ignored by git.
 
