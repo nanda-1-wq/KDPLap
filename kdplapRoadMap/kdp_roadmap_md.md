@@ -25,7 +25,15 @@ Design: ✅ approved (see `design/`)
   - E10.4 Checks tab: done (0022, generate v19, merged cd9966f)
 - [x] **PRODUCE gate** (after E10): G4 owner walk-through, G1 review, G2 clean-up, G3 fixes (0023, generate v20), G5 severity, Keep as is, Fix, Fix major (0024, generate v21), G6 all suites green on main. Merged bec800e. Results in `docs/reviews/produce-gate-g1.md` to `produce-gate-g5.md` (G4 answers in g1 section 7).
 - [x] **E11** Export DOCX + Markdown · Settings + AI usage: Export dialog (DOCX built in the browser with docx 9.5.1, Markdown), Settings, name-only sidebar, Books badge, 0025 live (20261025213500). Merged 1c9b932. Plans and results in `docs/reviews/2026-10-25-e11-plan.md` and `2026-10-25-e11-build-plan.md`.
-- [ ] **E12** Real test: write one full book, fix what hurts ← next
+- [ ] **E12** Real test: write one full book, fix what hurts ← in progress
+  - Step 1 AI prompt review: done (report `docs/reviews/2026-10-26-e12-prompt-review.md`)
+  - Step 2 fix batch: done (one number rule, point of view, examples, style, previews, `<book_so_far>`, bio, "ends mid-sentence" and "Mentions another part of the book" checks; generate v22 + v23; merged e6c0737). Plans and live checks in `docs/reviews/2026-10-26-e12-fix-batch-plan.md` and `2026-10-26-e12-part3-plan.md`
+  - Next: the real book on the owner's account
+
+### Watch list for the real book
+- Practices taught again: a practice from an earlier section is named, but its steps are taught a second time (Part 3 live check).
+- The same opener across sections, for example "This is common, and it does not mean…" (`<book_so_far>` shows subheadings only).
+- AI Verify marks on claims without numbers (H1): the AI rarely marks them, and no check flags them yet.
 
 ## v2 · KDP-ready files
 07 Quality Control · 08 Format · 09 Cover (full wrap) · Print PDF · EPUB ·
