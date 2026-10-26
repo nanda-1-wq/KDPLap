@@ -1,6 +1,6 @@
 # E12 step 2: prompt fix batch plan
 
-Status: STOP 2 reached 2026-10-26. Part 1 committed 83d1b02 and pushed on `claude/e12`. Waiting for the owner's review and "deploy" (generate v22, by Claude chat). Part 2 starts only after that.
+Status: STOP 3 reached 2026-10-26. generate v22 deployed by the owner from 83d1b02. Part 2 committed 1f74964 and pushed on `claude/e12`. The live check waits for the owner's "live".
 
 ## Context
 The step 1 review (`docs/reviews/2026-10-26-e12-prompt-review.md`, 91e8901) found prompt and rule problems that would hurt a real book. The owner accepted it and chose:
@@ -155,3 +155,31 @@ For the 12,000-word book in the review (33 Write, 88 Improve and 44 Check calls)
 - A section number ("section 9.9") never gets a Verify badge in an AI check message, even when that section does not exist. G5 note 4 flagged that case before.
 - Saved Title options and Outline chapters keep their old `unsourced` badges until the next Generate.
 - `js/text-checks.js` already has `ending()` (with its parity test). The Checks row and the Export note that use it come in Part 2.
+
+## 7. Part 2 results (STOP 3, 2026-10-26)
+
+Commit 1f74964 on `claude/e12`. Browser only: no server change, no migration, no AI calls, no Supabase writes. The owner deployed generate v22 from 83d1b02 before Part 2 (version 22, verify_jwt true, 401 without login).
+
+**What changed:**
+- **H2** (`js/pen-name.js`): the voice field is now "Point of view in your books", with the help line "The bio is always third person." under the select. The help line sits below the select, so the selects in a row stay level, and screen readers get it through `aria-describedby`. The option labels and saved values do not change. `design/screens/12-pen-name-detail.html` has the same text. Its PNG was shot again at 1440 with the design fonts; the old PNG had been rendered in a fallback font, so the whole image changed slightly, not only this field.
+- **M9 Checks** (`js/text-checks.js`): a new `ending` row: "The section ends mid-sentence." with the line "Finish the last sentence or cut it." It is a warning, it counts in the tab, and "Show" selects the cut piece. It uses `kdpTextChecks.ending()`, the same rule as the server's `endsMidSentence`.
+- **M9 Export** (`js/export-rules.js`, `js/export-dialog.js`): `model().cut` lists the sections in the file that end mid-sentence. The dialog shows a warning row like "Needs review", for example "2.1 and 4.2 end mid-sentence. Finish or cut the last sentence before you publish." It never blocks, needs no tick, and the download still works (owner decision 4). Under "Final only", a section left out of the file is left out of the note too. The "partial text" info row stays.
+
+**Tests:**
+- Deno helpers: 133 → 135 (the `ending` row and the `cut` list); generate unchanged at 307.
+- Browser (mocked), every suite: books 12, brief 161, delete 1, export 72 (+9, new `t-cut`), outline 226, positioning 159, research 77, settings 88, title 75, write 677 (+6 in `t-checks`; `t-selection` piped into `selection-check.ts`: 10 pass), and the new `pen` suite 9 (`t-label`). Total 1,557 passes, 0 fails, no page errors.
+
+**Screenshots** (`docs/reviews/e12-stop3/`):
+
+| File | What it shows |
+|---|---|
+| `pen-name-1440.png` | Pen name page, the new label and help line (Third person, as saved) |
+| `pen-name-900.png` | The same page at 900 (after the switch to Second person) |
+| `pen-name-voice-900.png` | The Voice profile panel at 900, close up |
+| `checks-ending-1440.png` | 06 Write Checks tab: the "ends mid-sentence" row, Show selecting the cut piece |
+| `checks-ending-900.png` | The same at 900 |
+| `export-cut-1440.png` | Export dialog with two cut sections: the warning row, no tick, Export on |
+| `export-cut-900.png` | Export dialog at 900 with one cut section (singular) |
+| `export-cut-two-900.png` | Export dialog at 900 with two cut sections |
+
+Also re-shot: `design/screens/12-pen-name-detail.png`.
