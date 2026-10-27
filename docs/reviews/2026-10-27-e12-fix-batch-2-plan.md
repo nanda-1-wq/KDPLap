@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: Live check A done (2026-10-27, test account, generate v24). Results are in "Live check A results" at the end, with screenshots in docs/reviews/e12-fix2-live/. Next: you decide; Part 3 (designs 22e and 23b) only after your OK. Branch `claude/e12-fixes`.
+Status: STOP 4 (2026-10-27). Part 3 designs 22e and 23b are committed and pushed, for your design review. Results and questions are in "Part 3 results" at the end. No code yet. Branch `claude/e12-fixes`.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -151,6 +151,7 @@ New files in `design/screens/`, each with PNGs at 1440 and 900, shot in a clean 
   5. A Final section;
   6. The repeat rows as info (item 7), with the source and "Also in another section" rows from Part 2 in context.
 - **Build (Part 4):** browser only, `js/finding-rules.js` and `js/write-checks.js`. Tests: `tests/finding-rules.test.js` (`ready`, `textOnlyChange`) and write `t-checks.js` / `t-fix.js`.
+- **Also in Part 4 (owner, after Live check A):** the Checks rows show each sentence as plain text, without Markdown marks ("Feel your contact points.", not "**Feel your contact points.**"). Show still selects the real text.
 
 ### Item 6. "Generate chapter" (`23b-generate-chapter-states.html`)
 - **Cause:** Generate works on the open section only (`js/write-generate.js`, one `gen` run).
@@ -374,3 +375,48 @@ Rows 292 and 293 have no book id now: the book they were for is deleted (`on del
 - There is 1 new export row (the .docx check).
 - The throwaway book is gone.
 - Nothing on your account was read through the app or changed. The only reads beyond the test user were `max(id)` on `ai_usage`, and 5 rows of it, all the test user's.
+
+## Owner decisions after Live check A (2026-10-27)
+- Live check A accepted.
+- **Watch list, with no prompt change now:**
+  - Write copies practice steps word for word from earlier sections (7.1 from 2.1 and 6.4);
+  - Write gives an example its own subheading (7.2 "## A short example").
+- Part 4 adds plain-text sentences in the Checks rows (above).
+- Next: Part 3, designs 22e and 23b only, then STOP 4.
+
+## Part 3 results (STOP 4, 2026-10-27): designs only
+New files in `design/screens/`, built on 22c, 22d and 23 (tokens only, the 280 px Checks panel, 44 px buttons, no em dashes). PNGs are full page at 1440 and 900, shot in a clean session (no mocks) after checking that IBM Plex Sans, IBM Plex Mono and Source Serif 4 had loaded. Neither width scrolls sideways.
+
+### 22e · Ready to mark Final (`22e-checks-ready-states.html`, `-1440.png`, `-900.png`)
+1. **Ready:** a block at the top of the Checks tab with the success check and "Ready to mark Final. No open problems. You do not need another AI check." It has a **Mark Final** button (it sets the status, the same as the select). The AI check shows "Fixed 3 of 3 major findings", and the tab has no count.
+2. **Almost:** "2 things left" lists what still blocks, in this order: Needs review, code warnings, open major findings, open objective gaps. Each has Show. "You can still mark it Final now." The tab count is unchanged.
+3. **Text clean, no AI check yet** (D7): "Run the AI check once" with the button.
+4. **Still valid after Fixes and small edits:** "Fixed 3 of 3", plus a meter "Your own edits since this check: 6% of the words" on a 0 to 20% scale. The meter shows only after manual edits.
+5. **Out of date, edits over 20%:** "You changed 24% of the words since this check. Up to 20% keeps a check."
+6. **Out of date, a change not from this check:** one line each for Generate, an Improve that was not a Fix, Restore, and "the plan changed" (today's line). When several apply, the first in that order shows.
+7. **Needs review blocks "ready":** Show goes to the banner's Mark as reviewed.
+8. **After Mark Final:** "Final. This section is marked Final and has no open problems." If it is edited later: "Final, 1 thing left. Its status stays Final."
+9. **An objective gap:** it stays open until it is kept, or a new check no longer finds it. Writing the missing part counts toward the 20%.
+10. **In your text** with every Part 2 row, and the Part 4 change: each sentence as plain text, without Markdown marks.
+11. **The rule table** (your rule) and how the app knows. There is no migration: the check's `version_id` and fingerprint (0022), each version's `source`, and a used suggestion's passage and version (0021). The rule is one pure `kdpFindingRules.stillValid()`.
+
+### 23b · Generate chapter (`23b-generate-chapter-states.html`, `-1440.png`, `-900.png`)
+- **1A, the button (recommended):** "Generate chapter" in the 06 head next to "Generate section", with the help line "Writes the 3 sections of this chapter that have no text, in order."
+- **1B, the option:** a "More" menu on each chapter row of the manuscript list ("Generate empty sections (3)").
+- **2, the confirm:**
+  - It lists the sections to write with their word targets, and a skipped one ("Has text, so it is skipped.").
+  - Its cost line reads "3 AI calls, about 1,000 words. About $0.07 and 27,000 tokens. You have 1.21M tokens left this month."
+  - The formula: this month's average Write input (6,500 when there is none) plus each target × 1.7 output tokens, priced at $2 and $10 a million.
+- **2b, near the limit:** a warning that never blocks: "This may pass your monthly AI allowance. You have about 20,000 tokens left. Writing stops at the limit, and the sections written so far stay."
+- **3, running:** "Generate chapter · 2 of 3", with each section Written, Writing now or Waiting. The current section streams with its progress bar, and one Stop ends that section's writing and cancels the rest. The open section follows the queue.
+- **4, done:** "Chapter 7 is written", the words per section, "Next, read each one and run its AI check."
+- **5, stopped by you:** today's stopped wording, then "Generate the rest (2)". It counts the stopped section again, because its partial text is not current yet.
+- **6a, failed:** "Try again from 7.2" and Stop. **6b, month limit:** no Try again.
+- **7, off:** with today's reasons ("Every section in this chapter has text.", "Wait for the section to finish writing.", "Lock the positioning in 03 to generate.", "Approve the outline in 05 to generate."). There is no button on the Introduction or the Conclusion.
+- **8, leaving 06 while it runs:** "Stop and leave? The text written so far in 7.2 is saved in Versions. 7.3 is not written."
+
+### Questions for your review
+1. **23b button:** A (in the head, recommended) or B (the chapter row menu)?
+2. **22e Mark Final button:** keep a Mark Final button in the Ready block (my pick), or point to the status select only?
+3. **22e meter:** show the 0 to 20% meter after manual edits (my pick), or text only ("Your own edits since this check: 6% of the words")?
+4. **23b after Stop:** "Generate the rest" also writes the stopped section again (my pick), unless you kept its partial text first.

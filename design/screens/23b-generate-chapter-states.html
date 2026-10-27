@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDP Lab · Generate chapter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;family=Source+Serif+4:wght@400;600&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../design-tokens.css">
+<!-- E12 fix batch 2 · item 6 · 06 Write · Generate chapter: a queue of the chapter's
+     sections with no text, written one at a time with the existing Generate section
+     call (design 23), Stop, progress, and a cost line before it starts. Not "the whole
+     book". Tokens from design/design-tokens.css only. Ink on paper; functional colors
+     only with an icon and a word, small areas. Every button 44 px. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
+  a { color: var(--ink); text-decoration: underline; }
+  :focus-visible, .is-focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .page { max-width: 1440px; padding: var(--space-10) var(--space-12); display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--space-8) var(--space-6); align-items: start; }
+  .page-head { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-1); }
+  .page-head h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
+  .page-head p { margin: 0; font-size: var(--text-md); color: var(--graphite); max-width: 860px; line-height: 1.5; }
+  .wide { grid-column: span 2; }
+  .full { grid-column: 1 / -1; }
+  @media (max-width: 899px) { .page { padding: var(--space-6) var(--space-4); grid-template-columns: minmax(0, 1fr); } .wide { grid-column: 1 / -1; } }
+
+  .label { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); text-transform: uppercase; }
+  .state { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+  .state > .label { padding-left: var(--space-1); }
+  .caption { margin: 0; font-size: var(--text-sm); color: var(--graphite); line-height: 1.5; max-width: 420px; }
+  .wide .caption, .full .caption { max-width: 760px; }
+  .caption strong { color: var(--ink); font-weight: 600; }
+
+  .btn { min-height: var(--control-h); padding: 0 var(--space-4); display: inline-flex; align-items: center; justify-content: center;
+         gap: var(--space-2); border-radius: var(--radius-md); font-family: inherit; font-size: var(--text-md);
+         border: 1px solid var(--stone); background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .btn-sm { font-size: var(--text-sm); padding: 0 var(--space-3); }
+  .btn-primary { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+  .btn-text { border-color: transparent; background: transparent; text-decoration: underline; padding: 0 var(--space-2); }
+  .btn[disabled] { background: var(--surface-2); border-color: var(--stone); color: var(--muted); cursor: default; }
+  .row { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+  .why { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); font-size: var(--text-sm); color: var(--graphite); line-height: 1.45; margin: 0; }
+  .why svg { margin-top: 2px; }
+  .help { margin: 0; font-size: var(--text-sm); color: var(--graphite); line-height: 1.5; }
+
+  /* The 06 head (design 22) */
+  .head { background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl); padding: var(--space-4) var(--space-5);
+          display: flex; flex-direction: column; gap: var(--space-3); }
+  .head-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); flex-wrap: wrap; }
+  .head .t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .head .t span { font-size: var(--text-sm); color: var(--graphite); }
+  .head .t strong { font-size: var(--text-xl); font-weight: 600; }
+  .status-line { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); color: var(--graphite); }
+  .select { min-height: var(--control-h); min-width: 140px; padding: 0 var(--space-3); display: inline-flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+            border: 1px solid var(--stone); border-radius: var(--radius-md); font-size: var(--text-md); background: var(--surface); color: var(--ink); }
+  .select.is-off { background: var(--surface-2); color: var(--muted); }
+
+  /* Option B: the manuscript list (design 22) */
+  .ms { width: 100%; max-width: 300px; background: var(--surface-2); border: 1px solid var(--stone); border-radius: var(--radius-xl); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
+  .ms-row { display: flex; align-items: center; gap: var(--space-1); }
+  .ms-ch { flex: 1 1 auto; min-height: var(--control-h); display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2);
+           font-size: var(--text-md); color: var(--ink); background: transparent; border: none; border-radius: var(--radius-md); text-align: left; font-family: inherit; }
+  .ms-more { width: var(--control-h); height: var(--control-h); border: 1px solid var(--stone); background: var(--surface); border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; color: var(--ink); }
+  .ms-sec { min-height: var(--control-h); display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-5); font-size: var(--text-sm); color: var(--ink-2); }
+  .pill { font-size: var(--text-xs); border-radius: var(--radius-pill); padding: 1px 8px; border: 1px dashed var(--stone-2); color: var(--graphite); white-space: nowrap; }
+  .pill.is-draft { border: 1px solid var(--ink); color: var(--ink); }
+  .pill.is-now { border: 1px solid var(--ink); background: var(--mist); color: var(--ink); }
+  .menu { background: var(--surface); border: 1px solid var(--stone-2); border-radius: var(--radius-lg); padding: 6px; box-shadow: var(--shadow-menu); display: flex; flex-direction: column; margin-left: auto; width: 240px; }
+  .menu button { min-height: var(--control-h); border: none; background: transparent; text-align: left; padding: 0 var(--space-3); border-radius: var(--radius-sm); font-family: inherit; font-size: var(--text-md); color: var(--ink); display: flex; align-items: center; gap: var(--space-2); }
+  .menu button.is-focus { background: var(--mist); outline-offset: -2px; }
+
+  /* A dialog (dialog-sm) */
+  .dialog { width: 100%; max-width: 480px; background: var(--surface); border-radius: var(--radius-2xl); box-shadow: var(--shadow-dialog); padding: var(--space-6);
+            display: flex; flex-direction: column; gap: var(--space-4); }
+  .dialog h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+  .dialog p { margin: 0; font-size: var(--text-base); line-height: 1.5; color: var(--ink-2); }
+  .dialog .foot { display: flex; justify-content: flex-end; gap: var(--space-3); flex-wrap: wrap; }
+  .backdrop { background: var(--overlay); border-radius: var(--radius-xl); padding: var(--space-6); display: flex; justify-content: center; }
+
+  /* The cost line (22d) */
+  .cost { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); font-size: var(--text-sm); color: var(--ink-2); line-height: 1.45;
+          padding: var(--space-2) var(--space-3); background: var(--surface-2); border-radius: var(--radius-sm); }
+  .cost svg { margin-top: 2px; color: var(--graphite); }
+  .cost strong { color: var(--ink); font-weight: 600; }
+
+  /* The queue list (22d) */
+  .qlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--mist); border-radius: var(--radius-lg); }
+  .qlist li { display: grid; grid-template-columns: 32px 1fr auto; gap: var(--space-2); align-items: start; padding: var(--space-2) var(--space-3);
+              font-size: var(--text-md); line-height: 1.45; color: var(--ink-2); border-top: 1px solid var(--mist); }
+  .qlist li:first-child { border-top: none; }
+  .qlist .n { font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); padding-top: 2px; }
+  .qlist .what { min-width: 0; }
+  .qlist .what .sub { display: block; font-size: var(--text-sm); color: var(--graphite); }
+  .qlist .st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--graphite); white-space: nowrap; }
+  .qlist .st.ok { color: var(--success); }
+  .qlist .st.now { color: var(--ink); font-weight: 600; }
+  .qlist .st.bad { color: var(--danger); font-weight: 600; }
+  .qlist li.is-now { background: var(--surface-2); color: var(--ink); }
+  .qlist li.is-skip { color: var(--graphite); }
+
+  /* The Generate card (design 23) */
+  .card { background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl); padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
+  .card h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+  .card p { margin: 0; font-size: var(--text-base); line-height: 1.5; color: var(--ink-2); }
+  .card .small { font-size: var(--text-sm); color: var(--graphite); }
+  .stream { font-family: var(--font-read); font-size: var(--text-lg); line-height: var(--leading-read); color: var(--ink); padding: var(--space-2) 0; border-top: 1px solid var(--mist); }
+  .caret { display: inline-block; width: 2px; height: 1.1em; background: var(--ink); vertical-align: -3px; margin-left: 2px; }
+  .progress { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-sm); color: var(--graphite); }
+  .bar { flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--mist); position: relative; }
+  .bar span { position: absolute; left: 0; top: 0; height: 6px; border-radius: 3px; background: var(--ink); }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--stone); border-top-color: var(--ink); flex-shrink: 0; }
+
+  /* Alerts */
+  .alert { display: grid; grid-template-columns: 16px 1fr; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-lg); font-size: var(--text-md); line-height: 1.5; }
+  .alert svg { margin-top: 3px; }
+  .alert p { margin: 0; font-size: var(--text-md); }
+  .alert-error { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger); }
+  .alert-error p { color: var(--danger) !important; }
+  .alert-warning { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--ink); }
+  .alert-warning svg { color: var(--warning); }
+  .alert-warning p { color: var(--ink) !important; }
+
+  .opt { display: flex; flex-direction: column; gap: var(--space-2); }
+  .opt + .opt { padding-top: var(--space-3); border-top: 1px solid var(--mist); }
+  .panel { background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+  .nowrap { white-space: nowrap; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="layers" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></g></symbol>
+  <symbol id="warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></g></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></g></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+  <symbol id="skip" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6l7 6-7 6M14 6v12"/></g></symbol>
+  <symbol id="dots" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></g></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<main class="page">
+  <header class="page-head">
+    <span class="label">E12 fix batch 2 · item 6 · 06 Write</span>
+    <h1>Generate chapter</h1>
+    <p>One click writes every section of the open chapter that has <strong>no text yet</strong>, one at a time and in order (owner D8: a section with text is skipped). Each step is the same Generate section call as today (design 23), so each section reads the one before it and is saved as its own version. You see the cost before it starts, the progress while it runs, and you can stop at any time. It never writes the whole book.</p>
+  </header>
+
+  <!-- 1A. Where it lives (recommended) -->
+  <section class="state wide" aria-label="The button, option A">
+    <span class="label">1A · The button: in the head, next to Generate section (recommended)</span>
+    <div class="head">
+      <div class="head-top">
+        <div class="t"><span>Chapter 7 · Live check: Morning reset</span><strong>7.1 A two-minute body scan before you get up</strong></div>
+        <span class="status-line">Status <span class="select">Not started <svg width="16" height="16"><use href="#chev"/></svg></span></span>
+      </div>
+      <div class="row">
+        <button class="btn"><svg width="18" height="18"><use href="#sparkle"/></svg>Generate section</button>
+        <button class="btn is-focus" aria-describedby="h1a"><svg width="18" height="18"><use href="#layers"/></svg>Generate chapter</button>
+      </div>
+      <p class="help" id="h1a">Writes the 3 sections of this chapter that have no text, in order.</p>
+    </div>
+    <p class="caption">Shown when the open section is in a chapter (not the Introduction or the Conclusion). The help line says how many sections it would write; it is the button's description for screen readers too. Off reasons are in state 7.</p>
+  </section>
+
+  <!-- 1B. Option -->
+  <section class="state" aria-label="The button, option B">
+    <span class="label">1B · Option: in the chapter's row menu</span>
+    <div class="ms">
+      <span class="label">Manuscript</span>
+      <div class="ms-row">
+        <button class="ms-ch" aria-expanded="true"><span>7 · Live check: Morning reset</span><span class="pill">Not started</span></button>
+        <button class="ms-more is-focus" aria-haspopup="menu" aria-expanded="true" aria-label="More for chapter 7"><svg width="18" height="18"><use href="#dots"/></svg></button>
+      </div>
+      <div class="menu" role="menu"><button role="menuitem" class="is-focus"><svg width="16" height="16"><use href="#layers"/></svg>Generate empty sections (3)</button></div>
+      <div class="ms-sec"><span>7.1 A two-minute body scan…</span><span class="pill">Not started</span></div>
+      <div class="ms-sec"><span>7.2 Calm cues for the busy…</span><span class="pill">Not started</span></div>
+      <div class="ms-sec"><span>7.3 Wind down at night</span><span class="pill">Not started</span></div>
+      <div class="ms-sec"><span>7.4 Your morning plan</span><span class="pill is-draft">Draft</span></div>
+    </div>
+    <p class="caption">Works for any chapter without opening it, but it is harder to find and adds a menu to every chapter row. I recommend A.</p>
+  </section>
+
+  <!-- 2. Confirm with the cost line -->
+  <section class="state" aria-label="Confirm">
+    <span class="label">2 · Confirm, with the cost line</span>
+    <div class="backdrop">
+      <div class="dialog" role="dialog" aria-labelledby="d2">
+        <h2 id="d2">Generate chapter 7?</h2>
+        <p>The AI writes the empty sections of "Live check: Morning reset", one at a time, in order. Each one is saved as a new version. You can stop at any time.</p>
+        <ol class="qlist" aria-label="Sections to write">
+          <li><span class="n">7.1</span><span class="what">A two-minute body scan before you get up</span><span class="st">300 words</span></li>
+          <li><span class="n">7.2</span><span class="what">Calm cues for the busy first hour</span><span class="st">300 words</span></li>
+          <li><span class="n">7.3</span><span class="what">Wind down at night</span><span class="st">400 words</span></li>
+          <li class="is-skip"><span class="n">7.4</span><span class="what">Your morning plan<span class="sub">Has text, so it is skipped.</span></span><span class="st"><svg width="14" height="14"><use href="#skip"/></svg>Skipped</span></li>
+        </ol>
+        <div class="cost"><svg width="16" height="16"><use href="#info"/></svg><span><strong>3 AI calls, about 1,000 words.</strong> About $0.07 and 27,000 tokens. You have 1.21M tokens left this month.</span></div>
+        <div class="foot"><button class="btn">Cancel</button><button class="btn btn-primary is-focus"><svg width="18" height="18"><use href="#sparkle"/></svg>Generate 3 sections</button></div>
+      </div>
+    </div>
+    <p class="caption"><strong>The estimate:</strong> each section is this month's average Write call input (6,500 tokens when there was none) plus its word target × 1.7 output tokens, priced with the Settings price list ($2 and $10 a million). It is an estimate: the real cost shows in Settings. A section with no word target counts 500 words, as Generate does.</p>
+  </section>
+
+  <!-- 2b. Confirm near the month limit -->
+  <section class="state" aria-label="Confirm near the limit">
+    <span class="label">2b · Confirm: more than the tokens left</span>
+    <div class="backdrop">
+      <div class="dialog" role="dialog" aria-labelledby="d2b">
+        <h2 id="d2b">Generate chapter 7?</h2>
+        <p>The AI writes the empty sections of "Live check: Morning reset", one at a time, in order. Each one is saved as a new version. You can stop at any time.</p>
+        <div class="cost"><svg width="16" height="16"><use href="#info"/></svg><span><strong>3 AI calls, about 1,000 words.</strong> About $0.07 and 27,000 tokens.</span></div>
+        <div class="alert alert-warning" role="alert"><svg width="16" height="16"><use href="#warn"/></svg>
+          <p><strong>This may pass your monthly AI allowance.</strong> You have about 20,000 tokens left. Writing stops at the limit, and the sections written so far stay.</p></div>
+        <div class="foot"><button class="btn">Cancel</button><button class="btn btn-primary"><svg width="18" height="18"><use href="#sparkle"/></svg>Generate 3 sections</button></div>
+      </div>
+    </div>
+    <p class="caption">A warning, not a block: the server still refuses a call it cannot afford (state 6b). With no tokens left at all, the button is off with "You have used this month’s AI allowance. It resets on November 1."</p>
+  </section>
+
+  <!-- 3. Running -->
+  <section class="state wide" aria-label="Running">
+    <span class="label">3 · Running: 2 of 3</span>
+    <div class="card" aria-labelledby="c3">
+      <span class="label">Generate chapter · 2 of 3</span>
+      <ol class="qlist" aria-label="Generate chapter progress">
+        <li><span class="n">7.1</span><span class="what">A two-minute body scan before you get up</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>Written · 312 words</span></li>
+        <li class="is-now"><span class="n">7.2</span><span class="what">Calm cues for the busy first hour</span><span class="st now"><span class="spin" aria-hidden="true"></span>Writing now</span></li>
+        <li><span class="n">7.3</span><span class="what">Wind down at night</span><span class="st">Waiting</span></li>
+      </ol>
+      <h2 id="c3">Writing 7.2 Calm cues for the busy first hour</h2>
+      <div class="stream">The first hour is full of small demands. The kettle, the kids, the inbox, the commute. Your body does not need a long practice to cope with them. It needs a few cues that remind it<span class="caret" aria-hidden="true"></span></div>
+      <div class="progress"><span class="bar" aria-hidden="true"><span style="width: 40%"></span></span><span class="nowrap">≈ 120 / 300 words</span></div>
+      <div class="row"><button class="btn is-focus">Stop</button></div>
+      <p class="small">Stop ends this section's writing (its text so far is saved in Versions) and cancels the rest.</p>
+    </div>
+    <p class="caption">The card takes the place of the Generate section card (design 23). The open section follows the queue, so you watch each one being written; the editor is read only while a section is written. In the manuscript list the section being written shows "Writing…". Leaving step 06 asks first (state 8). The screen reader hears "Writing 7.2" and "7.2 written, 328 words" (polite).</p>
+  </section>
+
+  <!-- 4. Done -->
+  <section class="state" aria-label="Done">
+    <span class="label">4 · Done</span>
+    <div class="card" role="status" aria-labelledby="c4">
+      <span class="label">Generate chapter · done</span>
+      <h2 id="c4">Chapter 7 is written</h2>
+      <ol class="qlist" aria-label="Generate chapter results">
+        <li><span class="n">7.1</span><span class="what">A two-minute body scan before you get up</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>312 words</span></li>
+        <li><span class="n">7.2</span><span class="what">Calm cues for the busy first hour</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>328 words</span></li>
+        <li><span class="n">7.3</span><span class="what">Wind down at night</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>405 words</span></li>
+      </ol>
+      <p>3 sections, 1,045 words. Each is a new version with the status Draft. Next, read each one and run its AI check.</p>
+      <div class="row"><button class="btn btn-sm is-focus">Close</button></div>
+    </div>
+    <p class="caption">The last written section stays open. Close returns focus to Generate chapter. No AI check runs by itself.</p>
+  </section>
+
+  <!-- 5. Stopped by you -->
+  <section class="state" aria-label="Stopped by you">
+    <span class="label">5 · Stopped by you</span>
+    <div class="card" aria-labelledby="c5">
+      <span class="label">Generate chapter · stopped</span>
+      <h2 id="c5">Writing stopped</h2>
+      <div class="alert alert-warning" role="alert"><svg width="16" height="16"><use href="#warn"/></svg>
+        <p>The 120 words of 7.2 are saved in Versions as v1. They are not in the section yet. The tokens used so far count toward your usage.</p></div>
+      <ol class="qlist" aria-label="Generate chapter results">
+        <li><span class="n">7.1</span><span class="what">A two-minute body scan before you get up</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>312 words</span></li>
+        <li class="is-now"><span class="n">7.2</span><span class="what">Calm cues for the busy first hour<span class="sub">Partial text in Versions</span></span><span class="st now">Stopped</span></li>
+        <li><span class="n">7.3</span><span class="what">Wind down at night</span><span class="st">Not written</span></li>
+      </ol>
+      <div class="row"><button class="btn btn-sm">Generate the rest (2)</button><button class="btn btn-sm btn-text">Close</button></div>
+    </div>
+    <p class="caption">Same wording as a stopped Generate today. 7.2 still has no text of its own (a partial version is not current until "Keep partial text"), so "the rest" is 7.2 and 7.3, with a new confirm and cost line. If you keep the partial text first, 7.2 is skipped.</p>
+  </section>
+
+  <!-- 6a. Failed -->
+  <section class="state" aria-label="Failed">
+    <span class="label">6a · A section failed</span>
+    <div class="card" aria-labelledby="c6">
+      <span class="label">Generate chapter · 2 of 3</span>
+      <h2 id="c6">Writing stopped</h2>
+      <div class="alert alert-error" role="alert"><svg width="16" height="16"><use href="#x"/></svg>
+        <p><strong>The AI service did not respond in time.</strong> Your text and versions are safe. This try was not counted.</p></div>
+      <ol class="qlist" aria-label="Generate chapter results">
+        <li><span class="n">7.1</span><span class="what">A two-minute body scan before you get up</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>312 words</span></li>
+        <li class="is-now"><span class="n">7.2</span><span class="what">Calm cues for the busy first hour</span><span class="st bad"><svg width="14" height="14"><use href="#x"/></svg>Failed</span></li>
+        <li><span class="n">7.3</span><span class="what">Wind down at night</span><span class="st">Waiting</span></li>
+      </ol>
+      <div class="row"><button class="btn btn-primary btn-sm is-focus">Try again from 7.2</button><button class="btn btn-sm btn-text">Stop</button></div>
+    </div>
+    <p class="caption">Each error uses today's Generate line (design 23, write-generate). "Try again from 7.2" goes on without a new confirm; Stop keeps 7.1.</p>
+  </section>
+
+  <!-- 6b. Month limit -->
+  <section class="state" aria-label="Stopped by the month limit">
+    <span class="label">6b · Stopped: month limit</span>
+    <div class="card" aria-labelledby="c6b">
+      <span class="label">Generate chapter · 2 of 3</span>
+      <h2 id="c6b">Writing stopped</h2>
+      <div class="alert alert-warning" role="alert"><svg width="16" height="16"><use href="#warn"/></svg>
+        <p>You have used this month’s AI allowance. It resets on <span class="nowrap">November 1</span>.</p></div>
+      <ol class="qlist" aria-label="Generate chapter results">
+        <li><span class="n">7.1</span><span class="what">A two-minute body scan before you get up</span><span class="st ok"><svg width="14" height="14"><use href="#check"/></svg>312 words</span></li>
+        <li><span class="n">7.2</span><span class="what">Calm cues for the busy first hour</span><span class="st">Not sent</span></li>
+        <li><span class="n">7.3</span><span class="what">Wind down at night</span><span class="st">Not sent</span></li>
+      </ol>
+      <p class="small">The server refused 7.2 before any AI call. This refusal was not counted.</p>
+      <div class="row"><button class="btn btn-sm">Close</button></div>
+    </div>
+    <p class="caption">As Fix major (22d, 10a): no Try again.</p>
+  </section>
+
+  <!-- 7. Off -->
+  <section class="state" aria-label="Off">
+    <span class="label">7 · Off, with the reason</span>
+    <div class="panel">
+      <div class="opt">
+        <span class="label">Every section has text</span>
+        <div class="row"><button class="btn" disabled aria-describedby="w7a"><svg width="18" height="18"><use href="#layers"/></svg>Generate chapter</button></div>
+        <p class="why" id="w7a"><svg width="16" height="16"><use href="#info"/></svg><span>Every section in this chapter has text.</span></p>
+      </div>
+      <div class="opt">
+        <span class="label">Another run is going</span>
+        <div class="row"><button class="btn" disabled aria-describedby="w7b"><svg width="18" height="18"><use href="#layers"/></svg>Generate chapter</button></div>
+        <p class="why" id="w7b"><svg width="16" height="16"><use href="#info"/></svg><span>Wait for the section to finish writing.</span></p>
+      </div>
+      <div class="opt">
+        <span class="label">Improve or Fix major is open</span>
+        <p class="why"><svg width="16" height="16"><use href="#info"/></svg><span>Finish or stop Fix major first.</span></p>
+      </div>
+      <div class="opt">
+        <span class="label">Positioning unlocked · outline not approved</span>
+        <p class="why"><svg width="16" height="16"><use href="#info"/></svg><span>Lock the positioning in 03 to generate.</span></p>
+        <p class="why"><svg width="16" height="16"><use href="#info"/></svg><span>Approve the outline in 05 to generate.</span></p>
+      </div>
+      <div class="opt">
+        <span class="label">Introduction or Conclusion open</span>
+        <p class="help">No Generate chapter button: they have one section.</p>
+      </div>
+    </div>
+    <p class="caption">The reasons are today's Generate and Improve lines. While the chapter runs, Generate section, Improve and the AI check are off with "Wait for the section to finish writing."</p>
+  </section>
+
+  <!-- 8. Leaving -->
+  <section class="state" aria-label="Leaving while it runs">
+    <span class="label">8 · Leaving 06 while it runs</span>
+    <div class="backdrop">
+      <div class="dialog" role="alertdialog" aria-labelledby="d8">
+        <h2 id="d8">Stop and leave?</h2>
+        <p>The text written so far in 7.2 is saved in Versions. 7.3 is not written.</p>
+        <div class="foot"><button class="btn is-focus">Keep writing</button><button class="btn btn-primary">Stop and leave</button></div>
+      </div>
+    </div>
+    <p class="caption">Today's leave confirm, with the queue's own line. Closing the tab stops the section being written (the server keeps its text, as today) and the rest is not started.</p>
+  </section>
+</main>
+</body>
+</html>
