@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: STOP 2 (2026-10-27). Part 1 (server) is committed as d220dd2 and pushed; results are in the section "Part 1 results" at the end. Next: you review, then say "deploy", and Claude chat deploys generate v24 from d220dd2. Branch `claude/e12-fixes` from main 38a28c4.
+Status: STOP 3 (2026-10-27). Generate v24 is deployed from d220dd2. Part 2 (browser) is committed and pushed; results are in "Part 2 results" at the end, with screenshots in docs/reviews/e12-fix2-stop3/. Next: your review, then Live check A after you say "live". Branch `claude/e12-fixes`.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -258,3 +258,67 @@ Commit d220dd2 on `claude/e12-fixes`. Server only: no migration, no SQL change, 
 - `<book_so_far>` can grow by up to 6,000 characters (about +1,500 tokens a call) once the book has many written sections.
 - Together that is about **+$0.07 to $0.11 a book**, in line with the plan.
 - Check, Positioning, Title and Outline prompts lose about 4 tokens per source (the label).
+
+## Part 2 results (STOP 3, 2026-10-27)
+Browser only: no server change (generate stays v24), no migration, no AI calls, no Supabase writes.
+
+**What changed:**
+- **Item 2, Outline dialog** (`js/book-outline.js`, `css/app.css`):
+  - "Sections per chapter" is now two radio cards: "Let the AI choose for each chapter" (2 to 5 sections, as each chapter needs) and "The same for every chapter".
+  - Below them, the "Sections in each chapter" number (1 to 6) is on only for "The same for every chapter".
+  - The AI choosing is the default (D1). The dialog remembers your last choice while the page is open.
+  - It sends `sectionsPerChapter: "auto"` or the number. `AUTO_SECTIONS` is checked against the server in `tests/limits-parity.test.js`.
+- **Item 4, Needs review:**
+  - 06 Write's banner now reads: "Check it against 03 Positioning, then choose Mark as reviewed. Setting the status to Reviewed or Final also clears this mark."
+  - **Mark as reviewed** sends only `needs_review: false`, so the status stays.
+  - Setting Reviewed or Final sends `{ status, needs_review: false }`. Draft and Not started keep the mark.
+  - A failed save keeps the mark and shows an error.
+  - The outline note adds "Approving the outline clears these marks."
+  - The Export note adds how each mark clears: "Mark the section(s) as reviewed in 06 Write." and/or "Approve the outline in 05 to clear the chapter(s)."
+- **Item 7, repeats** (`js/text-checks.js`):
+  - Repeat rows are info: the gray info icon, and never counted in the tab.
+  - Headings are no longer uses.
+  - A phrase whose other words (singular or plural) are all words of the section title or of its own subheadings is ignored.
+- **Items 9 and 10, "Source not named":** a warn row, counted.
+  - It lists each source label (Show selects just the label, and the list shows it with its sentence).
+  - It also lists each sentence with a source that has no name: "another source", "the other source", "other sources", and "a/one/some source" before a reporting word ("a source of stress" is fine).
+  - The label pattern is the server's `SOURCE_LABEL`, with a parity test.
+  - The Export `strip` takes labels out of the .docx and .md.
+- **Item 11 A, "Also in another section":** a warn row, counted.
+  - It lists each sentence of 8 or more words that another section's saved text has, with where, for example "Also in 1.1 and 4.1".
+  - The other texts come from a new read, `kdp.getSectionTexts(versionIds)`, when a section opens. A failed read shows no row. A read for a section you have already left is ignored.
+  - Export adds a warning note like "ends mid-sentence", for example "1 sentence appears in more than one section, such as "…" (2.1 and 4.2).". It never blocks and needs no tick.
+
+**Found and fixed while testing (not in the plan):**
+1. **A label at the end of a section showed as "ends mid-sentence".** A section ending "…the minimum. [S3]" (as in your book) got that row and Export note. Now `ending()` ignores source labels. That is the server's rule on text without labels, since the server no longer saves labels, and a parity test runs it.
+2. **No "Ready." next to the repeat warning.** The Export summary line is neutral (the info icon, no "Ready.") while the repeated-sentence note shows. This is the same rule you set for "ends mid-sentence" at the last STOP 3.
+3. **The Export test data repeated one sentence in every section.** `tests/browser/shared/e11.js` repeated "Breathe in slowly, … settle into the chair." in all 10 sections, so the new check flagged it. The sentence now ends with the section's topic word ("…settle into the roll."), with the same word count.
+
+**Tests:**
+
+| Suite | Before | After |
+|---|---:|---:|
+| Deno generate | 317 | 317 (no server change) |
+| Deno helpers | 137 | 145 (`text-checks` +6, `export-rules` +2, `limits-parity` +1 assert) |
+| Browser write | 684 | 714 (new `t-batch2` 28, `t-checks` +2) |
+| Browser export | 75 | 91 (new `t-repeats` 16) |
+| Browser outline | 226 | 235 (`t-generate`) |
+| Other browser suites (books 12, brief 161, delete 1, pen 9, positioning 159, research 77, settings 88, title 75) | 582 | 582 |
+| **Browser total** | **1,567** | **1,622**, 0 fails, no page errors |
+
+`t-selection`'s 10 server-rule lines pass too (counted apart, as before). In `t-checks`, the typed repeat changed from "roll your shoulders" to "lift your arms", because "roll your shoulders" is now the section's own topic ("Shoulder rolls, both ways").
+
+The code checks take about 1 to 2 ms more on a 16,000-word section: a median of 13 ms before and 14 to 15 ms after, against the 30 ms limit.
+
+**Screenshots** (`docs/reviews/e12-fix2-stop3/`):
+
+| File | What it shows |
+|---|---|
+| `outline-dialog-auto-1440.png`, `-900.png` | Generate an outline: "Let the AI choose" picked, the number off |
+| `outline-dialog-same-error-1440.png`, `-900.png` | Replace the outline: "The same for every chapter", 9 is refused |
+| `outline-review-note-1440.png` | 05 with the "Needs review" note and its new last sentence |
+| `write-needs-review-1440.png`, `-900.png` | 06 banner with Mark as reviewed and Run AI check |
+| `write-checks-rows-1440.png`, `-900.png` | Checks tab: "Source not named" (Show on [S3]), "Also in another section" with "Also in 1.1 and 4.1", the repeat as info, tab count 3 |
+| `export-repeats-1440.png`, `-900.png` | Export dialog: the repeated-sentence note and the neutral summary line |
+
+**Seen, not changed:** at 900 px the page header ("PRODUCE · STEP 5 OF 11") wraps into narrow lines. It did before this batch too (`docs/reviews/e12-stop3/checks-ending-900.png`); the app has no narrow layout yet (v2).
