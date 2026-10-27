@@ -96,7 +96,7 @@ const test = async page => {
   ok(JSON.stringify(await tabName()) === JSON.stringify(['Checks, 1 to review', 'true']), `accessible name: ${JSON.stringify(await tabName())}`);
   ok(await page.getByRole('tab', { name: 'Checks, 1 to review', exact: true }).count() === 1, 'found by role and name: "Checks, 1 to review"');
   await checksTab();
-  ok((await txt('.wr-chk-group:first-child .chip-label')) === 'IN YOUR TEXT', 'group: IN YOUR TEXT');
+  ok((await txt('.wr-chk-group:first-of-type .chip-label')) === 'IN YOUR TEXT', 'group: IN YOUR TEXT');
   ok((await rowText('number')) === '"40%" has no source Add a source in 02 Research, or mark it. Show', `number row: "${await rowText('number')}"`);
   ok((await rowText('words')) === '77 of 450 words Under 80% of the target.', `words row: "${await rowText('words')}"`);
   ok(await page.$eval('[data-chk-row="words"] .wr-chk-ico', (i) => !i.classList.contains('is-warn')) && await page.$eval('[data-chk-row="number"] .wr-chk-ico', (i) => i.classList.contains('is-warn')),
@@ -156,7 +156,14 @@ const test = async page => {
   }, 'If anything pinches');
   await page.keyboard.type('When something hurts');
   await page.waitForTimeout(700);
-  ok(/Out of date\. The text, the chapter, the positioning or the voice changed since this check\./.test(await txt('.wr-chk-group:last-child')), 'typing: Out of date');
+  // E12 fix batch 2 (22e, the owner's rule): a small edit of your own keeps the check; the drift quote is gone, so it is fixed.
+  ok(!/Out of date/.test(await txt('.wr-chk-group:last-child')) && /Fixed 1 of 1 major finding/.test(await txt('.wr-chk-group:last-child')), `small edit: the check still holds: "${(await txt('.wr-chk-group:last-child')).slice(0, 120)}"`);
+  ok(/Your own edits since this check: \d+% of the words/.test(await txt('[data-chk-meter]') || '') && !(await has('[data-chk-finding="1"]')), 'the meter shows; the fixed finding is not listed');
+  ok((await tabLabel()) === 'Checks 2', `the fixed finding is not counted (claim + gap): "${await tabLabel()}"`);
+  // A bigger edit (20% of the words or more): out of date, as before.
+  await page.keyboard.type(', stop at once, rest your arms in your lap, breathe out slowly, and try again later with a much smaller and softer circle');
+  await page.waitForTimeout(700);
+  ok(/Out of date\. You changed \d+% of the words since this check\. Up to 20% keeps a check\./.test(await txt('.wr-chk-group:last-child')), `a big edit: Out of date: "${(await txt('.wr-chk-group:last-child')).slice(0, 120)}"`);
   ok(await page.$eval('[data-chk-fix="1"]', (b) => b.disabled) && /This text is no longer in the section\./.test(await txt('[data-chk-finding="1"]')), 'quote gone: Fix off with the reason');
   ok(!(await page.$eval('[data-chk-fix="0"]', (b) => b.disabled)), 'Fix still works where the quote is still in the text');
   ok(await page.$eval('[data-chk-finding="0"]', (f) => f.classList.contains('is-old')), 'out of date findings are muted');
@@ -231,12 +238,13 @@ const test = async page => {
   ok((await txt('[data-chk-area="voice"]')) === 'Voice not checked No voice set for this pen name. Add one in Pen Names to check it.', `skipped: "${await txt('[data-chk-area="voice"]')}"`);
   ok((await txt('[data-chk-area="drift"]')) === 'Drift: the AI could not point to the text. Check again.', `unclear: "${await txt('[data-chk-area="drift"]')}"`);
   ok(!/Matches/.test(await txt('.wr-panel')), 'no "Matches" anywhere');
-  ok(/Out of date\./.test(await txt('.wr-chk-group:last-child')), 'typed after the save: out of date at once');
+  // E12 fix batch 2 (22e): one word typed after the check is a small edit: the check still holds.
+  ok(!/Out of date\./.test(await txt('.wr-chk-group:last-child')) && /Your own edits since this check/.test(await txt('.wr-chk-group:last-child')), 'typed after the save: a small edit, the check still holds');
   await page.click('[data-save-version]');
   await until(() => /Saved as v6/.test((document.querySelector('[data-foot]') || {}).innerText || ''));
 
-  // 7. Errors: Try again sends the same body; the limits.
-  await page.click('.wr-chk-alert [data-chk-run]');
+  // 7. Errors: Try again sends the same body; the limits. (22e: the check still holds after one word, so Check again is in the meta line.)
+  await page.click('.wr-chk-group:last-child [data-chk-run]');
   await until(() => window.__chk.requests.length === 3);
   await reply(502, { error: 'ai_unavailable' });
   await page.waitForSelector('[data-chk-retry]', { timeout: 3000 });
@@ -253,7 +261,7 @@ const test = async page => {
   await reply(429, { error: 'monthly_limit' });
   await until(() => /AI allowance/.test((document.querySelector('.wr-chk-group:last-child') || {}).innerText || ''));
   ok(!(await has('[data-chk-retry]')), 'monthly limit: no Try again');
-  await page.click('.wr-chk-alert [data-chk-run]');
+  await page.click('.wr-chk-group:last-child [data-chk-run]');   // 22e: the check still holds, Check again is in the meta line
   await until(() => window.__chk.requests.length === 6);
   await reply(409, { error: 'run_in_progress' });
   await until(() => /being written in another tab/.test((document.querySelector('.wr-chk-group:last-child') || {}).innerText || ''));

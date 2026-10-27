@@ -758,6 +758,20 @@ window.kdp = {
     return { data: out, error: null };
   },
 
+  /**
+   * A section's used Improve suggestions (0021, RLS: own rows): the passage each
+   * changed and the version it made. 06 Write reads them to tell an AI check's
+   * own Fixes from other edits (E12 fix batch 2, design 22e).
+   */
+  async listUsedSuggestions(sectionId) {
+    const { data, error } = await window.sb
+      .from('section_suggestions')
+      .select('id, action, selection, output, version_id, used_at')
+      .eq('section_id', sectionId)
+      .not('version_id', 'is', null);
+    return { data: error ? null : (data || []), error };
+  },
+
   /** One version's text (Compare). */
   async getVersion(id) {
     const { data, error } = await window.sb

@@ -314,6 +314,15 @@ const setup = async page => {
       sg.version_id = v.id;
       return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, source: v.source });
     }
+    // E12 fix batch 2 (22e): a section's used suggestions (listUsedSuggestions).
+    if (path === '/rest/v1/section_suggestions' && method === 'GET') {
+      store.sugReads = (store.sugReads || 0) + 1;
+      if (mode('sugError')) return json(r, 500, { message: 'mock' });
+      const sid = eq('section_id');
+      const list = Object.values(store.suggestions).filter((x) => x.section_id === sid && x.version_id)
+        .map((x) => ({ id: x.id, action: x.action, selection: x.selection, output: x.output, version_id: x.version_id, used_at: x.used_at }));
+      return json(r, 200, copy(list));
+    }
     // E10.4: the last AI check of a section (0022) and the Research rows (listResearch).
     if (path === '/rest/v1/section_checks' && method === 'GET') {
       if (mode('checkLoadError')) return json(r, 500, { message: 'mock' });

@@ -65,7 +65,7 @@ deno test --allow-read tests/sentences.test.js
 deno test --allow-read tests/text-checks.test.js
 deno test --allow-read tests/section-check-key.test.js
 deno test --allow-read tests/selection-in-text.test.js
-deno test tests/finding-rules.test.js
+deno test --allow-read tests/finding-rules.test.js
 deno test --allow-read tests/export-rules.test.js
 deno test --allow-read tests/export-build.test.js
 deno test --allow-read tests/usage-rules.test.js
@@ -89,7 +89,11 @@ deno test --allow-read tests/user-name.test.js
 - `finding-rules.test.js` (G5, design 22d): severity from the type, Keep as is
   matching (type + exact quote; a gap by message on its own check, timestamps
   compared to the microsecond), what the Checks tab shows, the Fix major N
-  rule and the tab count.
+  rule and the tab count. E12 fix batch 2 (design 22e): a check's own Fixes
+  (`isCheckFix`), words changed, the owner's rule for a check that still holds
+  (`stillValid`, every case of the 22e table), the fixed findings of a still
+  valid check, the "Ready to mark Final" block (`ready`), and the AI edit list
+  against Export's and 0021.
 
 - `outline-checks.test.js`: the step 05 code checks and the shared words and
   pages helper (`js/word-budget.js`, about 250 words a page).
@@ -199,7 +203,10 @@ t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
 `write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks,
 t-timing, t-selection, t-fix, t-queue, and t-batch2 for E12 fix batch 2: Mark as reviewed and the
-status clearing Needs review, "Source not named" and "Also in another section"), for E11 `settings` (t-settings, t-footer), `export`
+status clearing Needs review, "Source not named" and "Also in another section"; t-ready for design 22e:
+"Ready to mark Final", Mark Final, the owner's rule for a check that still holds (its own Fix, small
+edits with the meter, a big edit, Generate, another Improve, Restore, a plan change, a failed read),
+"things left" with Show, no check yet, plain-text sentences), for E11 `settings` (t-settings, t-footer), `export`
 (t-export, t-cut for E12 M9: the "ends mid-sentence" note never blocks, and t-repeats for E12 fix
 batch 2: the repeated-sentence note, the Needs review hint, no `[S3]` in the .docx or .md) and `books` (t-badge),
 and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).

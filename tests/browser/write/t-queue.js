@@ -189,12 +189,14 @@ const test = async page => {
   ok((await rows())[3] === '4 Objective Under 3 words, too short to fix. Skipped', `short item: "${(await rows())[3]}"`);
   ok((await live()) === 'Item 3: no changes suggested. Item 4 skipped. Under 3 words, too short to fix. Fix major done. 1 accepted, 2 skipped, 1 with no change.', `screen reader: "${await live()}"`);
   ok((await txt('.wr-q .chip-label')) === 'FIX MAJOR · DONE' && (await txt('#wrImpTitle')) === '1 accepted, 2 skipped, 1 with no change', `done: "${await txt('#wrImpTitle')}"`);
-  ok(/Each Accept saved a new version\. Run the AI check again to see what is left\./.test(await txt('.wr-q')) && (await focused()) === 'data-q-close data-imp-focus', 'the line, focus on Close');
-  ok(/^AI CHECK AI Out of date\./.test(await ai()) && !(await has('.wr-chk-meta [data-chk-run]')), 'panel: Out of date, one Check again (in the alert)');
-  // The minor fold was opened in 6, so the folded findings show (5 major, 1 minor; item 5 kept).
-  ok((await txt('.wr-chk-fold')) === '4 more major, 1 minor (voice) Hide' && await g(() => document.querySelectorAll('[data-chk-finding].is-old').length) === 6, `panel: the first major, the rest in the fold: "${await txt('.wr-chk-fold')}"`);
+  ok(/Each Accept saved a new version\. The Checks tab shows what is left\./.test(await txt('.wr-q')) && (await focused()) === 'data-q-close data-imp-focus', 'the line, focus on Close');
+  // E12 fix batch 2 (22e, the owner's rule): the accepted item was this check's own Fix, so the check still holds.
+  ok(!/Out of date/.test(await ai()) && /Fixed \d+ of \d+ major findings/.test(await ai()), `panel: the check still holds, "Fixed N of M": "${(await ai()).slice(0, 140)}"`);
+  // The open findings show as they are (not muted); the fixed one is not listed; the minor fold was opened in 6.
+  ok((await txt('.wr-chk-fold')) === '1 minor (voice) Hide' && await g(() => document.querySelectorAll('[data-chk-finding].is-old').length) === 0, `panel: open findings, the minor fold: "${await txt('.wr-chk-fold')}"`);
+  const listed = await g(() => document.querySelectorAll('[data-chk-finding]').length);
   await page.click('[data-chk-fold="minor"]');
-  ok(await g(() => document.querySelectorAll('[data-chk-finding]').length) === 1, 'Hide: only the first major');
+  ok(await g(() => document.querySelectorAll('[data-chk-finding]').length) === listed - 1, 'Hide: the minor finding folds away');
   ok(await g(() => window.__chk.requests.length) === 0, 'no check ran by itself');
   ok(await shots('done') === false, 'done: no sideways scroll at 900 px');
   await page.click('[data-q-close]');

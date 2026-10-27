@@ -22,6 +22,12 @@
    only), with Undo in the kept list. "Fix major (N)" runs the major findings
    one at a time in Improve's card (js/write-improve.js queue).
 
+   E12 fix batch 2 (design 22e): a block at the top says whether the section
+   is ready to mark Final (js/finding-rules.js ready), with Mark Final. An old
+   check stays valid after its own Fixes and your small edits (stillValid,
+   the owner's rule): the versions since it, the used suggestions and the
+   checked text are read when needed. Sentences in the rows are plain text.
+
    const chk = kdpWriteChecks.create(host)   host: see book-write.js
    chk.panelHtml() · chk.count() · chk.open(sectionId) · chk.onInput()
    chk.loadResearch() · chk.run() · chk.refresh() · chk.handleClick(target)
@@ -33,6 +39,7 @@
   const W = kdpWords;
   const T = kdpTextChecks;
   const R = kdpFindingRules;
+  const WD = kdpWordDiff;
 
   // Same numbers as generate/lib/limits.ts CHECK and 0022 (tests/limits-parity.test.js).
   const LIMITS = { minWords: 50, maxWords: 6000 };
@@ -59,6 +66,9 @@
     const keepErr = {};      // section id → { at: finding index or kept id, text }
     let fixing = null;       // { sid, i }: the finding whose Fix opened the Improve menu (shown pressed while it is open)
     let research = null;     // listResearch data, or null (not loaded or failed)
+    const hist = {};         // section id → what changed since its saved check (22e): { state, base, checkVid, versions, sugs, checkText }
+    const lastValid = {};    // section id → { at: checked_at, v }: the last answer, kept while hist reloads (no flicker)
+    let diffMemo = { key: null, n: 0 };
     let others = { seq: 0, id: null, list: [] };   // the other sections' saved texts [{ label, text }] for section id (fix batch 2, item 11 A)
     let othersToken = 0;
     let memo = { key: null, out: null };
@@ -106,14 +116,16 @@
 
     /* ── The saved AI check ───────────────────── */
 
-    function keyNow() {
+    /** The check fingerprint now; with versionId, as if that version were current (22e: only the text changed?). */
+    function keyNow(versionId) {
       const c = cur();
       const hit = host.findSection(c.id);
-      if (!hit || !c.base) return null;
+      const vid = versionId || c.base;
+      if (!hit || !vid) return null;
       const pos = one(book().positioning) || {};
       const pen = one(book().pen_names) || {};
       return kdpSectionCheckKey({
-        versionId: c.base, kind: hit.c.kind, chapterTitle: hit.c.title, objective: hit.c.objective, sectionTitle: hit.s.title,
+        versionId: vid, kind: hit.c.kind, chapterTitle: hit.c.title, objective: hit.c.objective, sectionTitle: hit.s.title,
         lockedAt: pos.locked_at || null, penName: pen.name || null, voice: pen.voice,
         // G3 P10: the word target and the chapter's other sections, as the prompt sends them.
         wordTarget: hit.s.word_target, siblings: kdpSectionCheckKey.siblings(hit.c.kind, hit.c.sections, hit.s.id)
@@ -122,12 +134,67 @@
 
     /** The saved row of the open section, or null. */
     const row = () => (ready() && saved[cur().id] && saved[cur().id].state === 'ready' ? saved[cur().id].row : null);
-    /** Out of date: the text on screen is not the version checked, or a part of the key changed. */
-    const outOfDate = (r) => !!r && (host.dirty() || keyNow() !== r.inputs_key);
+    /** The text on screen is not the version the check read. */
+    const textChanged = (r) => !!r && (host.dirty() || cur().base !== r.version_id);
+
+    /**
+     * Does the saved check still hold for the text now? (E12 fix batch 2, the
+     * owner's rule; design 22e). Unchanged text: yes. A plan change (the
+     * fingerprint with the check's own version): no. Else the versions since
+     * the check decide, with js/finding-rules.js stillValid. Until they are read
+     * the last answer stays (or 'unknown', which counts as out of date).
+     */
+    function validity(r) {
+      const c = cur();
+      if (!r.version_id || keyNow(r.version_id) !== r.inputs_key) return { valid: false, reason: 'plan', pct: 0 };
+      if (!textChanged(r)) return { valid: true, reason: null, pct: 0 };
+      const h = hist[c.id];
+      const match = !!h && h.base === c.base && h.checkVid === r.version_id;
+      if (!match) loadHist(c.id, r);
+      if (!match || h.state !== 'ready') {
+        const last = lastValid[c.id];
+        return match && h.state === 'error' ? { valid: false, reason: 'unknown', pct: 0 }
+          : last && last.at === r.checked_at ? last.v : { valid: false, reason: 'unknown', pct: 0 };
+      }
+      const checked = h.versions.find((x) => x.id === r.version_id);
+      if (!checked) return { valid: false, reason: 'unknown', pct: 0 };
+      const sugBy = new Map(h.sugs.map((x) => [x.version_id, x]));
+      const after = h.versions.filter((x) => x.version_no > checked.version_no && !x.partial).sort((a, b) => a.version_no - b.version_no);
+      let fixWords = 0;
+      const steps = after.map((x) => {
+        const sug = sugBy.get(x.id);
+        const fixOf = !!sug && R.isCheckFix(sug, r.findings);
+        if (fixOf) fixWords += R.changedWords(WD.diff(sug.selection, sug.output));
+        return { source: x.source, fix: fixOf };
+      });
+      const key = `${h.checkText}\u0000${c.text}`;
+      if (diffMemo.key !== key) diffMemo = { key, n: R.changedWords(WD.diff(h.checkText, c.text)) };
+      const v = R.stillValid({ planSame: true, steps, changed: diffMemo.n - fixWords, words: W.count(h.checkText) });
+      lastValid[c.id] = { at: r.checked_at, v };
+      return v;
+    }
+
+    /** What changed since the check: the versions, the used suggestions and the checked text (one read each). */
+    async function loadHist(id, r) {
+      const base = cur().base;
+      hist[id] = { state: 'loading', base, checkVid: r.version_id };
+      let res;
+      try {
+        const [vs, sg, cv] = await Promise.all([kdp.getVersions(id), kdp.listUsedSuggestions(id), kdp.getVersion(r.version_id)]);
+        res = vs.error || sg.error || cv.error || !cv.data ? { error: true } : { versions: vs.data || [], sugs: sg.data || [], checkText: cv.data.content || '' };
+      } catch (err) { res = { error: err }; }
+      const h = hist[id];
+      if (!h || h.base !== base || h.checkVid !== r.version_id) return;   // a newer read took over
+      hist[id] = res.error ? { state: 'error', base, checkVid: r.version_id } : { state: 'ready', base, checkVid: r.version_id, ...res };
+      if (ready() && cur().id === id) refresh();
+    }
+
+    /** Out of date: the check no longer holds (22e). */
+    const outOfDate = (r) => !!r && !validity(r).valid;
     /** The kept rows of the open section (none while loading or after a load error: nothing is hidden then). */
     const keptRows = () => (ready() && kept[cur().id] && kept[cur().id].state === 'ready' ? kept[cur().id].rows : []);
-    /** What the tab shows for the saved check (js/finding-rules.js). */
-    const viewNow = (r) => R.view(r, keptRows(), cur().text, outOfDate(r));
+    /** What the tab shows for the saved check (js/finding-rules.js); a fixed finding of a still valid check is set apart. */
+    const viewNow = (r) => R.view(r, keptRows(), cur().text, outOfDate(r), { textChanged: textChanged(r) });
 
     async function open(id) {
       if (!id) return;
@@ -137,6 +204,9 @@
       let res;
       try { res = await kdp.getSectionCheck(id); } catch (err) { res = { error: err }; }
       saved[id] = res.error ? { state: 'error', row: null } : { state: 'ready', row: res.data || null };
+      const r = saved[id].row;
+      // 22e: the text is not the checked version: read what changed since, before the first draw.
+      if (r && r.version_id && ready() && cur().id === id && textChanged(r)) await loadHist(id, r);
       await keptLoad;
       await othersLoad;
       refresh();
@@ -397,6 +467,8 @@
       if (t.dataset.chkKeep) { keep(Number(t.dataset.chkKeep)); return true; }
       if (t.dataset.chkUndo) { undo(t.dataset.chkUndo); return true; }
       if (t.hasAttribute('data-chk-fixmajor')) { fixMajor(); return true; }
+      if (t.hasAttribute('data-chk-final')) { markFinal(); return true; }
+      if (t.dataset.chkLeft != null) { showLeft(Number(t.dataset.chkLeft)); return true; }
       if (t.dataset.chkFold) {
         const f = fold();
         f[t.dataset.chkFold] = !f[t.dataset.chkFold];
@@ -438,9 +510,9 @@
       if (focused) { const b = panel.querySelector(focused); if (b) b.focus(); }
     }
 
-    const FOCUS_ATTRS = ['data-chk-run', 'data-chk-retry', 'data-chk-reload', 'data-chk-kept-reload', 'data-chk-fixmajor'];
+    const FOCUS_ATTRS = ['data-chk-run', 'data-chk-retry', 'data-chk-reload', 'data-chk-kept-reload', 'data-chk-fixmajor', 'data-chk-final'];
     const focusKey = (el) => FOCUS_ATTRS.map((a) => (el.hasAttribute(a) ? `[${a}]` : '')).find(Boolean)
-      || ['chkFix', 'chkShow', 'chkKeep', 'chkUndo', 'chkFold'].map((k) => (el.dataset[k] != null ? `[data-${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}="${el.dataset[k]}"]` : '')).find(Boolean)
+      || ['chkFix', 'chkShow', 'chkKeep', 'chkUndo', 'chkFold', 'chkLeft'].map((k) => (el.dataset[k] != null ? `[data-${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}="${el.dataset[k]}"]` : '')).find(Boolean)
       || null;
 
     const icon = { warn: () => `<span class="wr-chk-ico is-warn">${ICON.warn(16)}</span>`, ok: () => `<span class="wr-chk-ico is-ok">${ICON.check(16)}</span>`, info: () => `<span class="wr-chk-ico">${INFO(16)}</span>` };
@@ -453,9 +525,11 @@
       const rows = out.rows.map((r) => {
         let extra = '';
         if (r.sents.length) {
+          // Plain text, without Markdown marks (owner, after Live check A); Show selects the real text.
+          const plain = (t) => esc(MD.toPlain(t).replace(/\s+/g, ' ').trim());
           const sent = (s) => (s.where
-            ? `<span class="wr-chk-sent-wrap"><span class="wr-chk-sent">${esc(s.text)}</span><span class="wr-chk-where">Also in ${esc(listWords(s.where))}</span></span>`
-            : `<span class="wr-chk-sent">${esc(s.text)}</span>`);
+            ? `<span class="wr-chk-sent-wrap"><span class="wr-chk-sent">${plain(s.text)}</span><span class="wr-chk-where">Also in ${esc(listWords(s.where))}</span></span>`
+            : `<span class="wr-chk-sent">${plain(s.text)}</span>`);
           const items = r.sents.slice(0, 10).map((s) => `<li>${sent(s)}${showBtn(s)}</li>`).join('');
           const more = r.sents.length > 10 ? `<li class="wr-chk-more">+${fmt(r.sents.length - 10)} more</li>` : '';
           extra = `<ul class="wr-chk-sents">${items}${more}</ul>`;
@@ -626,7 +700,7 @@
       return `<div class="wr-chk-head"><span class="wr-chk-gh"><h3 class="chip-label wr-chk-h" id="wrChkAi">AI CHECK</h3><span class="wr-chk-ai">AI</span></span>${right}</div>${below}`;
     }
 
-    function aiHtml() {
+    function aiHtml(opts) {
       const c = cur();
       const s = saved[c.id];
       const r = row();
@@ -656,7 +730,8 @@
       }
       if (!r) {
         if (!err) parts.push('<p class="wr-chk-help">Checks the saved version against the chapter objective, your pen name’s voice and the locked positioning.</p>');
-        parts.push(runButton(why, whyText));
+        // 22e, 3: one Run button only; the block's when it asks for the first check.
+        if (!(opts && opts.blockRuns)) parts.push(runButton(why, whyText));
         return parts.join('');
       }
       // Fix major runs (22d, 7a and 8): the queue's items only; Out of date waits for the end.
@@ -668,17 +743,132 @@
       const old = v.old;
       const ver = (c.versions || []).find((x) => x.id === r.version_id);
       const when = host.relTime(r.checked_at);
+      const val = validity(r);
       if (old) {
-        parts.push(`<div class="alert alert-warning wr-chk-alert">${CLOCK(16)}<div><p class="alert-text"><strong>Out of date.</strong> The text, the chapter, the positioning or the voice changed since this check.</p>
+        parts.push(`<div class="alert alert-warning wr-chk-alert" data-chk-stale>${CLOCK(16)}<div><p class="alert-text"><strong>Out of date.</strong> ${esc(staleText(val))}</p>
           ${why ? '' : '<div class="wr-chk-acts"><button type="button" class="btn btn-secondary btn-sm" data-chk-run>Check again</button></div>'}</div></div>`);
         parts.push(`<div class="wr-chk-meta"><span>AI check${ver ? ` of v${ver.version_no}` : ''} · ${esc(when)}</span></div>`);
       } else {
         parts.push(`<div class="wr-chk-meta"><span>AI check${ver ? ` of v${ver.version_no}` : ''} · ${esc(when)}</span>${why ? '' : '<button type="button" class="wr-chk-link" data-chk-run>Check again</button>'}</div>`);
+        if (textChanged(r)) parts.push(validHtml(v, val));
       }
       if (why && why !== 'checking') parts.push(`<p class="wr-chk-why">${why === 'positioning' ? LOCK(16) : INFO(16)}<span>${esc(whyText)}</span></p>`);
       parts.push(findingsHtml(r, v));
       parts.push(HELP);
       return parts.join('');
+    }
+
+    /** Why a check is out of date (22e, 5 and 6). */
+    function staleText(val) {
+      switch (val.reason) {
+        case 'plan': return 'The chapter, the positioning or the voice changed since this check.';
+        case 'restore': return 'You restored another version after this check.';
+        case 'generate': return 'Generate wrote text after this check.';
+        case 'improve': return 'An Improve changed the text after this check.';
+        case 'edits': return `You changed ${pctText(val.pct)} of the words since this check. Up to ${R.EDIT_LIMIT}% keeps a check.`;
+        default: return 'The text, the chapter, the positioning or the voice changed since this check.';
+      }
+    }
+
+    /** "6%", or "less than 1%" (rounded down, so a valid check never shows 20%). */
+    const pctText = (p) => (p > 0 && p < 1 ? 'less than 1%' : `${Math.floor(p)}%`);
+
+    /** A still valid check of changed text (22e, 1 and 4): "Fixed N of M" and the meter of your own edits. */
+    function validHtml(v, val) {
+      const fixed = v.fixed.filter((x) => R.severity(x.f.type) === 'major').length;
+      const all = fixed + v.major.filter((x) => x.f.quote).length;
+      const rows = [];
+      if (fixed) rows.push(`<div class="wr-crow" data-chk-fixed>${icon.ok()}<div class="wr-crow-body"><span class="wr-crow-text">Fixed ${fmt(fixed)} of ${fmt(all)} major ${all === 1 ? 'finding' : 'findings'}</span></div></div>`);
+      if (val.pct > 0) {
+        const w = Math.min(100, (val.pct / R.EDIT_LIMIT) * 100);
+        rows.push(`<div class="wr-chk-meter" data-chk-meter><span class="wr-chk-help">Your own edits since this check: ${pctText(val.pct)} of the words</span>
+          <span class="wr-chk-bar" aria-hidden="true"><span style="width: ${w.toFixed(1)}%"></span></span>
+          <span class="wr-chk-scale" aria-hidden="true"><span>0%</span><span>${R.EDIT_LIMIT}%</span></span></div>`);
+      }
+      return rows.length ? `<div class="wr-chk-valid">${rows.join('')}</div>` : '';
+    }
+
+    /** The readiness of the open section (22e), or null when there is nothing to say yet. */
+    function readiness() {
+      const c = cur();
+      const out = codeChecks();
+      const s = saved[c.id];
+      if (out.empty || running[c.id] || queueNow() || !s || s.state !== 'ready') return null;
+      const hit = host.findSection(c.id);
+      const r = s.row;
+      const v = r ? viewNow(r) : null;
+      return R.ready({
+        status: hit ? hit.s.status : null, needsReview: !!(hit && hit.s.needs_review),
+        warnRows: out.rows.filter((x) => x.kind === 'warn'), check: r ? validity(r) : null, view: v && !v.old ? v : null
+      });
+    }
+
+    /** The block at the top of the Checks tab (22e). */
+    function readyHtml(rd) {
+      if (!rd) return '';
+      const [why, whyText] = aiWhy();
+      const head = (ok, title, sub) => `<div class="wr-ready-head">${ok ? icon.ok() : icon.info()}<div class="wr-crow-body"><strong class="wr-ready-title">${esc(title)}</strong><span class="wr-crow-sub">${esc(sub)}</span></div></div>`;
+      const n = rd.left.length;
+      const list = () => `<ul class="wr-ready-left">${rd.left.map((x, k) => {
+        if (x.kind === 'nocheck') return `<li>${ICON.warn(16)}<span>${esc(x.text)}</span><button type="button" class="wr-chk-link" data-chk-run${why ? ' disabled' : ''}><span class="lbl">Run</span></button></li>`;
+        return `<li>${ICON.warn(16)}<span>${esc(x.text)}</span><button type="button" class="wr-chk-link" data-chk-left="${k}"><span class="lbl">Show</span></button></li>`;
+      }).join('')}</ul>`;
+      switch (rd.state) {
+        case 'ready':
+          return `<div class="wr-ready is-ready" role="status" data-chk-ready="ready">${head(true, 'Ready to mark Final', 'No open problems. You do not need another AI check.')}
+            <button type="button" class="btn btn-primary btn-sm wr-ready-btn" data-chk-final${host.statusLocked() ? ' disabled' : ''}>Mark Final</button></div>`;
+        case 'final':
+          return `<div class="wr-ready" role="status" data-chk-ready="final">${head(true, 'Final', 'This section is marked Final and has no open problems.')}</div>`;
+        case 'nocheck':
+          // The AI check group's own button and reason move here (one Run button only, 22e 3).
+          return `<div class="wr-ready" data-chk-ready="nocheck">${head(false, 'Run the AI check once', 'Your text has no issues. One AI check tells you if this section is ready.')}
+            ${runButton(why, whyText)}</div>`;
+        case 'stale': {
+          const r = saved[cur().id].row;
+          const reason = validity(r).reason;
+          const sub = reason === 'edits' ? 'The text changed too much since the last AI check.'
+            : reason === 'plan' ? 'The chapter, the positioning or the voice changed since the last AI check.' : 'The text changed since the last AI check.';
+          return `<div class="wr-ready" data-chk-ready="stale">${head(false, 'Check again to see if it is ready', sub)}</div>`;
+        }
+        case 'final-left':
+          return `<div class="wr-ready" data-chk-ready="final-left">${head(false, `Final, ${n === 1 ? '1 thing' : `${fmt(n)} things`} left`, `Its status stays Final. Fix ${n === 1 ? 'this' : 'these'}, or set it back to Reviewed.`)}${list()}</div>`;
+        default:
+          return `<div class="wr-ready" data-chk-ready="left">${head(false, n === 1 ? '1 thing left' : `${fmt(n)} things left`, `Fix ${n === 1 ? 'it' : 'them'} and this section is ready. You can still mark it Final now.`)}${list()}</div>`;
+      }
+    }
+
+    /** Show on a "thing left" (22e, 2): to the row, the finding, the banner or the alert. */
+    function showLeft(k) {
+      const rd = readiness();
+      const x = rd && rd.left[k];
+      if (!x) return;
+      const side = host.els() && host.els().side;
+      const main = host.els() && host.els().main;
+      if (x.kind === 'review') { const b = main && main.querySelector('[data-mark-reviewed]'); if (b) b.focus(); return; }
+      if (x.kind === 'stale') { const b = side && (side.querySelector('[data-chk-stale] [data-chk-run]') || side.querySelector('[data-chk-stale]')); if (b) b.focus(); return; }
+      if (x.kind === 'code') {
+        const row = codeChecks().rows.find((y) => y.code === x.code);
+        if (row && row.ranges.length) show(row.ranges[0].start, row.ranges[0].end);
+        return;
+      }
+      const f = row() && row().findings[x.i];
+      if (x.kind === 'major' && f && f.quote) {
+        const at = cur().text.indexOf(f.quote);
+        if (at >= 0) show(at, at + f.quote.length);
+        return;
+      }
+      if (x.kind === 'gap') { const b = side && side.querySelector(`[data-chk-keep="${x.i}"]`); if (b) b.focus(); }
+    }
+
+    /** Mark Final (22e, 1 and 8): the status select's own save. */
+    async function markFinal() {
+      if (host.statusLocked()) return;
+      const ok = await host.setStatus('final');
+      if (!ok || !ready()) return;
+      refresh();
+      host.announce('Marked Final.');
+      const sel = host.els() && host.els().main.querySelector('[data-status]');
+      if (sel) sel.focus();
     }
 
     function runButton(why, whyText) {
@@ -689,9 +879,11 @@
 
     function panelHtml() {
       if (!ready()) return '<div class="chip-label">CHECKS</div><p class="wr-soon">Open a section to check it.</p>';
+      const rd = readiness();
       return `<div class="wr-chk">
+        ${readyHtml(rd)}
         <section class="wr-chk-group" aria-labelledby="wrChkText"><h3 class="chip-label wr-chk-h" id="wrChkText">IN YOUR TEXT</h3>${codeHtml()}</section>
-        <section class="wr-chk-group" aria-labelledby="wrChkAi">${aiHtml()}</section>
+        <section class="wr-chk-group" aria-labelledby="wrChkAi">${aiHtml({ blockRuns: !!rd && rd.state === 'nocheck' })}</section>
       </div>`;
     }
 

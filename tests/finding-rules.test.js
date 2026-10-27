@@ -2,9 +2,13 @@
 // The rules of the AI check findings in 06 Write (PRODUCE gate G5, design 22d):
 // severity from the type, "Keep as is" matching (a quote across checks, a gap
 // for its own check only, timestamps to the microsecond), what the tab shows,
-// the Fix major queue (the N rule) and the tab count.
+// the Fix major queue (the N rule) and the tab count. E12 fix batch 2 (design
+// 22e): which suggestions are a check's own Fixes, the words changed, the
+// owner's rule for a check that still holds (stillValid, case by case), the
+// fixed findings of a still valid check, and the "Ready to mark Final" block.
 import { assertEquals } from "jsr:@std/assert@1";
 import "../js/finding-rules.js";
+import "../js/word-diff.js";
 
 const R = globalThis.kdpFindingRules;
 const TEXT = "Shoulder rolls ease the stiffness. Chair yoga also helps you lose weight fast. Turn your head slowly to the right. If you feel a sharp pain, stop at once and rest. This gentle yet powerful movement serves as a foundation.";
@@ -105,4 +109,112 @@ Deno.test("tabCount: code warnings + open major of a current check", () => {
   assertEquals(R.tabCount(2, v, true), 2, "out of date: warnings only");
   assertEquals(R.tabCount(0, null, false), 0);
   assertEquals(R.KEPT_MAX, 50);
+});
+
+/* ── E12 fix batch 2: Ready to mark Final (design 22e) ── */
+
+Deno.test("isCheckFix: the passage changed holds a finding's quote, or most of it", () => {
+  const fs = [DRIFT, NECK, GAP];
+  const sug = (selection) => ({ selection, output: "x", version_id: "v" });
+  // A Fix selects the quote and the sentences around it.
+  assertEquals(R.isCheckFix(sug("Shoulder rolls ease the stiffness. Chair yoga also helps you lose weight fast."), fs), true);
+  assertEquals(R.isCheckFix(sug("Chair  yoga also helps\nyou lose weight fast."), fs), true);   // spaces and lines aside
+  // Part of a quote: at least half of it.
+  assertEquals(R.isCheckFix(sug("Chair yoga also helps you lose"), fs), true);
+  assertEquals(R.isCheckFix(sug("lose weight"), fs), false);
+  // Other text, a gap (no quote), nothing.
+  assertEquals(R.isCheckFix(sug("If you feel a sharp pain, stop at once and rest."), fs), false);
+  assertEquals(R.isCheckFix(sug(""), [GAP]), false);
+  assertEquals(R.isCheckFix(null, fs), false);
+  assertEquals(R.isCheckFix(sug("Turn your head slowly to the right."), []), false);
+});
+
+Deno.test("changedWords: words added and removed; a space change is not a word", () => {
+  const D = globalThis.kdpWordDiff.diff;
+  assertEquals(R.changedWords(D("One two three four.", "One two three four.")), 0);
+  assertEquals(R.changedWords(D("One two three four.", "One two  three four.")), 0);
+  assertEquals(R.changedWords(D("One two three four.", "One two five four.")), 2);   // three out, five in
+  assertEquals(R.changedWords(D("One two.", "One two. Three four five.")), 3);
+  assertEquals(R.changedWords([]), 0);
+});
+
+Deno.test("stillValid (owner rule, 2026-10-27): every case of the 22e table", () => {
+  const ok = (o) => R.stillValid({ planSame: true, steps: [], changed: 0, words: 100, ...o });
+  const fix = { source: "custom", fix: true };
+  // A Fix only.
+  assertEquals(ok({ steps: [fix] }), { valid: true, reason: null, pct: 0 });
+  // Fix major: several Fixes, other AI actions on the quote too.
+  assertEquals(ok({ steps: [fix, { source: "shorten", fix: true }, fix] }).valid, true);
+  // A Fix plus your own edits of 10%.
+  assertEquals(ok({ steps: [fix, { source: "manual", fix: false }], changed: 10 }), { valid: true, reason: null, pct: 10 });
+  // Your own edits: 19.9% keeps it, 20% and 25% do not (also typing that is not saved yet: the same count).
+  assertEquals(ok({ changed: 19.9 }).valid, true);
+  assertEquals(ok({ changed: 20 }), { valid: false, reason: "edits", pct: 20 });
+  assertEquals(ok({ changed: 25 }).reason, "edits");
+  // Several small edits that add up past 20%: the caller passes their total.
+  assertEquals(ok({ steps: [{ source: "manual" }, { source: "manual" }, { source: "manual" }], changed: 8 + 7 + 6 }).reason, "edits");
+  // A Generate (new or continue), an Improve that is not a Fix, a Restore, the plan (voice, chapter, positioning).
+  assertEquals(ok({ steps: [fix, { source: "generate", fix: false }] }).reason, "generate");
+  assertEquals(ok({ steps: [{ source: "improve", fix: false }] }).reason, "improve");
+  assertEquals(ok({ steps: [{ source: "edit_format", fix: false }] }).reason, "improve");
+  assertEquals(ok({ steps: [{ source: "restore", fix: false }] }).reason, "restore");
+  assertEquals(ok({ planSame: false }).reason, "plan");
+  // Several reasons: the plan, Restore, Generate, Improve, then edits (22e, 6).
+  const all = [{ source: "improve" }, { source: "generate" }, { source: "restore" }];
+  assertEquals([ok({ planSame: false, steps: all, changed: 90 }).reason, ok({ steps: all, changed: 90 }).reason,
+    ok({ steps: all.slice(0, 2), changed: 90 }).reason, ok({ steps: all.slice(0, 1), changed: 90 }).reason], ["plan", "restore", "generate", "improve"]);
+  // No words in the checked version: any change is 100%. A negative total (Fixes counted twice) is 0.
+  assertEquals(ok({ words: 0, changed: 1 }).reason, "edits");
+  assertEquals(ok({ words: 0, changed: 0 }).valid, true);
+  assertEquals(ok({ changed: -5 }), { valid: true, reason: null, pct: 0 });
+  assertEquals([R.EDIT_LIMIT, R.AI_EDITS], [20, ["edit_format", "improve", "expand", "shorten", "humanize", "custom"]]);
+});
+
+Deno.test("view with textChanged: a still valid check's findings with gone quotes are fixed, not open, not counted", () => {
+  const r = row([DRIFT, NECK, VOICE, GAP]);
+  const fixedText = TEXT.replace(DRIFT.quote, "Chair yoga keeps you moving.").replace(VOICE.quote, "It is a good start.");
+  const v = R.view(r, [], fixedText, false, { textChanged: true });
+  assertEquals([idx(v.fixed), idx(v.major), idx(v.minor)], [[0, 2], [1, 3], []]);
+  assertEquals(R.tabCount(0, v, false), 2);   // NECK and the gap
+  // Without textChanged (the checked text itself) nothing moves, as before.
+  assertEquals(idx(R.view(r, [], fixedText, false).major), [1, 0, 3]);
+  // An old check never moves findings (22d, 9 shows them muted).
+  assertEquals(R.view(r, [], fixedText, true, { textChanged: true }).fixed, []);
+  // A kept finding stays hidden, not fixed.
+  assertEquals(idx(R.view(r, [kq(DRIFT)], fixedText, false, { textChanged: true }).hidden), [0]);
+});
+
+Deno.test("ready: the block's states and what is left, in order (22e)", () => {
+  const r = row([DRIFT, NECK, GAP]);
+  const v = (text) => R.view(r, [], text, false, { textChanged: true });
+  const none = TEXT.replace(DRIFT.quote, "x.").replace(NECK.quote, "y.");
+  const base = { status: "draft", needsReview: false, warnRows: [], check: { valid: true }, view: v(none) };
+  // Ready: no warning, no mark, a valid check, every major fixed or kept, the gap kept.
+  const kept = R.view(r, [kg(GAP)], none, false, { textChanged: true });
+  assertEquals(R.ready({ ...base, view: kept }), { state: "ready", left: [] });
+  // Things left, in order: Needs review, the code warnings, open majors, open gaps.
+  const all = R.ready({ ...base, needsReview: true, warnRows: [{ code: "marks", text: "1 claim needs a source" }], view: v(TEXT) });
+  assertEquals(all.state, "left");
+  assertEquals(all.left.map((x) => [x.kind, x.text]), [
+    ["review", "Needs review: written before the positioning was unlocked"], ["code", "1 claim needs a source"],
+    ["major", "2 major AI findings"], ["gap", "1 part of the objective is not covered"],
+  ]);
+  assertEquals(R.ready({ ...base, view: v(TEXT.replace(NECK.quote, "y.")) }).left.map((x) => x.text), ["1 major AI finding (drift)", "1 part of the objective is not covered"]);
+  // Minor findings never count.
+  assertEquals(R.ready({ ...base, view: R.view(row([VOICE]), [], TEXT, false, { textChanged: true }) }).state, "ready");
+  // No check yet; a check that no longer holds.
+  assertEquals(R.ready({ ...base, check: null, view: null }), { state: "nocheck", left: [{ kind: "nocheck", text: "No AI check yet" }] });
+  assertEquals(R.ready({ ...base, check: { valid: false, reason: "edits" }, view: null }).state, "stale");
+  assertEquals(R.ready({ ...base, check: null, view: null, warnRows: [{ code: "ending", text: "The section ends mid-sentence." }] }).left.map((x) => x.kind), ["code", "nocheck"]);
+  // Final: nothing left, or what is left with the status kept.
+  assertEquals(R.ready({ ...base, status: "final", view: kept }).state, "final");
+  assertEquals(R.ready({ ...base, status: "final", view: kept, warnRows: [{ code: "ending", text: "The section ends mid-sentence." }] }).state, "final-left");
+});
+
+Deno.test("AI edits: the same list as Export's AI note (js/export-rules.js) and the 0021 suggestion actions", async () => {
+  await import("../js/export-rules.js");
+  assertEquals(R.AI_EDITS, globalThis.kdpExportRules.AI_EDITS);
+  const sql = Deno.readTextFileSync(new URL("../supabase/migrations/0021_section_suggestions.sql", import.meta.url));
+  const m = sql.match(/action\s+text not null check \(action in \(([^)]*)\)\)/);
+  assertEquals(m[1].split(",").map((x) => x.trim().replace(/'/g, "")), R.AI_EDITS);
 });

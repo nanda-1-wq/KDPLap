@@ -972,7 +972,8 @@
             <p>${accepted ? `${fmt(accepted)} accepted before the stop. ` : ''}The rest were not sent. This refusal was not counted.</p>
             <div class="wr-imp-actions"><button type="button" class="btn btn-secondary btn-sm" data-q-close data-imp-focus>Close</button></div></section>`;
         }
-        const text = accepted ? 'Each Accept saved a new version. Run the AI check again to see what is left.' : 'Your text did not change.';
+        // E12 fix batch 2 (22e): the check still holds after its own Fixes, so no new check is asked for.
+        const text = accepted ? 'Each Accept saved a new version. The Checks tab shows what is left.' : 'Your text did not change.';
         return `<section class="wr-imp wr-q" role="status" aria-labelledby="wrImpTitle" data-imp-card="q-done">${L('FIX MAJOR · DONE')}
           <h3 id="wrImpTitle">${esc(summary())}</h3>
           ${qlistHtml('Fix major results')}

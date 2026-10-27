@@ -474,10 +474,12 @@
     announce(msg);
   }
 
+  /** Saves the section status (the select, and Mark Final in Checks, 22e). True when it is saved. */
   async function setStatus(value) {
-    if (!cur || cur.state !== 'ready' || locked()) return;
+    if (!cur || cur.state !== 'ready' || locked()) return false;
     const hit = findSection(cur.id);
-    if (!hit || hit.s.status === value) return;
+    if (!hit) return false;
+    if (hit.s.status === value) return true;
     const before = hit.s.status, review = hit.s.needs_review;
     // Reviewed or Final is the review: the "Needs review" mark goes too (E12 fix batch 2, item 4).
     const clears = review && (value === 'reviewed' || value === 'final');
@@ -493,11 +495,13 @@
       hit.s.needs_review = review;
       note = { kind: 'error', text: 'We couldn’t save the status. Try again.' };
       ctx.refresh();
-      if (active()) { renderManuscript(); renderHead(); renderNotes(); }
-      return;
+      if (active()) { renderManuscript(); renderHead(); renderNotes(); chk.refresh(); }
+      return false;
     }
     if (res.data && res.data.updated_at) book.updated_at = res.data.updated_at;
     ctx.refresh();
+    if (active()) chk.refresh();
+    return true;
   }
 
   /** "Mark as reviewed" (E12 fix batch 2, item 4): clears the section's "Needs review" mark; the status stays. */
@@ -521,6 +525,7 @@
     if (!active()) return;
     renderManuscript();
     renderNotes();
+    chk.refresh();
     announce('Marked as reviewed.');
     const h = els.root.querySelector('[data-sec-title]');
     if (h) h.focus();
@@ -1249,6 +1254,10 @@
       book: () => book,
       chapters: () => chapters,
       findSection,
+      // 22e: Mark Final saves the status as the select does; off when the select is.
+      // The select shows the new status (the writer did not change it there).
+      setStatus: async (v) => { const ok = await setStatus(v); if (ok && active()) renderHead(); return ok; },
+      statusLocked: () => !cur || cur.state !== 'ready' || locked(),
       // "2.3", "Introduction" or "Conclusion" (the Checks tab's "Also in", fix batch 2).
       number: (c, s) => (c.kind === 'chapter' ? `${numberOf(c)}.${c.sections.indexOf(s) + 1}` : c.kind === 'intro' ? 'Introduction' : 'Conclusion'),
       dirty,

@@ -3089,6 +3089,25 @@ div.delete-text p { margin: 0; }
 .wr-chk-sents li { min-height: var(--control-h); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-left: 2px solid var(--stone-2); padding-left: var(--space-2); }
 .wr-chk-sent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-read); font-size: var(--text-sm); color: var(--ink-2); }
 .wr-chk-more { font-size: var(--text-sm); color: var(--graphite); border-left: none !important; }
+/* Ready to mark Final (E12 fix batch 2, design 22e): the block at the top of the Checks tab. */
+.wr-ready { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--stone); border-radius: var(--radius-lg); }
+.wr-ready.is-ready { border: 2px solid var(--ink); padding: 11px; }
+.wr-ready-head { display: grid; grid-template-columns: 16px 1fr; column-gap: var(--space-2); font-size: var(--text-md); line-height: 1.45; }
+.wr-ready-head .wr-chk-ico { margin-top: 2px; }
+.wr-ready-title { font-weight: 600; }
+.wr-ready-btn { width: 100%; }
+.wr-ready-left { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--mist); }
+.wr-ready-left li { min-height: var(--control-h); display: grid; grid-template-columns: 16px 1fr auto; column-gap: var(--space-2); align-items: center;
+                    font-size: var(--text-sm); color: var(--ink-2); border-bottom: 1px solid var(--mist); }
+.wr-ready-left li > svg { color: var(--warning); }
+/* A still valid check of changed text: "Fixed N of M" and the meter of your own edits (22e, 1 and 4). */
+.wr-chk-valid { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--surface-2); border-radius: var(--radius-md); }
+.wr-chk-valid .wr-crow { font-size: var(--text-sm); }
+.wr-chk-meter { display: flex; flex-direction: column; gap: 4px; }
+.wr-chk-bar { position: relative; display: block; height: 6px; border-radius: 3px; background: var(--mist); }
+.wr-chk-bar > span { position: absolute; left: 0; top: 0; height: 6px; border-radius: 3px; background: var(--ink); }
+.wr-chk-scale { display: flex; justify-content: space-between; font-family: var(--font-label); font-size: 11px; color: var(--graphite); }
+
 /* "Also in another section": the sentence and where else it is (E12 fix batch 2, item 11 A). */
 .wr-chk-sent-wrap { min-width: 0; display: flex; flex-direction: column; padding: 2px 0; }
 .wr-chk-where { font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); }

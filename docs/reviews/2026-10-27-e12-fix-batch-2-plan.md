@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: STOP 4 (2026-10-27). Part 3 designs 22e and 23b are committed and pushed, for your design review. Results and questions are in "Part 3 results" at the end. No code yet. Branch `claude/e12-fixes`.
+Status: STOP 5 (2026-10-27). Part 4 (the 22e Ready state) is committed and pushed. Results are in "Part 4 results" at the end, with screenshots in docs/reviews/e12-fix2-stop5/. Owner answers at STOP 4: 1 A, 2 keep Mark Final, 3 keep the meter, 4 yes. Branch `claude/e12-fixes`.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -420,3 +420,37 @@ New files in `design/screens/`, built on 22c, 22d and 23 (tokens only, the 280 p
 2. **22e Mark Final button:** keep a Mark Final button in the Ready block (my pick), or point to the status select only?
 3. **22e meter:** show the 0 to 20% meter after manual edits (my pick), or text only ("Your own edits since this check: 6% of the words")?
 4. **23b after Stop:** "Generate the rest" also writes the stopped section again (my pick), unless you kept its partial text first.
+
+## Part 4 results (STOP 5, 2026-10-27)
+Browser only: no server change, no migration, no AI calls, no Supabase writes.
+
+**What changed:**
+- **`js/finding-rules.js`:** new `isCheckFix`, `changedWords`, `stillValid` (your rule) and `ready` (the block). `view()` takes `{ textChanged }`: in a still valid check, a finding whose quote is gone is "fixed", not open and not counted.
+- **`js/write-checks.js`:**
+  - the Ready block (ready, things left with Show, Run the AI check once, stale, Final, Final with things left);
+  - Mark Final;
+  - "Fixed N of M major findings" and the 0 to 20% meter;
+  - one Out of date line per reason;
+  - plain-text sentences in the rows.
+- **What the rule reads:** the versions since the check, the used suggestions (new `kdp.listUsedSuggestions`, RLS own rows) and the checked text. They are read when the text is not the checked version. Until they arrive the last answer stays; a failed read counts as out of date.
+- **`js/book-write.js`:** `setStatus` returns whether it saved, and Mark Final uses it. Status changes and Mark as reviewed refresh the block.
+
+**Changed from before (all from your rule):**
+- A small edit, or an accepted Fix, no longer makes the check "Out of date".
+- `t-checks` and `t-queue` now test that, and keep the old out-of-date cases with an edit over 20%.
+
+**Unplanned wording change:** the Fix major done line now reads "Each Accept saved a new version. The Checks tab shows what is left." (was "…Run the AI check again to see what is left."), because 22e says no new check is needed.
+
+**Seen, not changed:** the shared sentence splitter does not break before "**" (a bold sentence stays joined to the one before it). It is an existing rule shared with the server.
+
+**Tests:**
+- Helpers: 145 → 151 (`finding-rules` +6; the suite now needs `--allow-read`).
+- Generate: 317, unchanged.
+- Browser: 1,622 → 1,661, 0 fails, no page errors. write 753 (new `t-ready` 36, `t-checks` +3); the other suites are unchanged. `t-selection`'s 10 server-rule lines are counted apart.
+
+**Screenshots (`e12-fix2-stop5/`), each at 1440 and 900:**
+- `t-ready-ready`: Ready, Mark Final, "Fixed 1 of 1";
+- `t-ready-meter`: the meter after a small edit;
+- `t-ready-stale`: an edit over 20%;
+- `t-ready-left`: Needs review and a gap;
+- `t-ready-nocheck`: no check yet.
