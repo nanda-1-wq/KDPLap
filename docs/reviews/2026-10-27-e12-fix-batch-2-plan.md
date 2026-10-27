@@ -441,7 +441,9 @@ Browser only: no server change, no migration, no AI calls, no Supabase writes.
 
 **Unplanned wording change:** the Fix major done line now reads "Each Accept saved a new version. The Checks tab shows what is left." (was "…Run the AI check again to see what is left."), because 22e says no new check is needed.
 
-**Seen, not changed:** the shared sentence splitter does not break before "**" (a bold sentence stays joined to the one before it). It is an existing rule shared with the server.
+**Seen, not changed:**
+- The shared sentence splitter does not break before "**" (a bold sentence stays joined to the one before it). It is an existing rule shared with the server.
+- At 900 px, with a banner above it, the editor gets very short. In `t-ready-left-900.png` its heading overlaps the "Keep writing…" hint. The Part 2 shot `e12-fix2-stop3/write-needs-review-900.png` shows the same short editor. It is the existing narrow layout (v2), not this part.
 
 **Tests:**
 - Helpers: 145 → 151 (`finding-rules` +6; the suite now needs `--allow-read`).
