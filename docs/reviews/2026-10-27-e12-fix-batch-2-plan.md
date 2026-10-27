@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: STOP 3 (2026-10-27). Generate v24 is deployed from d220dd2. Part 2 (browser) is committed as 5995dc5 and pushed; results are in "Part 2 results" at the end, with screenshots in docs/reviews/e12-fix2-stop3/. Next: your review, then Live check A after you say "live". Branch `claude/e12-fixes`.
+Status: Live check A done (2026-10-27, test account, generate v24). Results are in "Live check A results" at the end, with screenshots in docs/reviews/e12-fix2-live/. Next: you decide; Part 3 (designs 22e and 23b) only after your OK. Branch `claude/e12-fixes`.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -322,3 +322,55 @@ The code checks take about 1 to 2 ms more on a 16,000-word section: a median of 
 | `export-repeats-1440.png`, `-900.png` | Export dialog: the repeated-sentence note and the neutral summary line |
 
 **Seen, not changed:** at 900 px the page header ("PRODUCE · STEP 5 OF 11") wraps into narrow lines. It did before this batch too (`docs/reviews/e12-stop3/checks-ending-900.png`); the app has no narrow layout yet (v2).
+
+## Live check A results (2026-10-27, test account 1e117c74, generate v24)
+**Sign-in:**
+- Before sign-in, localStorage held no saved session.
+- I signed in from `.env.test` (the values were passed by the shell, never written down or printed).
+- After sign-in, localStorage held user `1e117c74-49db-4c1e-bee6-6c324c2ecae4`. The sidebar shows "Your account", and no "@" appears on any page shot.
+- The browser session was closed after the check.
+
+**`ai_usage` max id: 290 before, 295 after.** All 5 calls are the test user's, ok and counted.
+
+| Row | Stage | In | Out | Cost |
+|---:|---|---:|---:|---:|
+| 291 | competitor_import (book 4e2dde85) | 2,512 | 302 | $0.0080 |
+| 292 | drift_check (throwaway book) | 1,539 | 78 | $0.0039 |
+| 293 | outline_ideas (throwaway book) | 1,968 | 791 | $0.0118 |
+| 294 | section_write 7.1 | 8,405 | 584 | $0.0227 |
+| 295 | section_write 7.2 | 8,524 | 591 | $0.0230 |
+| | **Total** | 22,948 | 2,346 | **$0.0694** (plan: about $0.08) |
+
+Rows 292 and 293 have no book id now: the book they were for is deleted (`on delete set null`).
+
+| Step | Expected | Result | Evidence |
+|---|---|---|---|
+| 1 | Competitor import takes the Books rank | **Pass** | Page text (the synthetic fixture) with "Best Sellers Rank: #765,893 in Books (See Top 100 in Books) #343 in College Guides #652 in Time Management" on one line → the form's BSR is **765893**. Cancelled: competitors 4 before, 4 after. |
+| 2 | Outline "Let the AI choose": 2 to 5 sections, not the same everywhere | **Pass** | The dialog opened with "Let the AI choose" picked and the number off. Result: "Outline ready: 5 chapters, 9,950 words. Word counts were scaled to your target." Sections per chapter: **3, 4, 5, 4, 4** ("Why Short Sessions Work for a Busy Life" 3, "Tie Study to Routines You Already Have" 4, "The 5, 10 and 15 Minute Study Menus" 5, "Keep Going on Busy Days" 4, "Track Progress and Build Your Own System" 4). |
+| 2 | Throwaway book deleted | **Done** | Throwaway book `995f1e5f` ("Live Check: Micro Study Habits"; Brief, 1 source "BJ Fogg, Tiny Habits (2019)", positioning; its 1 drift flag kept with a reason, no AI), deleted from its own Books menu ("Delete "Live Check: Micro Study Habits"?" listed "The Brief", "1 research note", "Positioning", "7 chapters"). After: 0 rows in books, chapters, research_sources, positioning and book_briefs; the test user has 4 books, as before. |
+| 3 | New chapter, 2 sections of 300 words, approved again | Pass | Chapter 7 "Live check: Morning reset": 7.1 "A two-minute body scan before you get up", 7.2 "Calm cues for the busy first hour" (Examples and Exercise on). Approved at 12:04:54 UTC. |
+| 3 | No `[S#]` in either section | **Pass** | 0 labels in 7.1 (320 words) and 7.2 (328 words). |
+| 3 | Sources named by citation | **Not shown** | Neither section uses a fact from a source: no source is named, and there is no "a source" or "another source" either. 0 Verify marks. The rule could not be seen at work in these two sections. |
+| 3 | No "another source" | **Pass** | None in either section. |
+| 3 | No closing sentence copied from other sections | **Pass** | 7.1 ends "A body that has been noticed, even briefly, often meets the morning with a little more ease."; 7.2 ends "Keep that one for sure." Neither is in any other section. Neither previews the next section. |
+| 3 | Input about 1,000 to 1,500 tokens more than row 222 (6,304) | **Higher** | 8,405 (+2,101) and 8,524 (+2,220). The book now has 16 other written sections in `<book_so_far>` (12 at row 222), each with a longer item. That is about +$0.004 a Write call against the plan's +$0.003. |
+| 4 | Repeat rows are info and not counted | **Pass** | Introduction: three repeat rows with the info icon ("your body is" used 5 times, "You do not need to" used 3 times, "why your body" used 3 times). The tab says "Checks 3": the mention row and two opener rows. |
+| 4 | The section's own title and subheading phrases are not flagged | **Pass** | Ignored now: 2.1 "A two-minute check-in to read your body": "the check-in" (used 7 times); 2.2 "Finding your safe spot…": "your safe spot" (4 times); 4.2 "Soothing the pelvic floor and belly": "the pelvic floor" (3 times); 3.1: "into the floor" (3 times, a subheading word). 2.1's Checks tab has no repeat row. |
+| 4 | Typed `[S3]` and "another source" show "Source not named" | **Pass** | Typed in 7.2: "…You can always do more than the minimum. [S3] Another source suggests starting small." Row: "Source not named · Name the author or the title, or cut the label." with "You can always do more than the minimum. [S3]" and "Another source suggests starting small." Show selects just "[S3]". |
+| 4 | A copied sentence shows "Also in another section" | **Pass** | Typed 7.1's last sentence into 7.2: "1 sentence is also in another section … A body that has been noticed, even briefly, often meets the morning with a little more ease. Also in 7.1". Tab: "Checks 2". |
+| 4 | Mark as reviewed clears a Needs review mark | **Pass** | The Introduction (Final, marked by the old unlock): the banner showed the new text. Mark as reviewed made the banner and the pill go, and the status stayed **Final**: before this fix that mark could never clear, because the status was already Final. Book sections with the mark: 12 → 11. |
+| 4 | Export: no `[S3]` in the .docx, the repeat note | **Pass** | 7.2 was saved as v2 with the typed text, then exported (open-marks box ticked: the book has 82 old v15 marks). The .docx text has no "[S3]" and no `[S…]` label at all, and the sentence is kept: "…You can always do more than the minimum. Another source suggests starting small." Notes: "Needs review: 1.1, 1.2, 2.1, 2.2, 3.1, 3.2, 4.1, 4.2, 5.1, 5.2 and Conclusion. … Mark the sections as reviewed in 06 Write." and "4 sentences appear in more than one section, such as "Breathe in through your nose for a count of four." (3.1, 4.2 and 6.2)." |
+| 4 | Clean-up | Done | 7.2 restored to its generated text: v3 = v1, no "[S3]", no draft. v2 (the typed test) stays in Versions, as every version does. |
+
+**What the live text showed (not planned checks):**
+1. **The same steps taught again.** 7.1 says "It is the same check-in you learned earlier in the book, made smaller and slower", but still copies two steps word for word: "**Feel your contact points.** Notice where your body meets the bed." (also in 6.4) and "**Scan from the top down.** Start with your forehead and eyes." (also in 2.1). The new "Also in another section" row catches both. The richer `<book_so_far>` (item 11 B) did not stop it. Its Items part holds only the first 6 words of each list item.
+2. **The example got its own subheading.** 7.2 has "## A short example" over its example, which the E12 step 2 rule ("Do not give the example its own subheading") forbids. The example itself has no name, age or job.
+3. **Real repeats in the test book.** "Breathe in through your nose for a count of four." is in 3.1, 4.2 and 6.2. Export now reports 4 such sentences.
+4. **Raw Markdown in the Checks list.** The sentence list shows raw Markdown ("**Feel your contact points.**"). The older rows (marks, mention) show it the same way, so this is not new.
+
+**State after the check:**
+- Test book 4e2dde85 has a new chapter 7 "Live check: Morning reset". Its 7.1 and 7.2 have writing, so the chapter cannot be deleted and stays.
+- The Introduction is no longer marked "Needs review".
+- There is 1 new export row (the .docx check).
+- The throwaway book is gone.
+- Nothing on your account was read through the app or changed. The only reads beyond the test user were `max(id)` on `ai_usage`, and 5 rows of it, all the test user's.
