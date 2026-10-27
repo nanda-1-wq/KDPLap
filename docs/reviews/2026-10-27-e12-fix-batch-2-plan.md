@@ -456,3 +456,11 @@ Browser only: no server change, no migration, no AI calls, no Supabase writes.
 - `t-ready-stale`: an edit over 20%;
 - `t-ready-left`: Needs review and a gap;
 - `t-ready-nocheck`: no check yet.
+
+## Before Part 5 (owner, STOP 5 approved, 2026-10-27)
+- **The "40%" sentence in `t-ready-ready-1440.png`.** `t-ready.js` gives Research a source with the number ("In a small trial, shoulder rolls cut neck pain by 40%.", citation "Neck Trial, 2021"), so "In your text" is clean there. A new step 0 proves the reverse in the page: with no source, the row reads ""40%" has no source", and the block says "1 thing left" with that row, never Ready. `t-ready` went from 36 to 38 checks.
+- **Security review** of the whole `claude/e12-fixes` diff against main 38a28c4 (the automatic review of 6c53238 had not run, HTTP 429): **no findings.**
+  - Every new HTML sink escapes its text with `esc`, or holds only constants and numbers.
+  - The new reads (`getSectionTexts`, `listUsedSuggestions`, the server's `soFar` texts) run as the user, under RLS "select own". There is no new service role use.
+  - `parseInput` accepts "auto" only as an exact match.
+  - No secrets and no other users' data are added, and nothing new is logged.

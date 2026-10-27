@@ -71,13 +71,22 @@ const test = async page => {
   };
   await page.setViewportSize({ width: 1440, height: 960 });
 
-  // The section: 4.2 Shoulder rolls (design 22, v3). Its one number is in Research, so "In your text" is clean.
-  st.research.sources = [{ id: 'a1000000-0000-4000-8000-000000000001', kind: 'source', body: 'In a small trial, shoulder rolls cut neck pain by 40%.', citation: 'Neck Trial, 2021', created_at: new Date().toISOString() }];
   const OBJ_Q = 'If anything pinches, make the circle smaller.';
   const OBJ = { type: 'objective', message: 'The safety note comes after the steps. Move it before the first roll.', quote: OBJ_Q };
   const VOICE = { type: 'voice', message: 'Long and formal.', quote: 'Keep your neck long and your *chin* level.' };
   const GAP = { type: 'objective', message: 'The title promises both ways, but the text never shows the forward roll.', quote: '' };
   await open(W1);
+  await checkNow(st.s42, [OBJ, VOICE]);
+
+  // 0. A number with no source is a thing left: "Ready" never shows while it is open (owner, STOP 5).
+  await checkNow(st.s42, [VOICE]);
+  await open(W1, st.s42);
+  ok(/"40%" has no source/.test(await txt('[data-chk-row="number"]') || '') && (await state()) === 'left'
+    && (await block()) === '1 thing left Fix it and this section is ready. You can still mark it Final now. "40%" has no source Show', `no source: ${await block()}`);
+  // The section's one number is in Research from here on, so "In your text" is clean.
+  st.research.sources = [{ id: 'a1000000-0000-4000-8000-000000000001', kind: 'source', body: 'In a small trial, shoulder rolls cut neck pain by 40%.', citation: 'Neck Trial, 2021', created_at: new Date().toISOString() }];
+  await open(W1, st.s42);
+  ok((await state()) === 'ready' && !(await has('[data-chk-row="number"]')), `with the source in Research: ${await state()}`);
   await checkNow(st.s42, [OBJ, VOICE]);
 
   // 1. Almost: one major finding left (22e, 2); Show selects its quote; the tab counts it.
