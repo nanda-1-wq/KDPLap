@@ -49,8 +49,8 @@ export type WriteContext = PositioningContext & {
   run: { state: string; heartbeat_at: string; started_at: string } | null;
   /** The book's pen name (section_improve: a name the notes never flag, decision B). */
   penName?: string | null;
-  /** section_write only (E12 M8): the other sections with saved text, in reading order, with their "## " subheadings. */
-  soFar?: { sectionId: string; headings: string[] }[];
+  /** section_write only (E12 M8; fix batch 2, item 11 B): the other sections with saved text, in reading order, with that text. */
+  soFar?: { sectionId: string; text: string }[];
 };
 
 /** Where the section is: its chapter, its number ("4.2"), the chapter number, the other sections. */
@@ -180,8 +180,10 @@ Content:
 - Follow the locked positioning: its reader, reader promise and approach. No new audience, goal or angle that the Brief, the research and the positioning do not have. Do not copy the reader promise word for word.
 - If <section_so_far> has text, continue right after it. If it stops in the middle of a sentence, finish that sentence first. Do not repeat or sum up what it says, and do not reuse the subheadings in <headings_so_far>.
 - If <section_so_far> is empty, start with a new sentence of your own. Never finish a sentence from <previous_section_end>, and do not repeat it.
-- <book_so_far> lists the other written sections of the book with their subheadings. Do not repeat advice, tips or subheadings it shows.
+- <book_so_far> lists the other written sections of the book: their subheadings, how they end and open, the sources they name and their list items. Do not repeat advice, tips or subheadings it shows.
 - If you use a practice from <book_so_far>, name it and refer back to it in one sentence. Do not teach it again.
+- Do not reuse an opening or closing sentence that <book_so_far> shows, or one close to it.
+- If <book_so_far> names a source, the reader has already met it: refer back to it in one sentence, do not explain it again.
 - ${NO_NUMBERS} Do not end with a preview of the next section.
 - If <section> says examples: yes, add one short, concrete example: a situation, or "a reader who...". Never give a person a name, an age or a job. Do not give the example its own subheading. If it says examples: no, add no example story; a short "for example" inside a sentence is fine.
 - If <section> says exercise: yes, end with a short exercise for the reader.
@@ -189,6 +191,9 @@ Content:
 
 Facts:
 - Take facts, numbers, studies and quotes only from <brief> and <research>. Never invent a study, a statistic, a quote, a name, a date or a result.
+- When you use a fact from a <source>, name it the way its <citation> does: the author, or the book, study or website. Never write "a source", "another source", "one source" or "research suggests" without a name.
+- A <source kind="note"> is the author's own knowledge: say it in your own words and never call it a source.
+- Never write a reference mark such as [S3] or [1].
 - Practical steps and advice are fine. Counts of the book's own parts are fine (5 times, 3 steps, Week 2).
 - Mark every sentence that states a number, a study or a fact about the world that <brief> and <research> do not support: how the body, the mind, money or the law works, what most people do or feel, or what research shows. Write " ${MARKER}" right after the sentence's last punctuation mark. Do not mark advice, or a sentence that a <source> supports.
   Mark: "Slow breathing lowers your heart rate within a minute." when no source says so.
@@ -273,22 +278,73 @@ export function completeEnd(md: string): string {
   return lines.join("\n").replace(/\s+$/, "");
 }
 
+/** A source's name as the author will see it in the text: its citation up to the first comma, period, colon, semicolon or bracket. */
+function citationLead(citation: string | null): string {
+  return oneLine(str(citation).split(/[,.;:()[\]]|\s[-–—]\s/)[0], 60);
+}
+
+const escapeRe = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** w is in t as whole words: no letter or digit right before or after it. */
+const hasWords = (t: string, w: string) => new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRe(w)}(?:$|[^\\p{L}\\p{N}])`, "iu").test(t);
+
+/** The names of the author's sources that a text uses: the lead of the citation, or its last word (a surname, "Fogg") when that is capitalized. */
+export function namedSources(text: string, sources: PositioningContext["sources"]): string[] {
+  const out: string[] = [];
+  for (const s of sources) {
+    if (s.kind !== "source") continue;
+    const lead = citationLead(s.citation);
+    if (lead.length < 3 || out.includes(lead)) continue;
+    const last = lead.split(/\s+/).pop() ?? "";
+    if (hasWords(text, lead) || (/^\p{Lu}\p{L}{3,}$/u.test(last) && hasWords(text, last))) out.push(lead);
+  }
+  return out;
+}
+
+const plain = (t: string) => oneLine(t.split(MARKER).join("").replace(/\*+/g, ""), Infinity);
+
 /**
- * <book_so_far> (E12 M8): the other sections with saved text, as "Title:
- * heading; heading" items (each at most WRITE.soFarItemChars). The nearest
- * sections in reading order come first until WRITE.soFarChars, then the
- * items are put back in reading order.
+ * One <book_so_far> item (fix batch 2, item 11 B): "Title: heading; heading |
+ * Ends: "…" | Opens: "…" | Names: … | Items: …", most useful first, each part
+ * cut at a word, the whole at most WRITE.soFarItemChars. Opens and Ends are
+ * the first and last sentences of the paragraphs (a cut end is cut back
+ * first); Names are the author's sources the text names; Items are the first
+ * words of each list item. Verify marks, ** and source labels are left out.
+ */
+export function soFarItem(title: string, text: string, sources: PositioningContext["sources"]): string {
+  const md = completeEnd(stripSourceLabels(String(text || "")));
+  const lines = md.split("\n").map((l) => l.trim()).filter((l) => l && l.split(MARKER).join("").trim());
+  const paras = lines.filter((l) => !/^#{1,6}\s/.test(l) && !/^(?:[-+*]|[0-9]{1,9}[.)])\s/.test(l));
+  const first = paras.length ? plain(sentencesOf(paras[0])[0] ?? "") : "";
+  const lastLine = paras.length ? sentencesOf(paras[paras.length - 1]).map(plain).filter(Boolean) : [];
+  const last = lastLine.length ? lastLine[lastLine.length - 1] : "";
+  const items = lines.filter((l) => /^(?:[-+*]|[0-9]{1,9}[.)])\s/.test(l))
+    .map((l) => plain(l.replace(/^(?:[-+*]|[0-9]{1,9}[.)])\s+/, "")).split(/\s+/).slice(0, 6).join(" ").replace(/[.,;:!?]+$/, ""))
+    .filter(Boolean);
+  const heads = headingsIn(md).map(plain);
+  const parts = [cutWords(heads.length ? `${title}: ${heads.join("; ")}` : title, 200)];
+  if (last) parts.push(`Ends: "${cutWords(last, 160)}"`);
+  if (first && first !== last) parts.push(`Opens: "${cutWords(first, 160)}"`);
+  const names = namedSources(md, sources);
+  if (names.length) parts.push(`Names: ${cutWords(names.join("; "), 120)}`);
+  if (items.length) parts.push(`Items: ${cutWords(items.join("; "), 200)}`);
+  return cutWords(parts.join(" | "), WRITE.soFarItemChars);
+}
+
+/**
+ * <book_so_far> (E12 M8; fix batch 2, item 11 B): the other sections with
+ * saved text, one soFarItem each. The nearest sections in reading order come
+ * first until WRITE.soFarChars, then the items are put back in reading order.
  */
 export function bookSoFar(ctx: WriteContext): string {
   const order = ctx.outline.flatMap((c) => c.sections.map((s) => ({ s, c })));
   const at = order.findIndex((x) => x.s.id === ctx.sectionId);
   const items = (ctx.soFar ?? [])
-    .map((w) => ({ i: order.findIndex((x) => x.s.id === w.sectionId), headings: w.headings }))
-    .filter((w) => w.i >= 0 && w.i !== at)
+    .map((w) => ({ i: order.findIndex((x) => x.s.id === w.sectionId), text: w.text }))
+    .filter((w) => w.i >= 0 && w.i !== at && str(w.text))
     .map((w) => {
       const { s, c } = order[w.i];
       const title = str(s.title) || (c.kind === "intro" ? "Introduction" : c.kind === "conclusion" ? "Conclusion" : "Untitled section");
-      return { i: w.i, text: cutWords(oneLine(w.headings.length ? `${title}: ${w.headings.join("; ")}` : title, Infinity), WRITE.soFarItemChars) };
+      return { i: w.i, text: soFarItem(title, w.text, ctx.sources) };
     })
     .sort((a, b) => Math.abs(a.i - at) - Math.abs(b.i - at) || a.i - b.i);
   const kept: typeof items = [];
@@ -309,11 +365,12 @@ export function writeUserMessage(ctx: WriteContext, aim: number): string {
     `<chapter number="${i + 1}"><title>${asData(str(c.title))}</title><objective>${asData(str(c.objective))}</objective></chapter>`);
   const c = loc.chapter;
   const isLast = loc.index === c.sections.length - 1;
-  const own = ctx.current ? ctx.current.content : "";
+  // Fix batch 2, item 9: old text may hold source labels; the AI never sees them.
+  const own = ctx.current ? stripSourceLabels(ctx.current.content) : "";
   const soFar = tailText(own, WRITE.ownTailChars);
   const heads = headingsIn(own);
   // M4: never hand the AI half a sentence to finish (a stopped Generate in the previous section).
-  const prev = tailText(completeEnd(ctx.previous), WRITE.previousChars);
+  const prev = tailText(completeEnd(stripSourceLabels(ctx.previous)), WRITE.previousChars);
   const hasText = !!soFar;
   return [
     ...withoutShortVoice(briefAndResearch(ctx)),
@@ -381,7 +438,24 @@ export function cleanSubset(text: string, title: string | null): string {
   // Drop a first line that repeats the section title (with or without "## ").
   const first = lines.findIndex((l) => l.trim());
   if (first >= 0 && title && lines[first].replace(/^##\s+/, "").replace(/[*_]/g, "").trim().toLowerCase() === title.trim().toLowerCase()) lines.splice(first, 1);
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return stripSourceLabels(lines.join("\n")).replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
+ * Source labels the AI may still write (fix batch 2, item 9): "[S3]", "[S3, S5]",
+ * "[S3; S4]", "[S3-S5]", "(S2)", with the spaces before them. "[Verify: no
+ * source]" is never one. js/text-checks.js has the same pattern.
+ */
+export const SOURCE_LABEL = /[ \t]*[[(]S\d{1,3}(?:[ \t]*[,;–-][ \t]*S?\d{1,3})*[\])]/g;
+
+/** The text without source labels. A changed line keeps its indent, and loses the spaces a label leaves at its start or end. */
+export function stripSourceLabels(md: string): string {
+  return String(md || "").split("\n").map((l) => {
+    const out = l.replace(SOURCE_LABEL, "");
+    if (out === l) return l;
+    const lead = l.match(/^[ \t]*/)![0];
+    return lead + out.slice(lead.length).replace(/^[ \t]+/, "").replace(/[ \t]+$/, "");
+  }).join("\n");
 }
 
 /**

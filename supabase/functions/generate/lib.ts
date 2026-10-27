@@ -15,7 +15,7 @@
 ═══════════════════════════════════════════════════ */
 
 export {
-  ALLOWED_ORIGINS, BODY_BYTES, BRIEF_MAX, CALLS_PER_MINUTE, CHECK, CHECK_TYPES, type CheckType, COPY_MIN_CHARS, corsHeaders, DEFAULT_MONTHLY_LIMIT, ERROR_STATUS, type ErrorCode, type GenerateInput, IMPROVE, IMPROVE_ACTIONS, IMPROVE_GROWTH, type ImproveAction, limitError, MAX_AUTHOR_CHARS, MAX_BIO_CHARS, MAX_BODY_BYTES, MAX_BOOKS, MAX_BSR, MAX_COMPETITORS, MAX_EXAMPLE_CHARS, MAX_FINDING_QUOTE, MAX_FINDING_WHY, MAX_FINDINGS, MAX_FLAG_QUOTE, MAX_FLAG_WHY, MAX_FLAGS, MAX_INSIGHT_CHARS, MAX_INSIGHTS, MAX_KEPT_REASON, MAX_PAGE_CHARS, MAX_PROMPT_BOOKS, MAX_PROMPT_SOURCE_CHARS, MAX_PROMPT_SOURCES, MAX_REVIEW_BOX, MAX_REVIEWS, MAX_SOURCE_BODY, MAX_TITLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, MAX_TOC, MAX_TOKENS, MAX_TYPE_LABEL, MAX_UNSOURCED, DEFAULT_CHAPTERS, DEFAULT_OUTLINE_WORDS, LENGTH_RANGES, MAX_PROMPT_TOC_CHARS, OUTLINE_MAX, SECTIONS_PER_CHAPTER, MAX_IMPORT_REVIEWS, MIN_PAGE_CHARS, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MODELS, monthStartUtc, parseInput, POS_LIST_MAX, POS_TEXT_MAX, POSITIONING_FIELDS, type PositioningField, type Stage, RUN_STALE, SECTION_MAX_CHARS, STAGES, TIMEOUT_MS, TITLE_IDEAS_PER_CALL, TITLE_MAX, WRITE, WRITE_TIMING,
+  ALLOWED_ORIGINS, AUTO_SECTIONS, BODY_BYTES, BRIEF_MAX, CALLS_PER_MINUTE, CHECK, CHECK_TYPES, type CheckType, COPY_MIN_CHARS, corsHeaders, DEFAULT_MONTHLY_LIMIT, ERROR_STATUS, type ErrorCode, type GenerateInput, IMPROVE, IMPROVE_ACTIONS, IMPROVE_GROWTH, type ImproveAction, limitError, MAX_AUTHOR_CHARS, MAX_BIO_CHARS, MAX_BODY_BYTES, MAX_BOOKS, MAX_BSR, MAX_COMPETITORS, MAX_EXAMPLE_CHARS, MAX_FINDING_QUOTE, MAX_FINDING_WHY, MAX_FINDINGS, MAX_FLAG_QUOTE, MAX_FLAG_WHY, MAX_FLAGS, MAX_INSIGHT_CHARS, MAX_INSIGHTS, MAX_KEPT_REASON, MAX_PAGE_CHARS, MAX_PROMPT_BOOKS, MAX_PROMPT_SOURCE_CHARS, MAX_PROMPT_SOURCES, MAX_REVIEW_BOX, MAX_REVIEWS, MAX_SOURCE_BODY, MAX_TITLE_CHARS, MAX_TITLE_EXAMPLES, MAX_TITLE_KEYWORDS, MAX_TITLE_OPTIONS, MAX_TITLE_REASON, MAX_TOC, MAX_TOKENS, MAX_TYPE_LABEL, MAX_UNSOURCED, DEFAULT_CHAPTERS, DEFAULT_OUTLINE_WORDS, LENGTH_RANGES, MAX_PROMPT_TOC_CHARS, OUTLINE_MAX, SECTIONS_PER_CHAPTER, MAX_IMPORT_REVIEWS, MIN_PAGE_CHARS, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MODELS, monthStartUtc, parseInput, POS_LIST_MAX, POS_TEXT_MAX, POSITIONING_FIELDS, type PositioningField, type Stage, RUN_STALE, SECTION_MAX_CHARS, STAGES, TIMEOUT_MS, TITLE_IDEAS_PER_CALL, TITLE_MAX, WRITE, WRITE_TIMING,
 } from "./lib/limits.ts";
 export {
   asData, BOOK_TYPES, bookTypeText, type Outcome, readVoice, wordCount,
@@ -24,7 +24,7 @@ export {
   claimNumbers, MARKER, markUnsourced, numbersIn, sentencesOf, unsourcedList, unsourcedNumbers, withoutFigures,
 } from "./lib/numbers.ts";
 export {
-  COMPETITOR_SCHEMA, COMPETITOR_SYSTEM, competitorUserMessage, type ImportedCompetitor, interpretCompetitorImport,
+  COMPETITOR_SCHEMA, COMPETITOR_SYSTEM, competitorUserMessage, type ImportedCompetitor, interpretCompetitorImport, pageRanks,
 } from "./lib/competitor_import.ts";
 export {
   BIO_SCHEMA, BIO_SYSTEM, bioUserMessage, hasAnyFact, interpretBio, type PenRow, readFacts,
@@ -57,7 +57,7 @@ export {
   FINDING_KINDS, type FindingKind, interpretOutlineCheck, keyHash, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type OutlineCheckContext, outlineCheckKnown, outlineCheckUserMessage, type OutlineFinding, outlineKey, type OutlineRow,
 } from "./lib/outline_check.ts";
 export {
-  bookSoFar, capText, cleanSubset, completeEnd, cutText, endsMidSentence, estimateTokens, exampleIndex, FORMAT, headingsIn, locateSection, mdWords, NO_NUMBERS, POINT_OF_VIEW,
+  bookSoFar, capText, cleanSubset, completeEnd, namedSources, soFarItem, SOURCE_LABEL, stripSourceLabels, cutText, endsMidSentence, estimateTokens, exampleIndex, FORMAT, headingsIn, locateSection, mdWords, NO_NUMBERS, POINT_OF_VIEW,
   runIsFresh, STYLE, tailText, WRITE_SYSTEM, type WriteChapterRow, type WriteContext, writeAim, writeKnown, writeRequest, type WriteSectionRow, writeUserMessage, writeVoice,
 } from "./lib/section_write.ts";
 export {

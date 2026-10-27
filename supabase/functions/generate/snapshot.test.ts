@@ -27,6 +27,8 @@ const jobs: [string, L.Job][] = [
   ["outline_ideas", { stage: "outline_ideas", ctx: outlineCtx(), per: 3, target: L.outlineTarget(outlineCtx().plan), chapters: 8 }],
   ["outline_check", { stage: "outline_check", ctx: outlineCheckCtx(), chapters: outlineRows().filter((c) => c.kind === "chapter"), key: L.outlineKey(outlineRows(), LOCKED.locked_at) }],
   ["outline_ideas (AI picks, 1 section)", { stage: "outline_ideas", ctx: outlineCtx({ plan: { length_range: null, target_words: null, chapter_count: null } }), per: 1, target: L.outlineTarget({ length_range: null, target_words: null, chapter_count: null }), chapters: null }],
+  // E12 fix batch 2, item 2: "Let the AI choose for each chapter".
+  ["outline_ideas (auto sections)", { stage: "outline_ideas", ctx: outlineCtx(), per: "auto", target: L.outlineTarget(outlineCtx().plan), chapters: 8 }],
 ];
 
 Deno.test("snapshot: buildRequest for every stage", async (t) => {
@@ -190,6 +192,7 @@ const cases: [string, Setup, () => Request][] = [
 
   // outline_ideas (E9.1)
   ["outline_ideas success", { provider: outlineReply() }, () => post(oid)],
+  ["outline_ideas auto success", { provider: outlineReply() }, () => post({ ...oid, sectionsPerChapter: "auto" })],
   ["outline_ideas rescaled", { outline: outlineCtx({ plan: { length_range: null, target_words: 15000, chapter_count: 8 } }), provider: outlineReply() }, () => post(oid)],
   ["outline_ideas not locked", { outline: outlineCtx({ positioning: posRow() }) }, () => post(oid)],
   ["outline_ideas has writing", { outline: outlineCtx({ hasWriting: true }) }, () => post(oid)],

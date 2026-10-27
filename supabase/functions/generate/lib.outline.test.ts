@@ -75,8 +75,8 @@ Deno.test("outline prompt: competitor contents oldest first, at most 12,000 char
 });
 
 const ctx = outlineCtx();
-const job = (per = 3, c = ctx) => ({ stage: "outline_ideas" as const, ctx: c, per, target: L.outlineTarget(c.plan), chapters: c.plan.chapter_count });
-const read = (out: unknown, per = 3) => L.interpretJob(job(per), true,
+const job = (per: number | "auto" = 3, c = ctx) => ({ stage: "outline_ideas" as const, ctx: c, per, target: L.outlineTarget(c.plan), chapters: c.plan.chapter_count });
+const read = (out: unknown, per: number | "auto" = 3) => L.interpretJob(job(per), true,
   { stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: JSON.stringify(out) }] });
 
 Deno.test("outline reply: numbering is taken off titles, but a title that starts with a number keeps it", () => {
@@ -131,4 +131,26 @@ Deno.test("outlineHasWriting: any section with has_writing true (the 0020 rule, 
   assertEquals(L.outlineHasWriting(rows([[false], [false, true]])), true);
   assertEquals(L.outlineHasWriting(rows([[undefined]])), false);   // an older row without the key
   assertEquals(L.outlineHasWriting([{ sections: null }]), false);
+});
+
+Deno.test("outline auto (E12 fix batch 2, item 2): the last line asks for 2 to 5 sections as each chapter needs", () => {
+  const last = (per: number | "auto") => L.outlineUserMessage(ctx, per, L.outlineTarget(ctx.plan), ctx.plan.chapter_count).split("\n").pop()!;
+  assertEquals(L.AUTO_SECTIONS, { min: 2, max: 5 });
+  assertEquals(last("auto"), "Write 8 chapters. Give each chapter 2 to 5 sections, as many as it needs: fewer for one simple idea, more for a chapter that teaches several steps. Aim for about 10,000 words in all, with the Introduction and the Conclusion. Follow the rules.");
+  // The number path is unchanged.
+  assertEquals(last(3), "Write 8 chapters with 3 sections each. Aim for about 10,000 words in all, with the Introduction and the Conclusion. Follow the rules.");
+  assertEquals(last(1).startsWith("Write 8 chapters with 1 section each."), true);
+});
+
+Deno.test("outline auto: sections past 5 are cut, a chapter with 1 to 5 keeps them all (owner D2)", () => {
+  const out = structuredClone(OUTLINE_OUT);
+  const secs = (n: number) => Array.from({ length: n }, (_, i) => ({ title: `Part ${String.fromCharCode(65 + i)}`, words: 300 }));
+  out.chapters[0].sections = secs(7);
+  out.chapters[1].sections = secs(1);
+  out.chapters[2].sections = secs(5);
+  out.chapters[3].sections = secs(2);
+  const o = read(out, "auto").outline!;
+  assertEquals(o.chapters.slice(0, 4).map((c) => c.sections.length), [5, 1, 5, 2]);
+  // The same reply with a number keeps cutting at that number.
+  assertEquals(read(out, 3).outline!.chapters.slice(0, 4).map((c) => c.sections.length), [3, 1, 3, 2]);
 });

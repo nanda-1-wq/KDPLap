@@ -112,8 +112,9 @@ export function briefAndResearch(ctx: PositioningContext): string[] {
     .sort((a, c) => (a.created_at < c.created_at ? -1 : 1))
     .slice(0, MAX_COMPETITORS)
     .map((c) => `<book><title>${asData(c.title)}</title><author>${asData(c.author ?? "")}</author></book>`);
-  const srcLines = sources.map((s, i) => [
-    `<source label="S${i + 1}" kind="${s.kind === "source" ? "source" : "note"}">`,
+  // No "S1" labels (fix batch 2, item 9): nothing reads them, and Write copied one into a book.
+  const srcLines = sources.map((s) => [
+    `<source kind="${s.kind === "source" ? "source" : "note"}">`,
     `<text>${asData(str(s.body).slice(0, MAX_SOURCE_BODY))}</text>`,
     `<citation>${asData(s.citation ?? "")}</citation>`,
     "</source>",

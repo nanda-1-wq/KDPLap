@@ -60,7 +60,7 @@ Deno.test("section_write complete: streamed text, a normal version, counted with
   assert(!("format" in sent.output_config));
   // E12 M8: the store reads the other sections' subheadings, and the prompt lists them.
   assertEquals(writeReads, [{ bookId: BOOK_ID, sectionId: SECTION_ID, opts: { soFar: true } }]);
-  assert((sent.messages[0].content as string).includes("<book_so_far>\n<item>Neck turns and tilts: Neck turns and tilts</item>\n</book_so_far>"));
+  assert((sent.messages[0].content as string).includes('<book_so_far>\n<item>Neck turns and tilts: Neck turns and tilts | Ends: "End each turn back at the center." | Opens: "Turn your head slowly to the right, then to the left."</item>\n</book_so_far>'));
   // Rule C: the usage row is the run's own (begin and finish); heartbeats add none.
   assertEquals(logged, []);
   assert(beats.every((b) => b.runId === RUN));

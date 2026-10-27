@@ -112,7 +112,7 @@ Deno.test("prompt (E12 step 2): the system rules", () => {
   assertStringIncludes(s, "Never finish a sentence from <previous_section_end>, and do not repeat it.");
   assertStringIncludes(s, 'No picture notes, image descriptions or placeholders such as "Picture: ...". The book has no images.');
   assertStringIncludes(s, "<previous_section_end>, <book_so_far>, <headings_so_far>");
-  assertStringIncludes(s, "Do not repeat advice, tips or subheadings it shows.");
+  assertStringIncludes(s, "Do not repeat advice, tips or subheadings it shows.");   // fix batch 2: the line now names more parts
   // E12 Part 3: a practice from <book_so_far> is named and referred back to, never taught again.
   assertEquals(s.split("- If you use a practice from <book_so_far>, name it and refer back to it in one sentence. Do not teach it again.").length - 1, 1);
   assertStringIncludes(s, "If <part> is introduction, open the book");
@@ -159,27 +159,109 @@ Deno.test("completeEnd (E12 M4): a cut text goes back to its last full sentence"
   assertStringIncludes(none, "<previous_section_end>(not written yet)</previous_section_end>");
 });
 
-Deno.test("book so far (E12 M8): other written sections with their subheadings, nearest first, then in reading order", () => {
+Deno.test("book so far (E12 M8, fix batch 2 item 11 B): other written sections, nearest first, then in reading order", () => {
   const base = writeCtx();
   const order = base.outline.flatMap((c) => c.sections);
   const at = order.findIndex((s) => s.id === base.sectionId);
-  // Empty, or only this section: not given.
+  // Empty, blank text, or only this section: not given.
   assertEquals(L.bookSoFar(writeCtx({ soFar: [] })), "<book_so_far>(not given)</book_so_far>");
   assertEquals(L.bookSoFar(writeCtx({ soFar: undefined })), "<book_so_far>(not given)</book_so_far>");
-  assertEquals(L.bookSoFar(writeCtx({ soFar: [{ sectionId: base.sectionId, headings: ["Mine"] }] })), "<book_so_far>(not given)</book_so_far>");
-  // Escaped data; the Introduction has no title of its own; no subheadings is the title alone.
+  assertEquals(L.bookSoFar(writeCtx({ soFar: [{ sectionId: base.sectionId, text: "## Mine\n\nMine." }] })), "<book_so_far>(not given)</book_so_far>");
+  assertEquals(L.bookSoFar(writeCtx({ soFar: [{ sectionId: order[0].id, text: "  \n " }] })), "<book_so_far>(not given)</book_so_far>");
+  // Escaped data; the Introduction has no title of its own; a one-sentence section has no Opens.
   const small = L.bookSoFar(writeCtx({ soFar: [
-    { sectionId: order[0].id, headings: ["Why <this> book"] },
-    { sectionId: order[at + 1].id, headings: [] },
+    { sectionId: order[0].id, text: "## Why <this> book\n\nYou can start today." },
+    { sectionId: order[at + 1].id, text: "Circle your arms slowly." },
   ] }));
-  assertEquals(small, `<book_so_far>\n<item>Introduction: Why &lt;this&gt; book</item>\n<item>${order[at + 1].title}</item>\n</book_so_far>`);
-  // Every other section written, each item about 300 characters: the 10 nearest fit in 3,000.
-  const all = order.map((s, i) => ({ sectionId: s.id, headings: [`H${i} ${"word ".repeat(70)}`] }));
+  assertEquals(small, `<book_so_far>\n<item>Introduction: Why &lt;this&gt; book | Ends: "You can start today."</item>\n<item>${order[at + 1].title} | Ends: "Circle your arms slowly."</item>\n</book_so_far>`);
+  // Every other section written, each item near its 600 cap: the nearest ones that fit in 9,000.
+  const text = (i: number) => `## H${i} ${"word ".repeat(30)}\n\n${"A long sentence that keeps on going and going here. ".repeat(4)}Close ${i} with ${"a line that is long enough to matter ".repeat(5)}here.\n\n${Array.from({ length: 12 }, (_, k) => `- Item ${k} with six words in it, then more`).join("\n")}`;
+  const all = order.map((s, i) => ({ sectionId: s.id, text: text(i) }));
   const out = L.bookSoFar(writeCtx({ soFar: all }));
   const kept = [...out.matchAll(/<item>[^<]*?: H(\d+) /g)].map((m) => Number(m[1]));
-  assertEquals(kept, [at - 5, at - 4, at - 3, at - 2, at - 1, at + 1, at + 2, at + 3, at + 4, at + 5]);
-  assert(out.length < 3300, String(out.length));
-  for (const item of out.match(/<item>[^<]*<\/item>/g)!) assert(item.length - 13 <= 300, item.slice(0, 40));
+  // The expected set: nearest first (ties: the earlier one), while the items fit in 9,000.
+  const near = order.map((_, i) => i).filter((i) => i !== at).sort((a, b) => Math.abs(a - at) - Math.abs(b - at) || a - b);
+  const want: number[] = [];
+  let chars = 0;
+  for (const i of near) {
+    const n = L.soFarItem(String(order[i].title), text(i), base.sources).length;
+    if (chars + n > 9000) break;
+    chars += n;
+    want.push(i);
+  }
+  assertEquals(kept, want.sort((a, b) => a - b));
+  assert(want.length >= 14 && want.length <= 16, String(want.length));   // about 600 characters each
+  for (const item of out.match(/<item>[^<]*<\/item>/g)!) assert(item.length - 13 <= 600, item.slice(0, 40));
+});
+
+Deno.test("book so far item (fix batch 2, item 11 B): headings, ends, opens, names, items; marks and labels left out", () => {
+  const sources = writeCtx().sources.concat([
+    { kind: "source", body: "Tiny habits.", citation: "BJ Fogg, Tiny Habits (2019)", created_at: "2026-09-30T09:03:00Z" },
+    { kind: "source", body: "Deep work.", citation: "Cal Newport. Deep Work. 2016.", created_at: "2026-09-30T09:04:00Z" },
+    { kind: "note", body: "My own idea.", citation: null, created_at: "2026-09-30T09:05:00Z" },
+  ]);
+  const text = [
+    "Starting is the **hard** part. Fogg's research backs this up. [Verify: no source]",
+    "## Two-minute starts",
+    "- **Open the book** to the page you left, and read one line",
+    "- Write one flashcard",
+    "1. Set a timer for two minutes",
+    "Starting is often the hardest part, and you can always do more than the minimum. [S3]",
+  ].join("\n\n");
+  assertEquals(L.soFarItem("Five-minute habits", text, sources),
+    'Five-minute habits: Two-minute starts | Ends: "Starting is often the hardest part, and you can always do more than the minimum." | Opens: "Starting is the hard part." | Names: BJ Fogg | Items: Open the book to the page; Write one flashcard; Set a timer for two minutes');
+  // A cut end is cut back to its last full sentence first.
+  assertEquals(L.soFarItem("T", "First one. Second one. Then half a sent", sources), 'T | Ends: "Second one." | Opens: "First one."');
+  // The whole item stays within 600 characters, cut at a word.
+  const long = L.soFarItem("T", `${"Words that run on and on. ".repeat(40)}\n\n${Array.from({ length: 60 }, (_, k) => `- Item ${k}`).join("\n")}`, sources);
+  assert(long.length <= 600 && !long.endsWith(" "), String(long.length));
+});
+
+Deno.test("named sources: the citation's lead, or its capitalized last word; notes never", () => {
+  const src = (citation: string | null, kind = "source") => ({ kind, body: "x", citation, created_at: "2026-09-30T09:00:00Z" });
+  const sources = [src("BJ Fogg, Tiny Habits (2019)"), src("CDC, Physical Activity Guidelines, 2023"), src("National Sleep Foundation"), src("Cal Newport. Deep Work."), src("Fogg idea", "note"), src(null)];
+  assertEquals(L.namedSources("As BJ Fogg shows, and as the cdc says.", sources), ["BJ Fogg", "CDC"]);
+  assertEquals(L.namedSources("Fogg's idea is simple. Newport agrees.", sources), ["BJ Fogg", "Cal Newport"]);
+  assertEquals(L.namedSources("Foggy mornings. The national sleep foundation", sources), ["National Sleep Foundation"]);
+  assertEquals(L.namedSources("Nothing here.", sources), []);
+});
+
+Deno.test("source labels (fix batch 2, item 9): stripped on the server; Verify marks and other brackets stay", () => {
+  const cases: [string, string][] = [
+    ["You can always do more than the minimum. [S3]", "You can always do more than the minimum."],
+    ["Fogg [S3] says start small.", "Fogg says start small."],
+    ["Start small [S3, S5].", "Start small."],
+    ["Start small [S3; S4] today (S2).", "Start small today."],
+    ["Start small [S3-S5].", "Start small."],
+    ["Done.[S12]", "Done."],
+    ["[S3] Fogg says so.", "Fogg says so."],
+    ["- [S1] a list item", "- a list item"],
+    ["  Indented [S2]", "  Indented"],
+    ["Habits stick. [Verify: no source]", "Habits stick. [Verify: no source]"],
+    ["Rest for [2] minutes and see [the guide] or (S) or [S] or SS3.", "Rest for [2] minutes and see [the guide] or (S) or [S] or SS3."],
+  ];
+  for (const [inp, want] of cases) assertEquals(L.stripSourceLabels(inp), want, inp);
+  assertEquals(L.stripSourceLabels("One. [S1]\nTwo. [S2]\nThree. [S3]"), "One.\nTwo.\nThree.");
+  // Write and Improve both clean with cleanSubset.
+  assertEquals(L.cleanSubset("First line. [S3]\n\nSecond. [Verify: no source]", null), "First line.\n\nSecond. [Verify: no source]");
+  // The AI never reads a label in the earlier text it is sent.
+  const m = L.writeUserMessage(writeCtx({ previous: "Old text. [S3]", current: { id: "v", content: "Mine so far [S2]." } }), 300);
+  assertStringIncludes(m, "<previous_section_end>Old text.</previous_section_end>");
+  assertStringIncludes(m, "<section_so_far>Mine so far.</section_so_far>");
+  assert(!/\[S\d/.test(m));
+});
+
+Deno.test("sources in the prompt (fix batch 2, items 9 and 10): no labels; Write names sources by their citation", () => {
+  const m = L.writeUserMessage(writeCtx(), 300);
+  assert(!m.includes("label="), "no source labels");
+  assertStringIncludes(m, '<source kind="source"><text>Adults 65 and older');
+  const s = L.WRITE_SYSTEM;
+  assertStringIncludes(s, 'When you use a fact from a <source>, name it the way its <citation> does: the author, or the book, study or website. Never write "a source", "another source", "one source" or "research suggests" without a name.');
+  assertStringIncludes(s, 'A <source kind="note"> is the author\'s own knowledge: say it in your own words and never call it a source.');
+  assertStringIncludes(s, "Never write a reference mark such as [S3] or [1].");
+  assertStringIncludes(s, "Do not reuse an opening or closing sentence that <book_so_far> shows, or one close to it.");
+  assertStringIncludes(s, "If <book_so_far> names a source, the reader has already met it: refer back to it in one sentence, do not explain it again.");
+  assertStringIncludes(s, "<book_so_far> lists the other written sections of the book: their subheadings, how they end and open, the sources they name and their list items.");
 });
 
 Deno.test("request: streamed, no schema, thinking off, low effort, max_tokens from the words", () => {

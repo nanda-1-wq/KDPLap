@@ -127,6 +127,8 @@ export const ocid = { stage: "outline_check", bookId: BOOK_ID };
 export const SECTION_ID = "50000041-0000-4000-8000-000000000000";
 export const PREV_ID = "50000040-0000-4000-8000-000000000000";
 export const V_ID = "70000001-0000-4000-8000-000000000000";
+/** Section 4.1 as written: the previous section of 4.2. */
+export const PREV_TEXT = "## Neck turns and tilts\n\nTurn your head slowly to the right, then to the left. Keep your shoulders still. " + "Breathe out as you turn. ".repeat(120) + "End each turn back at the center.";
 /** A real-length Write context: the E9 outline (approved), a writing sample, 4.1 written. */
 export const writeCtx = (extra: Partial<WriteContext> = {}): WriteContext => {
   const rows = outlineRows().map((c) => ({ ...c, sections: c.sections.map((x) => ({ ...x, has_writing: false })) })) as WriteChapterRow[];
@@ -145,10 +147,10 @@ export const writeCtx = (extra: Partial<WriteContext> = {}): WriteContext => {
     sectionId: SECTION_ID,
     current: null,
     draft: null,
-    previous: "## Neck turns and tilts\n\nTurn your head slowly to the right, then to the left. Keep your shoulders still. " + "Breathe out as you turn. ".repeat(120) + "End each turn back at the center.",
+    previous: PREV_TEXT,
     run: null,
-    // The other written section (4.1, the previous one) and its subheading, for <book_so_far> (E12 M8).
-    soFar: [{ sectionId: rows[4].sections[0].id, headings: ["Neck turns and tilts"] }],
+    // The other written section (4.1, the previous one) and its text, for <book_so_far> (E12 M8; fix batch 2, item 11 B).
+    soFar: [{ sectionId: rows[4].sections[0].id, text: PREV_TEXT }],
     ...extra,
   };
 };

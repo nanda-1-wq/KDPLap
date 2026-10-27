@@ -103,6 +103,8 @@ export const MAX_UNSOURCED = 10;
 export const OUTLINE_MAX = { chapters: 30, sections: 12, chapterTitle: 150, objective: 300, sectionTitle: 150, sectionWords: 10000 } as const;
 // "Sections per chapter" in the Generate dialog (owner, E9).
 export const SECTIONS_PER_CHAPTER = { min: 1, max: 6, default: 3 } as const;
+// "Let the AI choose for each chapter" (sectionsPerChapter "auto", E12 fix batch 2, item 2).
+export const AUTO_SECTIONS = { min: 2, max: 5 } as const;
 // Competitor tables of contents in an outline prompt, all together (each is at most MAX_TOC).
 export const MAX_PROMPT_TOC_CHARS = 12_000;
 // Brief length ranges in words (same keys as js/book-brief.js and 0001; js/word-budget.js has the same numbers).
@@ -130,8 +132,8 @@ export const WRITE = {
   sampleChars: 1500,       // the pen name's writing sample in the prompt (answer 6)
   previousChars: 2000,     // the end of the previous section
   ownTailChars: 6000,      // the section's own text when generating the rest
-  soFarChars: 3000,        // <book_so_far>: the other sections' titles and subheadings, nearest first (E12 M8)
-  soFarItemChars: 300,     // one section's item in it
+  soFarChars: 9000,        // <book_so_far>: the other sections' items, nearest first (E12 M8; fix batch 2, item 11 B: was 3,000)
+  soFarItemChars: 600,     // one section's item in it (headings, ends, opens, names, list items; was 300)
 } as const;
 // The run's timers, in milliseconds (lib/write_run.ts). The tests pass smaller ones.
 /** A run is stale (taken over by the next claim, rule A) when its heartbeat is older than heartbeatMs, or it started over startedMs ago. Same values as 0020 section_run_fresh. */
@@ -261,7 +263,7 @@ export type GenerateInput =
   | { stage: "drift_check"; bookId: string }
   | { stage: "title_ideas"; bookId: string }
   | { stage: "competitor_import"; bookId: string; text: string }
-  | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number }
+  | { stage: "outline_ideas"; bookId: string; sectionsPerChapter: number | "auto" }
   | { stage: "outline_check"; bookId: string }
   | { stage: "section_write"; bookId: string; sectionId: string; baseVersionId: string | null; more: boolean }
   | { stage: "section_check"; bookId: string; sectionId: string; baseVersionId: string }
@@ -284,7 +286,8 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *   drift_check:     { stage, bookId }             at most 2 KB
  *   title_ideas:     { stage, bookId }             at most 2 KB
  *   competitor_import: { stage, bookId, text }     at most 256 KB, text 200 to 60,000 characters
- *   outline_ideas:   { stage, bookId, sectionsPerChapter }   at most 2 KB, a whole number from 1 to 6
+ *   outline_ideas:   { stage, bookId, sectionsPerChapter }   at most 2 KB, a whole number from 1 to 6,
+ *                    or "auto" (the AI gives each chapter AUTO_SECTIONS)
  *   outline_check:   { stage, bookId }             at most 2 KB
  *   section_write:   { stage, bookId, sectionId, baseVersionId (uuid or null) [, more: true] }   at most 2 KB
  *   section_improve: { stage, bookId, sectionId, baseVersionId (uuid or null), action, selection, before, after
@@ -323,6 +326,7 @@ export function parseInput(raw: string): GenerateInput | null {
     if (!sameKeys(o, ["stage", "bookId", "sectionsPerChapter"])) return null;
     if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
     const n = o.sectionsPerChapter;
+    if (n === "auto") return { stage, bookId: o.bookId.toLowerCase(), sectionsPerChapter: n };
     if (typeof n !== "number" || !Number.isInteger(n) || n < SECTIONS_PER_CHAPTER.min || n > SECTIONS_PER_CHAPTER.max) return null;
     return { stage, bookId: o.bookId.toLowerCase(), sectionsPerChapter: n };
   }

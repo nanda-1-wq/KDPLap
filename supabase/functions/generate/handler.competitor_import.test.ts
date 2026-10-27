@@ -24,10 +24,15 @@ Deno.test("competitor_import success: 200 with the form values only, one counted
   assert(calls[0].init.signal instanceof AbortSignal);
 }));
 
-Deno.test("competitor_import: numbers the page does not have come back empty", quiet(async () => {
+Deno.test("competitor_import: numbers the page does not have come back empty; the BSR is read from the page", quiet(async () => {
   const { handle } = setup({ provider: cimpReply({ ...PRODUCT_OUT, bsr: 999, reviews: 4321, rating: 4.9 }) });
   const c = (await json(await handle(post(cimp)))).competitor;
-  assertEquals([c.bsr, c.reviews, c.rating], [null, null, null]);
+  assertEquals([c.bsr, c.reviews, c.rating], [45210, null, null]);
+}));
+
+Deno.test("competitor_import: a category rank from the model becomes the overall rank (E12 fix batch 2, item 1)", quiet(async () => {
+  const { handle } = setup({ provider: cimpReply({ ...PRODUCT_OUT, bsr: 12 }) });
+  assertEquals((await json(await handle(post(cimp)))).competitor.bsr, 45210);
 }));
 
 Deno.test("competitor_import: not a product page is 422, logged with book_id, not counted", quiet(async () => {

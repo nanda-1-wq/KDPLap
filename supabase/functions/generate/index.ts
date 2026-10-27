@@ -42,7 +42,7 @@
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
 import type { BriefContext, Competitor, OutlineContext, OutlineRow, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
-import { headingsIn, outlineHasWriting, RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
+import { outlineHasWriting, RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -294,7 +294,7 @@ function openStore(authHeader: string): Store {
     // the previous section's current version (in reading order) and the
     // section's last run. null = not the caller's book or a section that is
     // not in it. With soFar (section_write, E12 M8) one read takes every
-    // section's current version, for the other sections' subheadings.
+    // section's current version, for <book_so_far> (fix batch 2, item 11 B).
     async getWriteContext(bookId, sectionId, opts) {
       // The book and the outline in parallel (outline_json reads nothing for a book the caller cannot see).
       const [data, { data: outline, error }] = await Promise.all([
@@ -330,7 +330,7 @@ function openStore(authHeader: string): Store {
         penName: (one(data.pen_name) as { name: string } | null)?.name ?? null,
         ...(opts?.soFar ? {
           soFar: order.filter((x, i) => i !== at && (text(x.current_version_id) ?? "").trim())
-            .map((x) => ({ sectionId: x.id, headings: headingsIn(text(x.current_version_id)!) })),
+            .map((x) => ({ sectionId: x.id, text: text(x.current_version_id)! })),
         } : {}),
       } satisfies WriteContext;
     },

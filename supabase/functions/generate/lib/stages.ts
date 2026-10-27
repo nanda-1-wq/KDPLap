@@ -38,7 +38,7 @@ export type Job =
   | { stage: "drift_check"; ctx: PositioningContext }
   | { stage: "title_ideas"; ctx: TitleContext; want: number }
   | { stage: "competitor_import"; text: string }
-  | { stage: "outline_ideas"; ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null }
+  | { stage: "outline_ideas"; ctx: OutlineContext; per: number | "auto"; target: OutlineTarget; chapters: number | null }
   | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string }
   | WriteJob
   | ImproveJob

@@ -83,7 +83,7 @@ Deno.test("outline_ideas: someone else's book is 404, no call", quiet(async () =
   assertEquals([r.status, calls.length], [404, 0]);
 }));
 
-Deno.test("outline_ideas: sectionsPerChapter must be a whole number from 1 to 6", quiet(async () => {
+Deno.test("outline_ideas: sectionsPerChapter must be a whole number from 1 to 6 (or \"auto\")", quiet(async () => {
   for (const bad of [0, 7, 2.5, "3", null]) {
     const { handle, calls } = setup({ provider: outlineReply() });
     const r = await handle(post({ ...oid, sectionsPerChapter: bad }));
@@ -96,6 +96,18 @@ Deno.test("outline_ideas: sectionsPerChapter must be a whole number from 1 to 6"
   await one.handle(post({ ...oid, sectionsPerChapter: 1 }));
   assert(content(one.calls).includes("Write 8 chapters with 1 section each."));
   assertEquals(one.outlineSaves[0].chapters.every((c) => c.sections.length === 1), true, "extra sections are cut");
+}));
+
+Deno.test("outline_ideas: sectionsPerChapter \"auto\" lets the AI choose 2 to 5 (E12 fix batch 2, item 2)", quiet(async () => {
+  const { handle, calls, outlineSaves } = setup({ provider: outlineReply() });
+  const r = await handle(post({ ...oid, sectionsPerChapter: "auto" }));
+  assertEquals(r.status, 200);
+  assert(content(calls).includes("Write 8 chapters. Give each chapter 2 to 5 sections, as many as it needs"));
+  assertEquals(outlineSaves[0].chapters.map((c) => c.sections.length), [3, 3, 3, 3, 3, 3, 3, 3]);
+  for (const bad of ["Auto", "AUTO", "auto ", "ai"]) {
+    const x = setup({ provider: outlineReply() });
+    assertEquals([(await x.handle(post({ ...oid, sectionsPerChapter: bad }))).status, x.calls.length], [400, 0], bad);
+  }
 }));
 
 Deno.test("outline_ideas: the wrong number of chapters fails, logged, not counted, nothing saved", quiet(async () => {

@@ -4,7 +4,7 @@
 import { asData, cleanLine, cutWords, obj, type Outcome, readReply, str } from "./common.ts";
 import { unsourcedList } from "./numbers.ts";
 import { briefAndResearch, positioningBlock, type PositioningContext, positioningValues } from "./context.ts";
-import { DEFAULT_CHAPTERS, DEFAULT_OUTLINE_WORDS, LENGTH_RANGES, MAX_PROMPT_TOC_CHARS, MAX_TOC, OUTLINE_MAX } from "./limits.ts";
+import { AUTO_SECTIONS, DEFAULT_CHAPTERS, DEFAULT_OUTLINE_WORDS, LENGTH_RANGES, MAX_PROMPT_TOC_CHARS, MAX_TOC, OUTLINE_MAX } from "./limits.ts";
 
 /** What outline_ideas reads through RLS: the positioning context, the book title, the Brief plan, competitor contents. */
 export type OutlineContext = PositioningContext & {
@@ -122,10 +122,13 @@ export const OUTLINE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function outlineUserMessage(ctx: OutlineContext, per: number, target: OutlineTarget, chapters: number | null): string {
+export function outlineUserMessage(ctx: OutlineContext, per: number | "auto", target: OutlineTarget, chapters: number | null): string {
   const tocs = promptTocs(ctx).map((t) => `<book><title>${asData(t.title)}</title><contents>\n${asData(t.toc)}\n</contents></book>`);
   const how = chapters ? `Write ${chapters} chapters` : `Choose ${DEFAULT_CHAPTERS[0]} to ${DEFAULT_CHAPTERS[1]} chapters`;
-  const each = per === 1 ? "1 section each" : `${per} sections each`;
+  // E12 fix batch 2, item 2: "auto" lets the AI give each chapter as many sections as it needs.
+  const plan = per === "auto"
+    ? `${how}. Give each chapter ${AUTO_SECTIONS.min} to ${AUTO_SECTIONS.max} sections, as many as it needs: fewer for one simple idea, more for a chapter that teaches several steps.`
+    : `${how} with ${per === 1 ? "1 section each" : `${per} sections each`}.`;
   return [
     ...briefAndResearch(ctx),
     ...positioningBlock("locked_positioning", positioningValues(ctx.positioning)),
@@ -133,7 +136,7 @@ export function outlineUserMessage(ctx: OutlineContext, per: number, target: Out
     `<book_subtitle>${asData(ctx.book.subtitle ?? "")}</book_subtitle>`,
     tocs.length ? `<competitor_contents>\n${tocs.join("\n")}\n</competitor_contents>` : "<competitor_contents>(not given)</competitor_contents>",
     "",
-    `${how} with ${each}. Aim for about ${target.aim.toLocaleString("en-US")} words in all, with the Introduction and the Conclusion. Follow the rules.`,
+    `${plan} Aim for about ${target.aim.toLocaleString("en-US")} words in all, with the Introduction and the Conclusion. Follow the rules.`,
   ].join("\n");
 }
 
@@ -151,13 +154,14 @@ const round50 = (n: number) => Math.min(OUTLINE_MAX.sectionWords, Math.max(0, Ma
  * - exactly the chapter count asked for (or 3 to 30 when the AI picks);
  *   a chapter with no title or no section fails the reply;
  * - titles and objectives are one line, cut at a word, numbering taken off;
- *   blank sections are dropped, sections past the number asked are cut;
+ *   blank sections are dropped, sections past the number asked are cut
+ *   (past AUTO_SECTIONS.max for "auto"; a chapter with fewer is kept);
  * - words are whole numbers from 0 to 10,000; when the total is outside the
  *   target, every count is scaled to the aim and rounded to 50 ("rescaled");
  * - numbers the author's data does not contain go to the chapter's "unsourced".
  * A reply that fails these is failed, not counted.
  */
-export function interpretOutline(httpOk: boolean, body: unknown, job: { ctx: OutlineContext; per: number; target: OutlineTarget; chapters: number | null }, known: string): Outcome {
+export function interpretOutline(httpOk: boolean, body: unknown, job: { ctx: OutlineContext; per: number | "auto"; target: OutlineTarget; chapters: number | null }, known: string): Outcome {
   const { base, out, fail } = readReply(httpOk, body);
   if (fail || !out) return fail!;
   const bad: Outcome = { ...base, status: "failed", counted: false, code: "ai_unavailable" };
@@ -172,7 +176,7 @@ export function interpretOutline(httpOk: boolean, body: unknown, job: { ctx: Out
     const sections = (Array.isArray(c.sections) ? c.sections : [])
       .map((s) => ({ title: line(obj(s).title, OUTLINE_MAX.sectionTitle), words: wordsOf(obj(s).words) }))
       .filter((s) => s.title)
-      .slice(0, job.per);
+      .slice(0, job.per === "auto" ? AUTO_SECTIONS.max : job.per);
     if (!title || !sections.length) return bad;
     const objective = line(c.objective, OUTLINE_MAX.objective) || null;
     const text = [title, objective ?? "", ...sections.map((s) => s.title)].join("\n");

@@ -3,6 +3,8 @@
    The model only copies facts out of the pasted page. Our code then keeps
    only what the page really has: a number that is not in the page text
    stays empty, and a review whose words are not in the page is dropped.
+   The BSR is read from the page by our code when it can be (E12 fix batch
+   2, item 1: the model sometimes copied a category rank).
    Nothing is saved here: the browser fills the Add competitor form and the
    author saves it. lib.ts re-exports the public names. */
 
@@ -84,6 +86,38 @@ function pageNumber(v: unknown, min: number, max: number, whole: boolean, inPage
   return inPage.has(v) ? v : null;
 }
 
+// "#765,893 in Books", "#1,234 Paid in Kindle Store", "#343 in College Guides".
+// The category ends at a line break, a bracket or the next rank.
+const RANK = /#\s?(\d{1,3}(?:,\d{3})+|\d+)\s+(?:(?:paid|free)\s+)?in\s+([^\n(#]*)/gi;
+const OVERALL = /^(?:books|kindle store|kindle ebooks)\b/i;
+
+/**
+ * The ranks on the page: the first overall one ("in Books", "in Kindle
+ * Store") and every category rank ("in College Guides"). "(See Top 100 in
+ * Books)" has no "#", so it is not a rank.
+ */
+export function pageRanks(pageText: string): { overall: number | null; category: Set<number> } {
+  let overall: number | null = null;
+  const category = new Set<number>();
+  for (const m of pageText.matchAll(RANK)) {
+    const n = Number(m[1].replace(/,/g, ""));
+    if (OVERALL.test(m[2].trim())) overall ??= n;
+    else category.add(n);
+  }
+  return { overall, category };
+}
+
+/**
+ * The BSR: the page's overall rank when it has one (our code wins over the
+ * model). Otherwise the model's number, unless it is a category rank.
+ */
+function pageBsr(v: unknown, pageText: string, inPage: Set<number>): number | null {
+  const ranks = pageRanks(pageText);
+  if (ranks.overall !== null) return ranks.overall >= 1 && ranks.overall <= MAX_BSR ? ranks.overall : null;
+  const ai = pageNumber(v, 1, MAX_BSR, true, inPage);
+  return ai !== null && ranks.category.has(ai) ? null : ai;
+}
+
 /**
  * Reviews found word for word in the page (spaces and case ignored), one
  * line each, no repeats, at most MAX_IMPORT_REVIEWS. Joined with a blank line
@@ -125,7 +159,7 @@ export function interpretCompetitorImport(httpOk: boolean, body: unknown, pageTe
   const competitor: ImportedCompetitor = {
     title,
     author: oneLine(out.author, MAX_AUTHOR_CHARS) || null,
-    bsr: pageNumber(out.bsr, 1, MAX_BSR, true, inPage),
+    bsr: pageBsr(out.bsr, pageText, inPage),
     reviews: pageNumber(out.reviews, 0, MAX_REVIEWS, true, inPage),
     rating: rating === null ? null : Math.round(rating * 10) / 10,
     low_reviews: pageReviews(out.low_reviews, page),
