@@ -28,10 +28,23 @@ Design: ✅ approved (see `design/`)
 - [ ] **E12** Real test: write one full book, fix what hurts ← in progress
   - Step 1 AI prompt review: done (report `docs/reviews/2026-10-26-e12-prompt-review.md`)
   - Step 2 fix batch: done (one number rule, point of view, examples, style, previews, `<book_so_far>`, bio, "ends mid-sentence" and "Mentions another part of the book" checks; generate v22 + v23; merged e6c0737). Plans and live checks in `docs/reviews/2026-10-26-e12-fix-batch-plan.md` and `2026-10-26-e12-part3-plan.md`
-  - Next: the real book on the owner's account
+  - Step 3, the real book: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX) was written on the owner's account
+  - Step 4, fix batch 2 from the real book: done (merged f0f2145, generate v24). The 11 items except item 3 (the Topic Lab note, postponed to v2):
+    - competitor BSR read from the page;
+    - outline "Let the AI choose" 2 to 5 sections a chapter;
+    - Needs review with "Mark as reviewed";
+    - "Ready to mark Final" with the owner's rule for a check that still holds (its own Fixes, own edits under 20%);
+    - Generate chapter with the cost line;
+    - repeats as info, not the section's own topic;
+    - no source labels like [S3] (prompts, server strip, Checks row, Export strip);
+    - sources named by their citation;
+    - a richer `<book_so_far>` and "Also in another section" in Checks and Export.
+    - Plan, live checks A and B and the security review: `docs/reviews/2026-10-27-e12-fix-batch-2-plan.md`
+  - Next: finish and publish the real book
 
 ### Watch list for the real book
-- Practices taught again: a practice from an earlier section is named, but its steps are taught a second time (Part 3 live check).
+- Practices taught again: a practice from an earlier section is named, but its steps are taught a second time (Part 3 live check; Live check A: 7.1 copied two steps word for word; "Also in another section" now flags it).
+- An example given its own subheading ("## A short example", Live check A).
 - The same opener across sections, for example "This is common, and it does not mean…" (`<book_so_far>` shows subheadings only).
 - AI Verify marks on claims without numbers (H1): the AI rarely marks them, and no check flags them yet.
 
