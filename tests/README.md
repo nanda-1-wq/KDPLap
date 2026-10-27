@@ -84,7 +84,8 @@ deno test --allow-read tests/user-name.test.js
   `tests/lib/unzip.js`): page sizes, page numbers only in the body and from 1,
   chapter page breaks, bookmarks and links, no marks, lists and styles. Run any
   browser suite once first, so the cache holds docx. `usage-rules.test.js` is
-  the Settings usage card; `user-name.test.js` the sidebar name rule.
+  the Settings usage card (and, E12 fix batch 2, the Generate chapter cost
+  line: `chapterEstimate`, `tokensText`); `user-name.test.js` the sidebar name rule.
 
 - `finding-rules.test.js` (G5, design 22d): severity from the type, Keep as is
   matching (type + exact quote; a gap by message on its own check, timestamps
@@ -206,7 +207,9 @@ t-timing, t-selection, t-fix, t-queue, and t-batch2 for E12 fix batch 2: Mark as
 status clearing Needs review, "Source not named" and "Also in another section"; t-ready for design 22e:
 "Ready to mark Final", Mark Final, the owner's rule for a check that still holds (its own Fix, small
 edits with the meter, a big edit, Generate, another Improve, Restore, a plan change, a failed read),
-"things left" with Show, no check yet, plain-text sentences), for E11 `settings` (t-settings, t-footer), `export`
+"things left" with Show, no check yet, plain-text sentences; t-chapter for design 23b: Generate chapter,
+the head button and its line, the confirm with the cost line, the limit warning, running, Stop and
+"Generate the rest", done, a failure with "Try again from", the month limit, leaving while it runs), for E11 `settings` (t-settings, t-footer), `export`
 (t-export, t-cut for E12 M9: the "ends mid-sentence" note never blocks, and t-repeats for E12 fix
 batch 2: the repeated-sentence note, the Needs review hint, no `[S3]` in the .docx or .md) and `books` (t-badge),
 and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).

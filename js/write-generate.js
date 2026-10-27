@@ -18,6 +18,14 @@
    a result card for that section) · G.keptOn(id) (a failed save keeps the
    streamed text) · G.dropOther(id) · G.loadRun() · G.handleClick(target)
    G.leave() (Stop and leave while it writes; resolves false to stay)
+
+   Generate chapter (E12 fix batch 2, design 23b, the button in the head): the
+   open chapter's sections with no text, one Generate section at a time, in
+   order. A confirm with the cost line first (kdpUsage.chapterEstimate); the
+   open section follows the queue; Stop ends the section being written (its
+   text so far is saved in Versions, as today) and cancels the rest. A
+   section with text is skipped; "Generate the rest" writes again a section
+   whose partial text was not kept. G.chapterButton() is the head's button.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -29,7 +37,11 @@
   const LOST_POLL_MS = 1000;           // a lost stream: read the run row every second…
   const LOST_POLL_TRIES = 15;          // …for at most 15 s
   const INFO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+  const LAYERS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>';
+  const SPARK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>';
+  const listWords = (items) => (items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
   const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+  const str = (v) => (typeof v === 'string' ? v : '');
 
   function create(host) {
     /**
@@ -39,6 +51,15 @@
      * outcome (phase 'ended'): what the card under the head shows until it is closed.
      */
     let gen = null;
+    /**
+     * Generate chapter (design 23b): { chapterId, num, title, items, k, state, stop, error }.
+     * items: [{ id, n ("7.2"), title, target, status, words, versionNo }]; status:
+     * 'wait' | 'now' | 'done' | 'stopped' | 'failed' | 'unsent' | 'unwritten'.
+     * state: 'run' | 'done' | 'stopped' | 'failed' | 'limit'. Kept for the end card until Close.
+     */
+    let chap = null;
+    let dlg = null;
+    const chapRunning = () => !!chap && chap.state === 'run';
     const cur = () => host.cur();
     const els = () => host.els();
     const book = () => host.book();
@@ -62,9 +83,9 @@
     }
 
     /** Why Generate is off for the open section, or '' when it can run. */
-    function genBlock() {
+    function genBlock(fromChapter) {
       if (!cur() || cur().state !== 'ready') return 'loading';
-      if (genBusy()) return 'busy';
+      if (genBusy() || (chapRunning() && !fromChapter)) return 'busy';
       if (host.imp().busy()) return 'improve';   // decision 8
       if (cur().conflict) return 'conflict';
       if (cur().busy || cur().saving) return 'busy';
@@ -84,8 +105,8 @@
      * Typed text becomes a version first (0019 rules), so the server writes
      * from what is on screen and nothing typed is lost.
      */
-    async function generate(more) {
-      if (genBlock()) return;
+    async function generate(more, fromChapter) {
+      if (genBlock(fromChapter)) return;
       const id = cur().id;
       const hit = host.findSection(id);
       const target = targetOf();
@@ -370,6 +391,16 @@
     function renderGen() {
       const box = els() && els().main.querySelector('[data-gen]');
       if (!box || !cur()) return;
+      const here = chap && host.findSection(cur().id);
+      if (here && here.c.id === chap.chapterId) {
+        // A redraw (a run row read, the head) keeps the focus on the card's button.
+        const a = document.activeElement;
+        const keep = a && box.contains(a) ? ['data-chap-close', 'data-chap-rest', 'data-chap-retry', 'data-chap-stop'].find((x) => a.hasAttribute(x)) : null;
+        box.innerHTML = chapterHtml();
+        const b = keep && box.querySelector(`[${keep}]`);
+        if (b && !b.disabled) b.focus();
+        return;
+      }
       const mine = gen && gen.id === cur().id;
       if (mine && gen.phase !== 'ended') { box.innerHTML = runningHtml(); return; }
       if (mine && gen.outcome) { box.innerHTML = outcomeHtml(gen.outcome); return; }
@@ -468,6 +499,8 @@
       if (!host.active() || !cur() || cur().state !== 'ready') return;
       host.renderMainShell();
       host.renderSide();
+      // Generate chapter: the manuscript list shows which section is being written (23b, 3).
+      if (chap) host.renderManuscript();
     }
 
     /**
@@ -475,6 +508,23 @@
      * Stop and leave waits for the save (at most STOP_WAIT_MS and the poll).
      */
     async function leave() {
+      if (chapRunning()) {
+        const it = chap.items[chap.k];
+        const rest = chap.items.slice(chap.k + 1).map((x) => x.n);
+        const yes = await host.confirm({
+          title: 'Stop and leave?',
+          text: `The text written so far in ${it.n} is saved in Versions.${rest.length ? ` ${listWords(rest)} ${rest.length === 1 ? 'is' : 'are'} not written.` : ''}`,
+          ok: 'Stop and leave', cancel: 'Keep writing'
+        });
+        if (!yes) return false;
+        chap.stop = true;
+        if (gen && gen.phase === 'writing') stopGen();
+        await new Promise((resolve) => {
+          const wait = () => (!chapRunning() ? resolve() : setTimeout(wait, 100));
+          wait();
+        });
+        return true;
+      }
       if (!genBusy()) return true;
       if (gen.phase === 'saving') return false;
       const yes = await host.confirm({
@@ -492,8 +542,286 @@
       return true;
     }
 
+    /* ── Generate chapter (E12 fix batch 2, design 23b) ── */
+
+    /** The sections of a chapter with no text yet (owner D8: a section with text is skipped). */
+    const emptySections = (c) => (c.sections || []).filter((s) => !(host.sectionWords(s) > 0));
+    const sectionNo = (c, s) => `${host.chapterNumber(c)}.${c.sections.indexOf(s) + 1}`;
+
+    const CHAP_WHY = {
+      full: 'Every section in this chapter has text.',
+      busy: 'Wait for the section to finish writing.',
+      queue: 'Finish or stop Fix major first.',
+      improve: 'Accept or reject the suggestion first.',
+      conflict: 'Choose which text to keep first.',
+      positioning: 'Lock the positioning in 03 to generate.',
+      outline: 'Approve the outline in 05 to generate.'
+    };
+
+    /** Why Generate chapter is off ('' when it can run); 'none': no button (the Introduction or the Conclusion). */
+    function chapBlock() {
+      const hit = cur() && host.findSection(cur().id);
+      if (!hit || hit.c.kind !== 'chapter') return 'none';
+      if (chapRunning()) return 'busy';
+      const g = genBlock();
+      if (g === 'improve') return host.imp().queue && host.imp().queue() ? 'queue' : 'improve';
+      if (g === 'conflict' || g === 'positioning') return g;
+      if (g) return 'busy';
+      if (!book().outline_approved_at) return 'outline';
+      if (!emptySections(hit.c).length) return 'full';
+      return '';
+    }
+
+    /** The head's button and its line (design 23b, 1A), or '' for the Introduction and the Conclusion. */
+    function chapterButton() {
+      const why = chapBlock();
+      if (why === 'none') return '';
+      const hit = host.findSection(cur().id);
+      const n = emptySections(hit.c).length;
+      const line = why ? CHAP_WHY[why] : `Writes the ${n === 1 ? '1 section' : `${fmt(n)} sections`} of this chapter that ${n === 1 ? 'has' : 'have'} no text, in order.`;
+      return `<button type="button" class="btn btn-secondary wr-chap-btn" data-gen-chapter aria-describedby="wrChapLine"${why ? ' disabled' : ''}>${LAYERS}Generate chapter</button>
+        <p class="wr-chap-line" id="wrChapLine">${why ? INFO : ''}<span>${esc(line)}</span></p>`;   // inside .wr-gen-btns (book-write.js)
+    }
+
+    function buildDialog() {
+      const d = document.createElement('dialog');
+      d.className = 'dialog dialog-sm wr-chap-dlg';
+      d.setAttribute('aria-labelledby', 'wrChapDlgTitle');
+      d.innerHTML = '<form class="dialog-inner" novalidate data-chap-form></form>';
+      document.body.append(d);
+      d.addEventListener('click', (e) => {
+        if (e.target.closest('[data-chap-cancel]')) d.close();
+      });
+      d.querySelector('form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const st = dlg.state;
+        if (!st || st.busy || (st.est && st.est.none)) return;
+        d.close();
+        startChapter(st.c, st.items);
+      });
+      d.addEventListener('close', () => {
+        if (chapRunning()) return;
+        const b = els() && els().main.querySelector('[data-gen-chapter]');
+        if (b && !b.disabled) b.focus();
+      });
+      dlg = { d, state: null };
+    }
+
+    /** The confirm (design 23b, 2 and 2b): the sections, the skipped ones, the cost line. */
+    function dialogHtml(st) {
+      const c = st.c;
+      const rows = c.sections.map((s) => {
+        const no = sectionNo(c, s);
+        const title = esc(str(s.title).trim() || 'Untitled section');
+        if (st.items.some((x) => x.id === s.id)) return `<li><span class="wr-q-n">${no}</span><span class="wr-q-what">${title}</span><span class="wr-q-st">${fmt(s.word_target > 0 ? s.word_target : 500)} words</span></li>`;
+        return `<li class="is-skip"><span class="wr-q-n">${no}</span><span class="wr-q-what">${title}<span class="wr-q-sub">Has text, so it is skipped.</span></span><span class="wr-q-st">Skipped</span></li>`;
+      }).join('');
+      const n = st.items.length;
+      let cost;
+      if (st.busy) cost = '<span class="wr-imp-spin" aria-hidden="true"></span><span>Working out the cost…</span>';
+      else {
+        const e = st.est;
+        const head = `<strong>${n === 1 ? '1 AI call' : `${fmt(n)} AI calls`}, about ${fmt(e.words)} words.</strong> ${kdpUsage.costText(e.cost)} and ${kdpUsage.tokensText(e.tokens)} tokens.`;
+        cost = `${INFO}<span>${head}${e.left !== null && !e.over && !e.none ? ` You have ${kdpUsage.tokensText(e.left)} tokens left this month.` : ''}</span>`;
+      }
+      const e = st.est;
+      const warn = !st.busy && e && e.none
+        ? `<div class="alert alert-warning wr-chap-alert" role="alert">${ICON.warn(16)}<p class="alert-text">You have used this month’s AI allowance. It resets on ${esc(e.resets)}.</p></div>`
+        : !st.busy && e && e.over
+          ? `<div class="alert alert-warning wr-chap-alert" role="alert">${ICON.warn(16)}<p class="alert-text"><strong>This may pass your monthly AI allowance.</strong> You have about ${kdpUsage.tokensText(e.left)} tokens left. Writing stops at the limit, and the sections written so far stay.</p></div>`
+          : '';
+      const off = st.busy || (e && e.none);
+      return `<div class="dialog-head"><h2 id="wrChapDlgTitle">Generate chapter ${host.chapterNumber(c)}?</h2></div>
+        <p class="delete-text">The AI writes the empty sections of “${esc(str(c.title).trim() || 'Untitled chapter')}”, one at a time, in order. Each one is saved as a new version. You can stop at any time.</p>
+        <ol class="wr-q-list wr-chap-list" aria-label="Sections to write">${rows}</ol>
+        <div class="wr-q-cost wr-chap-cost" role="status">${cost}</div>
+        ${warn}
+        <div class="dialog-foot">
+          <button type="button" class="btn btn-secondary" data-chap-cancel>Cancel</button>
+          <button type="submit" class="btn btn-primary" data-chap-go${off ? ' disabled' : ''}>${SPARK}Generate ${n === 1 ? '1 section' : `${fmt(n)} sections`}</button>
+        </div>`;
+    }
+
+    async function openChapterDialog() {
+      if (chapBlock()) return;
+      const hit = host.findSection(cur().id);
+      const c = hit.c;
+      const items = emptySections(c).map((s) => ({ id: s.id, n: sectionNo(c, s), title: str(s.title).trim() || 'Untitled section', target: s.word_target || 0 }));
+      if (!items.length) return;
+      if (!dlg) buildDialog();
+      const st = { c, items, busy: true, est: null };
+      dlg.state = st;
+      const form = dlg.d.querySelector('form');
+      form.innerHTML = dialogHtml(st);
+      dlg.d.showModal();
+      const cancel = form.querySelector('[data-chap-cancel]');
+      if (cancel) cancel.focus();
+      let res;
+      try { res = await kdp.getUsageMonth(); } catch (err) { res = { error: err }; }
+      if (dlg.state !== st) return;
+      st.busy = false;
+      // Without this month's usage the estimate uses the default input and says nothing about what is left.
+      st.est = kdpUsage.chapterEstimate(res.error ? null : res.data, items.map((x) => x.target));
+      form.innerHTML = dialogHtml(st);
+      const go = form.querySelector('[data-chap-go]');
+      (go && !go.disabled ? go : form.querySelector('[data-chap-cancel]')).focus();
+    }
+
+    function startChapter(c, items) {
+      chap = { chapterId: c.id, num: host.chapterNumber(c), title: str(c.title).trim(), items: items.map((x) => ({ ...x, status: 'wait', words: 0, versionNo: null })), k: 0, state: 'run', stop: false, error: '' };
+      runChapter();
+    }
+
+    /** One section after another; each is the existing Generate section call. */
+    async function runChapter() {
+      const c = chap;
+      while (chap === c && c.state === 'run') {
+        if (c.k >= c.items.length) { c.state = 'done'; break; }
+        const it = c.items[c.k];
+        if (c.stop) { c.state = 'stopped'; break; }
+        it.status = 'now';
+        if (!cur() || cur().id !== it.id) await host.openSection(it.id, { keepNote: true });
+        if (chap !== c) return;
+        if (!cur() || cur().id !== it.id || cur().state !== 'ready') { it.status = 'failed'; c.state = 'failed'; c.error = 'We couldn’t open this section. Try again.'; break; }
+        renderGenShell();
+        if (c.stop) { it.status = 'wait'; c.state = 'stopped'; break; }
+        await generate(false, true);
+        if (chap !== c) return;
+        const o = gen && gen.id === it.id ? gen.outcome : null;
+        if (o && (o.kind === 'done' || o.kind === 'lost_complete')) {
+          it.status = 'done';
+          it.words = cur() && cur().id === it.id ? W.count(cur().text) : 0;
+          gen = null;
+          host.announce(`${it.n} written, ${fmt(it.words)} words.`);
+          c.k++;
+          continue;
+        }
+        if (o && (o.kind === 'stopped' || ((o.kind === 'lost_saved' || o.kind === 'lost_none') && c.stop))) {
+          it.status = 'stopped';
+          it.versionNo = o.versionNo || null;
+          it.words = o.words || 0;
+          c.error = outcomeText(o);
+          c.state = 'stopped';
+        } else if (o && o.kind === 'refused' && o.code === 'monthly_limit') {
+          it.status = 'unsent';
+          c.state = 'limit';
+        } else {
+          it.status = 'failed';
+          c.error = !o ? 'We couldn’t start writing this section. Try again.'
+            : o.kind === 'failed' ? `${failLine(o.reason)} ${outcomeText(o)}` : outcomeText(o);
+          c.state = c.stop ? 'stopped' : 'failed';
+        }
+        gen = null;
+        break;
+      }
+      if (chap !== c) return;
+      for (const x of c.items) if (x.status === 'wait') x.status = c.state === 'limit' ? 'unsent' : c.state === 'stopped' ? 'unwritten' : 'wait';
+      const total = c.items.reduce((a, x) => a + (x.status === 'done' ? x.words : 0), 0);
+      host.announce(c.state === 'done' ? `Chapter ${c.num} is written. ${c.items.length === 1 ? '1 section' : `${fmt(c.items.length)} sections`}, ${fmt(total)} words.`
+        : c.state === 'limit' ? 'Writing stopped. You have used this month’s AI allowance.' : 'Writing stopped.');
+      renderGenShell();
+      const f = els() && els().main.querySelector('[data-chap-focus]');
+      if (f) f.focus();
+    }
+
+    function stopChapter() {
+      if (!chapRunning()) return;
+      chap.stop = true;
+      if (gen && gen.phase === 'writing') stopGen();
+      renderGen();
+    }
+
+    /** The chapter's card (design 23b, 3 to 6b). */
+    function chapterHtml() {
+      const c = chap;
+      const n = c.items.length;
+      const k = Math.min(c.k, n - 1);
+      const ok = (t) => `<span class="wr-q-st is-ok">${ICON.check(14)}${t}</span>`;
+      const rows = c.items.map((it) => {
+        let st;
+        switch (it.status) {
+          case 'done': st = ok(c.state === 'run' ? `Written · ${fmt(it.words)} words` : `${fmt(it.words)} words`); break;
+          case 'now': st = '<span class="wr-q-st is-now"><span class="wr-imp-spin" aria-hidden="true"></span>Writing now</span>'; break;
+          case 'stopped': st = '<span class="wr-q-st is-now">Stopped</span>'; break;
+          case 'failed': st = `<span class="wr-q-st is-bad">${ICON.x(14)}Failed</span>`; break;
+          case 'unsent': st = '<span class="wr-q-st">Not sent</span>'; break;
+          case 'unwritten': st = '<span class="wr-q-st">Not written</span>'; break;
+          default: st = '<span class="wr-q-st">Waiting</span>';
+        }
+        const sub = it.status === 'stopped' && it.versionNo ? '<span class="wr-q-sub">Partial text in Versions</span>' : '';
+        const now = it.status === 'now' || it.status === 'stopped' || it.status === 'failed';
+        return `<li${now ? ' class="is-now"' : ''} data-chap-item="${esc(it.n)}"><span class="wr-q-n">${esc(it.n)}</span><span class="wr-q-what">${esc(it.title)}${sub}</span>${st}</li>`;
+      }).join('');
+      const list = `<ol class="wr-q-list wr-chap-list" aria-label="Generate chapter progress">${rows}</ol>`;
+      if (c.state === 'run') {
+        const it = c.items[k];
+        const g = gen && gen.id === it.id ? gen : null;
+        const words = g ? W.count(g.text) : 0;
+        const goal = g && g.aim;
+        const pct = goal ? Math.min(100, Math.round((words / goal) * 100)) : 0;
+        const stopping = c.stop || (g && g.phase === 'stopping');
+        const title = stopping ? 'Stopping and saving…' : `Writing ${esc(it.n)} ${esc(it.title)}`;
+        return `<section class="wr-gen wr-chap" aria-labelledby="wrChapTitle" data-chap="run">
+            <div class="chip-label">GENERATE CHAPTER · ${k + 1} OF ${n}</div>
+            ${list}
+            <h3 id="wrChapTitle">${title}</h3>
+            <div class="wr-gen-row">
+              ${goal ? `<span class="wr-bar wr-gen-bar" aria-hidden="true"><span style="width: ${pct}%"></span></span>` : ''}
+              <span class="wr-gen-count" data-gen-count>${goal ? `≈ ${fmt(words)} / ${fmt(goal)} words` : `≈ ${fmt(words)} words`}</span>
+            </div>
+            <button type="button" class="btn btn-secondary wr-gen-stop" data-chap-stop${stopping || !g || g.phase === 'saving' ? ' disabled' : ''}>${stopping ? 'Stopping…' : 'Stop'}</button>
+            <p class="wr-chap-small">Stop ends this section's writing (its text so far is saved in Versions) and cancels the rest.</p>
+          </section>`;
+      }
+      const close = (extra = '') => `<button type="button" class="${extra || 'btn btn-secondary btn-sm'}" data-chap-close${extra ? '' : ' data-chap-focus'}>Close</button>`;
+      if (c.state === 'done') {
+        const total = c.items.reduce((a, x) => a + x.words, 0);
+        return `<section class="wr-gen wr-chap" role="status" aria-labelledby="wrChapTitle" data-chap="done">
+            <div class="chip-label">GENERATE CHAPTER · DONE</div>
+            <h3 id="wrChapTitle">Chapter ${c.num} is written</h3>
+            ${list}
+            <p class="wr-chap-text">${n === 1 ? '1 section' : `${fmt(n)} sections`}, ${fmt(total)} words. Each is a new version with the status Draft. Next, read each one and run its AI check.</p>
+            <div class="wr-note-actions">${close()}</div>
+          </section>`;
+      }
+      const label = c.state === 'stopped' ? 'GENERATE CHAPTER · STOPPED' : `GENERATE CHAPTER · ${k + 1} OF ${n}`;
+      const it = c.items[k];
+      let alert, actions;
+      if (c.state === 'stopped') {
+        const rest = c.chapterId && host.chapterById(c.chapterId) ? emptySections(host.chapterById(c.chapterId)).length : 0;
+        alert = `<div class="alert alert-warning wr-chap-alert" role="alert">${ICON.warn(16)}<p class="alert-text">${c.error || 'Writing stopped.'}</p></div>`;
+        actions = `${rest ? `<button type="button" class="btn btn-secondary btn-sm" data-chap-rest data-chap-focus>Generate the rest (${fmt(rest)})</button>` : ''}${close(rest ? 'link-btn' : '')}`;
+      } else if (c.state === 'limit') {
+        alert = `<div class="alert alert-warning wr-chap-alert" role="alert">${ICON.warn(16)}<p class="alert-text">You have used this month’s AI allowance. It resets on ${esc(kdpUsage.resetsText())}.</p></div>
+          <p class="wr-chap-small">The server refused ${esc(it.n)} before any AI call. This refusal was not counted.</p>`;
+        actions = close();
+      } else {
+        alert = `<div class="alert alert-error wr-chap-alert" role="alert">${ICON.x(16)}<p class="alert-text">${c.error}</p></div>`;
+        actions = `<button type="button" class="btn btn-primary btn-sm" data-chap-retry data-chap-focus${genBlock() ? ' disabled' : ''}>Try again from ${esc(it.n)}</button><button type="button" class="link-btn" data-chap-close>Stop</button>`;
+      }
+      return `<section class="wr-gen wr-chap" aria-labelledby="wrChapTitle" data-chap="${c.state}">
+          <div class="chip-label">${label}</div>
+          <h3 id="wrChapTitle">Writing stopped</h3>
+          ${alert}
+          ${list}
+          <div class="wr-note-actions">${actions}</div>
+        </section>`;
+    }
+
+    function closeChapter() {
+      chap = null;
+      renderGenShell();
+      const b = els() && els().main.querySelector('[data-gen-chapter]');
+      if (b && !b.disabled) b.focus();
+    }
+
     /** Clicks on the Generate button and the run's cards. True when handled. */
     function handleClick(t) {
+      if (t.hasAttribute('data-gen-chapter')) { openChapterDialog(); return true; }
+      if (t.hasAttribute('data-chap-stop')) { stopChapter(); return true; }
+      if (t.hasAttribute('data-chap-close')) { closeChapter(); return true; }
+      if (t.hasAttribute('data-chap-retry')) { if (chap && !genBlock()) { chap.state = 'run'; chap.stop = false; chap.error = ''; chap.items[chap.k].status = 'wait'; runChapter(); } return true; }
+      if (t.hasAttribute('data-chap-rest')) { chap = null; renderGenShell(); openChapterDialog(); return true; }
       if (t.hasAttribute('data-generate') || t.hasAttribute('data-gen-retry')) { if (gen && gen.phase === 'ended') gen = null; generate(false); return true; }
       if (t.hasAttribute('data-gen-stop')) { stopGen(); return true; }
       if (t.hasAttribute('data-gen-keep')) { keepPartial(); return true; }
@@ -508,8 +836,13 @@
       render: renderGen,
       renderStream,
       block: genBlock,
-      busy: genBusy,
-      busyOn: (id) => genBusy() && gen.id === id,
+      // While Generate chapter runs, the whole step is busy (Generate section, Improve and the AI check are off).
+      busy: () => genBusy() || chapRunning(),
+      busyOn: (id) => (genBusy() && gen.id === id) || chapRunning(),
+      chapterButton,
+      chapterRunning: chapRunning,
+      /** The section Generate chapter is writing now (the manuscript's "Writing…" pill). */
+      writingNow: (id) => chapRunning() && chap.items[chap.k] && chap.items[chap.k].id === id,
       on: (id) => !!(gen && gen.id === id),
       keptOn: (id) => !!gen && gen.id === id && !!gen.outcome && gen.outcome.kind === 'save_failed',
       /** Opening another section: an old section's result card goes (a run in progress stays). */

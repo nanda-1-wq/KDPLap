@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: STOP 5 (2026-10-27). Part 4 (the 22e Ready state) is committed and pushed. Results are in "Part 4 results" at the end, with screenshots in docs/reviews/e12-fix2-stop5/. Owner answers at STOP 4: 1 A, 2 keep Mark Final, 3 keep the meter, 4 yes. Branch `claude/e12-fixes`.
+Status: STOP 6 (2026-10-27). Part 5 (Generate chapter, design 23b) is committed and pushed. Results are in "Part 5 results" at the end, with screenshots in docs/reviews/e12-fix2-stop6/. Next: your review, then Live check B after you say "live". Branch `claude/e12-fixes`.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -464,3 +464,44 @@ Browser only: no server change, no migration, no AI calls, no Supabase writes.
   - The new reads (`getSectionTexts`, `listUsedSuggestions`, the server's `soFar` texts) run as the user, under RLS "select own". There is no new service role use.
   - `parseInput` accepts "auto" only as an exact match.
   - No secrets and no other users' data are added, and nothing new is logged.
+
+## Part 5 results (STOP 6, 2026-10-27)
+Browser only: no server change (each step is the existing `section_write` call), no migration, no AI calls, no Supabase writes.
+
+**What changed:**
+- **The head (23b, 1A):**
+  - In a chapter, "Generate chapter" sits next to "Generate section", on a row of their own, with the line "Writes the N sections of this chapter that have no text, in order."
+  - When it is off, the line gives the reason: "Every section in this chapter has text.", "Wait for the section to finish writing.", "Finish or stop Fix major first.", "Accept or reject the suggestion first.", "Choose which text to keep first.", "Lock the positioning in 03 to generate." or "Approve the outline in 05 to generate."
+  - The Introduction and the Conclusion have no button.
+- **The confirm (2 and 2b):**
+  - It lists the sections to write with their word targets, and each skipped one ("Has text, so it is skipped.").
+  - The cost line is `kdpUsage.chapterEstimate`: this month's average Write call input (6,500 when there is none) plus each target × 1.7 output, at $2 and $10 a million. For example: "2 AI calls, about 650 words. About $0.04 and 18,000 tokens. You have 1.21M tokens left this month."
+  - Near the limit there is a warning that does not block. With no tokens left, the allowance line shows and Generate is off.
+- **Running (3):**
+  - The card has "Generate chapter · 1 of 2", each section as Written, Writing now or Waiting, the progress, and Stop.
+  - The open section follows the queue. The manuscript list shows "Writing…" on it.
+  - The editor, Generate section, Generate chapter, Improve and the AI check are off.
+  - The text streams in the editor, as Generate section does today; the 23b mock-up drew it inside the card.
+- **The end cards:**
+  - **Done (4):** "Chapter 2 is written…", with focus on Close.
+  - **Stopped (5):** today's stopped wording, and "Generate the rest (N)", which writes the stopped section again (your answer 4).
+  - **Failed (6a):** "Try again from 3.1", with no new confirm.
+  - **Month limit (6b):** no Try again.
+- **Leaving while it runs (8):** "Stop and leave? The text written so far in 3.2 is saved in Versions. 3.3 is not written."
+- **Files:** `js/write-generate.js` (the queue, next to the single run), `js/book-write.js` (the head row, the host, the pill), `js/usage-rules.js` (`chapterEstimate`, `tokensText`; now loaded in `app/book.html`), `css/app.css`, and the write mock (`usage_month`).
+
+**Found while testing:** a redraw of the card (a run row read) dropped focus from its button. The card now keeps the focus on Close, Stop, Try again or Generate the rest.
+
+**Tests:**
+- Helpers: 151 → 153 (`usage-rules` +2).
+- Generate: 317, unchanged.
+- Browser: 1,661 → 1,704, 0 fails, no page errors. write 796: new `t-chapter` 41, and `t-ready` +2 for step 0 (no source, so never Ready). The other suites are unchanged.
+
+**Screenshots (`e12-fix2-stop6/`), each at 1440 and 900:**
+- `t-chapter-button`: the head;
+- `t-chapter-confirm` and `t-chapter-near`: the confirm and the limit warning;
+- `t-chapter-running`;
+- `t-chapter-stopped`;
+- `t-chapter-done`;
+- `t-chapter-failed`;
+- `t-chapter-leave`.

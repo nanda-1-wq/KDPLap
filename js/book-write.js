@@ -819,7 +819,7 @@
     const current = cur && cur.id === s.id ? ' aria-current="true"' : '';
     return `<button type="button" class="wr-ms-sec${top ? ' is-top' : ''}" data-section="${s.id}"${current}>
         <span class="wr-ms-name">${esc(sectionLabel(c, s))}</span>
-        <span class="wr-ms-pills">${s.needs_review ? reviewPill() : ''}${pill(s.status)}</span>
+        <span class="wr-ms-pills">${s.needs_review ? reviewPill() : ''}${G && G.writingNow(s.id) ? '<span class="wr-pill is-writing">Writing…</span>' : pill(s.status)}</span>
       </button>`;
   }
 
@@ -877,6 +877,13 @@
     imp.render();
   }
 
+  /** Generate section, and in a chapter Generate chapter with its line on a row of their own (design 23b, 1A). */
+  function genButtons() {
+    const one = `<button type="button" class="btn btn-secondary wr-gen-btn" data-generate${G.block() ? ' disabled' : ''}>${SPARKLE}Generate section</button>`;
+    const chap = G.chapterButton();
+    return chap ? `<div class="wr-gen-btns">${one}${chap}</div>` : one;
+  }
+
   function renderHead() {
     const box = els && els.main.querySelector('[data-head]');
     if (!box || !cur) return;
@@ -895,7 +902,7 @@
           ${STATUSES.map(([k, l]) => `<option value="${k}"${s.status === k ? ' selected' : ''}>${l}</option>`).join('')}
         </select>
       </label>
-      <button type="button" class="btn btn-secondary wr-gen-btn" data-generate${G.block() ? ' disabled' : ''}>${SPARKLE}Generate section</button>`;
+      ${genButtons()}`;
     // The hint of design 22: under the target, with text, nothing running.
     const hint = els.main.querySelector('[data-hint]');
     if (hint) {
@@ -1290,6 +1297,10 @@
       maxChars: MAX_CHARS,
       findSection,
       sectionLabel,
+      // Generate chapter (E12 fix batch 2, design 23b).
+      sectionWords,
+      chapterNumber: (c) => numberOf(c),
+      chapterById: (id) => chapters.find((c) => c.id === id) || null,
       active,
       announce,
       posLocked,

@@ -73,3 +73,29 @@ Deno.test("every server stage has a plain name", () => {
   for (const s of stages) assertEquals(typeof U.STAGE_NAMES[s], "string", s);
   assertEquals(Object.keys(U.STAGE_NAMES).sort(), [...stages].sort());
 });
+
+/* ── E12 fix batch 2: the Generate chapter cost line (design 23b) ── */
+
+Deno.test("chapterEstimate: this month's average Write input, targets × 1.7 output, Sonnet prices", () => {
+  const u = { limit: 2_000_000, tokens: 790_000, resets: "2026-11-01T00:00:00Z",
+    by_stage: [{ stage: "section_write", model: "claude-sonnet-5-5", calls: 10, input: 84_000, output: 6_000 }, { stage: "section_check", model: "claude-sonnet-5-5", calls: 4, input: 20_000, output: 900 }] };
+  const e = U.chapterEstimate(u, [300, 300, 400]);
+  assertEquals([e.calls, e.words, e.input, e.output, e.tokens], [3, 1000, 25_200, 1_700, 26_900]);
+  assertEquals(Math.round(e.cost * 1e4) / 1e4, 0.0674);   // 25,200 × $2 + 1,700 × $10 a million
+  assertEquals([e.left, e.over, e.none, e.resets], [1_210_000, false, false, "November 1"]);
+  assertEquals([U.costText(e.cost), U.tokensText(e.tokens), U.tokensText(e.left)], ["About $0.07", "27,000", "1.21M"]);
+});
+
+Deno.test("chapterEstimate: no Write call yet, no target, near and at the limit, no usage", () => {
+  const none = { limit: 2_000_000, tokens: 0, by_stage: [] };
+  const e = U.chapterEstimate(none, [0, null]);
+  assertEquals([e.input, e.words, e.output], [2 * U.WRITE_INPUT_DEFAULT, 1000, 1700]);   // 6,500 each; 500 words for no target, as Generate
+  const near = U.chapterEstimate({ ...none, tokens: 1_980_000 }, [300, 300, 400]);
+  assertEquals([near.left, near.over, near.none], [20_000, true, false]);
+  const at = U.chapterEstimate({ ...none, tokens: 2_000_050 }, [300]);
+  assertEquals([at.left, at.over, at.none], [0, true, true]);
+  // Usage could not be read: the default input, nothing said about what is left.
+  const unknown = U.chapterEstimate(null, [300]);
+  assertEquals([unknown.input, unknown.left, unknown.over, unknown.none], [U.WRITE_INPUT_DEFAULT, null, false, false]);
+  assertEquals([U.tokensText(950), U.tokensText(27_400), U.tokensText(1_219_999)], ["950", "27,000", "1.21M"]);
+});

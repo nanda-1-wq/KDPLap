@@ -314,6 +314,13 @@ const setup = async page => {
       sg.version_id = v.id;
       return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, source: v.source });
     }
+    // E12 fix batch 2 (23b): this month's usage for the Generate chapter cost line (0025 usage_month).
+    if (path === '/rest/v1/rpc/usage_month') {
+      store.usageReads = (store.usageReads || 0) + 1;
+      if (mode('usageError')) return json(r, 500, { message: 'mock' });
+      return json(r, 200, copy(store.usage || { month_start: '2026-10-01T00:00:00+00:00', resets: '2026-11-01T00:00:00+00:00', limit: 2000000, tokens: 790000,
+        by_stage: [{ stage: 'section_write', model: 'claude-sonnet-5-5', calls: 10, input: 84000, output: 6000 }] }));
+    }
     // E12 fix batch 2 (22e): a section's used suggestions (listUsedSuggestions).
     if (path === '/rest/v1/section_suggestions' && method === 'GET') {
       store.sugReads = (store.sugReads || 0) + 1;

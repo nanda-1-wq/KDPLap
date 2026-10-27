@@ -19,11 +19,22 @@
              rounded down; null when there was no Write section call.
    kdpUsage.costText(cost) → "About $2.10" | "Under $0.01" | "$0.00" | "No estimate"
    kdpUsage.call(row, now) → one "Last calls" row: { when, name, where, tokens, tag }
+   kdpUsage.chapterEstimate(u, targets) → the cost line of Generate chapter (E12 fix
+     batch 2, design 23b): { calls, words, input, output, tokens, cost, left, over,
+     none, resets }. Each section: this month's average Write call input (or
+     WRITE_INPUT_DEFAULT) plus its word target × OUT_PER_WORD output tokens.
+   kdpUsage.tokensText(n) → "27,000" | "1.21M" (rounded, for the cost line)
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
   // Dollars per million tokens (Anthropic price list, checked for Sonnet 5.5 in G3).
   const PRICES = { 'claude-sonnet-5-5': { in: 2, out: 10 } };
+  // Generate chapter (design 23b): the input of one Write call when this month has none,
+  // the output tokens a word (E12: 1.54 to 1.85 measured), and Generate's words for no target.
+  const WRITE_INPUT_DEFAULT = 6500;
+  const OUT_PER_WORD = 1.7;
+  const NO_TARGET_WORDS = 500;
+  const WRITE_MODEL = 'claude-sonnet-5-5';
   const WARN_AT = 0.8;
   const TOP = 5;
 
@@ -104,6 +115,34 @@
     };
   }
 
+  function chapterEstimate(u, targets) {
+    const list = Array.isArray(targets) ? targets : [];
+    const rows = (Array.isArray(u && u.by_stage) ? u.by_stage : []).filter((r) => r.stage === 'section_write');
+    const calls = rows.reduce((a, r) => a + n(r.calls), 0);
+    const avgIn = calls ? rows.reduce((a, r) => a + n(r.input), 0) / calls : WRITE_INPUT_DEFAULT;
+    const words = list.reduce((a, t) => a + (n(t) > 0 ? n(t) : NO_TARGET_WORDS), 0);
+    const input = Math.round(avgIn * list.length);
+    const output = Math.round(words * OUT_PER_WORD);
+    const p = PRICES[(rows[0] && rows[0].model) || WRITE_MODEL] || PRICES[WRITE_MODEL];
+    const tokens = input + output;
+    const limit = n(u && u.limit), used = n(u && u.tokens);
+    const left = u ? Math.max(0, limit - used) : null;
+    return {
+      calls: list.length, words, input, output, tokens,
+      cost: (input * p.in + output * p.out) / 1e6,
+      left, over: left !== null && tokens > left, none: left !== null && limit > 0 && left === 0,
+      resets: resetsText(u && u.resets)
+    };
+  }
+
+  /** Tokens for a short line: "27,000" (to the nearest 1,000) or "1.21M". */
+  function tokensText(t) {
+    const v = n(t);
+    if (v >= 1e6) return `${(Math.floor(v / 1e4) / 100).toFixed(2)}M`;
+    if (v >= 1000) return (Math.round(v / 1000) * 1000).toLocaleString('en-US');
+    return v.toLocaleString('en-US');
+  }
+
   function costText(cost) {
     if (cost === null || cost === undefined) return 'No estimate';
     if (cost === 0) return '$0.00';
@@ -135,5 +174,5 @@
     };
   }
 
-  root.kdpUsage = { PRICES, WARN_AT, STAGE_NAMES, summary, costText, call, nameOf, resetsText, whenText };
+  root.kdpUsage = { PRICES, WARN_AT, STAGE_NAMES, WRITE_INPUT_DEFAULT, OUT_PER_WORD, summary, costText, call, nameOf, resetsText, whenText, chapterEstimate, tokensText };
 })(globalThis);
