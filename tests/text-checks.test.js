@@ -3,9 +3,12 @@
 // against the server's markUnsourced (the E10.2 marker rows, read from
 // lib.section_write.test.ts as data, and more), the known text against the
 // server's writeKnown, then repeated phrases, the same opener, words vs the
-// target, open marks, and the speed on a 16,000-word section.
+// target, open marks, and the speed on a 16,000-word section. E12 fix batch 2:
+// repeats as info, never the section's own topic (item 7); "Source not named"
+// and the label strip against the server's (items 9, 10); the same sentence
+// in another section (item 11 A).
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { completeEnd, endsMidSentence, markUnsourced, writeKnown } from "../supabase/functions/generate/lib/section_write.ts";
+import { completeEnd, endsMidSentence, markUnsourced, SOURCE_LABEL, stripSourceLabels, writeKnown } from "../supabase/functions/generate/lib/section_write.ts";
 import { writeCtx } from "../supabase/functions/generate/test_fakes.ts";
 import "../js/word-budget.js";
 import "../js/sentences.js";
@@ -251,4 +254,94 @@ Deno.test("ending: the same answer as the server's endsMidSentence, and the cut 
     assertEquals(md.slice(0, e.start).replace(/\s+$/, ""), completeEnd(md), JSON.stringify(md));
   }
   assertEquals(T.ending("That is real progress. In the next"), { start: 23, end: 34, text: "In the next" });
+});
+
+Deno.test("ending (fix batch 2, item 9): source labels are not text; the server's rule on the text without labels", () => {
+  const cases = ["You can always do more than the minimum. [S3]", "Done.[S12]", "Done. [S3, S5]\n\n[S2]", "Cut mid sen [S3]", "Para one.\n\nHalf a sent (S2)"];
+  for (const md of cases) assertEquals(T.ending(md) !== null, endsMidSentence(stripSourceLabels(md)), JSON.stringify(md));
+  assertEquals(T.ending("You can always do more than the minimum. [S3]"), null);
+  assertEquals(T.ending("Cut mid sen [S3]").text, "Cut mid sen [S3]");
+});
+
+/* ── E12 fix batch 2 ── */
+
+Deno.test("repeated phrases (fix batch 2, item 7): info and never counted; the section title and its own subheadings are not repeats", () => {
+  // The real book: "five-minute habit" in "Five-minute habits for your emptiest days" (singular or plural).
+  const md = "Pick one five-minute habit. A five-minute habit is small. Any five-minute habit counts.";
+  assertEquals(T.check(md, { title: "Five-minute habits for your emptiest days" }).rows.filter((r) => r.code === "repeat"), []);
+  // Without the title it shows, as info, and the tab does not count it.
+  const out = T.check(md, {});
+  const row = out.rows.find((r) => r.code === "repeat");
+  assertEquals([row.kind, row.text, out.warnings], ["info", '"five-minute habit" used 3 times', 0]);
+  // "look and touch" is one of the section's subheadings; the heading is not a use either.
+  const sub = "## Look and touch\n\nLook and touch the cup. Then look and touch the table. Now look and touch the door.";
+  assertEquals(T.check(sub, {}).rows.filter((r) => r.code === "repeat"), []);
+  assertEquals(T.check(sub.replace("## Look and touch\n\n", ""), {}).rows.filter((r) => r.code === "repeat").map((r) => r.text), ['"look and touch the" used 3 times']);   // the longest phrase
+  // A phrase with a word outside the topic still shows; touches / touch match both ways.
+  const mixed = "Build morning habits early. Then build morning habits again. Always build morning habits.";
+  assertEquals(T.check(mixed, { title: "Morning habits" }).rows.filter((r) => r.code === "repeat").map((r) => r.text), ['"build morning habits" used 3 times']);
+  assertEquals(T.check("A light touch now. One light touch again. Only light touch here.", { title: "Light touches" }).rows.filter((r) => r.code === "repeat"), []);
+  // Only headings: nothing to count.
+  assertEquals(T.check("## Roll your shoulders\n\n## Roll your shoulders\n\n## Roll your shoulders", {}).rows.filter((r) => r.code === "repeat"), []);
+});
+
+Deno.test("source labels (fix batch 2, item 9): the same pattern and strip as the server", () => {
+  assertEquals(T.SOURCE_LABEL.source, SOURCE_LABEL.source);
+  assertEquals(T.SOURCE_LABEL.flags, SOURCE_LABEL.flags);
+  const cases = [
+    "You can always do more than the minimum. [S3]", "Fogg [S3] says start small.", "Start small [S3, S5].", "Start small [S3; S4] today (S2).",
+    "Start small [S3-S5].", "Done.[S12]", "[S3] Fogg says so.", "- [S1] a list item", "  Indented [S2]", "Habits stick. [Verify: no source]",
+    "Rest for [2] minutes and see [the guide] or (S) or [S] or SS3.", "One. [S1]\nTwo. [S2]\n\n## Three [S3]", "",
+  ];
+  for (const c of cases) assertEquals(T.stripLabels(c), stripSourceLabels(c), c);
+});
+
+Deno.test("source row (fix batch 2, items 9 and 10): labels and sources with no name; counted", () => {
+  const md = "Start small, Fogg says. You can always do more than the minimum. [S3]\n\nAnother source suggests a timer. A source of stress is noise.\n\n- Fogg [S2, S4] says start tiny.\n\nOne source puts it this way: rest.";
+  const out = T.check(md, {});
+  const row = out.rows.find((r) => r.code === "source");
+  assertEquals([row.kind, row.text, row.sub], ["warn", "Source not named", "Name the author or the title, or cut the label."]);
+  // Show selects just the label, or the whole sentence for a source with no name.
+  assertEquals(row.ranges.map((g) => md.slice(g.start, g.end)), ["[S3]", "Another source suggests a timer.", "[S2, S4]", "One source puts it this way: rest."]);
+  assertEquals(row.sents.map((x) => x.text), ["You can always do more than the minimum. [S3]", "Another source suggests a timer.", "Fogg [S2, S4] says start tiny.", "One source puts it this way: rest."]);
+  assertEquals(out.warnings, 1);
+  // Other sources, the other source; never "a source of", "the source" or a named one.
+  for (const t of ["Other sources agree on this.", "The other source puts it simply.", "Some sources say so."]) assert(T.check(t, {}).rows.some((r) => r.code === "source"), t);
+  // A label right after a sentence, then more text: shown with the sentence it ends; a source
+  // with no name after it is shown and selected without the label.
+  const md2 = "You can always do more. [S3] Another source suggests a timer.";
+  const r2 = T.check(md2, {}).rows.find((r) => r.code === "source");
+  assertEquals(r2.sents.map((x) => [x.text, md2.slice(x.start, x.end)]), [["You can always do more. [S3]", "[S3]"], ["Another source suggests a timer.", "Another source suggests a timer."]]);
+  for (const t of ["Sleep is a source of energy.", "The source of the problem is time.", "BJ Fogg says start small.", "## Another source\n\nRest."]) assertEquals(T.check(t, {}).rows.filter((r) => r.code === "source"), [], t);
+});
+
+Deno.test("again row (fix batch 2, item 11 A): sentences of 8+ words that another section has, with where", () => {
+  const s1 = "Starting is often the hardest part, and you can always do more than the minimum.";
+  const md = `Pick a time. ${s1}${M}\n\nKeep going with this small step every single day.\n\nShort lines are fine here.`;
+  const others = [
+    { label: "2.3", text: `Intro. ${s1.replace(",", "").toUpperCase()}` },
+    { label: "4.1", text: `## Starting\n\n- ${s1} [S3]` },
+    { label: "1.1", text: "Short lines are fine here. Nothing else is the same in this one at all." },
+    { label: "Conclusion", text: "## Keep going with this small step every single day." },
+  ];
+  const out = T.check(md, { others });
+  const row = out.rows.find((r) => r.code === "again");
+  assertEquals([row.kind, row.text, row.sub], ["warn", "1 sentence is also in another section", "Rewrite it here or cut it."]);
+  assertEquals(row.sents.map((x) => [x.text, x.where]), [[s1, ["2.3", "4.1"]]]);   // a 5-word sentence and a heading do not count
+  assertEquals(md.slice(row.ranges[0].start, row.ranges[0].end), `${s1}${M}`);
+  assertEquals(out.warnings, 2);   // the open mark and this row
+  assertEquals(out.rows.map((r) => r.code), ["marks", "again"]);
+  // No other sections, or the same sentence twice in this section only: no row.
+  assertEquals(T.check(md, {}).rows.some((r) => r.code === "again"), false);
+  assertEquals(T.bookRepeats(`${s1} ${s1}`, [{ label: "2.1", text: "Nothing alike here at all in these many words." }]), []);
+  // The plural: two sentences.
+  const s2 = "Write one flashcard before you open your phone each morning.";
+  assertEquals(T.check(`${s1} ${s2}`, { others: [{ label: "3.2", text: `${s2} ${s1}` }] }).rows.find((r) => r.code === "again").text, "2 sentences are also in another section");
+});
+
+Deno.test("sentenceKeys: 8+ words in paragraphs and list items; marks, labels, ** and punctuation left out", () => {
+  const md = "## A heading with many words in it today now\n\n- **Open** the book to the page you left, and read one line. [S3]\n\nToo short to count here." + M;
+  const keys = T.sentenceKeys(md);
+  assertEquals(keys.map((k) => k.key), ["open the book to the page you left and read one line"]);
+  assertEquals(keys[0].text, "**Open** the book to the page you left, and read one line. [S3]");
 });

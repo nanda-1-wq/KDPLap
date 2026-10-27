@@ -241,9 +241,21 @@
       out.push(row(IC.info, `${parts.join(' and ')}. They are in the file.`, 'Choose "Final only" to leave them out.'));
     }
     if (m.noText.length) out.push(row(IC.info, `${plural(m.noText.length, 'section has', 'sections have')} no text: ${esc(listWords(m.noText.map(shortLabel)))}. ${m.noText.length === 1 ? 'It is' : 'They are'} left out.`));
-    if (m.needsReview.length) out.push(row(`<span class="exp-warn">${ICON.warn(16)}</span>`, `Needs review: ${esc(listWords(m.needsReview.map((x) => x.chapter ? x.label : shortLabel(x))))}. The positioning changed after it was written.`));
+    if (m.needsReview.length) {
+      // E12 fix batch 2, item 4: how each kind of mark clears.
+      const secs = m.needsReview.filter((x) => !x.chapter).length, chs = m.needsReview.length - secs;
+      const how = [secs && `Mark ${secs === 1 ? 'the section' : 'the sections'} as reviewed in 06 Write.`, chs && `Approve the outline in 05 to clear ${chs === 1 ? 'the chapter' : 'the chapters'}.`].filter(Boolean).join(' ');
+      out.push(row(`<span class="exp-warn">${ICON.warn(16)}</span>`, `Needs review: ${esc(listWords(m.needsReview.map((x) => x.chapter ? x.label : shortLabel(x))))}. The positioning changed after it was written.`, how));
+    }
     // E12 M9: a warning like Needs review; it never blocks and needs no tick.
     if (m.cut.length) out.push(row(`<span class="exp-warn">${ICON.warn(16)}</span>`, `${esc(listWords(m.cut.map(shortLabel)))} ${m.cut.length === 1 ? 'ends' : 'end'} mid-sentence. Finish or cut the last sentence before you publish.`));
+    // E12 fix batch 2, item 11 A: a warning like the mid-sentence one; it never blocks and needs no tick.
+    if (m.repeats && m.repeats.length) {
+      const r = m.repeats[0];
+      const short = r.text.length > 70 ? `${r.text.slice(0, 70).replace(/\s+\S*$/, '')}…` : r.text;
+      const n = m.repeats.length;
+      out.push(row(`<span class="exp-warn">${ICON.warn(16)}</span>`, `${n === 1 ? '1 sentence appears' : `${fmt(n)} sentences appear`} in more than one section, such as “${esc(short)}” (${esc(listWords(r.items.map(shortLabel)))}).`, 'Rewrite or cut the repeats in 06 Write. Each section’s Checks tab lists them.'));
+    }
     if (m.unsaved.length === 1) out.push(row(IC.info, `${esc(shortLabel(m.unsaved[0]))} has unsaved edits. The file uses v${m.unsaved[0].versionNo}, its last saved version.`));
     else if (m.unsaved.length > 1) out.push(row(IC.info, `${esc(listWords(m.unsaved.map(shortLabel)))} have unsaved edits. The file uses their last saved versions.`));
     if (m.partial.length) out.push(row(IC.info, `${esc(listWords(m.partial.map(shortLabel)))} ${m.partial.length === 1 ? 'ends' : 'end'} where a Generate was stopped (partial text).`));
@@ -292,7 +304,8 @@
     const allFinal = m.sections.every((s) => s.status === 'final');
     const summary = `${allFinal ? `All ${plural(m.sections.length, 'section')} ${m.sections.length === 1 ? 'is' : 'are'} Final.` : `${plural(m.sections.length, 'section')} in the file.`} No open Verify marks.`;
     // E12 STOP 3 (owner): with the "ends mid-sentence" note the line is neutral: the info icon, no "Ready.".
-    const readyLine = !ready ? '' : m.cut.length
+    // The same with the repeated-sentence note (fix batch 2, item 11 A).
+    const readyLine = !ready ? '' : m.cut.length || m.repeats.length
       ? `<div class="exp-crow">${IC.info}<span>${summary}</span></div>`
       : `<div class="exp-crow"><span class="save-ok">${ICON.check(16)}</span><span>Ready. ${summary}</span></div>`;
     const emptyFinal = m.empty && m.include === 'final'

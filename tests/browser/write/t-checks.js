@@ -169,14 +169,18 @@ const test = async page => {
   ok(!(await page.$eval('[data-generate]', (b) => b.disabled)) && !/turns on when the section is ready/.test(await txt('[data-imp-hint]') || ''), 'after Save version: Generate on, no "Improve turns on" hint');
 
   // 5. Live code checks: debounced; the opener and the repeated phrase; Show. Typed into the
-  // first paragraph (openers are checked in paragraphs, not list items).
+  // first paragraph (openers are checked in paragraphs, not list items). E12 fix batch 2, item 7:
+  // a repeat is info and not counted, and "roll your shoulders" is this section's own topic
+  // ("Shoulder rolls, both ways"), so it is not a repeat.
   await caretAfter('neck pain by 40%.');
-  await page.keyboard.type(' You sit tall. You breathe out. You roll back. Now roll your shoulders up. Then roll your shoulders back. Again roll your shoulders down.');
+  await page.keyboard.type(' You sit tall. You breathe out. You roll back. Now lift your arms up. Then lift your arms back. Again lift your arms down. Gently roll your shoulders up. Slowly roll your shoulders down. Then roll your shoulders once more.');
   ok(!(await has('[data-chk-row="opener"]')), 'right after typing: not yet (400 ms debounce)');
   await page.waitForTimeout(700);
   ok((await rowText('opener')) === '3 sentences in a row start with "You". Show', `opener row: "${await rowText('opener')}"`);
-  ok((await rowText('repeat')) === '"roll your shoulders" used 3 times Show', `repeat row (3+ words): "${await rowText('repeat')}"`);
-  ok((await tabLabel()) === 'Checks 3', `tab count 3 (claim, opener, repeat): "${await tabLabel()}"`);
+  ok((await rowText('repeat')) === '"lift your arms" used 3 times Show', `repeat row (3+ words): "${await rowText('repeat')}"`);
+  ok((await page.$$('[data-chk-row="repeat"]')).length === 1, 'the section title\'s words are not a repeat ("roll your shoulders" in "Shoulder rolls, both ways")');
+  ok(await has('[data-chk-row="repeat"] .wr-chk-ico:not(.is-warn)') && !(await has('[data-chk-row="repeat"] .is-warn')), 'repeat row: the info icon');
+  ok((await tabLabel()) === 'Checks 2', `tab count 2 (claim, opener; a repeat is never counted): "${await tabLabel()}"`);
   await page.click('[data-chk-row="opener"] [data-chk-show]');
   ok((await selected()) === 'You sit tall. You breathe out. You roll back.', `Show selects the 3 sentences: "${await selected()}"`);
 
@@ -327,7 +331,7 @@ const test = async page => {
   await checksTab();
   await page.waitForTimeout(300);
   ok(!(await has('[data-chk-row="number"]')), 'a number from Research is not flagged');
-  ok((await tabLabel()) === 'Checks 2', `tab count: only the opener and the repeat (typed in 5): "${await tabLabel()}"`);
+  ok((await tabLabel()) === 'Checks 1', `tab count: only the opener (typed in 5; the repeat is info): "${await tabLabel()}"`);
   st.research.sources = [];
 
   // 11. Open marks; under 50 words; over 6,000 words; an empty section.

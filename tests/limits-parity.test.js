@@ -144,6 +144,7 @@ Deno.test("outline limits: browser, server and 0016", () => {
   assertEquals(jsConst(OUT, "MAX"), { chapterTitle: L.OUTLINE_MAX.chapterTitle, objective: L.OUTLINE_MAX.objective, sectionTitle: L.OUTLINE_MAX.sectionTitle, sectionWords: L.OUTLINE_MAX.sectionWords });
   assertEquals([jsConst(OUT, "MAX_CHAPTERS"), jsConst(OUT, "MAX_SECTIONS")], [L.OUTLINE_MAX.chapters, L.OUTLINE_MAX.sections]);
   assertEquals(jsConst(OUT, "PER_CHAPTER"), { ...L.SECTIONS_PER_CHAPTER });
+  assertEquals(jsConst(OUT, "AUTO_SECTIONS"), { ...L.AUTO_SECTIONS });   // E12 fix batch 2, item 2
   assertEquals(one(f, String.raw`chapters_title_length_check\s+check \(title is null or \(char_length\(title\) <= (\d+)`), L.OUTLINE_MAX.chapterTitle);
   assertEquals(one(f, String.raw`chapters_objective_length_check\s+check \(objective is null or \(char_length\(objective\) <= (\d+)`), L.OUTLINE_MAX.objective);
   assertEquals(one(f, String.raw`sections_title_length_check\s+check \(title is null or \(char_length\(title\) <= (\d+)`), L.OUTLINE_MAX.sectionTitle);

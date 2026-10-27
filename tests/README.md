@@ -76,7 +76,9 @@ deno test --allow-read tests/user-name.test.js
   include rule (the cases in `tests/fixtures/export-include.json`, shared with
   the SQL test `t_export_include`), counts, notes, run freshness, the AI note,
   Verify marks (the old v15 places too), the sections that end mid-sentence
-  (E12 M9, a note only), the copyright text and the file name.
+  (E12 M9, a note only), the same sentence in more than one section (E12 fix
+  batch 2, a note only), the copyright text and the file name. `strip` takes
+  out source labels too.
   `export-build.test.js` checks the exact Markdown and opens a real .docx
   (docx 9.5.1 from `tests/browser/.cache/`, its SRI checked; unzipped by
   `tests/lib/unzip.js`): page sizes, page numbers only in the body and from 1,
@@ -124,7 +126,13 @@ deno test --allow-read tests/user-name.test.js
   (E12 Part 3: "next section", "next chapter", "following section", "following
   chapter", "later in this book", "later in the book", "later in this chapter",
   and "section" or "chapter" with a number; back references are allowed); open marks, repeated phrases (3 to 6 words, 3+
-  times, the longest, never common words only), the same opener (paragraphs
+  times, the longest, never common words only; E12 fix batch 2: info and never
+  counted, never the words of the section title or its own subheadings, headings
+  are not uses), "Source not named" (a label such as `[S3]`, Show on the label,
+  and "another source" with no name; the label pattern and strip against the
+  server's `SOURCE_LABEL` and `stripSourceLabels`; a label at the end is not a
+  cut sentence), "Also in another section" (sentences of 8+ words another
+  section has, with where; `sentenceKeys`, `bookRepeats`), the same opener (paragraphs
   only; a heading or a list resets), words vs the target (under 80%, over
   120%, never counted), and under 30 ms on a 16,000-word section.
 - `section-check-key.test.js`: the section check fingerprint in the browser
@@ -190,8 +198,10 @@ t-book-type, t-help-more, t-references), `research` (t-stale, t-missing, t-from,
 t-accept-all, t-missing, t-save-owner), `title` (t1, t-note, t-hyphen, t-missing),
 `delete` (t-dialog), `outline` (t1, t-struct, t-generate, t-check, t-approve, t-blank, t-running),
 `write` (t1, t-draft, t-versions, t-idle, t-fixes, t-empty, t-generate, t-gen-ends, t-improve, t-checks,
-t-timing, t-selection, t-fix, t-queue), for E11 `settings` (t-settings, t-footer), `export`
-(t-export, and t-cut for E12 M9: the "ends mid-sentence" note never blocks) and `books` (t-badge),
+t-timing, t-selection, t-fix, t-queue, and t-batch2 for E12 fix batch 2: Mark as reviewed and the
+status clearing Needs review, "Source not named" and "Also in another section"), for E11 `settings` (t-settings, t-footer), `export`
+(t-export, t-cut for E12 M9: the "ends mid-sentence" note never blocks, and t-repeats for E12 fix
+batch 2: the repeated-sentence note, the Needs review hint, no `[S3]` in the .docx or .md) and `books` (t-badge),
 and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,

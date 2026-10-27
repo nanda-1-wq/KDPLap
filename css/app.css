@@ -2523,6 +2523,9 @@ div.delete-text p { margin: 0; }
 .otl-words { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; font-size: var(--text-md); color: var(--graphite); }
 .otl-words strong { min-width: var(--app-otl-words-w); padding: 0 var(--space-3); color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 .otl-num-input { width: var(--app-otl-words-w); font-variant-numeric: tabular-nums; }
+/* Generate dialog: the number is off while "Let the AI choose" is picked (E12 fix batch 2, item 2). */
+.dialog .otl-num-input:disabled { color: var(--muted); background: var(--surface-2); border-color: var(--mist); cursor: not-allowed; }
+.dialog .field:has(.otl-num-input:disabled) label { color: var(--muted); }
 
 .otl-ch-body { display: flex; flex-direction: column; gap: var(--space-4); padding: 0 var(--space-5) var(--space-5) calc(var(--control-h) + var(--space-8)); }
 .otl-fields { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -3086,6 +3089,9 @@ div.delete-text p { margin: 0; }
 .wr-chk-sents li { min-height: var(--control-h); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-left: 2px solid var(--stone-2); padding-left: var(--space-2); }
 .wr-chk-sent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-read); font-size: var(--text-sm); color: var(--ink-2); }
 .wr-chk-more { font-size: var(--text-sm); color: var(--graphite); border-left: none !important; }
+/* "Also in another section": the sentence and where else it is (E12 fix batch 2, item 11 A). */
+.wr-chk-sent-wrap { min-width: 0; display: flex; flex-direction: column; padding: 2px 0; }
+.wr-chk-where { font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); }
 .wr-chk-help { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }
 .wr-chk-meta { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-sm); color: var(--graphite); }
 .wr-chk-run { width: 100%; }

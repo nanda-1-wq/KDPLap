@@ -5,7 +5,9 @@
 
    Two groups. "In your text": code checks (js/text-checks.js) on the editor
    text, 400 ms after typing stops: open source marks, numbers with no source,
-   repeated phrases, the same opener, words vs the target. Free, never the AI.
+   sources with no name, sentences also in another section (the other
+   sections' saved texts, read when a section opens), repeated phrases, the
+   same opener, words vs the target. Free, never the AI.
    "AI check": the last saved result of the section (0022 section_checks), or
    a button. One call (stage section_check) on the saved current version:
    unsaved typing is saved as a version first, with autosave paused until the
@@ -45,6 +47,7 @@
   const PASS = { objective: 'No objective problems found', voice: 'No voice problems found', drift: 'No drift found' };
   const fmt = (n) => Number(n || 0).toLocaleString('en-US');
   const one = (rel) => (Array.isArray(rel) ? rel[0] : rel) || null;
+  const listWords = (items) => (items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
 
   function create(host) {
     const saved = {};        // section id → { state: 'loading' | 'ready' | 'error', row }
@@ -56,6 +59,8 @@
     const keepErr = {};      // section id → { at: finding index or kept id, text }
     let fixing = null;       // { sid, i }: the finding whose Fix opened the Improve menu (shown pressed while it is open)
     let research = null;     // listResearch data, or null (not loaded or failed)
+    let others = { seq: 0, id: null, list: [] };   // the other sections' saved texts [{ label, text }] for section id (fix batch 2, item 11 A)
+    let othersToken = 0;
     let memo = { key: null, out: null };
     let timer = 0;
 
@@ -76,9 +81,27 @@
       const hit = host.findSection(cur().id);
       const target = hit ? hit.s.word_target || 0 : 0;
       const k = known();
-      const key = `${cur().text}\u0000${k}\u0000${target}`;
-      if (memo.key !== key) memo = { key, out: T.check(cur().text, { known: k, target }) };
+      const title = hit ? hit.s.title || '' : '';
+      const key = `${cur().text}\u0000${k}\u0000${target}\u0000${title}\u0000${others.seq}`;
+      // Only the list read for this section (never one that holds its own text).
+      const list = others.id === cur().id ? others.list : [];
+      if (memo.key !== key) memo = { key, out: T.check(cur().text, { known: k, target, title, others: list }) };
       return memo.out;
+    }
+
+    /**
+     * The other sections' saved texts, for "Also in another section" (fix batch 2,
+     * item 11 A). Read each time a section opens. A failed read shows no row.
+     */
+    async function loadOthers(id) {
+      const token = ++othersToken;
+      const list = [];
+      for (const c of host.chapters()) for (const s of c.sections || []) if (s.id !== id && s.current_version_id) list.push({ label: host.number(c, s), vid: s.current_version_id });
+      let res = { data: [] };
+      if (list.length) { try { res = await kdp.getSectionTexts(list.map((x) => x.vid)); } catch (err) { res = { error: err }; } }
+      if (token !== othersToken) return;   // a newer section opened meanwhile: its read wins
+      const text = new Map((res.error ? [] : res.data || []).map((v) => [v.id, v.content || '']));
+      others = { seq: others.seq + 1, id, list: list.filter((x) => text.has(x.vid)).map((x) => ({ label: x.label, text: text.get(x.vid) })) };
     }
 
     /* ── The saved AI check ───────────────────── */
@@ -110,10 +133,12 @@
       if (!id) return;
       saved[id] = { state: 'loading', row: saved[id] && saved[id].row };
       const keptLoad = loadKept(id);
+      const othersLoad = loadOthers(id);
       let res;
       try { res = await kdp.getSectionCheck(id); } catch (err) { res = { error: err }; }
       saved[id] = res.error ? { state: 'error', row: null } : { state: 'ready', row: res.data || null };
       await keptLoad;
+      await othersLoad;
       refresh();
     }
 
@@ -428,7 +453,10 @@
       const rows = out.rows.map((r) => {
         let extra = '';
         if (r.sents.length) {
-          const items = r.sents.slice(0, 10).map((s) => `<li><span class="wr-chk-sent">${esc(s.text)}</span>${showBtn(s)}</li>`).join('');
+          const sent = (s) => (s.where
+            ? `<span class="wr-chk-sent-wrap"><span class="wr-chk-sent">${esc(s.text)}</span><span class="wr-chk-where">Also in ${esc(listWords(s.where))}</span></span>`
+            : `<span class="wr-chk-sent">${esc(s.text)}</span>`);
+          const items = r.sents.slice(0, 10).map((s) => `<li>${sent(s)}${showBtn(s)}</li>`).join('');
           const more = r.sents.length > 10 ? `<li class="wr-chk-more">+${fmt(r.sents.length - 10)} more</li>` : '';
           extra = `<ul class="wr-chk-sents">${items}${more}</ul>`;
         } else if (r.ranges.length) extra = showBtn(r.ranges[0]);

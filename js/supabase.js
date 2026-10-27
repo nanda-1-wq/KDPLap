@@ -747,6 +747,17 @@ window.kdp = {
     return { data: error ? null : (data || []), error };
   },
 
+  /** Several versions' texts by id, at most 100 a request (06 Write, "Also in another section", E12 fix batch 2). */
+  async getSectionTexts(versionIds) {
+    const out = [];
+    for (let i = 0; i < versionIds.length; i += 100) {
+      const { data, error } = await window.sb.from('section_versions').select('id, content').in('id', versionIds.slice(i, i + 100));
+      if (error) return { data: null, error };
+      out.push(...(data || []));
+    }
+    return { data: out, error: null };
+  },
+
   /** One version's text (Compare). */
   async getVersion(id) {
     const { data, error } = await window.sb

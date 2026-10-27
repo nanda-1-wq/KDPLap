@@ -21,6 +21,7 @@
    kdpExportRules.model(data, opts)       → everything the dialog and the builder need
    kdpExportRules.versionIds(model)       → the exported version ids, in order
    kdpExportRules.strip(md)               → the text without "[Verify: no source]" marks
+                                            and source labels ("[S3]", E12 fix batch 2)
    kdpExportRules.copyright(pen, year)    → the copyright page text (owner, 2026-10-25)
    kdpExportRules.fileName(title, format) → "chair-yoga-for-seniors-over-60.docx"
 ═══════════════════════════════════════════════════ */
@@ -96,9 +97,10 @@
     return row ? row.ranges.length : 0;
   }
 
-  /** Remove every mark, then tidy the spaces it leaves. The sentences stay. */
+  /** Remove every mark and source label ("[S3]", fix batch 2, item 9), then tidy the spaces they leave. The sentences stay. */
   function strip(md) {
-    return str(md)
+    const T = root.kdpTextChecks;
+    return (T && T.stripLabels ? T.stripLabels(str(md)) : str(md))
       .split('\n')
       .map((line) => line.replace(/[ \t]*\[Verify: no source\]/g, '').replace(/([^ \t])[ \t]{2,}/g, '$1 ').replace(/[ \t]+$/, ''))
       .join('\n');
@@ -120,6 +122,7 @@
       noText: [],       // no saved text: always left out
       droppedChapters: [],
       needsReview: [], unsaved: [], partial: [], running: [], cut: [],
+      repeats: [],      // sentences in more than one section in the file: [{ text, items }], most places first (fix batch 2, item 11 A)
       marks: { total: 0, numbers: 0, sections: [] },
       ai: { draft: 0, edits: 0, own: 0, words: { draft: 0, edits: 0, own: 0 } },
       words: 0
@@ -173,6 +176,19 @@
     // Chapter numbers in the file run 1, 2, 3 over the chapters that are in it.
     let n = 0;
     for (const c of out.chapters) if (c.kind === 'chapter') c.fileNumber = ++n;
+    // E12 fix batch 2, item 11 A: the same sentence (8 or more words) in more than one section in the file.
+    // A warning, never blocking: the Checks tab's rule (kdpTextChecks.sentenceKeys).
+    if (root.kdpTextChecks && root.kdpTextChecks.sentenceKeys) {
+      const where = new Map();
+      for (const sec of out.sections) {
+        for (const k of root.kdpTextChecks.sentenceKeys(sec.content)) {
+          const w = where.get(k.key) || { text: k.text, items: [] };
+          if (!w.items.includes(sec)) w.items.push(sec);
+          where.set(k.key, w);
+        }
+      }
+      out.repeats = [...where.values()].filter((w) => w.items.length > 1).sort((a, b) => b.items.length - a.items.length);
+    }
     out.openMarks = out.marks.total + out.marks.numbers;
     out.empty = out.sections.length === 0;
     return out;

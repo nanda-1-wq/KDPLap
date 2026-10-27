@@ -161,6 +161,30 @@ Deno.test("strip: every mark goes, the sentences stay (the old v15 places too)",
   assertEquals(R.strip("No marks here.\n\nTwo  spaces stay  as one."), "No marks here.\n\nTwo spaces stay as one.");
 });
 
+Deno.test("strip: source labels go too (E12 fix batch 2, item 9)", () => {
+  assertEquals(R.strip("You can always do more than the minimum. [S3]"), "You can always do more than the minimum.");
+  assertEquals(R.strip("Fogg [S2, S4] says start tiny. [Verify: no source]\n\n- [S1] An item"), "Fogg says start tiny.\n\n- An item");
+  assertEquals(R.strip("Rest for [2] minutes."), "Rest for [2] minutes.");
+});
+
+Deno.test("model: the same sentence in more than one section (E12 fix batch 2, item 11 A), in the file only, never blocking", () => {
+  assertEquals(R.model(BOOK, { include: "all", format: "docx" }).repeats, []);
+  const s1 = "Starting is often the hardest part, and you can always do more than the minimum.";
+  const s2 = "Write one flashcard before you open your phone each morning.";
+  const rep = structuredClone(BOOK);
+  rep.chapters[0].sections[0].version.content = `Welcome. ${s1}`;                  // Introduction, Final
+  rep.chapters[1].sections[0].version.content = `${s1} [Verify: no source] ${s2}`; // 1.1, Final
+  rep.chapters[3].sections[0].version.content = `${s2}\n\n- ${s1}`;               // 3.1, Reviewed
+  rep.chapters[4].sections[0].version.content = `${s1.toLowerCase()}`;            // Conclusion, Final
+  const m = R.model(rep, { include: "all", format: "docx" });
+  assertEquals(m.repeats.map((r) => [r.text, r.items.map((x) => x.label)]), [
+    [s1, ["Introduction", "1.1 Your chair", "3.1 With support", "Conclusion"]],
+    [s2, ["1.1 Your chair", "3.1 With support"]],
+  ]);
+  // Final only: 3.1 is not in the file, so s2 is in one section only.
+  assertEquals(R.model(rep, { include: "final", format: "docx" }).repeats.map((r) => r.items.length), [3]);
+});
+
 Deno.test("copyright: the owner's text, year and pen name", () => {
   assertEquals(R.copyright("Nora Hale", 2026),
     "Copyright © 2026 Nora Hale. All rights reserved. No part of this book may be reproduced without written permission from the author, except for short quotes in reviews. The information in this book is for general education only. It is not medical, legal or financial advice. Talk to a qualified professional before you act on it.");

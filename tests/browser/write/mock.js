@@ -196,6 +196,13 @@ const setup = async page => {
       return json(r, 200, [{ id: hit.s.id, updated_at: now() }]);
     }
     if (path === '/rest/v1/section_versions' && method === 'GET') {
+      // Several texts by id (getSectionTexts, E12 fix batch 2: "Also in another section").
+      if (/^in\.\(/.test(param('id') || '')) {
+        store.textReads = (store.textReads || 0) + 1;
+        if (mode('textsError')) return json(r, 500, { message: 'mock' });
+        const ids = param('id').slice(4, -1).split(',').map((x) => x.replace(/"/g, ''));
+        return json(r, 200, copy(versions.filter((v) => ids.includes(v.id)).map((v) => ({ id: v.id, content: v.content }))));
+      }
       if (param('id')) { const v = versionOf(eq('id')); return json(r, 200, v ? [copy(v)] : []); }
       if (mode('versionsError')) return json(r, 500, { message: 'mock' });
       const list = versions.filter((v) => v.section_id === eq('section_id')).sort((a, b) => b.version_no - a.version_no)

@@ -478,14 +478,19 @@
     if (!cur || cur.state !== 'ready' || locked()) return;
     const hit = findSection(cur.id);
     if (!hit || hit.s.status === value) return;
-    const before = hit.s.status;
+    const before = hit.s.status, review = hit.s.needs_review;
+    // Reviewed or Final is the review: the "Needs review" mark goes too (E12 fix batch 2, item 4).
+    const clears = review && (value === 'reviewed' || value === 'final');
     hit.s.status = value;
+    if (clears) hit.s.needs_review = false;
     ctx.refresh();
     renderManuscript();
+    if (clears) renderNotes();
     let res;
-    try { res = await kdp.updateSection(hit.s.id, { status: value }); } catch (err) { res = { error: err }; }
+    try { res = await kdp.updateSection(hit.s.id, clears ? { status: value, needs_review: false } : { status: value }); } catch (err) { res = { error: err }; }
     if (res.error) {
       hit.s.status = before;
+      hit.s.needs_review = review;
       note = { kind: 'error', text: 'We couldn’t save the status. Try again.' };
       ctx.refresh();
       if (active()) { renderManuscript(); renderHead(); renderNotes(); }
@@ -493,6 +498,32 @@
     }
     if (res.data && res.data.updated_at) book.updated_at = res.data.updated_at;
     ctx.refresh();
+  }
+
+  /** "Mark as reviewed" (E12 fix batch 2, item 4): clears the section's "Needs review" mark; the status stays. */
+  async function markReviewed() {
+    if (!cur || cur.state !== 'ready' || locked()) return;
+    const hit = findSection(cur.id);
+    if (!hit || !hit.s.needs_review || hit.s.marking) return;
+    hit.s.marking = true;
+    renderNotes();
+    let res;
+    try { res = await kdp.updateSection(hit.s.id, { needs_review: false }); } catch (err) { res = { error: err }; }
+    hit.s.marking = false;
+    if (res.error) {
+      note = { kind: 'error', text: 'We couldn’t mark it as reviewed. Try again.' };
+      if (active()) renderNotes();
+      return;
+    }
+    hit.s.needs_review = false;
+    if (res.data && res.data.updated_at) book.updated_at = res.data.updated_at;
+    ctx.refresh();
+    if (!active()) return;
+    renderManuscript();
+    renderNotes();
+    announce('Marked as reviewed.');
+    const h = els.root.querySelector('[data-sec-title]');
+    if (h) h.focus();
   }
 
   /** Leaving the section: a version first. Stays when the text could not be saved at all. */
@@ -881,8 +912,10 @@
     if (hit && hit.s.needs_review) {
       const [off, offText] = chk.aiWhy();
       const why = off && off !== 'checking' ? offText : '';
-      parts.push(`<div class="alert alert-warning wr-note">${ICON.warn(16)}<div><p class="alert-text"><strong>Needs review.</strong> This section was written before the positioning was unlocked. Check it against 03 Positioning, then set its status.</p>
-          <div class="wr-note-actions"><button type="button" class="btn btn-secondary btn-sm" data-chk-review${off ? ` disabled${why ? ' aria-describedby="wrChkReviewWhy"' : ''}` : ''}>${SPARKLE}Run AI check</button></div>
+      // E12 fix batch 2, item 4: say how the mark clears (Mark as reviewed, or Reviewed or Final as the status).
+      const marking = hit.s.marking;
+      parts.push(`<div class="alert alert-warning wr-note" data-review-note>${ICON.warn(16)}<div><p class="alert-text"><strong>Needs review.</strong> This section was written before the positioning was unlocked. Check it against 03 Positioning, then choose Mark as reviewed. Setting the status to Reviewed or Final also clears this mark.</p>
+          <div class="wr-note-actions"><button type="button" class="btn btn-secondary btn-sm" data-mark-reviewed${marking || locked() ? ' disabled' : ''}>${marking ? '<span class="spinner" aria-hidden="true"></span>Saving…' : 'Mark as reviewed'}</button><button type="button" class="btn btn-secondary btn-sm" data-chk-review${off ? ` disabled${why ? ' aria-describedby="wrChkReviewWhy"' : ''}` : ''}>${SPARKLE}Run AI check</button></div>
           ${why ? `<p class="alert-text wr-chk-small" id="wrChkReviewWhy">${esc(why)}</p>` : ''}</div></div>`);
     }
     if (cur && cur.conflict) {
@@ -1050,6 +1083,7 @@
       if (!t || !root.contains(t)) return;
       if (t.dataset.goStep) { e.preventDefault(); ctx.go(Number(t.dataset.goStep)); return; }
       if (els.side.contains(t) && chk.handleClick(t)) return;
+      if (t.hasAttribute('data-mark-reviewed')) { markReviewed(); return; }
       if (t.hasAttribute('data-chk-review')) {
         tab = 'checks';
         renderSide();
@@ -1215,6 +1249,8 @@
       book: () => book,
       chapters: () => chapters,
       findSection,
+      // "2.3", "Introduction" or "Conclusion" (the Checks tab's "Also in", fix batch 2).
+      number: (c, s) => (c.kind === 'chapter' ? `${numberOf(c)}.${c.sections.indexOf(s) + 1}` : c.kind === 'intro' ? 'Introduction' : 'Conclusion'),
       dirty,
       active,
       why: improveWhy,

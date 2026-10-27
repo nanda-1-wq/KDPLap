@@ -12,7 +12,8 @@
      Introduction and the Conclusion each have one section that holds their
      words, so they show one Words box.
    - Generate / Regenerate (stage outline_ideas) needs a locked positioning
-     and asks for the sections per chapter (1 to 6, default 3). The server
+     and asks for the sections per chapter: the AI chooses 2 to 5 for each
+     chapter (the default, E12 fix batch 2), or the same 1 to 6 for all. The server
      saves the whole outline (replace_outline) and returns it. Regenerate
      replaces everything after a confirm, and is refused once any section
      has writing.
@@ -49,6 +50,8 @@
   const MAX_CHAPTERS = 30;
   const MAX_SECTIONS = 12;
   const PER_CHAPTER = { min: 1, max: 6, default: 3 };
+  // "Let the AI choose for each chapter" (E12 fix batch 2, item 2; generate/lib/limits.ts AUTO_SECTIONS).
+  const AUTO_SECTIONS = { min: 2, max: 5 };
 
   const GRIP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
   const INFO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
@@ -67,7 +70,8 @@
   let aiToken = 0;
   let busy = '';                         // 'add' while Add chapter runs
   let note = null;                       // { text, retry } after a failed add, move or remove
-  let lastPer = PER_CHAPTER.default;
+  let lastPer = PER_CHAPTER.default;    // the number for "The same for every chapter"
+  let lastAuto = true;                   // the AI chooses (owner D1: the default)
   let drag = null;                       // { id } while a chapter is dragged
   let gen = null, del = null, appr = null;   // dialogs, built on first use
   let checkRow = null;                   // the saved AI check { findings, inputs_key, checked_at } or null
@@ -374,7 +378,7 @@
       }
       const n = reviewCount();
       if (n) {
-        parts.push(`<p class="ttl-note is-warn" data-review-note>${ICON.warn(16)}<span><strong>Needs review.</strong> The positioning was unlocked after this outline was made, so ${n === 1 ? '1 chapter is' : `${n} chapters are`} marked. Check each one against the positioning.</span></p>`);
+        parts.push(`<p class="ttl-note is-warn" data-review-note>${ICON.warn(16)}<span><strong>Needs review.</strong> The positioning was unlocked after this outline was made, so ${n === 1 ? '1 chapter is' : `${n} chapters are`} marked. Check each one against the positioning. Approving the outline clears these marks.</span></p>`);
       }
     }
     parts.push(`<div data-status>${statusHtml()}</div>`);
@@ -1102,8 +1106,15 @@
         <div class="dialog-head"><h2 id="ogTitle"></h2></div>
         <p class="delete-text" data-gen-text></p>
         <p class="ttl-sub" data-gen-plan></p>
+        <fieldset class="choice-group">
+          <legend class="field-label choice-legend">Sections per chapter</legend>
+          <label class="choice"><input type="radio" name="ogMode" value="auto" data-per-mode />
+            <span class="choice-body"><span class="choice-title">Let the AI choose for each chapter</span><span class="field-hint">${AUTO_SECTIONS.min} to ${AUTO_SECTIONS.max} sections, as each chapter needs.</span></span></label>
+          <label class="choice"><input type="radio" name="ogMode" value="same" data-per-mode />
+            <span class="choice-body"><span class="choice-title">The same for every chapter</span><span class="field-hint">Set the number below.</span></span></label>
+        </fieldset>
         <div class="field">
-          <label for="ogPer">Sections per chapter</label>
+          <label for="ogPer">Sections in each chapter</label>
           <input type="text" class="text-input otl-num-input" id="ogPer" inputmode="numeric" autocomplete="off" aria-describedby="ogPerHint ogPerError">
           <span class="field-hint" id="ogPerHint">From ${PER_CHAPTER.min} to ${PER_CHAPTER.max}. You can add or remove sections later.</span>
           <span class="field-error" id="ogPerError" hidden></span>
@@ -1115,7 +1126,9 @@
         </div>
       </form>`;
     document.body.append(d);
-    gen = { d, title: d.querySelector('#ogTitle'), text: d.querySelector('[data-gen-text]'), plan: d.querySelector('[data-gen-plan]'), per: d.querySelector('#ogPer'), err: d.querySelector('#ogPerError'), btn: d.querySelector('[data-confirm]'), started: false };
+    gen = { d, title: d.querySelector('#ogTitle'), text: d.querySelector('[data-gen-text]'), plan: d.querySelector('[data-gen-plan]'), per: d.querySelector('#ogPer'), err: d.querySelector('#ogPerError'), btn: d.querySelector('[data-confirm]'), started: false,
+      auto: d.querySelector('[data-per-mode][value="auto"]'), same: d.querySelector('[data-per-mode][value="same"]') };
+    d.querySelectorAll('[data-per-mode]').forEach((r) => r.addEventListener('change', () => perMode()));
     d.querySelector('[data-close]').addEventListener('click', () => d.close());
     d.addEventListener('close', () => {
       if (gen.started || !active()) return;
@@ -1131,6 +1144,13 @@
     });
     d.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
+      if (gen.auto.checked) {
+        lastAuto = true;
+        gen.started = true;
+        d.close();
+        generate('auto');
+        return;
+      }
       const raw = gen.per.value.trim();
       const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
       if (!(n >= PER_CHAPTER.min && n <= PER_CHAPTER.max)) {
@@ -1141,10 +1161,21 @@
         return;
       }
       lastPer = n;
+      lastAuto = false;
       gen.started = true;
       d.close();
       generate(n);
     });
+  }
+
+  /** The number field is on only for "The same for every chapter". */
+  function perMode() {
+    const off = gen.auto.checked;
+    gen.per.disabled = off;
+    if (off) {
+      gen.per.removeAttribute('aria-invalid');
+      gen.err.hidden = true;
+    }
   }
 
   /** What the Brief gives the AI, in one or two sentences. */
@@ -1172,11 +1203,14 @@
     gen.per.value = String(lastPer);
     gen.per.removeAttribute('aria-invalid');
     gen.err.hidden = true;
+    gen.auto.checked = lastAuto;
+    gen.same.checked = !lastAuto;
+    perMode();
     gen.btn.className = `btn ${replace ? 'btn-danger' : 'btn-primary'}`;
     gen.btn.textContent = replace ? 'Replace outline' : 'Generate outline';
     gen.d.showModal();
-    gen.per.focus();
-    gen.per.select();
+    if (lastAuto) gen.auto.focus();
+    else { gen.per.focus(); gen.per.select(); }
   }
 
   async function generate(per) {

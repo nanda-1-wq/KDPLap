@@ -262,7 +262,7 @@ const setup = async page => {
         if (!bk.pos || !bk.pos.locked_at) return json(r, 409, { error: 'positioning_not_locked' });
         if (store.outline[b.bookId].some(hasVersion)) return json(r, 409, { error: 'has_writing' });
         const n = bk.brief.chapter_count || 9;
-        const plan = Array.from({ length: n }, (_, i) => AI_DESIGN[i % AI_DESIGN.length]).map(([t, o, s], i) => [i < 8 ? t : `${t} ${i + 1}`, o, s.slice(0, b.sectionsPerChapter)]);
+        const plan = Array.from({ length: n }, (_, i) => AI_DESIGN[i % AI_DESIGN.length]).map(([t, o, s], i) => [i < 8 ? t : `${t} ${i + 1}`, o, s.slice(0, b.sectionsPerChapter === 'auto' ? 2 + (i % 2) : b.sectionsPerChapter)]);   // "auto": 2 or 3 (E12 fix batch 2)
         store.outline[b.bookId] = outline(plan);
         bk.outline_approved_at = null;
         return json(r, 200, { stage: 'outline_ideas', chapters: copy(ordered(b.bookId)), rescaled: !!mode('rescaled'), target: { min: 8000, max: 12000, aim: 10000, source: 'range' }, aiPickedChapters: !bk.brief.chapter_count });

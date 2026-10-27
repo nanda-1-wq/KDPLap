@@ -1,4 +1,4 @@
-// Step 05 Outline (E9.1): Generate (dialog, sections per chapter), Regenerate
+// Step 05 Outline (E9.1): Generate (dialog, sections per chapter: the AI chooses or the same for all, E12 fix batch 2), Regenerate
 // (replace confirm), Stop, errors, writing, and the "Needs review" marks.
 const test = async page => {
   const log = globalThis.__log = [];
@@ -13,43 +13,69 @@ const test = async page => {
   const done = () => page.waitForFunction(() => !document.querySelector('[data-stop]'), null, { timeout: 8000 });
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  // 1. Empty book: the dialog says what the Brief gives; 1 to 6 sections, default 3.
+  // 1. Empty book: the dialog says what the Brief gives; the AI chooses the sections by default (E12 fix batch 2, item 2, owner D1).
   await open(B2);
   await page.click('[data-list] [data-generate]');
   ok((await txt('dialog[open] h2')) === 'Generate an outline', 'dialog: Generate an outline');
   ok((await txt('dialog[open] [data-gen-plan]')) === 'From your Brief: 8 chapters, 8K to 12K words. Change these in 01 Brief', `plan: ${await txt('dialog[open] [data-gen-plan]')}`);
-  ok((await page.inputValue('#ogPer')) === '3', 'sections per chapter: 3');
+  ok(await page.isChecked('[data-per-mode][value="auto"]') && !(await page.isChecked('[data-per-mode][value="same"]')), 'default: Let the AI choose');
+  ok(await page.$eval('#ogPer', (i) => i.disabled && i.value === '3'), 'the number field is off while the AI chooses (3 kept)');
+  ok(await page.evaluate(() => document.activeElement && document.activeElement.matches('[data-per-mode][value="auto"]')), 'focus on the chosen radio');
+  ok((await txt('dialog[open] fieldset')) === 'Sections per chapter Let the AI choose for each chapter 2 to 5 sections, as each chapter needs. The same for every chapter Set the number below.', `choices: ${await txt('dialog[open] fieldset')}`);
   ok(await page.$eval('dialog[open] [data-confirm]', (b) => b.classList.contains('btn-primary') && b.textContent === 'Generate outline'), 'primary Generate outline');
-  await page.fill('#ogPer', '9');
-  await page.click('dialog[open] [data-confirm]');
-  ok((await txt('#ogPerError')) === 'Use a whole number from 1 to 6.' && await page.$eval('#ogPer', (i) => i.getAttribute('aria-invalid') === 'true'), '9: error, dialog stays');
-  ok(st.gens.length === 0, '9: no AI call');
+  await page.screenshot({ path: `${SHOTS}/t-generate-auto-1440.png`, timeout: 8000 }).catch(() => {});
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.waitForTimeout(250);
+  ok(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)), 'dialog at 900: no sideways scroll');
+  await page.screenshot({ path: `${SHOTS}/t-generate-auto-900.png`, timeout: 8000 }).catch(() => {});
+  await page.setViewportSize({ width: 1440, height: 1000 });
   globalThis.__modes.genDelay = 700;
-  await page.fill('#ogPer', '2');
   await page.click('dialog[open] [data-confirm]');
   await page.waitForSelector('[data-stop]', { timeout: 3000 });
   ok(/Writing your outline from the locked positioning/.test(await txt('[data-list]')), 'working state with Stop');
   ok(await page.evaluate(() => document.activeElement && document.activeElement.matches('[data-stop]')), 'focus on Stop');
   await done();
   globalThis.__modes.genDelay = 0;
-  ok(JSON.stringify(st.gens.at(-1)) === JSON.stringify({ stage: 'outline_ideas', bookId: B2, sectionsPerChapter: 2 }), `request: ${JSON.stringify(st.gens.at(-1))}`);
-  ok((await titles()).length === 8 && (await page.$$('.otl-ch:not(.otl-fixed):nth-child(2) .otl-sec')).length === 2, '8 chapters, 2 sections each');
+  ok(JSON.stringify(st.gens.at(-1)) === JSON.stringify({ stage: 'outline_ideas', bookId: B2, sectionsPerChapter: 'auto' }), `request: ${JSON.stringify(st.gens.at(-1))}`);
+  const per = () => st.outline[B2].filter((c) => c.kind === 'chapter').map((c) => c.sections.length).join(',');
+  ok((await titles()).length === 8 && per() === '2,3,2,3,2,3,2,3' && (await page.$$('.otl-ch:not(.otl-fixed):nth-child(2) .otl-sec')).length === 2, `auto: 8 chapters, sections as the AI chose (${per()})`);
   ok(/^Outline ready: 8 chapters, [\d,]+ words\.$/.test(await txt('[data-status] [role="status"]')), `status: ${await txt('[data-status] [role="status"]')}`);
   ok(await page.$eval('.otl-ch:not(.otl-fixed):nth-child(2)', (l) => !!l.querySelector('.otl-ch-body')), 'chapter 1 open');
   await page.fill('.otl-ch:not(.otl-fixed):nth-child(2) [data-f="title"]', 'Why Chair Yoga Works');
   ok(!(await txt('[data-status]')), 'the "ready" note clears on the next edit');
   await page.waitForTimeout(1200);
 
-  // 2. Regenerate: replace confirm with a red button; the outline is replaced.
+  // 2. Regenerate: replace confirm with a red button; "The same for every chapter" turns the number on; 1 to 6.
   await page.click('[data-top] [data-generate]');
   ok((await txt('dialog[open] h2')) === 'Replace the outline?', 'dialog: Replace the outline?');
   ok((await txt('dialog[open] [data-gen-text]')) === 'The AI writes a new outline. Your edits to chapters and sections are lost. Nothing is written yet.', 'replace text');
   ok(await page.$eval('dialog[open] [data-confirm]', (b) => b.classList.contains('btn-danger') && b.textContent === 'Replace outline'), 'red Replace outline');
-  ok((await page.inputValue('#ogPer')) === '2', 'remembers 2');
+  ok(await page.isChecked('[data-per-mode][value="auto"]'), 'remembers: the AI chooses');
+  await page.check('[data-per-mode][value="same"]');
+  ok(await page.$eval('#ogPer', (i) => !i.disabled), 'same: the number field is on');
+  await page.fill('#ogPer', '9');
+  await page.click('dialog[open] [data-confirm]');
+  ok((await txt('#ogPerError')) === 'Use a whole number from 1 to 6.' && await page.$eval('#ogPer', (i) => i.getAttribute('aria-invalid') === 'true'), '9: error, dialog stays');
+  ok(st.gens.length === 1, '9: no AI call');
+  await page.screenshot({ path: `${SHOTS}/t-generate-same-error-1440.png`, timeout: 8000 }).catch(() => {});
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${SHOTS}/t-generate-same-error-900.png`, timeout: 8000 }).catch(() => {});
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.check('[data-per-mode][value="auto"]');
+  ok(await page.$eval('#ogPer', (i) => i.disabled && !i.hasAttribute('aria-invalid')) && await page.$eval('#ogPerError', (e) => e.hidden), 'back to the AI: the error clears, the field is off');
+  await page.check('[data-per-mode][value="same"]');
+  await page.fill('#ogPer', '2');
+  await page.click('dialog[open] [data-confirm]');
+  await done();
+  ok(JSON.stringify(st.gens.at(-1)) === JSON.stringify({ stage: 'outline_ideas', bookId: B2, sectionsPerChapter: 2 }), `request: ${JSON.stringify(st.gens.at(-1))}`);
+  ok((await titles())[0] === 'Why Chair Yoga Works After 60' && per() === '2,2,2,2,2,2,2,2', `replaced: 2 sections each, edit gone (${per()})`);
+  await page.click('[data-top] [data-generate]');
+  ok(await page.isChecked('[data-per-mode][value="same"]') && (await page.inputValue('#ogPer')) === '2' && await page.$eval('#ogPer', (i) => !i.disabled), 'remembers: the same, 2');
   await page.fill('#ogPer', '3');
   await page.click('dialog[open] [data-confirm]');
   await done();
-  ok((await titles())[0] === 'Why Chair Yoga Works After 60' && (await page.$$('.otl-ch:not(.otl-fixed):nth-child(2) .otl-sec')).length === 3, 'replaced: 3 sections each, edit gone');
+  ok((await page.$$('.otl-ch:not(.otl-fixed):nth-child(2) .otl-sec')).length === 3 && per() === '3,3,3,3,3,3,3,3', '3 sections each');
 
   // 3. Stop: the message from E7; the outline the server saved still shows.
   globalThis.__modes.genDelay = 1500;
@@ -95,7 +121,7 @@ const test = async page => {
   // 7. Unlocked after the outline: Needs review note, pills, sidebar flag; editing still works.
   await open(B4);
   await page.screenshot({ path: `${SHOTS}/t-generate-review.png`, timeout: 8000 }).catch(() => {});
-  ok(/Needs review\. The positioning was unlocked after this outline was made, so 8 chapters are marked\. Check each one against the positioning\./.test(await txt('[data-review-note]')), `note: ${await txt('[data-review-note]')}`);
+  ok(/Needs review\. The positioning was unlocked after this outline was made, so 8 chapters are marked\. Check each one against the positioning\. Approving the outline clears these marks\.$/.test(await txt('[data-review-note]')), `note: ${await txt('[data-review-note]')}`);
   ok((await page.$$eval('[data-pills]', (ps) => ps.filter((p) => /Needs review/.test(p.innerText)).length)) === 8, '8 Needs review pills');
   ok(/Needs review/.test(await txt('a[data-step="5"]')), 'sidebar 05: Needs review flag');
   ok(await page.$eval('[data-top] [data-generate]', (b) => b.disabled) && /The positioning is unlocked\. Lock it in 03 again to regenerate\. You can still edit the outline\./.test(await txt('[data-top]')), 'unlocked: Regenerate off, reason and link');

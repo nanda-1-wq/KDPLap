@@ -13,7 +13,9 @@ const B1 = 'b1b1b1b1-0000-4000-8000-000000000001';   // Chair Yoga for Seniors O
 const B2 = 'b2b2b2b2-0000-4000-8000-000000000002';   // Budget Smart for College Students
 const B3 = 'b3b3b3b3-0000-4000-8000-000000000003';   // Sleep Better After 50 (no text)
 
-const PARA = (topic, n) => Array.from({ length: n }, (_, i) => `${topic} step ${i + 1} keeps the body moving with care. Breathe in slowly, then breathe out as you settle into the chair.`).join(' ');
+// The second sentence names the topic, so no 8-word sentence is the same in two sections
+// (E12 fix batch 2: Export notes repeats); the word count is the same as before.
+const PARA = (topic, n) => Array.from({ length: n }, (_, i) => `${topic} step ${i + 1} keeps the body moving with care. Breathe in slowly, then breathe out as you settle into the ${topic.toLowerCase()}.`).join(' ');
 const ver = (id, content, extra = {}) => ({ id, version_no: 3, content, partial: false, word_count: 0, ...extra });
 const sec = (id, position, title, status, content, extra = {}) => ({ id, position, title, status, needs_review: false, ai: 'none', unsaved: false, run: null,
   version: content === null ? null : ver(`v-${id}`, content, extra.version || {}), ...extra.section });
