@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: STOP 6 (2026-10-27). Part 5 (Generate chapter, design 23b) is committed and pushed. Results are in "Part 5 results" at the end, with screenshots in docs/reviews/e12-fix2-stop6/. Next: your review, then Live check B after you say "live". Branch `claude/e12-fixes`.
+Status: Live check B done (2026-10-27, test account). Every planned check passes except the cost line, which is too low (see the proposed fix). Results are in "Live check B results" at the end, with screenshots in docs/reviews/e12-fix2-live-b/. Next: your decision on the cost line fix, then STOP for merge. Branch `claude/e12-fixes`.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -505,3 +505,45 @@ Browser only: no server change (each step is the existing `section_write` call),
 - `t-chapter-done`;
 - `t-chapter-failed`;
 - `t-chapter-leave`.
+
+## Live check B results (2026-10-27, test account 1e117c74, test book 4e2dde85)
+**Sign-in:** before sign-in, localStorage held no saved session. After it, localStorage held user `1e117c74-49db-4c1e-bee6-6c324c2ecae4`. The footer shows "Your account", and no "@" appears on any page shot. The session was closed after the check.
+
+**`ai_usage` max id: 295 before, 301 after.** All 6 calls are the test user's and counted.
+
+| Row | Stage | Status | In | Out | Cost |
+|---:|---|---|---:|---:|---:|
+| 296 | section_write 8.1 | ok | 8,786 | 569 | $0.0233 |
+| 297 | section_write 8.2 | ok | 8,919 | 632 | $0.0242 |
+| 298 | section_write 8.3 | ok | 9,148 | 593 | $0.0242 |
+| 299 | section_write 9.1 (Stop) | stopped | 9,253 | 107 | $0.0196 |
+| 300 | section_check 8.2 | ok | 4,849 | 197 | $0.0117 |
+| 301 | section_improve 8.2 (the Fix) | ok | 3,491 | 53 | $0.0075 |
+| | **Total** | | 44,446 | 2,151 | **$0.1104** (plan: about $0.10) |
+
+| Step | Expected | Result | Evidence |
+|---|---|---|---|
+| Setup | Two new chapters, approved again (no AI) | Done | Chapter 8 "Live check: Midday calm" (8.1 to 8.3, 300 words each) and chapter 9 "Live check: Stop test" (9.1, 9.2), approved |
+| 1 | The button in the head, with its line | **Pass** | "Generate chapter", on; the line "Writes the 3 sections of this chapter that have no text, in order." |
+| 1 | The confirm, with the cost line | **Pass** | "Generate chapter 8? … 8.1 A one-minute pause at your desk 300 words 8.2 … 8.3 … 3 AI calls, about 900 words. About $0.04 and 16,000 tokens. You have 1.32M tokens left this month." |
+| 1 | Running: the queue, "Writing…" in the list, everything else off | **Pass** | "GENERATE CHAPTER · 1 OF 3 8.1 … Writing now 8.2 … Waiting 8.3 … Waiting"; the manuscript pill "Writing…"; Generate section, Generate chapter and the editor are off |
+| 1 | Done, with focus on Close | **Pass** | "Chapter 8 is written 8.1 … 315 words 8.2 … 335 words 8.3 … 328 words 3 sections, 978 words …"; focus on Close; 23 s for 3 calls |
+| 1 | **The cost line within about 30% of the real rows** | **Fail (too low)** | Estimate: 16,000 tokens and $0.04 (about 16,194 and $0.0446 before rounding). Real rows 296 to 298: **28,647 tokens and $0.0716**, so the estimate is 43% low on tokens and 38% low on cost. The output part was close (1,530 against 1,794). The input part was low: this month's average Write input for the test user was **4,888**, against 8,786 to 9,148 for these calls. `<book_so_far>` grows as the book fills, so older calls had less input. |
+| 2 | Stop during 9.1 | **Pass** | Stop showed "Stopping and saving…", then "GENERATE CHAPTER · STOPPED Writing stopped Writing stopped. The 63 words written so far are saved in Versions as v1. They are not in your section yet. The tokens used so far count toward your usage. 9.1 … Partial text in Versions Stopped 9.2 … Not written Generate the rest (2) Close". 9.1 has no current text; its v1 is partial (63 words). Row 299 is "stopped" and counted, as CLAUDE.md §5 says. |
+| 3 | No check yet: "Run the AI check once", one Run button | **Pass** | 8.2 (no code warnings): "Run the AI check once Your text has no issues. One AI check tells you if this section is ready. Run AI check"; 1 Run button in the tab |
+| 3 | One AI check | Done | 1 major (drift: "By the end of the week, she catches the clench within seconds instead of at five o'clock.") and 1 minor (voice). The block says "1 thing left … 1 major AI finding (drift)", and the tab says "Checks 1". With one major there is no Fix major button (22d: 2 or more), so its own Fix ran, which is the same Custom fix the queue sends. |
+| 3 | Fix, then Ready with no re-check | **Pass** | Custom pre-filled with the finding. The suggestion: "By the end of the week, she catches → Over time, she may start to catch the clench sooner, often in the moment instead of at the end of the day." Accepted, then "Ready to mark Final No open problems. You do not need another AI check. Mark Final"; the AI check shows "Fixed 1 of 1 major finding"; the tab has no count; **no second check was sent** (one Improve call on that page, row 301 only) |
+| 3 | A small edit of your own keeps it | **Pass** | Typed " Breathe out slowly.": still Ready; the meter reads "Your own edits since this check: less than 1% of the words" |
+| 3 | An edit over 20% makes it out of date | **Pass** | Typed 72 more words: "Out of date. You changed 23% of the words since this check. Up to 20% keeps a check. Check again"; the block says "Check again to see if it is ready The text changed too much since the last AI check." |
+| 3 | Clean-up | Done | The typed text was removed. 8.2 is on v2 again, and its draft equals it (no new version), so it is Ready again. |
+
+**Proposed fix for the cost line (not made; your decision):** estimate each section's input from this book's most recent Write calls, not this month's average.
+- Use the average of the last 5 counted `section_write` calls of this book, from a short read like Settings' "Last calls".
+- Keep the month average when the book has none, and 6,500 when the month has none too.
+- With rows 294 and 295 before this run (8,405 and 8,524), the line would have said about 27,000 tokens and $0.07, against a real 28,647 and $0.0716: 6% and 8% low.
+- It is browser only (`js/usage-rules.js` and one read in `js/write-generate.js`), with tests, and needs no deploy.
+
+**State after the check:**
+- Test book 4e2dde85 has chapter 8 (three written sections; 8.2 is v2 after the Fix and has an AI check) and chapter 9 (9.1 has only a partial version in Versions; 9.2 is empty). Both stay in the test book.
+- No exports were made.
+- Nothing on your account was read through the app or changed. The only reads beyond the test user were `max(id)` on `ai_usage`, and rows 296 to 301, all the test user's.
