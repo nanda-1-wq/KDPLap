@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: plan approved 2026-10-27 (decisions at the end). Part 1 (server) in progress. Branch `claude/e12-fixes` from main 38a28c4.
+Status: STOP 2 (2026-10-27). Part 1 (server) is committed as d220dd2 and pushed; results are in the section "Part 1 results" at the end. Next: you review, then say "deploy", and Claude chat deploys generate v24 from d220dd2. Branch `claude/e12-fixes` from main 38a28c4.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -214,3 +214,47 @@ Before signing in, check that the localStorage user id is 1e117c74. Note the `ai
 - **D8.** Generate chapter skips sections that already have text.
 - **D9.** Item 3 (Topic Lab note) is postponed to v2. It is out of this batch and out of Live B.
 - **Items 5/8 change:** an old AI check stays valid only when every change since it is a Fix or Accept of that check's own findings, or a small manual edit (under 20% of the words changed in total since the check). Anything else makes it "Out of date" as today. The rule goes in design 22e and its tests (see the loop breaker above).
+
+## Part 1 results (STOP 2, 2026-10-27)
+Commit d220dd2 on `claude/e12-fixes`. Server only: no migration, no SQL change, no browser change, no AI calls, no Supabase writes.
+
+**Tests:**
+- `deno check` is clean.
+- Generate: 307 → 317 passed, 0 failed.
+- Helpers: 137 passed, unchanged. The `text-checks` and `sentences` parity tests still match the server.
+- `deno lint` finds 17 problems, all in `handler.test.ts`, which this commit does not touch. They were there before.
+
+**Prompts that changed** (snapshot re-recorded, each entry compared with the old one by a script, then the rest read line by line):
+
+| Prompt | What changed |
+|---|---|
+| positioning_help, drift_check, title_ideas, outline_ideas, outline_check, section_check | Only `<source label="S1" kind=…>` → `<source kind=…>` (item 9). Every other changed line in their handler entries is a request hash (`bodySha`). |
+| section_write (system) | 1 line reworded and 5 new lines: see below. |
+| section_write (user message) | No labels; each `<book_so_far>` item now adds `Ends`, `Opens`, `Names` and `Items`. |
+| outline_ideas (only with "auto") | The last line: "Write 8 chapters. Give each chapter 2 to 5 sections, as many as it needs: fewer for one simple idea, more for a chapter that teaches several steps. …". The number path's last line is byte for byte the same. |
+
+**Unchanged:** bio, brief_help, amazon_import, competitor_import (its prompt; only one reply changed, see below), review_insights and section_improve. In the plan I expected brief_help to change, but it has no Research sources, so it does not.
+
+**The new Write system lines:**
+- Reworded: "<book_so_far> lists the other written sections of the book: their subheadings, how they end and open, the sources they name and their list items. Do not repeat advice, tips or subheadings it shows."
+- "Do not reuse an opening or closing sentence that <book_so_far> shows, or one close to it."
+- "If <book_so_far> names a source, the reader has already met it: refer back to it in one sentence, do not explain it again."
+- "When you use a fact from a <source>, name it the way its <citation> does: the author, or the book, study or website. Never write "a source", "another source", "one source" or "research suggests" without a name."
+- "A <source kind="note"> is the author's own knowledge: say it in your own words and never call it a source."
+- "Never write a reference mark such as [S3] or [1]."
+
+**Other snapshot changes:**
+- `handler competitor_import numbers not in page`: `bsr` null → 45210. The page has "#45,210 in Books", and our code now reads it.
+- Two new entries: `buildRequest outline_ideas (auto sections)` and `handler outline_ideas auto success`. The second differs from `outline_ideas success` only in its request hash.
+
+**Behavior changes to know:**
+- **Item 1:** the BSR is the page's first "#N in Books / Kindle Store / Kindle eBooks", also on one line ("#765,893 in Books (See Top 100 in Books) #343 in College Guides" → 765,893). With no overall rank on the page, a model number that is a category rank becomes empty.
+- **Item 2:** the input takes `"auto"` (exactly that word). In auto mode, sections past 5 are cut, and a chapter with 1 section is kept (D2).
+- **Item 9:** `[S3]`, `[S3, S5]`, `[S3; S4]`, `[S3-S5]` and `(S2)` are removed from what Write and Improve save, and from the earlier text Write reads (`<previous_section_end>`, `<section_so_far>` and `<book_so_far>`). Already saved text keeps its labels until the Part 2 Checks row and Export strip.
+- **Item 11 B:** each item is "Title: headings | Ends: "…" | Opens: "…" | Names: … | Items: …". It holds at most 600 characters a section and 9,000 in all, nearest sections first. Names are the author's sources that the text mentions: the citation's lead ("BJ Fogg"), or its capitalized last word ("Fogg's idea").
+
+**Prompt size and cost:**
+- The Write system prompt goes from 4,839 to 5,493 characters: about +165 tokens a call, or about $0.01 for a 33-call book.
+- `<book_so_far>` can grow by up to 6,000 characters (about +1,500 tokens a call) once the book has many written sections.
+- Together that is about **+$0.07 to $0.11 a book**, in line with the plan.
+- Check, Positioning, Title and Outline prompts lose about 4 tokens per source (the label).
