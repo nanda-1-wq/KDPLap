@@ -19,10 +19,12 @@
              rounded down; null when there was no Write section call.
    kdpUsage.costText(cost) → "About $2.10" | "Under $0.01" | "$0.00" | "No estimate"
    kdpUsage.call(row, now) → one "Last calls" row: { when, name, where, tokens, tag }
-   kdpUsage.chapterEstimate(u, targets) → the cost line of Generate chapter (E12 fix
-     batch 2, design 23b): { calls, words, input, output, tokens, cost, left, over,
-     none, resets }. Each section: this month's average Write call input (or
-     WRITE_INPUT_DEFAULT) plus its word target × OUT_PER_WORD output tokens.
+   kdpUsage.chapterEstimate(u, targets, recent) → the cost line of Generate chapter
+     (E12 fix batch 2, design 23b): { calls, words, input, output, tokens, cost, left,
+     over, none, resets }. Each section: the average input of this book's last Write
+     calls (recent, after Live check B: the book's context grows), else this month's
+     average Write call input, else WRITE_INPUT_DEFAULT; plus its word target ×
+     OUT_PER_WORD output tokens.
    kdpUsage.tokensText(n) → "27,000" | "1.21M" (rounded, for the cost line)
 ═══════════════════════════════════════════════════ */
 
@@ -115,11 +117,13 @@
     };
   }
 
-  function chapterEstimate(u, targets) {
+  function chapterEstimate(u, targets, recent) {
     const list = Array.isArray(targets) ? targets : [];
     const rows = (Array.isArray(u && u.by_stage) ? u.by_stage : []).filter((r) => r.stage === 'section_write');
     const calls = rows.reduce((a, r) => a + n(r.calls), 0);
-    const avgIn = calls ? rows.reduce((a, r) => a + n(r.input), 0) / calls : WRITE_INPUT_DEFAULT;
+    const book = (Array.isArray(recent) ? recent : []).map(n).filter((x) => x > 0);
+    const avgIn = book.length ? book.reduce((a, x) => a + x, 0) / book.length
+      : calls ? rows.reduce((a, r) => a + n(r.input), 0) / calls : WRITE_INPUT_DEFAULT;
     const words = list.reduce((a, t) => a + (n(t) > 0 ? n(t) : NO_TARGET_WORDS), 0);
     const input = Math.round(avgIn * list.length);
     const output = Math.round(words * OUT_PER_WORD);

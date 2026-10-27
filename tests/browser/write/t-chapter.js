@@ -91,6 +91,15 @@ const test = async page => {
   await page.click('dialog[open] [data-chap-cancel]');
   delete st.usage;
 
+  // After Live check B: the input comes from this book's last Write calls (12,000 each here, not the month's 8,400).
+  st.bookWrites = [12000, 12000];
+  await page.click('[data-gen-chapter]');
+  await page.waitForSelector('dialog[open] [data-chap-go]:not([disabled])', { timeout: 5000 });
+  ok((await txt('dialog[open] .wr-chap-cost')) === '2 AI calls, about 650 words. About $0.06 and 25,000 tokens. You have 1.21M tokens left this month.', `book calls: ${await txt('dialog[open] .wr-chap-cost')}`);
+  ok(st.calls.some((c) => /GET \/rest\/v1\/ai_usage\?select=input_tokens&book_id=eq\.e1e1e1e1[^&]*&stage=eq\.section_write&counted=eq\.true&order=id\.desc&limit=5/.test(c)), 'it reads this book\'s last 5 counted Write calls');
+  await page.click('dialog[open] [data-chap-cancel]');
+  delete st.bookWrites;
+
   // 3. Running: 1 of 2; the open section follows the queue; the editor, Generate section and Generate chapter are off.
   await page.click('[data-gen-chapter]');
   await page.waitForSelector('dialog[open] [data-chap-go]:not([disabled])', { timeout: 5000 });
@@ -149,6 +158,7 @@ const test = async page => {
   await finish(s22, 'Clear a space as wide as your arms. Move rugs and cords out of the way.', 3);
   await until(() => !!document.querySelector('[data-chap="done"]'));
   const w22 = st.count('Clear a space as wide as your arms. Move rugs and cords out of the way.');
+  await until((w) => ((document.querySelector('[data-chap="done"]') || {}).innerText || '').replace(/\s+/g, ' ').includes(`1 section, ${w} words.`), w22).catch(() => {});
   ok((await card()) === `GENERATE CHAPTER · DONE Chapter 2 is written 2.2 Clearing a safe space at home ${w22} words 1 section, ${w22} words. Each is a new version with the status Draft. Next, read each one and run its AI check. Close`, `done: ${await card()}`);
   ok(await g(() => document.activeElement && document.activeElement.matches('[data-chap-close]')), 'focus on Close');
   ok(await shots('done') === false, 'done: no sideways scroll at 900 px');

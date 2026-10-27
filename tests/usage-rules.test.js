@@ -99,3 +99,23 @@ Deno.test("chapterEstimate: no Write call yet, no target, near and at the limit,
   assertEquals([unknown.input, unknown.left, unknown.over, unknown.none], [U.WRITE_INPUT_DEFAULT, null, false, false]);
   assertEquals([U.tokensText(950), U.tokensText(27_400), U.tokensText(1_219_999)], ["950", "27,000", "1.21M"]);
 });
+
+Deno.test("chapterEstimate: this book's last Write calls first (Live check B, rows 296 to 298: 28,647 tokens)", () => {
+  const month = { limit: 2_000_000, tokens: 700_000, by_stage: [{ stage: "section_write", model: M, calls: 30, input: 30 * 4_888, output: 30 * 550 }] };
+  const real = 8_786 + 569 + 8_919 + 632 + 9_148 + 593;   // 28,647
+  const within = (t) => Math.abs(t - real) / real <= 0.15;
+  // What the line said live: the month average (4,888 a call), 43% low.
+  const old = U.chapterEstimate(month, [300, 300, 300]);
+  assertEquals([old.input, within(old.tokens)], [14_664, false]);
+  // The book's last Write calls before that run (rows 294 and 295): 26,924 tokens, 6% low.
+  const before = U.chapterEstimate(month, [300, 300, 300], [8_524, 8_405]);
+  assertEquals([before.input, before.output, before.tokens, within(before.tokens)], [25_394, 1_530, 26_924, true]);
+  assertEquals(U.costText(before.cost), "About $0.07");   // real $0.0716
+  // Rows 296 to 298 as the last calls: 28,383, under 1% off.
+  const after = U.chapterEstimate(month, [300, 300, 300], [9_148, 8_919, 8_786]);
+  assertEquals([after.tokens, within(after.tokens)], [28_383, true]);
+  // No Write call in this book (or a failed read): the month average, then the default.
+  assertEquals(U.chapterEstimate(month, [300], []).input, 4_888);
+  assertEquals(U.chapterEstimate(month, [300], null).input, 4_888);
+  assertEquals(U.chapterEstimate({ limit: 1, tokens: 0, by_stage: [] }, [300], [0]).input, U.WRITE_INPUT_DEFAULT);
+});

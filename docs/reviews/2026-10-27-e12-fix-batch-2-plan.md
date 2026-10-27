@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: Live check B done (2026-10-27, test account). Every planned check passes except the cost line, which is too low (see the proposed fix). Results are in "Live check B results" at the end, with screenshots in docs/reviews/e12-fix2-live-b/. Next: your decision on the cost line fix, then STOP for merge. Branch `claude/e12-fixes`.
+Status: done and merged to main (2026-10-27). Live check B accepted; the cost line fix is below. Item 3 is postponed to v2.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -547,3 +547,11 @@ Browser only: no server change (each step is the existing `section_write` call),
 - Test book 4e2dde85 has chapter 8 (three written sections; 8.2 is v2 after the Fix and has an AI check) and chapter 9 (9.1 has only a partial version in Versions; 9.2 is empty). Both stay in the test book.
 - No exports were made.
 - Nothing on your account was read through the app or changed. The only reads beyond the test user were `max(id)` on `ai_usage`, and rows 296 to 301, all the test user's.
+
+## Cost line fix (owner, after Live check B)
+- **What changed:** Generate chapter now estimates each section's input from this book's last 5 counted Write calls (new `kdp.listBookWriteInputs`, own `ai_usage` rows). If the book has none it uses this month's average, and then 6,500.
+- **Against the real rows 296 to 298 (28,647 tokens):**
+  - The book's calls just before that run (rows 294 and 295) give 26,924 tokens, 6% low. Live, the line was 43% low.
+  - Rows 296 to 298 used as the last calls give 28,383, under 1% off.
+- **Tests:** `usage-rules` +1 (the estimate must be within 15%), `t-chapter` +2 (it reads this book's last 5 counted Write calls). I also fixed a test-only race in the `t-chapter` done check.
+- **Totals:** helpers 154, browser 1,706, generate 317; all green, no page errors. No AI calls and no live re-check.

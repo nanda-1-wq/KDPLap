@@ -656,12 +656,15 @@
       dlg.d.showModal();
       const cancel = form.querySelector('[data-chap-cancel]');
       if (cancel) cancel.focus();
-      let res;
-      try { res = await kdp.getUsageMonth(); } catch (err) { res = { error: err }; }
+      let res, rec;
+      try {
+        [res, rec] = await Promise.all([kdp.getUsageMonth(), kdp.listBookWriteInputs(book().id, 5)]);
+      } catch (err) { res = { error: err }; rec = { error: err }; }
       if (dlg.state !== st) return;
       st.busy = false;
-      // Without this month's usage the estimate uses the default input and says nothing about what is left.
-      st.est = kdpUsage.chapterEstimate(res.error ? null : res.data, items.map((x) => x.target));
+      // The input comes from this book's last 5 Write calls (else the month's average, else the default);
+      // without this month's usage the line says nothing about what is left.
+      st.est = kdpUsage.chapterEstimate(res.error ? null : res.data, items.map((x) => x.target), rec && !rec.error ? rec.data : null);
       form.innerHTML = dialogHtml(st);
       const go = form.querySelector('[data-chap-go]');
       (go && !go.disabled ? go : form.querySelector('[data-chap-cancel]')).focus();

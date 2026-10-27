@@ -1216,6 +1216,22 @@ window.kdp = {
   },
 
   /** The newest AI calls (counted or not), with the book's title. Own rows only (RLS). */
+  /**
+   * The input tokens of a book's last counted Write calls, newest first (own rows, RLS):
+   * the Generate chapter cost line (E12 fix batch 2, after Live check B).
+   */
+  async listBookWriteInputs(bookId, limit = 5) {
+    const { data, error } = await window.sb
+      .from('ai_usage')
+      .select('input_tokens')
+      .eq('book_id', bookId)
+      .eq('stage', 'section_write')
+      .eq('counted', true)
+      .order('id', { ascending: false })
+      .limit(limit);
+    return { data: error ? null : (data || []).map((r) => r.input_tokens), error };
+  },
+
   async listLastCalls(limit = 10) {
     const { data, error } = await window.sb
       .from('ai_usage')

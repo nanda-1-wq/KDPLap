@@ -314,6 +314,8 @@ const setup = async page => {
       sg.version_id = v.id;
       return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, source: v.source });
     }
+    // E12 fix batch 2: a book's last Write calls' input (listBookWriteInputs), newest first.
+    if (path === '/rest/v1/ai_usage' && method === 'GET') return json(r, 200, copy((store.bookWrites || []).map((x) => ({ input_tokens: x }))));
     // E12 fix batch 2 (23b): this month's usage for the Generate chapter cost line (0025 usage_month).
     if (path === '/rest/v1/rpc/usage_month') {
       store.usageReads = (store.usageReads || 0) + 1;
