@@ -1,6 +1,6 @@
 # E12 step 3: fix batch 2 (from the real book)
 
-Status: STOP 3 (2026-10-27). Generate v24 is deployed from d220dd2. Part 2 (browser) is committed and pushed; results are in "Part 2 results" at the end, with screenshots in docs/reviews/e12-fix2-stop3/. Next: your review, then Live check A after you say "live". Branch `claude/e12-fixes`.
+Status: STOP 3 (2026-10-27). Generate v24 is deployed from d220dd2. Part 2 (browser) is committed as 5995dc5 and pushed; results are in "Part 2 results" at the end, with screenshots in docs/reviews/e12-fix2-stop3/. Next: your review, then Live check A after you say "live". Branch `claude/e12-fixes`.
 
 ## Context
 The owner wrote the first real book on their own account: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX). Claude chat reviewed it, along with the owner's "what hurts" list. That gave 11 items. Today: generate v23, migrations up to 0025. Tests: generate 307, helpers 137, browser 1,567 (write 684).
@@ -260,7 +260,7 @@ Commit d220dd2 on `claude/e12-fixes`. Server only: no migration, no SQL change, 
 - Check, Positioning, Title and Outline prompts lose about 4 tokens per source (the label).
 
 ## Part 2 results (STOP 3, 2026-10-27)
-Browser only: no server change (generate stays v24), no migration, no AI calls, no Supabase writes.
+Commit 5995dc5 (code and tests); docs and screenshots b388931. Browser only: no server change (generate stays v24), no migration, no AI calls, no Supabase writes.
 
 **What changed:**
 - **Item 2, Outline dialog** (`js/book-outline.js`, `css/app.css`):
