@@ -1,6 +1,11 @@
 # E12 step 4: fix batch 3 (from finishing the real book)
 
-Status: STOP 2 (2026-10-28). Part 1 designs are done: `design/screens/01b-books-words-states.html` (DG1, plus the card's Reopen menu from DG2) and `design/screens/22f-review-complete-states.html` (DG2 to DG4), with PNGs at 1440 and 900. Waiting for the owner's design review. No app code yet.
+Status: STOP 2 design review done (2026-10-28): approved with 3 fixes (below). Part 2 (migration 0026 + SQL tests) is next, then STOP 3.
+
+**Design review fixes (owner, 2026-10-28):**
+- **R1, chapter marks.** Mark all as reviewed clears sections only, and only `approve_outline` clears `chapters.needs_review`. So the head box adds the gray line "Approve the outline in 05 to clear the chapter marks." (no button) whenever a chapter still needs review. New state 22f 6b. The state 6 note now says the card badge and the Export note clear only when no chapter needs review.
+- **R2, title room.** On the card (01b 3a) a long title ran under the ⋯ button. The real app has the same rule: the button covers 8 to 52 px from the right edge, and the title stops at 50 px (`css/app.css:894`, `--space-8`). The design now uses `--space-10` (40 px), and Part 3 changes `css/app.css:894` the same way.
+- **R3, `books.completed_at`** (0026). `complete_book` sets it. Reopen and a reopen on its own set it to null. 22f state 12 shows it ("Marked Oct 28"). SQL tests check all three. Reopen is a plain `status = 'in_progress'` update, so the guard trigger sets `completed_at` to null for any move away from completed. A browser cannot set `completed_at` to a value itself.
 
 Changes from the plan in Part 1:
 - The card menu's "Reopen book" is in 01b, not 22f, because it is the Books page.
@@ -94,6 +99,7 @@ Generate stays v24 unless Q6 = yes. Then a v25 Part is added before Part 3, with
   - Book shell (`js/book.js`): a gray info strip on every step: "This book is marked completed." plus a "Reopen book" button.
   - 06 Write manuscript panel: a "Mark book as completed" button under the word count. When the rule fails, the button is disabled and a line says why: "6 sections are not Final yet · 2 need review". No confirm dialog, because Reopen undoes it.
   - Other options: **A, read-only** (Write, Generate, Improve and steps 01 to 05 locked until Reopen). That needs a generate change (v25) and server guards on save_version, so it is much bigger. **C, label only** (no auto-reopen). That needs no trigger, but a completed book can drift.
+- **`books.completed_at` (R3):** set by `complete_book`, null after Reopen or a reopen on its own; the browser never writes it.
 - **Files:** `js/book-write.js` (button + rule state), `js/book.js` (strip), `js/book-actions.js` (menu item), `js/supabase.js` (`completeBook`, `reopenBook`), `app/dashboard.html` (menu callback), `supabase/migrations/0026_…sql`.
 - **Migration:** yes (recommended). **Generate:** no (B or C).
 
