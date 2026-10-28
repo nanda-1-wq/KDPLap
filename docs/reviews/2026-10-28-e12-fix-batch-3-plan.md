@@ -1,6 +1,12 @@
 # E12 step 4: fix batch 3 (from finishing the real book)
 
-Status: STOP 1 answered (2026-10-28). Part 1 (designs DG1 to DG4) is next, then STOP 2.
+Status: STOP 2 (2026-10-28). Part 1 designs are done: `design/screens/01b-books-words-states.html` (DG1, plus the card's Reopen menu from DG2) and `design/screens/22f-review-complete-states.html` (DG2 to DG4), with PNGs at 1440 and 900. Waiting for the owner's design review. No app code yet.
+
+Changes from the plan in Part 1:
+- The card menu's "Reopen book" is in 01b, not 22f, because it is the Books page.
+- New: a note when your own change reopens the book (22f state 14).
+- New: the "Mark book as completed" foot lists only the steps left, in gray (22f state 9).
+- New: a server refusal of `complete_book` shows its reason with Reload (state 11).
 
 ## Decisions (owner, 2026-10-28)
 | Q | Answer |
