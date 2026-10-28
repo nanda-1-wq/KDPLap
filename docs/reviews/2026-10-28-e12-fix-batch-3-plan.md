@@ -1,6 +1,35 @@
 # E12 step 4: fix batch 3 (from finishing the real book)
 
-Status: STOP 1. The plan is written. Waiting for the owner's answers to Q1 to Q8.
+Status: STOP 1 answered (2026-10-28). Part 1 (designs DG1 to DG4) is next, then STOP 2.
+
+## Decisions (owner, 2026-10-28)
+| Q | Answer |
+|---|---|
+| Q1 | **Rule 1**: `words_month()` in migration 0026. |
+| Q2 | Yes. A Brief range fills the bar against its low end. |
+| Q3 | **B**: a completed book stays editable and reopens on its own. **Changed, see D1.** |
+| Q4 | No. Open Verify marks do not block "Mark book as completed". |
+| Q5 | Yes. "later in this chapter" stays in the counted `mention` row. The new info row covers back references only. |
+| Q6 | No v25. "research shows / studies show / experts say" goes on the watch list for the Write prompt. |
+| Q7 | Yes. The card's "Needs review" badge also counts sections. |
+| Q8 | Yes. The card counts saved versions only. |
+
+**D1 (Q3 change).** A new version on a Final section does **not** reopen a completed book. That covers save_version, restore_version, a Generate finish and an Improve apply. Only these events reopen it:
+- a section leaves Final;
+- `needs_review` is set on a section or a chapter;
+- a section or a chapter is added;
+- the outline approval is cleared.
+
+A Generate finish that sets `needs_review` (the positioning is unlocked) reopens the book through the second event, not through the new version. New SQL test: a `save_version` on a Final section of a completed book keeps `books.status = 'completed'` (and the same for `restore_version`).
+
+**D2 (item 5a change).** "research", "study", "studies", "science" and "evidence" are **not** flagged when "this", "that", "these", "those" or "the same" comes right before them. The source is usually named in the sentence before. Test: "Lally's study followed 96 people. This research shows the habit took 66 days." is not flagged.
+
+**D3 (the owner's question: does "Source not named" block "Ready to mark Final"?).** **Yes.** `kdpFindingRules.ready()` lists every counted warn row as something left to do (`js/finding-rules.js:194`), and `write-checks.js:800-803` passes all warn rows to it. So today a false alarm keeps the section out of "Ready to mark Final". It never blocks the status itself: the status select still sets Final (`js/book-write.js:478`, no Ready check). It does count toward "Mark book as completed" only through the status, never through Checks.
+
+**Proposal: the new phrases are info only. No "Keep as is" for code rows.**
+- "Source not named" (warn, counted, blocks Ready) keeps what it has today, plus "according to (a|one|another|some) source(s)". Those phrases have no name by their wording, so a false alarm is very rare.
+- A new info row **"Check that the source is named"** gets the guessed phrases: "research/studies/science/evidence shows…" and "experts/scientists/researchers/doctors say…", with the D2 rule. Sub text: "Name the author or the title in this sentence or the one before." It is not counted, does not block Ready, and Show selects each sentence. It sits right after the Source row.
+- Why not "Keep as is": `kept_findings` (0024) holds AI findings only ("objective" / "voice" / "drift", matched by quote). Code rows are worked out again on every keystroke. Keeping one would need a new type in 0026, a quote match on code rows, and Undo in the kept list. That is more parts for a row that an info row solves. It can still come later if the info row turns out too noisy.
 
 ## Context
 The owner is finishing the real book. That surfaced 5 gaps. The Books card always shows 0 words written. "Words this month" is fixed at 0. Nothing marks a book completed. Clearing "Needs review" means one click per section. And Checks miss some vague sources and back references.
@@ -54,7 +83,7 @@ Generate stays v24 unless Q6 = yes. Then a v25 Part is added before Part 3, with
 - **When it is allowed (recommended, Q4):** the outline is approved (`outline_approved_at` set), the book has at least 1 section, **every** section is Final and has text, and no section or chapter needs review. Open Verify marks do not block it, because Export already warns about them.
 - **RLS:** the owner can already set `status` (F4), so a browser-only version would work. **Recommended:** migration 0026 adds `complete_book(p_book_id)`, which checks the rule on the server. A guard trigger then lets `status` become `completed` only through that RPC. This is the same pattern as `approve_outline` in 0017, so the rule cannot be skipped by a stale tab. "Reopen" is a plain `updateBook(id, { status: 'in_progress' })`, allowed by RLS and the guard.
 - **What a completed book looks like (Q3, recommended option B: editable, stays honest):**
-  - Everything stays editable. A trigger reopens the book on its own when the rule stops being true: a section leaves Final, a section gets "Needs review", a section or chapter is added, a chapter gets "Needs review" (an unlock of 03), or the outline approval is cleared. "Completed" then always means the rule holds (one source of truth).
+  - Everything stays editable. A trigger reopens the book on its own when the rule stops being true: a section leaves Final, a section gets "Needs review", a section or chapter is added, a chapter gets "Needs review" (an unlock of 03), or the outline approval is cleared. "Completed" then always means the rule holds (one source of truth). **D1:** a new version on a Final section does not reopen it.
   - Books card: a "Completed" pill instead of the step (exists, `app/dashboard.html:95`), a full bar, the Completed filter tab (exists). The ⋯ menu gets "Reopen book".
   - Book shell (`js/book.js`): a gray info strip on every step: "This book is marked completed." plus a "Reopen book" button.
   - 06 Write manuscript panel: a "Mark book as completed" button under the word count. When the rule fails, the button is disabled and a line says why: "6 sections are not Final yet · 2 need review". No confirm dialog, because Reopen undoes it.
@@ -75,6 +104,7 @@ Generate stays v24 unless Q6 = yes. Then a v25 Part is added before Part 3, with
   - "(research|studies|science|evidence) (shows|suggests|says|finds|found|has shown|have shown|tells us|confirms)" when no name comes before it. "Recent research shows" is flagged. "Smith's research shows", "her/his/their research shows" and "research by …" are not;
   - "(experts|scientists|researchers|doctors) (say|agree|recommend|suggest)".
   - The rule for "a source" / "one source" stays as it is ("a source of stress" is fine). The sub text becomes "Name the author or the title, or cut it."
+  - **Changed by D2 and D3:** only "according to … source(s)" joins the Source row. The research/studies and experts phrases go to the new info row "Check that the source is named", and "this/that/these/those/the same" before the noun is not flagged.
 - **5b, a new info row** `backref`: "Points back to another part" / "Check that it points to the right place." It is info, so it is never counted, and Show selects each sentence. It matches "earlier in (this|the) (chapter|book|section)", "in the (previous|last) (chapter|section)" and "as (mentioned|described|covered|shown) earlier". It goes right after the `mention` row.
   - "later in this chapter" stays in the counted `mention` row (E12 Part 3 rule: no previews), so it does not move. See Q5.
 - **Write prompt:** no change needed (F5). The rule has been there since v24. Q6: optionally widen it in v25 to also say "research shows" / "studies show" / "experts say".
@@ -86,16 +116,17 @@ Generate stays v24 unless Q6 = yes. Then a v25 Part is added before Part 3, with
 - **DG1, Books card and stats** (`design/screens/01b-books-words-states.html` + PNGs at 1440 and 900). Card: target from sections, Brief custom target, Brief range, no target, 0 words, over target, completed, Needs review from a section. Stat "Words this month": value, loading, error, start of the month (0).
 - **DG2, Completed** (in `design/screens/22f-review-complete-states.html`). The Write panel button enabled. Disabled with reasons. Saving. Error with Retry. Done. The book shell "marked completed" strip. Reopen saving and error. The card ⋯ menu with "Reopen book".
 - **DG3, Mark all as reviewed** (same file). The book-level head line + button. The chapter-level button. Both confirm dialogs (book, chapter) with counts. Saving. Error with Retry. Done (the message, the head line gone). None left (hidden).
-- **DG4, Checks rows** (same file, 1 panel). The new info row "Points back to another part" and the wider Source row, in the 22c row style. Wording only, no new parts.
+- **DG4, Checks rows** (same file, 1 panel). The new info row "Points back to another part", the new info row "Check that the source is named" (D3), and the Source row with "according to a source", in the 22c row style. Plus the Ready block when only info rows are left (Ready). Wording only, no new parts.
 
 ## Tests to add
 - **Helpers** (`tests/*.test.js`, deno):
-  - `text-checks.test.js`: each new 5a phrase flagged, each named case not flagged ("Smith's research shows", "their research shows", "a source of stress"), the backref row is info and not counted, its order, and "later in this chapter" still in `mention`.
+  - `text-checks.test.js`: D2 ("Lally's study followed 96 people. This research shows…" not flagged; "this/that/these/those/the same study" not flagged). D3: the new phrases are in the info row, not the Source row, and do not count. Each new 5a phrase flagged, each named case not flagged ("Smith's research shows", "their research shows", "a source of stress"), the backref row is info and not counted, its order, and "later in this chapter" still in `mention`.
   - A new `book-words.test.js`, if `bookWords()` moves to a shared file (`js/word-budget.js` gets `kdpWords.bookProgress(book)`): section sums, the Brief fallbacks, null versions, the cap at 100%, and rule 2 if chosen.
 - **SQL** (`supabase/tests/sql/t0026.sql`):
   - `words_month`: a new section, an old section edited, a cut floored at 0, the month start in UTC, RLS cross-user.
   - `complete_book`: refusals for each failed rule, a direct `status = 'completed'` refused by the guard, Reopen allowed.
   - The auto-reopen triggers: status, needs_review, add section, chapter review, outline approval cleared.
+  - D1: a `save_version` and a `restore_version` on a Final section keep the book completed.
   - Add to `rls_cross_user.sql`.
 - **Browser** (`tests/browser/`):
   - `books/t-words.js`: card texts for each target kind, the stat, the section badge. Mocks in `shared/e11.js` get `sections`/`current`.
