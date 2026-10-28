@@ -132,6 +132,10 @@ select pg_temp.expect('export_badges: none of A''s books', $q$select 1 from publ
 select pg_temp.expect('usage_month: none of A''s tokens', $q$select 1 where (public.usage_month() ->> 'tokens')::int = 0$q$, 'OK 1');
 select pg_temp.expect('user_settings: B cannot set A''s display name', $q$update public.user_settings set display_name = 'B' where user_id = '00000000-0000-4000-8000-00000000000a'$q$, 'OK 0');
 select pg_temp.expect('approve_outline: A''s book reads as not found', $q$select public.approve_outline('a3000000-0000-4000-8000-000000000001')$q$, 'P0002 book_not_found%');
+select pg_temp.expect('complete_book: A''s book reads as not found', $q$select public.complete_book('a3000000-0000-4000-8000-000000000001')$q$, 'P0002 book_not_found%');
+select pg_temp.expect('books: B cannot reopen A''s book', $q$update public.books set status = 'in_progress' where id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('books: B cannot touch A''s completed_at', $q$update public.books set completed_at = null where id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('words_month: none of A''s words', $q$select 1 where (public.words_month() ->> 'words')::int = 0$q$, 'OK 1');
 select pg_temp.expect('user_settings: B''s settings with A''s pen name refused', $q$insert into public.user_settings (default_pen_name_id) values ('a1000000-0000-4000-8000-000000000001')$q$, '42501%');
 
 -- ── As user B: moving own rows to A is refused ──

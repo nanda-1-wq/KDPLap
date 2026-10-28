@@ -185,6 +185,7 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0023` G3 fixes (the book-level "has writing" outline_ideas reads: a discarded partial is not writing, a draft and a fresh run are; write_cut and the 100,000 cut in finish and recover, never inside a word or a marker, the same cases as cutText; an AI section finding with the optional unsourced list; the grants),
 `t0024` kept findings (Keep as is: own select, insert and delete, no update; type, message, quote and check_at shape; a gap only from the current check; older gaps removed; at most 50 per section; the unique keys; the cascades; advice only),
 `t0025` export and settings (display_name, book_exports with its guard and the newest 20 per book and format, export_json, export_badges and its "changed" rule, usage_month),
+`t0026` book complete and words this month (completed_at, complete_book and each refusal, the books guard, the reopen on its own for each event, D1: a new version on a Final section keeps the book completed, words_month rule 1 with the UTC month edge),
 `t_export_include` (E11: the fixture cases from `tests/fixtures/export-include.json`, recorded with the dialog's own list, read as not changed by export_badges; run from the repo root),
 `rls_cross_user` (user B against user A's rows in every table).
 

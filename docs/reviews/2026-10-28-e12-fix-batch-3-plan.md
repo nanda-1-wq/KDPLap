@@ -1,6 +1,6 @@
 # E12 step 4: fix batch 3 (from finishing the real book)
 
-Status: STOP 2 design review done (2026-10-28): approved with 3 fixes (below). Part 2 (migration 0026 + SQL tests) is next, then STOP 3.
+Status: STOP 3 (2026-10-28). Part 2 is done: migration `0026_book_complete_words.sql` with SQL tests `t0026.sql` and `rls_cross_user.sql`. **Not applied.** Waiting for the owner's review, then "apply" (Claude chat).
 
 **Design review fixes (owner, 2026-10-28):**
 - **R1, chapter marks.** Mark all as reviewed clears sections only, and only `approve_outline` clears `chapters.needs_review`. So the head box adds the gray line "Approve the outline in 05 to clear the chapter marks." (no button) whenever a chapter still needs review. New state 22f 6b. The state 6 note now says the card badge and the Export note clear only when no chapter needs review.
@@ -165,3 +165,41 @@ No AI calls: **$0**. If v25 is chosen: +2 Write calls, about $0.04 (Live B was $
 - **Q6:** Generate v25 to widen the prompt rule to "research shows / studies show / experts say"? Recommended: **no for now**. The rule exists since v24 and the Checks row catches the rest. Add it to the watch list.
 - **Q7:** The card's "Needs review" badge should also come from sections (F3)? Recommended: yes.
 - **Q8:** The card counts saved versions only, so it can be lower than 06 Write while a draft is unsaved. Is that OK? Recommended: yes (that is "current version", as asked).
+
+
+## Part 2 results (STOP 3, 2026-10-28)
+**`supabase/migrations/0026_book_complete_words.sql`** (not applied), SHA-256 `22d28e6129770e62e37cbb4f8547208a7a1e1f19178615a92544c0a338155a79`
+1. `books.completed_at` (R3), with the check `(status = 'completed') = (completed_at is not null)`. A book already `completed` before 0026 gets `completed_at = updated_at`. None is expected, because nothing set the status. Pre-check for Claude chat: `select count(*) from public.books where status = 'completed';`.
+2. `complete_book(book_id)` → `completed_at`. SECURITY INVOKER, and the book row is locked (`outline_lock_book`). The refusals are checked in this order, each with a detail for 22f state 11:
+   - `outline_not_approved`;
+   - `book_empty`;
+   - `section_not_final` ("2 sections are not Final.");
+   - `section_no_text` (no current version, or a blank one);
+   - `needs_review` ("1 section needs review.", or "Approve the outline in 05 to clear the chapter marks." when only chapters are marked).
+
+   A completed book returns its `completed_at` again, so a double click is not an error.
+3. `books_status_guard` (before insert or update, every role). `completed` and a new `completed_at` are allowed only through `complete_book` (P0001 `complete_rpc`). Clearing the outline approval reopens the book. `completed_at` is null whenever the book is not completed, so Reopen is a plain update.
+4. `book_reopen_on_change` (after insert or update of status and needs_review on sections, and after insert or update of needs_review on chapters). These events reopen the book:
+   - a section leaves Final;
+   - a section or chapter gets needs_review;
+   - a section or chapter is added.
+
+   D1: a new current version does not reopen it.
+5. `words_month()` → `{ month_start, words }`. It follows rule 1. "Newest version before the 1st" = the highest `version_no` made before the 1st, 00:00 UTC.
+
+**Change from the plan, found while building:** every outline edit already clears the approval (0017 §4). That covers a section or chapter added or deleted, a title, an objective or a word target edited, and an unlock of 03. So these all reopen a completed book through the guard (event "outline approval cleared"). That includes **deleting** an empty section, and editing a section title or word target. Both were in your list only through "outline approval cleared".
+
+**Tests:** `t0026.sql` has 80 checks:
+- the schema;
+- each refusal and its detail;
+- the guard (a plain update, the owner role, insert, completed_at on a book in progress, a rename);
+- D1: save_version, save kept aside, restore_version, a Generate-like finish, and a no-change update;
+- each reopen event, with a new completed_at after completing again;
+- Reopen, and B cannot reopen;
+- words_month: 8 sections, with the edges "a cut is 0", "the newest before the 1st", "m − 1 s vs m" and "a kept-aside version", plus B and anon.
+
+`rls_cross_user.sql` gets 4 new B checks: complete_book reads as not found, B cannot reopen or touch completed_at, and words_month shows none of A's words.
+
+A mutation check: with the reopen trigger changed to fire on every section update, the 4 D1 checks fail. The file was put back, with the same SHA-256.
+
+**SQL suites (local Postgres 18, port 55432, each file on a fresh database):** 1,133 → **1,217 pass, 0 fail** (t0026 +80, rls_cross_user 134 → 138). No browser or generate code changed (generate stays v24).
