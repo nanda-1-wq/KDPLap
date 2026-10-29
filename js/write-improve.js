@@ -598,7 +598,7 @@
         ai_unavailable: 'The AI service did not respond.',
         ai_stopped: 'The AI service stopped.',
         ai_declined: 'The AI service declined this text.',
-        network: 'We couldn’t reach KDP Lab. Check your connection.',
+        network: 'We couldn’t reach NicheInk. Check your connection.',
         server_error: 'Something went wrong on our side.',
         run_in_progress: 'This section is being written in another tab or window.',
         positioning_not_locked: 'Lock the positioning in 03 to use Improve.',

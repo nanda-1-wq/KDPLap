@@ -11,7 +11,7 @@
    same field as the "Default" tag on Pen Names) and trim size (default_trim,
    the Brief's five sizes). Language: English, read only.
    AI usage this month: usage_month() (0025) and the last 10 calls. The
-   monthly limit is set by KDP Lab and read only. At 80% or more a warning,
+   monthly limit is set by NicheInk and read only. At 80% or more a warning,
    at 100% "AI is paused" (this page only, owner decision 4).
 ═══════════════════════════════════════════════════ */
 
@@ -242,7 +242,7 @@
     usageBody.innerHTML = `${top}${alert}
       <div class="set-stats">
         <div class="set-stat"><span class="chip-label">COST SO FAR</span><span class="set-stat-v">${kdpUsage.costText(s.cost)}</span><span class="field-hint">${s.cost === null ? 'A model here has no price yet' : 'Estimate at Sonnet 5.5 prices'}</span></div>
-        <div class="set-stat"><span class="chip-label">MONTHLY LIMIT</span><span class="set-stat-v">${fmt(s.limit)}</span><span class="field-hint">Set by KDP Lab. Read only.</span></div>
+        <div class="set-stat"><span class="chip-label">MONTHLY LIMIT</span><span class="set-stat-v">${fmt(s.limit)}</span><span class="field-hint">Set by NicheInk. Read only.</span></div>
       </div>
       ${stageTable(s)}
       ${callsTable(calls)}`;

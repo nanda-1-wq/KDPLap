@@ -80,9 +80,9 @@ a:focus-visible {
 .mark-fill { fill: var(--lp-logo); }
 .mark-cut { fill: var(--lp-logo-cut); }
 .mark-line { stroke: var(--lp-logo); }
-.wordmark { font-size: var(--lp-wordmark-size); font-weight: 700; letter-spacing: 0.01em; }
-.wordmark-kdp { color: var(--lp-heading); }
-.wordmark-lab { color: var(--lp-accent); }
+.wordmark { font-size: var(--lp-wordmark-size); font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+.wordmark-niche { color: var(--lp-heading); }
+.wordmark-ink { color: var(--lp-accent); }
 
 .social { display: flex; gap: var(--lp-gap-10); }
 .pill {

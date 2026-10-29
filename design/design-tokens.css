@@ -59,7 +59,7 @@
   --lp-text-2: var(--graphite);     /* lead text, notes, footer */
   --lp-border: var(--stone);
   --lp-chip: var(--mist);           /* status chip, icon tiles */
-  --lp-accent: var(--brand-blue);   /* status dot, "LAB" */
+  --lp-accent: var(--brand-blue);   /* status dot, "Ink" */
   --lp-cta-bg: var(--brand-navy);
   --lp-cta-text: #FFFFFF;
   --lp-logo: var(--brand-navy);

@@ -221,7 +221,7 @@
     const bits = [model.niche ? esc(model.niche) : '<span class="none">Niche not set</span>', `${n} book${n === 1 ? '' : 's'}`];
     els.meta.innerHTML = bits.join(' · ') + (defaultId === penId ? ` ${P.defaultChip}` : '');
     els.menuBtn.setAttribute('aria-label', `More actions for ${model.name}`);
-    document.title = `${model.name} · Pen Names · KDP Lab`;
+    document.title = `${model.name} · Pen Names · NicheInk`;
   }
 
   function renderDefault(error) {

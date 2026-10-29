@@ -146,6 +146,13 @@ Deno.test("DOCX: no front matter → one section, numbered from 1", async () => 
   assert(/<w:pgNumType w:start="1"\/>/.test(sects[0]));
 });
 
+Deno.test("DOCX file properties: Author is the pen name, else NicheInk (rename)", async () => {
+  const creator = (files) => files.get("docProps/core.xml").match(/<dc:creator>([^<]*)<\/dc:creator>/)[1];
+  assertEquals(creator((await build()).files), "Nora Hale");
+  assertEquals(creator((await build({}, { ...DATA, book: { ...DATA.book, pen_name: "" } })).files), "NicheInk");
+  assertEquals(creator((await build({}, { ...DATA, book: { ...DATA.book, pen_name: null } })).files), "NicheInk");
+});
+
 Deno.test("DOCX: lists, bold, italic, a line break, a literal star; styles", async () => {
   const { files, doc } = await build();
   assertEquals(count(doc, /<w:numPr>/g), 6, "2 bullets + 2 numbered + 2 numbered");

@@ -631,7 +631,7 @@ const test = async page => {
   await until(() => window.__imp.requests.length === 1);
   await g(() => window.__imp.fail());
   await waitCard('error');
-  ok(/We couldn’t reach KDP Lab\. Check your connection\. Your text is safe\. If the AI had already finished, this call may still count\./.test(await txt('[data-imp] .alert'))
+  ok(/We couldn’t reach NicheInk\. Check your connection\. Your text is safe\. If the AI had already finished, this call may still count\./.test(await txt('[data-imp] .alert'))
     && !/not counted/.test(await txt('[data-imp] .alert')) && await has('[data-imp-retry]'), `network: may count, Try again: ${await txt('[data-imp] .alert')}`);
   // G3 P9: the server did not find the passage in the saved section: a warning with Try again, not counted.
   await page.click('[data-imp-retry]');

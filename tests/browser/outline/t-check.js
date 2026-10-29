@@ -51,7 +51,7 @@ const test = async page => {
   const pills = await aiPills();
   ok(pills[2] === 'Overlaps chapter 6 AI' && pills[5] === 'Overlaps chapter 3 AI' && pills[7] === 'Off the positioning AI', `pills: ${JSON.stringify(pills)}`);
   ok(await page.$eval(ch(3), (l) => l.classList.contains('is-warn')) && !(await page.$eval(ch(1), (l) => l.classList.contains('is-warn'))), 'chapter 3 card has the warning border, chapter 1 not');
-  ok((await page.$$('[data-checks] .otl-by')).length >= 1 && /Checked by KDP Lab/.test(await txt('[data-checks]')), 'code checks keep "Checked by KDP Lab"');
+  ok((await page.$$('[data-checks] .otl-by')).length >= 1 && /Checked by NicheInk/.test(await txt('[data-checks]')), 'code checks keep "Checked by NicheInk"');
 
   // 3. Words and the Examples box do not make it out of date (owner answer A).
   await page.click(`${ch(1)} [data-toggle]`).catch(() => {});

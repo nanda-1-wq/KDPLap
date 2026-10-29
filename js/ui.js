@@ -42,7 +42,7 @@
       case 'monthly_limit': return ['warning', `You have used this month’s AI allowance. It resets on ${nextMonthUtc()}.`, false];
       case 'rate_limited': return ['warning', 'Too many requests. Wait a minute, then try again.', true];
       case 'save_first': return ['error', 'Your last change is not saved yet. Use Retry next to “Couldn’t save”, then try again.', false];
-      case 'network': return ['error', 'We couldn’t reach KDP Lab. Check your connection, then try again. This try was not counted.', true];
+      case 'network': return ['error', 'We couldn’t reach NicheInk. Check your connection, then try again. This try was not counted.', true];
       default: return ['error', 'The AI is not available right now. This try was not counted.', true];
     }
   }

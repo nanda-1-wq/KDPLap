@@ -67,7 +67,7 @@ const test = async page => {
   for (const [g, msg] of [
     ['positioning_changed', 'The text changed while the check ran, so nothing was saved. Run it again. This try was not counted. Try again'],
     ['monthly_limit', 'You have used this month’s AI allowance. It resets on'],
-    ['network', 'We couldn’t reach KDP Lab. Check your connection, then try again. This try was not counted. Try again']
+    ['network', 'We couldn’t reach NicheInk. Check your connection, then try again. This try was not counted. Try again']
   ]) {
     M.gen = g;
     await page.click('[data-run-drift]');

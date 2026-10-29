@@ -199,7 +199,7 @@
       paragraph: { spacing: { line: 240, lineRule: 'auto', ...spacing }, keepNext: true, ...extra }
     });
     return new Document({
-      creator: str(b.pen_name) || 'KDP Lab',
+      creator: str(b.pen_name) || 'NicheInk',
       title: str(b.title) || 'Untitled book',
       styles: {
         default: {

@@ -165,7 +165,7 @@ const test = async page => {
   await until(() => window.__imp.requests.length === 3);
   await g(() => window.__imp.fail());
   await cardIs('q-failed');
-  ok((await txt('.wr-q .alert')) === 'We couldn’t reach KDP Lab. Check your connection. Your text is safe. If the AI had already finished, this call may still count.', `network: "${await txt('.wr-q .alert')}"`);
+  ok((await txt('.wr-q .alert')) === 'We couldn’t reach NicheInk. Check your connection. Your text is safe. If the AI had already finished, this call may still count.', `network: "${await txt('.wr-q .alert')}"`);
   ok((await rows())[2] === '3 Drift Failed' && (await txt('.wr-q p.wr-imp-small')) === 'Try again sends item 3 again. Stop keeps item 1’s change.', `item 3 Failed; "${await txt('.wr-q .wr-imp-small')}"`);
   ok((await edState()) === 'true' && (await focused()) === 'data-q-retry data-imp-focus', 'editable; focus on Try again');
   ok(await shots('network') === false, 'network: no sideways scroll at 900 px');

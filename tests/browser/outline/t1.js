@@ -36,7 +36,7 @@ const test = async page => {
   await open(B2);
   ok(/No outline yet/.test(await txt('[data-list]')), 'empty: No outline yet');
   ok(!!(await page.$('[data-list] [data-generate].btn-primary')) && !!(await page.$('[data-list] [data-add-chapter]')), 'empty: Generate and Add chapter');
-  ok((await txt('[data-checks]')) === 'OUTLINE CHECK Checked by KDP Lab Checks show here once you have chapters.', `empty checks: "${await txt('[data-checks]')}"`);
+  ok((await txt('[data-checks]')) === 'OUTLINE CHECK Checked by NicheInk Checks show here once you have chapters.', `empty checks: "${await txt('[data-checks]')}"`);
 
   // 3. Design 20.
   await open(B1);

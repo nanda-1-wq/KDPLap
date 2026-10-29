@@ -275,7 +275,7 @@
     refresh() {
       renderNav();
       setGate();
-      document.title = `${STEPS[step].name} · ${workingTitle(book)} · KDP Lab`;
+      document.title = `${STEPS[step].name} · ${workingTitle(book)} · NicheInk`;
     },
     /** owner = the step number that saves (default 1, the Brief). */
     renderSave(state, message, canRetry, owner = 1) {
@@ -317,7 +317,7 @@
         </div>`;
     }
     setGate();
-    document.title = `${s.name} · ${workingTitle(book)} · KDP Lab`;
+    document.title = `${s.name} · ${workingTitle(book)} · NicheInk`;
     if (moveFocus) stepTitle.focus();
   }
 
@@ -344,7 +344,7 @@
   }
 
   function renderNotFound() {
-    document.title = 'Book not found · KDP Lab';
+    document.title = 'Book not found · NicheInk';
     renderMessage({
       title: 'Book not found',
       text: 'This book does not exist, or it belongs to another account.',

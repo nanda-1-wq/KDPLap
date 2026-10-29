@@ -71,7 +71,16 @@ deno test --allow-read tests/export-rules.test.js
 deno test --allow-read tests/export-build.test.js
 deno test --allow-read tests/usage-rules.test.js
 deno test --allow-read tests/user-name.test.js
+deno test --allow-read tests/brand-name.test.js
 ```
+
+- Rename to NicheInk (design 40): `brand-name.test.js` scans every served
+  page, script and style (comments left out): no "KDP Lab" where a user sees
+  it, every title names NicheInk, the Amazon disclaimer, the wordmark spans
+  and their no-wrap rule, "PUZZLE TOOLS", the landing text, relative links only
+  (no `/KDPLap/`, `github.io`, `<base>` or root-absolute paths, so a rollback
+  to github.io keeps working), `robots.txt`, and `CNAME` once GitHub writes it.
+  `export-build.test.js` also checks the .docx Author: the pen name, else NicheInk.
 
 - E11 (designs 24b and 25b): `export-rules.test.js` is the Export dialog's
   include rule (the cases in `tests/fixtures/export-include.json`, shared with
@@ -227,7 +236,10 @@ manuscript, a status change that reopens the book)), for E11 `settings` (t-setti
 (t-export, t-cut for E12 M9: the "ends mid-sentence" note never blocks, and t-repeats for E12 fix
 batch 2: the repeated-sentence note, the Needs review hint, no `[S3]` in the .docx or .md) and `books` (t-badge; t-words for E12 fix batch 3, design 01b:
 the card word bar for each target kind, "Needs review" from a section, the "Words this month" stat,
-"Reopen book" in the card menu, the title room),
+"Reopen book" in the card menu, the title room; t-brand for the rename to NicheInk, design 40: the
+sidebar wordmark, its label, colors and focus ring, "PUZZLE TOOLS", the titles, 200% text, Sign in
+signed out and the landing page in light and dark at 1440 and 390, the root redirect; it loads the
+real Google Fonts for its own screenshots, with an 8 s cap),
 and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,

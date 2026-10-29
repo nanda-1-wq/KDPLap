@@ -217,7 +217,7 @@
   function renderName() {
     els.name.textContent = model.name;
     els.crumb.textContent = model.name;
-    document.title = `${model.name} · Topic Lab · KDP Lab`;
+    document.title = `${model.name} · Topic Lab · NicheInk`;
     els.searchHint.textContent = `Search "${model.name.toLowerCase()}" in a private window. Count page 1 only.`;
     els.menuBtn.setAttribute('aria-label', `More actions for ${model.name}`);
   }

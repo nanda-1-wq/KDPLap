@@ -610,7 +610,7 @@
       ? `<li class="is-pass">${ICON.check(16)}<span>${esc(x.text)}</span></li>`
       : `<li class="is-warn">${ICON.warn(16)}<span>${esc(x.text)}</span></li>`)).join('');
     els.checks.innerHTML = `
-      <div class="otl-check-head"><h2 class="ttl-label" id="otlChecks" tabindex="-1">OUTLINE CHECK</h2><span class="otl-by">Checked by KDP Lab</span></div>
+      <div class="otl-check-head"><h2 class="ttl-label" id="otlChecks" tabindex="-1">OUTLINE CHECK</h2><span class="otl-by">Checked by NicheInk</span></div>
       ${rows ? `<ul class="ttl-check-list" data-check-list>${rows}</ul>` : '<p class="ttl-sub">Checks show here once you have chapters.</p>'}
       ${regular().length ? `<div class="otl-ai-block" role="group" data-ai-check aria-labelledby="otlAi">${aiCheckHtml()}</div>` : ''}`;
   }

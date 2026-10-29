@@ -121,9 +121,10 @@ a:hover { text-decoration-thickness: 2px; }
   font-size: var(--auth-logo-text);
   font-weight: 700;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
-.auth-logo-text .kdp { color: var(--lp-heading); }
-.auth-logo-text .lab { color: var(--lp-accent); }
+.auth-logo-text .niche { color: var(--lp-heading); }
+.auth-logo-text .ink { color: var(--lp-accent); }
 
 /* ── Title block ──────────────────────────────── */
 

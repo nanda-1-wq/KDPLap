@@ -36,7 +36,7 @@ const test = async (page) => {
   ok('1 usage: 412,380 of 2,000,000 tokens, 21%, resets November 1 (UTC)',
     (await text('.set-big')) === '412,380 of 2,000,000 tokens 21%' && (await text('[data-resets]')) === 'Resets November 1 (UTC)', await text('.set-big'));
   ok('1 bar: 21% for screen readers', (await page.locator('.set-bar').getAttribute('aria-label')) === "21% of this month's AI allowance used");
-  ok('1 cost estimate and the read-only limit', (await text('.set-stats')).includes('About $2.06') && (await text('.set-stats')).includes('Set by KDP Lab. Read only.'), await text('.set-stats'));
+  ok('1 cost estimate and the read-only limit', (await text('.set-stats')).includes('About $2.06') && (await text('.set-stats')).includes('Set by NicheInk. Read only.'), await text('.set-stats'));
   const stages = await page.locator('table[aria-label="By stage this month"] tbody tr').allInnerTexts();
   ok('1 by stage: top 5 and Other (positioning, Brief, drift)', stages.length === 6 && stages[0].replace(/\s+/g, ' ').startsWith('Write section 38 268,400')
     && stages[5].replace(/\s+/g, ' ').startsWith('Other (positioning, Brief, drift) 9 10,480'), stages);

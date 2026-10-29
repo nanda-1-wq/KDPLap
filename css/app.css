@@ -189,9 +189,9 @@ a { color: var(--ink); }
 .sidebar-logo .mark { fill: var(--brand-navy); }
 .sidebar-logo .cut { fill: var(--surface); }
 .sidebar-logo .spine { stroke: var(--brand-navy); }
-.sidebar-logo-text { font-size: var(--app-logo-text); font-weight: 700; letter-spacing: 0.01em; }
-.sidebar-logo-text .kdp { color: var(--brand-navy); }
-.sidebar-logo-text .lab { color: var(--brand-blue); }
+.sidebar-logo-text { font-size: var(--app-logo-text); font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+.sidebar-logo-text .niche { color: var(--brand-navy); }
+.sidebar-logo-text .ink { color: var(--brand-blue); }
 
 .nav-group {
   display: flex;

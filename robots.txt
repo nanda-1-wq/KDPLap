@@ -1,0 +1,15 @@
+# NicheInk (nicheink.com). Crawlers may read the landing page and the sign-in
+# pages. The paths below are project files, not pages. This file only asks
+# crawlers to stay away; it hides nothing. /design/ stays open because the
+# landing page loads its tokens and favicon from there.
+User-agent: *
+Disallow: /app/
+Disallow: /docs/
+Disallow: /tests/
+Disallow: /supabase/
+Disallow: /design/screens/
+Disallow: /landing/archive/
+Disallow: /kdplapRoadMap/
+Disallow: /KDP%20Lab%20Design%20System/
+Disallow: /Inspriations/
+Disallow: /CLAUDE
