@@ -5,6 +5,7 @@
 
 ## v1 · Write your first real book in KDP Lab
 Design: ✅ approved (see `design/`)
+Status: ✅ done (E1 to E12, both review gates)
 
 - [x] **E1** Project setup: design files, CLAUDE.md, this roadmap
 - [x] **E2** Data model: tables, relations, Row Level Security (SQL migrations)
@@ -25,7 +26,7 @@ Design: ✅ approved (see `design/`)
   - E10.4 Checks tab: done (0022, generate v19, merged cd9966f)
 - [x] **PRODUCE gate** (after E10): G4 owner walk-through, G1 review, G2 clean-up, G3 fixes (0023, generate v20), G5 severity, Keep as is, Fix, Fix major (0024, generate v21), G6 all suites green on main. Merged bec800e. Results in `docs/reviews/produce-gate-g1.md` to `produce-gate-g5.md` (G4 answers in g1 section 7).
 - [x] **E11** Export DOCX + Markdown · Settings + AI usage: Export dialog (DOCX built in the browser with docx 9.5.1, Markdown), Settings, name-only sidebar, Books badge, 0025 live (20261025213500). Merged 1c9b932. Plans and results in `docs/reviews/2026-10-25-e11-plan.md` and `2026-10-25-e11-build-plan.md`.
-- [ ] **E12** Real test: write one full book, fix what hurts ← in progress
+- [x] **E12** Real test: write one full book, fix what hurts
   - Step 1 AI prompt review: done (report `docs/reviews/2026-10-26-e12-prompt-review.md`)
   - Step 2 fix batch: done (one number rule, point of view, examples, style, previews, `<book_so_far>`, bio, "ends mid-sentence" and "Mentions another part of the book" checks; generate v22 + v23; merged e6c0737). Plans and live checks in `docs/reviews/2026-10-26-e12-fix-batch-plan.md` and `2026-10-26-e12-part3-plan.md`
   - Step 3, the real book: "Micro Study Habits for Busy Adult Learners" (5 chapters, about 11,000 words, DOCX) was written on the owner's account
@@ -48,7 +49,7 @@ Design: ✅ approved (see `design/`)
     - Checks: "according to one source" in Source not named, plus two info rows, "Check that the source is named" and "Points back to another part";
     - the card title keeps room for the ⋯ button.
     - Plan, designs 01b and 22f, STOPs and the live check: `docs/reviews/2026-10-28-e12-fix-batch-3-plan.md`, `docs/reviews/e12-fix3-live/results.md`
-  - Next: finish and publish the real book
+  - The real book is final, exported and marked completed (Oct 29). Publishing moves to v2, after 09 Cover (owner decision, Oct 28).
 
 ### Watch list for the real book
 - Practices taught again: a practice from an earlier section is named, but its steps are taught a second time (Part 3 live check; Live check A: 7.1 copied two steps word for word; "Also in another section" now flags it).
@@ -57,6 +58,9 @@ Design: ✅ approved (see `design/`)
 - AI Verify marks on claims without numbers (H1): the AI rarely marks them, and no check flags them yet.
 - Unnamed sources in the Write prompt (fix batch 3, Q6): "research shows", "studies show" and "experts say" are not in the prompt rule yet (v24 names "research suggests" only). The Checks info row shows them. Widen the rule in a later generate version if the real book still has them.
 - Test flake: the `write/t-chapter` "done" check fails about 2 in 5 runs, on main too (fix batch 3, STOP 4).
+
+## Next
+Rename to NicheInk (nicheink.com), then v2 starting with 09 Cover.
 
 ## v2 · KDP-ready files
 07 Quality Control · 08 Format · 09 Cover (full wrap) · Print PDF · EPUB ·
