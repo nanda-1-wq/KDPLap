@@ -1,6 +1,7 @@
 *.mov
 .DS_Store
 KDP referance/
+Inspriations/
 
 # Claude Code local settings
 .claude/settings.local*.json
