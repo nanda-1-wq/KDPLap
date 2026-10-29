@@ -71,6 +71,9 @@ Design starts after E12.
 10 Metadata (description, 7 keywords, categories, price) · 11 Publish (preflight) ·
 new landing page · usage plans and billing · name and trademark check.
 
+**After v2: landing page redesign (owner).** The owner redesigns the landing page once v2 is done.
+The NicheInk rename changed only its wordmark, chip, lead, description, title and footer (design 40).
+
 ## v4 · Business
 Research Vault · Templates · Assets · Launch tracker · Analytics (royalty report upload) ·
 low-content generators return under KDP Tools.
