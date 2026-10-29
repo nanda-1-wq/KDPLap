@@ -1,6 +1,6 @@
 # E12 step 4: fix batch 3 (from finishing the real book)
 
-Status: STOP 4 (2026-10-28). 0026 applied by Claude chat as `20261028093000 book_complete_words`. Part 3 (browser, items 1 to 5 and the R2 title room) is done. Waiting for the owner's review of the screenshots, then the live check.
+Status: STOP 5 (2026-10-29). The live check passed on the test account ($0, no AI calls). Results: `docs/reviews/e12-fix3-live/results.md`. Not merged: waiting for the owner.
 
 **Design review fixes (owner, 2026-10-28):**
 - **R1, chapter marks.** Mark all as reviewed clears sections only, and only `approve_outline` clears `chapters.needs_review`. So the head box adds the gray line "Approve the outline in 05 to clear the chapter marks." (no button) whenever a chapter still needs review. New state 22f 6b. The state 6 note now says the card badge and the Export note clear only when no chapter needs review.
@@ -255,3 +255,9 @@ Browser only. No migration (0026 is live), no generate change (stays v24).
 - Generate 317, unchanged. SQL 1,217, unchanged since STOP 3.
 
 **Screenshots:** `docs/reviews/e12-fix3-stop4/` (45 PNGs, from the mocked tests, at 1440 and 900).
+
+## Live check (STOP 5, 2026-10-29)
+All steps pass, with no bug found. Results, the restored state and the screenshots are in `docs/reviews/e12-fix3-live/`. Changes from the plan:
+- **Step 3:** no unlock of 03. The test book already had 11 marked sections, and an unlock would also have marked the title and cleared the outline approval.
+- **Step 4 (owner decision):** 10.1 got its partial text kept and 10.2 one short version, because a book with text-less sections cannot be completed. Every status and the 11 marks were put back afterwards.
+- **Step 5:** under D3, "Research shows…" lands in the new info row, not the Source row.
