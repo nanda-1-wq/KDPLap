@@ -1,14 +1,15 @@
-# CLAUDE.md · KDP Lab
+# CLAUDE.md · NicheInk
 
 Read this file fully before any task in this repository.
 
 ## 1. Product
-KDP Lab is a web app that helps one author plan, validate, and write
-medium- and high-content nonfiction books for Amazon KDP, with AI assistance.
-Current target: **v1**. The first user is the owner (Adnan). Other users come in v3.
+NicheInk (formerly KDP Lab; the repo keeps the name `KDPLap`) is a web app that
+helps one author plan, validate, and write medium- and high-content nonfiction
+books for Amazon KDP, with AI assistance. Live at https://nicheink.com.
+v1 is done (Oct 29, 2026); next is v2. The first user is the owner (Adnan). Other users come in v3.
 
 v1 flow: Topic Lab (market validation) → Book Wizard steps 01 to 06 → DOCX export.
-Low-content generators (Word Search, Sudoku in `app/generators/`) are **parked**.
+Low-content generators (Word Search, Sudoku in `app/generators/`, under "Puzzle Tools" in the sidebar) are **parked**.
 Keep them working. Do not change them unless asked.
 
 ## 2. How we work (mandatory)
@@ -27,7 +28,7 @@ Keep them working. Do not change them unless asked.
 | Backend | Supabase Edge Functions in TypeScript (AI calls, prompts, usage limits) |
 | AI | Anthropic API, called **only** from Edge Functions |
 | Export (v1) | DOCX generated in the browser |
-| Hosting | GitHub Pages or Vercel (static) |
+| Hosting | GitHub Pages from `main`, custom domain https://nicheink.com. GitHub writes `CNAME`; never edit it. Keep every path relative (no `/KDPLap/`, no root-absolute paths), so a rollback to github.io still works. |
 
 ## 4. Security rules (never break)
 - The Anthropic API key lives only in Supabase Edge Function secrets. Never in frontend code, never in git.
@@ -63,7 +64,10 @@ Keep them working. Do not change them unless asked.
   Accepted exception: the Write editor (4 px) and the Improve menu items (2 px) draw the ring inside, because the scrolling card clips an outside ring.
 - Every screen designs its states: empty, loading or generating, error with retry, locked, needs review.
 - Reference screens: `design/screens/*.html` (open in a browser) and `*.png`. Match them.
-- Logo files: `design/logo/`.
+- Logo files: `design/logo/`. Wordmark (design 40, 40b): "Niche" in navy + "Ink" in blue, with a
+  `--wordmark-gap` margin before "Ink" (never a space), 19 px (18 px on the landing at 900 px and below).
+- The name is NicheInk. Keep the Amazon disclaimer on the auth pages and the landing
+  ("… NicheInk is independent and not affiliated with Amazon.").
 - Do not use the words "PMA" in the UI. Say "market validation" or "market checks".
 
 ## 8. v1 screens
@@ -75,14 +79,15 @@ Steps 07 to 11 show "Coming in v2 / v3" in the book sidebar.
 ## 9. Repository map
 | Path | Contents |
 |---|---|
-| `index.html`, `login.html`, `signup.html`, `forgot-password.html` | Public and auth pages |
+| `index.html`, `login.html`, `signup.html`, `forgot-password.html`, `reset-password.html` | Public and auth pages |
 | `app/` | Signed-in app pages |
 | `app/generators/` | Parked low-content generators |
 | `js/supabase.js` | Single Supabase client. All data access goes through it (`window.kdp`). |
-| `landing/` | Current landing page (old low-content copy, redesigned in v3) |
-| `design/` | Approved v1 design: tokens, screens, logo |
+| `landing/` | Current landing page (the owner redesigns it after v2) |
+| `design/` | Approved design: tokens, screens (40 = the NicheInk wordmark), logo |
 | `kdplapRoadMap/` | Roadmap. `kdp_roadmap_md.md` is the current plan. |
-| `KDP referance/` | Private reference screenshots. Ignored by git. Never copy from it. |
+| `CNAME`, `robots.txt` | Pages custom domain (written by GitHub) and the crawler rules for the site root |
+| `KDP referance/`, `Inspriations/` | Private reference screenshots. Local only: not tracked, ignored by git. Never copy from them. |
 
 ## 10. Writing style for UI text
 Clear, simple words. Short sentences. Active voice. No em dashes.

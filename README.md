@@ -1,12 +1,20 @@
-# KDP Lab
+# NicheInk
 
-KDP Lab is being rebuilt as an AI studio for nonfiction books. It will help you validate a topic, plan the book, and write it chapter by chapter. The old low-content features (puzzle books, journals, planners) are archived, and the notes below describe that archived version.
+NicheInk (formerly KDP Lab) is an AI studio for nonfiction books. It helps you validate a topic, plan the book, and write it chapter by chapter, in your own voice, then export it as DOCX. v1 is done; v2 adds KDP-ready files. The repo keeps its old name, `KDPLap`.
 
-> Live site: [https://nanda-1-wq.github.io/KDPLap/](https://nanda-1-wq.github.io/KDPLap/)
+> Live site: [https://nicheink.com](https://nicheink.com)
+
+Hosting: GitHub Pages from `main`, custom domain `nicheink.com` (the `CNAME` file is written by GitHub). Every path in the site is relative. The old address `https://nanda-1-wq.github.io/KDPLap/` redirects to the same path on nicheink.com. Plan and roadmap: [`kdplapRoadMap/kdp_roadmap_md.md`](./kdplapRoadMap/kdp_roadmap_md.md). Project rules: [`CLAUDE.md`](./CLAUDE.md).
+
+Kindle Direct Publishing (KDP) is a trademark of Amazon. NicheInk is independent and not affiliated with Amazon.
 
 ---
 
-## What is KDP Lab?
+## Archived: the KDP Lab low-content version
+
+The notes from here to "How to run the tests" describe the old low-content product. They are kept for reference and are out of date. The Word Search and Sudoku generators are parked under Puzzle Tools.
+
+### What was KDP Lab?
 
 KDP Lab is a SaaS platform that lets anyone — without design or technical skills — generate puzzle books, journals, planners, coloring books, and activity books, then export them as KDP-ready PDFs and publish directly to Amazon Kindle Direct Publishing.
 
@@ -56,8 +64,8 @@ KDPLAP/
 │   ├── preview/                  # HTML previews for colors, type, components
 │   └── ui_kits/web_app/          # React component kit (Nav, Hero, Dashboard, etc.)
 ├── kdplapRoadMap/                # Product roadmap
-├── KDP referance/                # Competitor & inspiration screenshots
-└── Inspriations/                 # Design inspiration assets
+├── KDP referance/                # Competitor screenshots (local only, not in git)
+└── Inspriations/                 # Design inspiration assets (local only, not in git)
 ```
 
 ---
@@ -102,5 +110,5 @@ Details, suites, and setup: [tests/README.md](tests/README.md).
 
 ## Status
 
-Beta — all features free, no credit card required.  
-&copy; 2026 KDP Lab. All rights reserved.
+In early testing, owner only. Sign-ups are off until v3.  
+&copy; 2026 NicheInk. All rights reserved.

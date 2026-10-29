@@ -1,4 +1,4 @@
-# KDP Lab Roadmap
+# NicheInk Roadmap (formerly KDP Lab)
 
 > Product: AI-assisted medium- and high-content nonfiction books for Amazon KDP.
 > Rule: design before code. Each version repeats review → flow → wireframes → final design → code.
@@ -57,10 +57,21 @@ Status: ✅ done (E1 to E12, both review gates)
 - The same opener across sections, for example "This is common, and it does not mean…" (`<book_so_far>` shows subheadings only).
 - AI Verify marks on claims without numbers (H1): the AI rarely marks them, and no check flags them yet.
 - Unnamed sources in the Write prompt (fix batch 3, Q6): "research shows", "studies show" and "experts say" are not in the prompt rule yet (v24 names "research suggests" only). The Checks info row shows them. Widen the rule in a later generate version if the real book still has them.
-- Test flake: the `write/t-chapter` "done" check fails about 2 in 5 runs, on main too (fix batch 3, STOP 4).
+- Test flake: the `write/t-chapter` "done" check fails about 2 in 5 runs, on main too (fix batch 3, STOP 4; the rename saw it in 2 of 3 runs on main).
+
+## Rename to NicheInk · ✅ done (Oct 29)
+- [x] Plan, owner answers: `docs/reviews/2026-10-29-rename-nicheink-plan.md` (14b)
+- [x] Design 40, the wordmark "Niche" navy + "Ink" blue; 40b: a 2 px gap, the size stays 19 px (the 260 px sidebar at 200% text decides)
+- [x] Every user-facing name, PUZZLE TOOLS, the landing text, `robots.txt`; `KDP referance/` and `Inspriations/` no longer tracked
+- [x] generate v25: CORS allows https://nicheink.com and www (STOP 3: `docs/reviews/rename-stop3/`)
+- [x] DNS, GitHub Pages custom domain and HTTPS; Supabase Site URL https://nicheink.com; Google sign-in works on nicheink.com
+- [x] Live check on nicheink.com, steps 1 to 5 and 8 (`docs/reviews/rename-live/`)
+- Pending:
+  - the Google OAuth consent-screen app name (NicheInk);
+  - drop the github.io origin (generate CORS, Supabase redirect URLs, Google origins) in generate v26, no earlier than Nov 12, 2026 (14 days after Oct 29), and only if the Edge logs show no github.io calls for 7 days.
 
 ## Next
-Rename to NicheInk (nicheink.com), then v2 starting with 09 Cover.
+v2, starting with 09 Cover.
 
 ## v2 · KDP-ready files
 07 Quality Control · 08 Format · 09 Cover (full wrap) · Print PDF · EPUB ·
@@ -71,8 +82,10 @@ Design starts after E12.
 10 Metadata (description, 7 keywords, categories, price) · 11 Publish (preflight) ·
 new landing page · usage plans and billing · name and trademark check.
 
-**After v2: landing page redesign (owner).** The owner redesigns the landing page once v2 is done.
-The NicheInk rename changed only its wordmark, chip, lead, description, title and footer (design 40).
+**After v2 (owner):**
+- Landing page redesign. The owner redesigns the landing page once v2 is done. The NicheInk rename
+  changed only its wordmark, chip, lead, description, title and footer (design 40).
+- Responsive on all devices: every page works on phones, tablets and desktops.
 
 ## v4 · Business
 Research Vault · Templates · Assets · Launch tracker · Analytics (royalty report upload) ·
