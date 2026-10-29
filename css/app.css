@@ -17,7 +17,7 @@
   --app-avatar: 36px;
   --app-tab-h: var(--control-h);
   --app-logo: 30px;
-  --app-logo-text: 19px;
+  --app-logo-text: 22px;
   --app-card-pad: 18px;
   --app-card-title: 17px;
   --app-cover-w: 92px;
@@ -176,6 +176,7 @@ a { color: var(--ink); }
 
 .sidebar-logo {
   display: flex;
+  flex-wrap: wrap;            /* 40c: at 200% text the wordmark goes under the mark */
   align-items: center;
   gap: 10px;
   padding: 0 var(--space-2);
@@ -184,7 +185,7 @@ a { color: var(--ink); }
   text-decoration: none;
   border-radius: var(--radius-md);
 }
-.sidebar-logo svg { width: var(--app-logo); height: var(--app-logo); }
+.sidebar-logo svg { width: var(--app-logo); height: var(--app-logo); flex-shrink: 0; }
 /* Logo only: brand colors are allowed here (CLAUDE.md §7). */
 .sidebar-logo .mark { fill: var(--brand-navy); }
 .sidebar-logo .cut { fill: var(--surface); }

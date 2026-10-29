@@ -20,7 +20,7 @@
   --auth-head-gap: 28px;         /* space under the title block */
   --auth-stack-gap: 18px;        /* space between form rows */
   --auth-logo: 30px;
-  --auth-logo-text: 19px;
+  --auth-logo-text: 22px;
   --auth-tile: 56px;             /* mail icon tile */
   --auth-tile-radius: 14px;
   --auth-panel-pad-y: 64px;
@@ -104,6 +104,7 @@ a:hover { text-decoration-thickness: 2px; }
 
 .auth-logo {
   display: inline-flex;
+  flex-wrap: wrap;            /* 40c: if the row has no room, the wordmark goes under the mark */
   align-items: center;
   gap: 10px;
   min-height: var(--control-h);
@@ -113,7 +114,7 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
   border-radius: var(--radius-sm);
 }
-.auth-logo svg { width: var(--auth-logo); height: var(--auth-logo); }
+.auth-logo svg { width: var(--auth-logo); height: var(--auth-logo); flex-shrink: 0; }
 .auth-logo .mark { fill: var(--lp-logo); }
 .auth-logo .cut { fill: var(--lp-logo-cut); }
 .auth-logo .spine { stroke: var(--lp-logo); }

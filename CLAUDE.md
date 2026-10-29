@@ -64,8 +64,10 @@ Keep them working. Do not change them unless asked.
   Accepted exception: the Write editor (4 px) and the Improve menu items (2 px) draw the ring inside, because the scrolling card clips an outside ring.
 - Every screen designs its states: empty, loading or generating, error with retry, locked, needs review.
 - Reference screens: `design/screens/*.html` (open in a browser) and `*.png`. Match them.
-- Logo files: `design/logo/`. Wordmark (design 40, 40b): "Niche" in navy + "Ink" in blue, with a
-  `--wordmark-gap` margin before "Ink" (never a space), 19 px (18 px on the landing at 900 px and below).
+- Logo files: `design/logo/`. Wordmark (design 40, 40b, 40c): "Niche" in navy + "Ink" in blue, with a
+  `--wordmark-gap` margin before "Ink" (never a space), 22 px (21 px on the landing at 900 px and below),
+  weight 700. The mark never shrinks (30 px, 28 px on the landing at 900 px and below). If the row has
+  no room (200% text), the logo wraps: the mark on one line, the wordmark under it. Never sideways scroll.
 - The name is NicheInk. Keep the Amazon disclaimer on the auth pages and the landing
   ("… NicheInk is independent and not affiliated with Amazon.").
 - Do not use the words "PMA" in the UI. Say "market validation" or "market checks".

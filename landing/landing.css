@@ -7,7 +7,7 @@
   --lp-pad-y: 36px;
   --lp-pad-x: 96px;
   --lp-logo-size: 30px;
-  --lp-wordmark-size: 19px;
+  --lp-wordmark-size: 22px;
   --lp-h1-size: 56px;
   --lp-lead-size: 19px;
   --lp-lead-max: 600px;
@@ -75,8 +75,8 @@ a:focus-visible {
   align-items: center;
   gap: var(--space-4);
 }
-.brand { display: flex; align-items: center; gap: var(--lp-gap-10); }
-.brand-mark { width: var(--lp-logo-size); height: var(--lp-logo-size); }
+.brand { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lp-gap-10); }   /* 40c: wraps, never squeezes the mark */
+.brand-mark { width: var(--lp-logo-size); height: var(--lp-logo-size); flex-shrink: 0; }
 .mark-fill { fill: var(--lp-logo); }
 .mark-cut { fill: var(--lp-logo-cut); }
 .mark-line { stroke: var(--lp-logo); }
@@ -260,7 +260,7 @@ h1 {
     --lp-pad-y: 24px;
     --lp-pad-x: 22px;
     --lp-logo-size: 28px;
-    --lp-wordmark-size: 18px;
+    --lp-wordmark-size: 21px;
     --lp-h1-size: 36px;
     --lp-lead-size: 17px;
   }

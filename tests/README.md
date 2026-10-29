@@ -77,7 +77,8 @@ deno test --allow-read tests/brand-name.test.js
 - Rename to NicheInk (design 40): `brand-name.test.js` scans every served
   page, script and style (comments left out): no "KDP Lab" where a user sees
   it, every title names NicheInk, the Amazon disclaimer, the wordmark spans
-  and their no-wrap rule, "PUZZLE TOOLS", the landing text, relative links only
+  and their no-wrap rule, the 40c sizes (22 px, 21 px on the landing at 900 px
+  and below) and the wrapping logo row with a mark that never shrinks, "PUZZLE TOOLS", the landing text, relative links only
   (no `/KDPLap/`, `github.io`, `<base>` or root-absolute paths, so a rollback
   to github.io keeps working), `robots.txt`, and `CNAME` once GitHub writes it.
   `export-build.test.js` also checks the .docx Author: the pen name, else NicheInk.
@@ -239,7 +240,8 @@ the card word bar for each target kind, "Needs review" from a section, the "Word
 "Reopen book" in the card menu, the title room; t-brand for the rename to NicheInk, design 40: the
 sidebar wordmark, its label, colors and focus ring, "PUZZLE TOOLS", the titles, 200% text, Sign in
 signed out and the landing page in light and dark at 1440 and 390, the root redirect, and for 40b the
-2 px gap before "Ink" and the mark keeping its size at 200% text; it loads the
+2 px gap before "Ink" and the mark keeping its size at 200% text; for 40c the 22 px and 21 px sizes, and
+at 200% text the sidebar logo wrapping, the wordmark under the mark with no sideways scroll; it loads the
 real Google Fonts for its own screenshots, with an 8 s cap),
 and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`

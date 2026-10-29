@@ -78,19 +78,30 @@ Deno.test("the wordmark: Niche + Ink spans, colors from the tokens, never wraps"
   }
 });
 
-// Design 40b: the largest size up to 22 px that fits at 200% text in the 260 px sidebar, the
-// auth page at 390 and the landing header at 390 is 19 px (the sidebar decides: at 19.5 px the
-// mark starts to shrink). The landing at 900 px and below stays 1 px smaller. The gap is a margin.
-Deno.test("40b: one 2 px gap token; 19 px everywhere, 18 px on the landing at 900 px and below", () => {
+// Design 40b: a 2 px gap before "Ink", a margin, never a space.
+// Design 40c (owner): 22 px everywhere, 21 px on the landing at 900 px and below. The mark never
+// shrinks (flex-shrink: 0). If the row has no room (200% text in the 260 px sidebar), the logo row
+// wraps: the mark on one line, the wordmark under it. Never a squeezed mark, never sideways scroll.
+Deno.test("40b/40c: one 2 px gap token; 22 px everywhere, 21 px on the landing at 900 px and below", () => {
   assert(read("design/design-tokens.css").includes("--wordmark-gap: 2px;"));
-  assert(read("css/app.css").includes("--app-logo-text: 19px;"));
-  assert(read("css/auth.css").includes("--auth-logo-text: 19px;"));
+  assert(read("css/app.css").includes("--app-logo-text: 22px;"));
+  assert(read("css/auth.css").includes("--auth-logo-text: 22px;"));
   const lp = read("landing/landing.css");
-  assert(/:root \{[^}]*--lp-wordmark-size: 19px;/.test(lp));
-  assert(/@media \(max-width: 900px\) \{\s*:root \{[^}]*--lp-wordmark-size: 18px;/.test(lp));
+  assert(/:root \{[^}]*--lp-wordmark-size: 22px;/.test(lp));
+  assert(/@media \(max-width: 900px\) \{\s*:root \{[^}]*--lp-wordmark-size: 21px;/.test(lp));
   assertEquals((lp.match(/--lp-wordmark-size:/g) || []).length, 2);
   // Never a space character between the two spans (the text and the accessible name stay "NicheInk").
   for (const p of [...AUTH, "js/shell.js", "landing/index.html"]) assert(!/Niche<\/span>\s+<span|Niche <\/span>|<span class="(?:wordmark-)?ink"> /.test(read(p)), p);
+});
+
+Deno.test("40c: the logo row wraps and the mark never shrinks, in all three places", () => {
+  const app = read("css/app.css"), auth = read("css/auth.css"), lp = read("landing/landing.css");
+  assert(/\.sidebar-logo \{[^}]*flex-wrap: wrap;/.test(app));
+  assert(/\.sidebar-logo svg \{[^}]*flex-shrink: 0;/.test(app));
+  assert(/\.auth-logo \{[^}]*flex-wrap: wrap;/.test(auth));
+  assert(/\.auth-logo svg \{[^}]*flex-shrink: 0;/.test(auth));
+  assert(/\.brand \{[^}]*flex-wrap: wrap;/.test(lp));
+  assert(/\.brand-mark \{[^}]*flex-shrink: 0;/.test(lp));
 });
 
 Deno.test("the sidebar says PUZZLE TOOLS; the landing chip and lead are the design 40 text", () => {
