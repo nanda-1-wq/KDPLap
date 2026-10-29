@@ -191,7 +191,7 @@ a { color: var(--ink); }
 .sidebar-logo .spine { stroke: var(--brand-navy); }
 .sidebar-logo-text { font-size: var(--app-logo-text); font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
 .sidebar-logo-text .niche { color: var(--brand-navy); }
-.sidebar-logo-text .ink { color: var(--brand-blue); }
+.sidebar-logo-text .ink { color: var(--brand-blue); margin-left: var(--wordmark-gap); }
 
 .nav-group {
   display: flex;

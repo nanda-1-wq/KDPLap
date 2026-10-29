@@ -68,14 +68,29 @@ Deno.test("the wordmark: Niche + Ink spans, colors from the tokens, never wraps"
   assert(read("landing/index.html").includes('<span class="wordmark-niche">Niche</span><span class="wordmark-ink">Ink</span>'));
   const app = read("css/app.css"), auth = read("css/auth.css"), lp = read("landing/landing.css");
   assert(/\.sidebar-logo-text \{[^}]*white-space: nowrap;/.test(app));
-  assert(app.includes(".sidebar-logo-text .niche { color: var(--brand-navy); }") && app.includes(".sidebar-logo-text .ink { color: var(--brand-blue); }"));
+  assert(app.includes(".sidebar-logo-text .niche { color: var(--brand-navy); }") && app.includes(".sidebar-logo-text .ink { color: var(--brand-blue); margin-left: var(--wordmark-gap); }"));
   assert(/\.auth-logo-text \{[^}]*white-space: nowrap;/.test(auth));
-  assert(auth.includes(".auth-logo-text .niche { color: var(--lp-heading); }") && auth.includes(".auth-logo-text .ink { color: var(--lp-accent); }"));
+  assert(auth.includes(".auth-logo-text .niche { color: var(--lp-heading); }") && auth.includes(".auth-logo-text .ink { color: var(--lp-accent); margin-left: var(--wordmark-gap); }"));
   assert(/\.wordmark \{[^}]*white-space: nowrap;/.test(lp));
-  assert(lp.includes(".wordmark-niche { color: var(--lp-heading); }") && lp.includes(".wordmark-ink { color: var(--lp-accent); }"));
+  assert(lp.includes(".wordmark-niche { color: var(--lp-heading); }") && lp.includes(".wordmark-ink { color: var(--lp-accent); margin-left: var(--wordmark-gap); }"));
   for (const [p, s] of [["css/app.css", app], ["css/auth.css", auth], ["landing/landing.css", lp]]) {
     assert(!/\.kdp\b|\.lab\b|wordmark-kdp|wordmark-lab/.test(s), p);
   }
+});
+
+// Design 40b: the largest size up to 22 px that fits at 200% text in the 260 px sidebar, the
+// auth page at 390 and the landing header at 390 is 19 px (the sidebar decides: at 19.5 px the
+// mark starts to shrink). The landing at 900 px and below stays 1 px smaller. The gap is a margin.
+Deno.test("40b: one 2 px gap token; 19 px everywhere, 18 px on the landing at 900 px and below", () => {
+  assert(read("design/design-tokens.css").includes("--wordmark-gap: 2px;"));
+  assert(read("css/app.css").includes("--app-logo-text: 19px;"));
+  assert(read("css/auth.css").includes("--auth-logo-text: 19px;"));
+  const lp = read("landing/landing.css");
+  assert(/:root \{[^}]*--lp-wordmark-size: 19px;/.test(lp));
+  assert(/@media \(max-width: 900px\) \{\s*:root \{[^}]*--lp-wordmark-size: 18px;/.test(lp));
+  assertEquals((lp.match(/--lp-wordmark-size:/g) || []).length, 2);
+  // Never a space character between the two spans (the text and the accessible name stay "NicheInk").
+  for (const p of [...AUTH, "js/shell.js", "landing/index.html"]) assert(!/Niche<\/span>\s+<span|Niche <\/span>|<span class="(?:wordmark-)?ink"> /.test(read(p)), p);
 });
 
 Deno.test("the sidebar says PUZZLE TOOLS; the landing chip and lead are the design 40 text", () => {

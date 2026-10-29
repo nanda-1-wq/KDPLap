@@ -28,10 +28,14 @@ const test = async (page) => {
     return e.getClientRects().length === 1 && r.height < parseFloat(getComputedStyle(e).fontSize) * 1.6 ? Math.round(r.width) : false;
   }, sel);
   const color = (sel) => page.evaluate((s) => getComputedStyle(document.querySelector(s)).color, sel);
+  /** 40b: a 2 px margin before "Ink", no space character, so the text (and the accessible name) stays "NicheInk". */
+  const gap = (sel) => page.evaluate((s) => { const e = document.querySelector(s); return getComputedStyle(e).marginLeft === '2px' && !/\s/.test(e.parentElement.textContent); }, sel);
+  const markW = (sel) => page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().width), sel);
   const NAVY = 'rgb(20, 33, 61)', BLUE = 'rgb(46, 106, 230)', WHITE = 'rgb(255, 255, 255)', LIGHT_BLUE = 'rgb(127, 166, 242)';
 
   try {
     // 1. Books: the sidebar.
+    await page.emulateMedia({ colorScheme: 'light' });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${E11.base}/app/dashboard.html`, { waitUntil: 'domcontentloaded' });
     await page.locator('.stat .bar').waitFor({ timeout: 10000 });
@@ -46,7 +50,9 @@ const test = async (page) => {
     ok('title: "Books · NicheInk"', (await page.title()) === 'Books · NicheInk', await page.title());
     const w = await oneLine('.sidebar-logo-text');
     ok('sidebar: the wordmark is one line, 19 px, nowrap', w && (await page.evaluate(() => { const s = getComputedStyle(document.querySelector('.sidebar-logo-text')); return s.fontSize === '19px' && s.whiteSpace === 'nowrap'; })), w);
+    ok('sidebar: 2 px gap before "Ink", no space character (40b)', await gap('.sidebar-logo-text .ink'));
     await shot('brand-sidebar-1440', page.locator('aside.sidebar'));
+    await shot('brand-logo-sidebar', logo);
     await shot('brand-books-1440');
     await logo.focus();
     const ring = await logo.evaluate((e) => { const s = getComputedStyle(e); return `${s.outlineStyle} ${s.outlineWidth} ${s.outlineOffset}`; });
@@ -56,7 +62,8 @@ const test = async (page) => {
     await page.addStyleTag({ content: '.sidebar-logo-text { font-size: 38px; }' });
     const w2 = await oneLine('.sidebar-logo-text');
     const fits = await logo.evaluate((e) => e.scrollWidth <= e.clientWidth);
-    ok('200% text: the sidebar wordmark stays on one line and inside the link', w2 && fits, { w2, fits });
+    const mk2 = await markW('.sidebar-logo svg');
+    ok('200% text: the sidebar wordmark stays on one line and inside the link; the mark keeps 30 px', w2 && fits && mk2 === 30, { w2, fits, mk2 });
     await shot('brand-sidebar-200', page.locator('aside.sidebar'));
 
     // 2. Sign in, signed out: light, then dark.
@@ -68,8 +75,21 @@ const test = async (page) => {
     ok('sign in: wordmark "NicheInk", link "NicheInk home"', (await T(page.locator('.auth-logo-text'))) === 'NicheInk' && (await page.locator('.auth-logo').getAttribute('aria-label')) === 'NicheInk home');
     ok('sign in: "New to NicheInk? Create an account"', (await T(page.locator('.auth-switch'))) === 'New to NicheInk? Create an account', await T(page.locator('.auth-switch')));
     ok('sign in: the disclaimer names NicheInk', (await T(page.locator('.auth-legal'))) === 'KDP is a trademark of Amazon. NicheInk is independent and not affiliated with Amazon.', await T(page.locator('.auth-legal')));
-    ok('sign in, light: "Niche" navy, "Ink" blue, one line', (await color('.auth-logo-text .niche')) === NAVY && (await color('.auth-logo-text .ink')) === BLUE && (await oneLine('.auth-logo-text')));
+    const al = { niche: await color('.auth-logo-text .niche'), ink: await color('.auth-logo-text .ink'), line: await oneLine('.auth-logo-text') };
+    ok('sign in, light: "Niche" navy, "Ink" blue, one line', al.niche === NAVY && al.ink === BLUE && al.line, al);
+    ok('sign in: 2 px gap before "Ink", 19 px (40b)', (await gap('.auth-logo-text .ink')) && (await page.evaluate(() => getComputedStyle(document.querySelector('.auth-logo-text')).fontSize)) === '19px');
     await shot('brand-signin-1440');
+    await shot('brand-logo-auth', page.locator('.auth-logo'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(200);
+    ok('sign in 390: 19 px wordmark on one line, no sideways scroll', (await oneLine('.auth-logo-text')) && (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
+    await shot('brand-signin-390');
+    await page.addStyleTag({ content: '.auth-logo-text { font-size: 38px; }' });
+    const a2 = await page.evaluate(() => { const m = document.querySelector('.auth-main'); return { sw: document.documentElement.scrollWidth, fits: m.scrollWidth <= m.clientWidth }; });
+    ok('200% text at 390: the auth wordmark stays on one line; the mark keeps 30 px', (await oneLine('.auth-logo-text')) && a2.sw <= 390 && a2.fits && (await markW('.auth-logo svg')) === 30, a2);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#signinForm').waitFor({ state: 'visible', timeout: 10000 });
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ colorScheme: 'dark' });
     ok('sign in, dark: "Niche" white, "Ink" light blue', (await color('.auth-logo-text .niche')) === WHITE && (await color('.auth-logo-text .ink')) === LIGHT_BLUE,
       [await color('.auth-logo-text .niche'), await color('.auth-logo-text .ink')]);
@@ -87,7 +107,9 @@ const test = async (page) => {
     ok('landing: the footer and its disclaimer', (await T(page.locator('.foot'))) === '© 2026 NicheInk · Built by Adnan Kindle Direct Publishing (KDP) is a trademark of Amazon. NicheInk is independent and not affiliated with Amazon.', await T(page.locator('.foot')));
     ok('landing: the X link stays @3Desso', (await page.locator('a.cta').getAttribute('href')) === 'https://x.com/3Desso' && (await page.locator('.social a').first().getAttribute('href')) === 'https://x.com/3Desso');
     ok('landing, light: "Niche" navy, "Ink" blue, one line', (await color('.wordmark-niche')) === NAVY && (await color('.wordmark-ink')) === BLUE && (await oneLine('.wordmark')));
+    ok('landing: 2 px gap before "Ink", 19 px at 1440 (40b)', (await gap('.wordmark-ink')) && (await page.evaluate(() => getComputedStyle(document.querySelector('.wordmark')).fontSize)) === '19px');
     await shot('brand-landing-1440');
+    await shot('brand-logo-landing', page.locator('.brand'));
     await page.emulateMedia({ colorScheme: 'dark' });
     ok('landing, dark: "Niche" white, "Ink" light blue', (await color('.wordmark-niche')) === WHITE && (await color('.wordmark-ink')) === LIGHT_BLUE);
     await shot('brand-landing-1440-dark');
@@ -105,7 +127,7 @@ const test = async (page) => {
       const top = document.querySelector('.top'), brand = document.querySelector('.brand'), social = document.querySelector('.social');
       return { sw: document.documentElement.scrollWidth, gap: Math.round(social.getBoundingClientRect().left - brand.getBoundingClientRect().right), fits: top.scrollWidth <= top.clientWidth };
     });
-    ok('200% text at 390: the landing wordmark stays on one line, beside the buttons', (await oneLine('.wordmark')) && z.sw <= 390 && z.fits && z.gap >= 16, z);
+    ok('200% text at 390: the landing wordmark stays on one line, beside the buttons; the mark keeps 28 px', (await oneLine('.wordmark')) && z.sw <= 390 && z.fits && z.gap >= 16 && (await markW('.brand-mark')) === 28, z);
     await shot('brand-landing-390-200');
 
     // 4. The root page still sends you to the landing page (relative refresh).
@@ -114,7 +136,8 @@ const test = async (page) => {
     await page.waitForURL(/\/landing\/index\.html$/, { timeout: 5000 }).catch(() => {});
     ok('root: index.html redirects to landing/index.html', /\/landing\/index\.html$/.test(page.url()), page.url());
   } finally {
-    await page.emulateMedia({ colorScheme: null }).catch(() => {});
+    // Back to Playwright's default (light). null would drop the override and follow the OS.
+    await page.emulateMedia({ colorScheme: 'light' }).catch(() => {});
     await page.setViewportSize({ width: 1440, height: 900 }).catch(() => {});
     await ctx.unroute('**/fonts.googleapis.com/**', fonts).catch(() => {});
     await ctx.unroute('**/fonts.gstatic.com/**', fonts).catch(() => {});

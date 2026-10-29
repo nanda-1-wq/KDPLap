@@ -82,7 +82,7 @@ a:focus-visible {
 .mark-line { stroke: var(--lp-logo); }
 .wordmark { font-size: var(--lp-wordmark-size); font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
 .wordmark-niche { color: var(--lp-heading); }
-.wordmark-ink { color: var(--lp-accent); }
+.wordmark-ink { color: var(--lp-accent); margin-left: var(--wordmark-gap); }
 
 .social { display: flex; gap: var(--lp-gap-10); }
 .pill {

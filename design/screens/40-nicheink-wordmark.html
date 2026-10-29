@@ -66,6 +66,18 @@
   .lp .niche { color: var(--lp-heading); }
   .lp .ink { color: var(--lp-accent); }
   .lp .is-focus { outline-color: var(--lp-focus); }
+  /* 40b: a 2 px margin before "Ink" (never a space). "Before" frames show the first version. */
+  .wm .ink { margin-left: var(--wordmark-gap); }
+  .before .wm .ink { margin-left: 0; }
+  .ba { display: grid; grid-template-columns: max-content repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-6); align-items: center; }
+  .ba .tile { padding: var(--space-4) var(--space-5); }
+  .ba-h { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); }
+  .ba .detail { min-width: 0; }
+  @media (max-width: 1199px) {
+    .ba .detail { padding: var(--space-5) var(--space-4); }
+    .ba .detail .wm { font-size: calc(var(--wm) * 2); }
+    .ba .detail .logo { --logo: 60px; gap: 20px; }
+  }
 
   /* Light and dark side by side. Light: the :root Landing theme block. Dark: the same
      values as the prefers-color-scheme: dark block of design-tokens.css. */
@@ -246,7 +258,8 @@
           <tr><td>Font</td><td>IBM Plex Sans 700, letter-spacing 0.01em. Same as today.</td></tr>
           <tr><td>Size</td><td>19 px in the app sidebar, the auth pages and the landing. 18 px on the landing at 900 px and below. Same as today.</td></tr>
           <tr><td>Mark</td><td>Unchanged (<code>design/logo/</code>, favicon). 30 px, or 28 px on the landing at 900 px and below. Gap 10 px.</td></tr>
-          <tr><td>Width</td><td>"NicheInk" is <strong>83 px</strong> at 19 px (79 px at 18 px). "KDPLAB" was <strong>76 px</strong>. The logo row grows by about 7 px.</td></tr>
+          <tr><td>Gap (40b)</td><td>2 px before "Ink": a margin on the Ink span (<code>--wordmark-gap</code>), never a space character, so the text and the accessible name stay "NicheInk".</td></tr>
+          <tr><td>Width</td><td>"NicheInk" with the gap is <strong>85 px</strong> at 19 px (81 px at 18 px). "KDPLAB" was <strong>76 px</strong>. The logo row grows by about 9 px.</td></tr>
           <tr><td>Markup</td><td><code>&lt;span class="niche"&gt;Niche&lt;/span&gt;&lt;span class="ink"&gt;Ink&lt;/span&gt;</code> in the sidebar and the auth pages. <code>wordmark-niche</code> and <code>wordmark-ink</code> on the landing (14b, Q7).</td></tr>
           <tr><td>No wrap</td><td>The two spans have no space between them, so there is no place to break. Step 2 also adds <code>white-space: nowrap</code> to the three wordmark rules.</td></tr>
           <tr><td>Screen readers</td><td>The links read "NicheInk home" (auth) and "NicheInk, go to Books" (sidebar). The landing mark reads "NicheInk logo". The wordmark text itself stays visible text.</td></tr>
@@ -396,7 +409,7 @@
 
   <section class="state" aria-label="Landing at 390 px, notes">
     <span class="label">4c · At 390 px</span>
-    <p class="caption">The wordmark is 18 px and the mark 28 px, as today. The social links show their icons only, at 44 × 44 px. The header row keeps <strong>131 px</strong> between the wordmark and the X button, so nothing is squeezed.</p>
+    <p class="caption">The wordmark is 18 px and the mark 28 px, as today. The social links show their icons only, at 44 × 44 px. The header row keeps <strong>129 px</strong> between the wordmark and the X button, so nothing is squeezed.</p>
     <p class="caption">The chip, the lead and the footer change as on desktop. The covers and the features are unchanged; they sit between the button and the footer on the real page.</p>
     <p class="caption">The landing brand is not a link today, so it has no focus ring. That stays (section 5).</p>
   </section>
@@ -408,7 +421,7 @@
       <a class="logo sb-logo is-focus" href="#" aria-label="NicheInk, go to Books"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></a>
       <button class="btn btn-primary"><svg width="18" height="18" aria-hidden="true"><use href="#plus"/></svg>New Book</button>
     </aside>
-    <p class="caption">2 px ink ring, 2 px offset, around the whole 44 px link (CLAUDE.md §7). The wordmark is about 7 px longer than "KDPLAB", and the ring follows the link box, so it still fits inside the sidebar.</p>
+    <p class="caption">2 px ink ring, 2 px offset, around the whole 44 px link (CLAUDE.md §7). The wordmark is about 9 px longer than "KDPLAB", and the ring follows the link box, so it still fits inside the sidebar.</p>
   </section>
 
   <section class="state" aria-label="Focus, auth light">
@@ -432,16 +445,16 @@
     <span class="label">6a · 200% text: sidebar (260 px)</span>
     <aside class="sb app z200" aria-label="Main, top, 200 percent">
       <a class="logo sb-logo" href="#" aria-label="NicheInk, go to Books"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></a>
-      <span class="room">ROOM LEFT: 5 PX</span>
+      <span class="room">ROOM LEFT: 3 PX</span>
     </aside>
-    <p class="caption">The wordmark at 38 px in the real 260 px sidebar: one line, nothing cut, <strong>5 px to spare</strong>. "KDPLAB" had 19 px. This is the tightest place, and it still passes.</p>
+    <p class="caption">The wordmark at 38 px in the real 260 px sidebar: one line, nothing cut, <strong>3 px to spare</strong> with the 2 px gap. "KDPLAB" had 19 px. This is the tightest place, and it decides the size (40b).</p>
   </section>
 
   <section class="state" aria-label="200 percent, auth at 390 px">
     <span class="label">6b · 200% text: auth at 390 px</span>
     <div class="auth lp light m z200">
       <a class="logo auth-logo" href="#" aria-label="NicheInk home"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></a>
-      <span class="room">ROOM LEFT: 136 PX</span>
+      <span class="room">ROOM LEFT: 134 PX</span>
     </div>
     <p class="caption">The auth column on a phone (24 px sides). The narrowest auth case.</p>
   </section>
@@ -456,9 +469,9 @@
           <a class="pill" href="#" aria-label="LinkedIn"><svg aria-hidden="true"><use href="#in"/></svg><span class="pill-label">LinkedIn</span></a>
         </nav>
       </header>
-      <span class="room">ROOM LEFT: 37 PX</span>
+      <span class="room">ROOM LEFT: 41 PX</span>
     </div>
-    <p class="caption">The wordmark at 36 px next to the two 44 px buttons: one line, 37 px to spare. The buttons keep their size.</p>
+    <p class="caption">The wordmark at 36 px next to the two 44 px buttons: one line, 41 px to spare. The buttons keep their size.</p>
   </section>
 
   <section class="state full" aria-label="200 percent, measured">
@@ -467,9 +480,9 @@
       <table class="rule">
         <thead><tr><th>Place</th><th>Room for the logo row (real page)</th><th>Logo row at 100%</th><th>Logo row at 200% text</th><th>Result at 200%</th></tr></thead>
         <tbody>
-          <tr><td>App sidebar</td><td>227 px<span class="small">260, less 2 × 16 px padding and the 1 px border</span></td><td>139 px</td><td>222 px</td><td><span class="ok"><svg width="14" height="14" aria-hidden="true"><use href="#check"/></svg>Fits</span>, one line, 5 px to spare</td></tr>
-          <tr><td>Auth, phone</td><td>342 px<span class="small">390, less 2 × 24 px</span></td><td>123 px</td><td>206 px</td><td><span class="ok"><svg width="14" height="14" aria-hidden="true"><use href="#check"/></svg>Fits</span>, one line, 136 px to spare</td></tr>
-          <tr><td>Landing header, phone</td><td>232 px<span class="small">390, less 2 × 22 px, the two 44 px buttons, their 10 px gap and the 16 px gap</span></td><td>117 px</td><td>195 px</td><td><span class="ok"><svg width="14" height="14" aria-hidden="true"><use href="#check"/></svg>Fits</span>, one line, 37 px to spare</td></tr>
+          <tr><td>App sidebar</td><td>227 px<span class="small">260, less 2 × 16 px padding and the 1 px border</span></td><td>141 px</td><td>224 px</td><td><span class="ok"><svg width="14" height="14" aria-hidden="true"><use href="#check"/></svg>Fits</span>, one line, 3 px to spare</td></tr>
+          <tr><td>Auth, phone</td><td>342 px<span class="small">390, less 2 × 24 px</span></td><td>125 px</td><td>208 px</td><td><span class="ok"><svg width="14" height="14" aria-hidden="true"><use href="#check"/></svg>Fits</span>, one line, 134 px to spare</td></tr>
+          <tr><td>Landing header, phone</td><td>232 px<span class="small">390, less 2 × 22 px, the two 44 px buttons, their 10 px gap and the 16 px gap</span></td><td>119 px</td><td>191 px</td><td><span class="ok"><svg width="14" height="14" aria-hidden="true"><use href="#check"/></svg>Fits</span>, one line, 41 px to spare</td></tr>
         </tbody>
       </table>
     </div>
@@ -508,6 +521,42 @@
       </table>
     </div>
     <p class="caption"><strong>Kept:</strong> every "KDP" that means Amazon's service, for example "KDP allows 200 characters", "For KDP's AI question", "KDP content guidelines" and "Import from Amazon page". The disclaimer stays because the app names KDP and Amazon on many screens.</p>
+  </section>
+
+  <!-- 40b. Gap and size (owner, option B) -->
+  <section class="state full" aria-label="40b, gap and size">
+    <span class="label">40b · A 2 px gap before "Ink"; the size stays 19 px (owner, option B)</span>
+    <div class="ba">
+      <span></span><span class="ba-h">BEFORE (40)</span><span class="ba-h">AFTER (40B)</span>
+      <span class="ba-h">APP SIDEBAR</span>
+      <div class="tile app before"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <div class="tile app"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <span class="ba-h">AUTH, LIGHT</span>
+      <div class="tile lp light before"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <div class="tile lp light"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <span class="ba-h">DARK</span>
+      <div class="tile lp dark before"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <div class="tile lp dark"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <span class="ba-h">LANDING ≤ 900</span>
+      <div class="tile lp light m before"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <div class="tile lp light m"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <span class="ba-h">DETAIL, 4×</span>
+      <div class="detail app before"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+      <div class="detail app"><span class="logo"><svg aria-hidden="true"><use href="#mark"/></svg><span class="wm"><span class="niche">Niche</span><span class="ink">Ink</span></span></span></div>
+    </div>
+    <div class="scroll">
+      <table class="rule">
+        <thead><tr><th>Size (landing ≤ 900: 1 px less)</th><th>Sidebar, 260 px, 200% text</th><th>Auth at 390, 200% text</th><th>Landing header at 390, 200% text</th></tr></thead>
+        <tbody>
+          <tr><td><strong>19 px (chosen)</strong></td><td><span class="ok"><svg width="14" height="14" aria-hidden="true"><use href="#check"/></svg>Fits</span>, 3 px to spare, mark 30 px</td><td>Fits, 134 px to spare</td><td>Fits, 41 px to spare</td></tr>
+          <tr><td>19.5 px</td><td>No: the mark shrinks to 29 px</td><td>Fits, 130 px</td><td>Fits, 37 px</td></tr>
+          <tr><td>20 px</td><td>No: the mark shrinks to 24 px</td><td>Fits, 125 px</td><td>Fits, 33 px</td></tr>
+          <tr><td>21 px</td><td>No: the mark shrinks to 15 px</td><td>Fits, 116 px</td><td>Fits, 25 px</td></tr>
+          <tr><td>22 px</td><td>No: the mark shrinks to 7 px</td><td>Fits, 108 px</td><td>Fits, 17 px</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="caption"><strong>The rule (owner):</strong> the largest size up to 22 px that still fits on one line at 200% text in all three places, the same in all three, with the landing at 900 px and below 1 px smaller. Measured in the browser with the real fonts and the 2 px gap. The text never wraps (nowrap). In the 260 px sidebar, a size above 19 px makes the mark shrink to make room, so <strong>19 px is the largest size that fits</strong>, the same as before. Auth and the landing alone would allow 22 px. A bigger wordmark needs a change to this rule, for example a wider sidebar or the 200% check only on the auth and landing pages.</p>
   </section>
 
   <!-- 8. Not changing -->

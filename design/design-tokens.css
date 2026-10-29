@@ -21,6 +21,7 @@
   /* Brand: logo and landing page ONLY, never inside the app UI */
   --brand-navy: #14213D;
   --brand-blue: #2E6AE6;
+  --wordmark-gap: 2px;     /* margin before "Ink" in the NicheInk wordmark (design 40b), never a space */
 
   /* Type */
   --font-ui: "IBM Plex Sans", system-ui, sans-serif;

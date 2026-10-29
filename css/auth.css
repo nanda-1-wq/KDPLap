@@ -124,7 +124,7 @@ a:hover { text-decoration-thickness: 2px; }
   white-space: nowrap;
 }
 .auth-logo-text .niche { color: var(--lp-heading); }
-.auth-logo-text .ink { color: var(--lp-accent); }
+.auth-logo-text .ink { color: var(--lp-accent); margin-left: var(--wordmark-gap); }
 
 /* ── Title block ──────────────────────────────── */
 

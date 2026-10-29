@@ -238,7 +238,8 @@ batch 2: the repeated-sentence note, the Needs review hint, no `[S3]` in the .do
 the card word bar for each target kind, "Needs review" from a section, the "Words this month" stat,
 "Reopen book" in the card menu, the title room; t-brand for the rename to NicheInk, design 40: the
 sidebar wordmark, its label, colors and focus ring, "PUZZLE TOOLS", the titles, 200% text, Sign in
-signed out and the landing page in light and dark at 1440 and 390, the root redirect; it loads the
+signed out and the landing page in light and dark at 1440 and 390, the root redirect, and for 40b the
+2 px gap before "Ink" and the mark keeping its size at 200% text; it loads the
 real Google Fonts for its own screenshots, with an 8 s cap),
 and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
