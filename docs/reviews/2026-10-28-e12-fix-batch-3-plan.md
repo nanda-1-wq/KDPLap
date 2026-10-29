@@ -1,6 +1,6 @@
 # E12 step 4: fix batch 3 (from finishing the real book)
 
-Status: STOP 3 (2026-10-28). Part 2 is done: migration `0026_book_complete_words.sql` with SQL tests `t0026.sql` and `rls_cross_user.sql`. **Not applied.** Waiting for the owner's review, then "apply" (Claude chat).
+Status: STOP 4 (2026-10-28). 0026 applied by Claude chat as `20261028093000 book_complete_words`. Part 3 (browser, items 1 to 5 and the R2 title room) is done. Waiting for the owner's review of the screenshots, then the live check.
 
 **Design review fixes (owner, 2026-10-28):**
 - **R1, chapter marks.** Mark all as reviewed clears sections only, and only `approve_outline` clears `chapters.needs_review`. So the head box adds the gray line "Approve the outline in 05 to clear the chapter marks." (no button) whenever a chapter still needs review. New state 22f 6b. The state 6 note now says the card badge and the Export note clear only when no chapter needs review.
@@ -203,3 +203,55 @@ No AI calls: **$0**. If v25 is chosen: +2 Write calls, about $0.04 (Live B was $
 A mutation check: with the reopen trigger changed to fire on every section update, the 4 D1 checks fail. The file was put back, with the same SHA-256.
 
 **SQL suites (local Postgres 18, port 55432, each file on a fresh database):** 1,133 → **1,217 pass, 0 fail** (t0026 +80, rls_cross_user 134 → 138). No browser or generate code changed (generate stays v24).
+
+
+## Part 3 results (STOP 4, 2026-10-28)
+Browser only. No migration (0026 is live), no generate change (stays v24).
+
+**Files**
+- `js/supabase.js`:
+  - `listBooks` embeds each section's word target, status, needs_review and `current:section_versions!sections_current_version_id_fkey(word_count)`, and the book's `completed_at`. It is still one query.
+  - New: `getWordsMonth`, `completeBook`, `reopenBook`, `getBookStatus`, `markSectionsReviewed(chapterIds)` (one update: `chapter_id=in.(…)`, `needs_review=eq.true`).
+  - `getBook` reads `completed_at`.
+- `js/word-budget.js`: `kdpWords.bookProgress(book)`, the design 01b table 4 rule, shared and tested.
+- `app/dashboard.html`:
+  - the card uses `bookProgress`;
+  - the "Needs review" badge counts chapters or sections (Q7);
+  - the "Words this month" stat has value, loading and error states;
+  - Reopen: its notice, and an error notice with Retry. On the Completed tab, focus goes to the tab.
+- `js/book-actions.js`: "Reopen book" (after Export) only on a completed book. No confirm.
+- `js/book-write.js` (design 22f):
+  - the review box under the manuscript bar, with the chapter marks line (R1, 6b);
+  - "Mark chapter as reviewed (N)" as the first row of an open chapter;
+  - confirms with the count (the book confirm lists the first 8, then "and N more"; the main button has focus);
+  - one save, Saving…, an error with Retry, the done note with the server's count for 8 s, focus on the first section;
+  - the manuscript foot: "Mark book as completed" (what is left, ready, Saving…, network error with Retry, the server's refusal with Reload), and "Completed / Marked <date>. You can still edit it." with Reopen;
+  - a status change from Final on a completed book shows the gray note (state 14).
+- `js/write-generate.js`: the manuscript is drawn again when a Generate run changes phase. Before, the new buttons stayed on while the AI wrote. A click did nothing, but the screen was wrong. The new test t-review-all (state 7) found this.
+- `js/book.js` + `app/book.html`:
+  - the strip on every step of a completed book, with Reopen and an error with Retry;
+  - `ctx.setStatus` and `ctx.reloadStatus`;
+  - a step of a completed book reads the status again (an outline edit or an unlock elsewhere reopens it, 0026).
+- `js/text-checks.js`:
+  - the Source row gains "according to a / one / another / some source(s)", with the sub text "…, or cut it.";
+  - new info rows "Check that the source is named" (D2, D3) and "Points back to another part" (5b), each sentence in one row at most;
+  - a sentence with an open Verify mark stays only in the marks row.
+- `css/app.css`:
+  - R2: `.book-card .book-title` padding-right goes from `--space-8` to `--space-10`;
+  - an error notice;
+  - the review box, the foot, the confirm list and the strip.
+
+**Changes from the design, found while building**
+- The named row skips a sentence that already has an open "[Verify: no source]" mark. That sentence is in the counted "claims need a source" row already (one row per sentence).
+- "Mark book as completed" counts a section as "no text" when its current version has 0 words. The server checks the same rule with `text_is_blank`. A version of only "##" would differ, and the server's reply wins (state 11).
+
+**Tests (all mocked; no account, no AI calls, no Supabase writes)**
+- Helpers (deno): 153 → **163 pass**. Added `tests/book-words.test.js` (6) and 4 tests in `text-checks.test.js` (5a, named with D2 and D3, backref with Q5, and the marked sentence).
+- Browser: 1,704 → **1,818 pass**.
+  - New: `books/t-words` 26, `write/t-review-all` 52, `write/t-complete` 34 (+112).
+  - The old files total 1,706. `t-chapter` has 43 checks, because f0f2145 (the cost-line fix after STOP 6) added 2. This branch does not change it.
+  - `t-batch2` expects the new Source sub text "…, or cut it.".
+- `write/t-chapter` "done" check: an intermittent failure. It failed 2 of 7 runs on this branch and 2 of 5 runs with `js/write-generate.js` back at main, so it was there before and is not caused by this batch. It is on the watch list. A failed run leaves a "Leave site?" dialog in session kdp-write (`playwright-cli -s=kdp-write dialog-accept`), and that dialog stopped the first full run.
+- Generate 317, unchanged. SQL 1,217, unchanged since STOP 3.
+
+**Screenshots:** `docs/reviews/e12-fix3-stop4/` (45 PNGs, from the mocked tests, at 1440 and 900).
