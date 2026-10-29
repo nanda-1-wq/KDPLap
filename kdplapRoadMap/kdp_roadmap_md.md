@@ -40,6 +40,14 @@ Design: ✅ approved (see `design/`)
     - sources named by their citation;
     - a richer `<book_so_far>` and "Also in another section" in Checks and Export.
     - Plan, live checks A and B and the security review: `docs/reviews/2026-10-27-e12-fix-batch-2-plan.md`
+  - Step 5, fix batch 3 from finishing the real book: done (merged f46ca03; migration 0026 live as 20261028093000; generate stays v24):
+    - the Books card counts the saved words of each section against the section targets (the old card never counted words);
+    - "Words this month" counts the words added since the 1st, UTC (0026 `words_month`);
+    - "Mark book as completed" in 06 Write (every section Final with text, nothing needs review), Reopen in 06, the book strip and the card menu, and a reopen on its own when the rule breaks (0026 `complete_book`, `books.completed_at`);
+    - "Mark all as reviewed" for a chapter or the whole book;
+    - Checks: "according to one source" in Source not named, plus two info rows, "Check that the source is named" and "Points back to another part";
+    - the card title keeps room for the ⋯ button.
+    - Plan, designs 01b and 22f, STOPs and the live check: `docs/reviews/2026-10-28-e12-fix-batch-3-plan.md`, `docs/reviews/e12-fix3-live/results.md`
   - Next: finish and publish the real book
 
 ### Watch list for the real book
@@ -47,6 +55,8 @@ Design: ✅ approved (see `design/`)
 - An example given its own subheading ("## A short example", Live check A).
 - The same opener across sections, for example "This is common, and it does not mean…" (`<book_so_far>` shows subheadings only).
 - AI Verify marks on claims without numbers (H1): the AI rarely marks them, and no check flags them yet.
+- Unnamed sources in the Write prompt (fix batch 3, Q6): "research shows", "studies show" and "experts say" are not in the prompt rule yet (v24 names "research suggests" only). The Checks info row shows them. Widen the rule in a later generate version if the real book still has them.
+- Test flake: the `write/t-chapter` "done" check fails about 2 in 5 runs, on main too (fix batch 3, STOP 4).
 
 ## v2 · KDP-ready files
 07 Quality Control · 08 Format · 09 Cover (full wrap) · Print PDF · EPUB ·
