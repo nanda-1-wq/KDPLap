@@ -76,4 +76,4 @@ The NicheInk rename changed only its wordmark, chip, lead, description, title an
 
 ## v4 · Business
 Research Vault · Templates · Assets · Launch tracker · Analytics (royalty report upload) ·
-low-content generators return under KDP Tools.
+low-content generators return under Puzzle Tools.
