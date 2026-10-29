@@ -28,6 +28,11 @@
    asks "Stop and leave?" while the AI writes). go, Exit and Back/Forward
    wait for it.
    Other steps show a "Coming in" placeholder.
+   E12 fix batch 3 (design 22f, 13): a completed book shows a strip above
+   every step with "Reopen book". ctx.setStatus(fields) updates the book's
+   status (Write's Mark book as completed); ctx.reloadStatus() reads it again.
+   Opening a step of a completed book reads the status again, because a
+   change elsewhere (an outline edit, an unlock of 03) reopens it (0026).
 ═══════════════════════════════════════════════════ */
 
 (async function () {
@@ -54,8 +59,10 @@
   const PLAN_STEPS = [1, 2, 3, 4];
   const stepLabel = document.querySelector('[data-step-label]');
   const stepTitle = document.querySelector('[data-step-title]');
+  const strip = document.querySelector('[data-book-strip]');
 
   const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
+  const REOPEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg>';
   const LOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
   const WARN = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
 
@@ -106,6 +113,43 @@
   }
 
   /* ── Rendering ───────────────────────────── */
+
+  let reopening = false, reopenErr = false;
+
+  /** Design 22f, 13: the strip on every step of a completed book. */
+  function renderStrip() {
+    if (!strip) return;
+    const done = !!book && book.status === 'completed';
+    strip.hidden = !done;
+    if (!done) { strip.innerHTML = ''; return; }
+    strip.classList.toggle('is-error', reopenErr);
+    strip.setAttribute('role', reopenErr ? 'alert' : 'note');
+    strip.innerHTML = reopenErr
+      ? `<span class="book-strip-text">${ICON.x(16)}<span>We couldn’t reopen the book. Try again.</span></span>
+         <button type="button" class="btn btn-secondary btn-sm" data-strip-reopen>Retry</button>`
+      : `<span class="book-strip-text">${CHECK}<span><strong>This book is marked completed.</strong> You can still edit it. A new version keeps it completed.</span></span>
+         <button type="button" class="btn btn-secondary btn-sm" data-strip-reopen${reopening ? ' disabled' : ''}>${reopening ? '<span class="spinner" aria-hidden="true"></span>Saving…' : `${REOPEN}Reopen book`}</button>`;
+  }
+
+  async function reopenFromStrip() {
+    if (reopening) return;
+    reopening = true;
+    reopenErr = false;
+    renderStrip();
+    let res;
+    try { res = await kdp.reopenBook(bookId); } catch (e) { res = { error: e }; }
+    reopening = false;
+    if (res.error) { reopenErr = true; renderStrip(); const b = strip.querySelector('[data-strip-reopen]'); if (b) b.focus(); return; }
+    ctx.setStatus({ status: res.data.status, completed_at: res.data.completed_at, updated_at: res.data.updated_at });
+    stepTitle.focus();
+  }
+
+  /** A completed book may have been reopened elsewhere: read its status again (no error shown). */
+  async function readStatus() {
+    let res;
+    try { res = await kdp.getBookStatus(bookId); } catch (e) { return; }
+    if (!res.error && res.data) ctx.setStatus(res.data);
+  }
 
   function stepLink(n) {
     const s = STEPS[n];
@@ -239,6 +283,16 @@
       renderSaveLine();
     },
     notFound() { renderNotFound(); },
+    /** E12 fix batch 3: the book's status changed (status, completed_at, updated_at). */
+    setStatus(fields) {
+      const was = book.status;
+      Object.assign(book, fields);
+      if (book.status !== 'completed') reopenErr = false;
+      renderStrip();
+      renderNav();
+      if (was !== book.status && MODULES[step] && MODULES[step].statusChanged) MODULES[step].statusChanged();
+    },
+    reloadStatus: () => readStatus(),
     /** Open another step, as a sidebar link does (Brief "Open 02 Research"). */
     go: (n) => go(n)
   };
@@ -249,6 +303,8 @@
     stepTitle.textContent = s.name;
     backBtn.disabled = step === 1;
     renderNav();
+    renderStrip();
+    if (book.status === 'completed') readStatus();
     if (MODULES[step]) {
       content.classList.add('has-step');
       MODULES[step].render(content);
@@ -274,6 +330,7 @@
 
   function renderMessage({ title, text, action, danger }) {
     head.hidden = true;
+    if (strip) strip.hidden = true;
     nav.innerHTML = '';
     content.innerHTML = `
       <div class="center-state">
@@ -326,6 +383,7 @@
   }
 
   backBtn.addEventListener('click', () => go(step - 1));
+  if (strip) strip.addEventListener('click', (e) => { if (e.target.closest('[data-strip-reopen]')) reopenFromStrip(); });
   // Export (design 24b): on every step. Typed text is saved as a draft first;
   // the dialog exports saved versions and says when a section has unsaved edits.
   const exportBtn = document.querySelector('[data-export]');

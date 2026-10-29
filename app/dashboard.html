@@ -63,13 +63,11 @@
       5: ['Produce', '05 Outline'], 6: ['Write', '06 Write'], 7: ['Produce', '07 Quality Control'],
       8: ['Package', '08 Format'], 9: ['Package', '09 Cover'], 10: ['Release', '10 Metadata'], 11: ['Release', '11 Publish']
     };
-    const LENGTH_RANGES = {
-      '5-8k': [5000, 8000], '8-12k': [8000, 12000], '12-20k': [12000, 20000], '20-30k': [20000, 30000], '30k+': [30000, null]
-    };
     const MORE_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
     const CHECK_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
     const WARN_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
     const OK_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
+    const X_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
     const INFO_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
 
     let books = [];
@@ -97,20 +95,8 @@
       return `${s[0]} · ${s[1]}`;
     }
 
-    /** Words planned: sum of chapter targets, else the brief's custom target or length range. */
-    function wordsText(book) {
-      const written = 0;   // counted from sections in E10
-      const planned = (book.chapters || []).reduce((sum, c) => sum + (c.word_target || 0), 0);
-      if (planned > 0) return { text: `${num(written)} of ${num(planned)} words`, pct: written / planned };
-      const brief = one(book.book_briefs);
-      if (brief && brief.target_words) return { text: `Target ${num(brief.target_words)} words`, pct: 0 };
-      const range = brief && LENGTH_RANGES[brief.length_range];
-      if (range) {
-        const text = range[1] ? `Target ${num(range[0])} to ${num(range[1])} words` : `Target ${num(range[0])}+ words`;
-        return { text, pct: 0 };
-      }
-      return { text: 'No word target yet', pct: 0 };
-    }
+    /** "Needs review" on the card: a chapter or a section marked by an unlock of 03 (fix batch 3, Q7: as 06 Write). */
+    const needsReview = (book) => (book.chapters || []).some((c) => c.needs_review || (c.sections || []).some((s) => s.needs_review));
 
     function editedText(iso) {
       const then = new Date(iso);
@@ -137,10 +123,17 @@
           ? `<div class="stat-value">–</div><div class="stat-note">Not available right now</div>`
           : `<div class="stat-value">${usage.pct}%</div><div class="stat-note">Resets ${usage.resets}</div>
              <div class="bar" role="img" aria-label="${usage.pct}% of this month's AI allowance used"><span style="width: ${usage.pct}%"></span></div>`;
+      // Design 01b, 1: words added this month (0026 words_month, rule 1), loaded with the usage card.
+      const words = stats.words;
+      const wordsCard = words === undefined
+        ? `<div class="skel skel-value"></div><div class="skel skel-line skel-w40"></div>`
+        : words === null
+          ? `<div class="stat-value">–</div><div class="stat-note">Not available right now</div>`
+          : `<div class="stat-value">${num(words.words)}</div><div class="stat-note">since ${words.since}, across all books</div>`;
       return `
         <section class="stats" aria-label="Summary">
           <div class="stat"><div class="stat-label">IN PROGRESS</div><div class="stat-value">${stats.inProgress}</div><div class="stat-note">book${stats.inProgress === 1 ? '' : 's'}</div></div>
-          <div class="stat"><div class="stat-label">WORDS THIS MONTH</div><div class="stat-value">0</div><div class="stat-note">across all books</div></div>
+          <div class="stat"><div class="stat-label">WORDS THIS MONTH</div>${wordsCard}</div>
           <div class="stat"><div class="stat-label">AI USAGE THIS MONTH</div>${usageCard}</div>
         </section>`;
     }
@@ -159,9 +152,9 @@
     function cardHtml(book) {
       const pen = one(book.pen_names);
       const penName = pen && pen.name;
-      const words = wordsText(book);
+      const words = kdpWords.bookProgress(book);
       const completed = book.status === 'completed';
-      const needsReview = (book.chapters || []).some((c) => c.needs_review);
+      const review = needsReview(book);
       const title = workingTitle(book);
       const href = bookHref(book.id);
       const pct = completed ? 100 : Math.round(words.pct * 100);
@@ -180,7 +173,7 @@
             <div class="book-tags">
               <span class="pill">${esc(stepLabel(book))}</span>
               ${book.topic_id ? '' : `<span class="badge badge-warning">${WARN_ICON}Unvalidated topic</span>`}
-              ${needsReview ? `<span class="badge badge-warning">${WARN_ICON}Needs review</span>` : ''}
+              ${review ? `<span class="badge badge-warning">${WARN_ICON}Needs review</span>` : ''}
               ${exportBadge}
             </div>
             <div class="grow"></div>
@@ -291,6 +284,14 @@
       return { pct, resets };
     }
 
+    /** Words added this month (0026 words_month). null when it cannot be read: the card shows "–". */
+    async function loadWords() {
+      const res = await kdp.getWordsMonth();
+      if (res.error || !res.data) return null;
+      const since = new Date(res.data.month_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      return { words: Number(res.data.words) || 0, since };
+    }
+
     /** The export badges. A failed read shows no badges and no error (they are a note only). */
     async function loadBadges() {
       try {
@@ -305,6 +306,7 @@
       renderLoading();
 
       const usagePromise = loadUsage().catch(() => null);
+      const wordsPromise = loadWords().catch(() => null);
       const badgePromise = loadBadges();
       let result;
       try { result = await kdp.listBooks(); } catch (e) { result = { error: e }; }
@@ -313,9 +315,9 @@
       books = result.data || [];
       if (!books.length) { renderEmpty(); return; }
 
-      const stats = { inProgress: books.filter((b) => b.status === 'in_progress').length, usage: undefined };
+      const stats = { inProgress: books.filter((b) => b.status === 'in_progress').length, usage: undefined, words: undefined };
       renderList(stats);
-      [stats.usage, badges] = await Promise.all([usagePromise, badgePromise]);
+      [stats.usage, stats.words, badges] = await Promise.all([usagePromise, wordsPromise, badgePromise]);
       renderList(stats);
     }
 
@@ -326,11 +328,24 @@
 
     let noticeTimer = null;
     function showNotice(text) {
+      notice.classList.remove('is-error');
+      notice.setAttribute('role', 'status');
       notice.innerHTML = CHECK_ICON;
       notice.append(text);
       notice.hidden = false;
       clearTimeout(noticeTimer);
       noticeTimer = setTimeout(() => { notice.hidden = true; }, 8000);
+    }
+
+    /** An error with Retry (design 01b, 3b). It stays until the next notice. */
+    function showError(text, retry) {
+      clearTimeout(noticeTimer);
+      notice.classList.add('is-error');
+      notice.setAttribute('role', 'alert');
+      notice.innerHTML = `${X_ICON}<span></span><button type="button" class="link-btn" data-notice-retry>Retry</button>`;
+      notice.querySelector('span').textContent = text;
+      notice.querySelector('[data-notice-retry]').addEventListener('click', () => { notice.hidden = true; retry(); });
+      notice.hidden = false;
     }
 
     const bookById = (id) => books.find((b) => b.id === id);
@@ -344,6 +359,19 @@
         rerender();
       },
       getTitle: (id) => { const b = bookById(id); return b ? workingTitle(b) : ''; },
+      // Design 01b, 3: "Reopen book" in the menu of a completed book.
+      isCompleted: (id) => { const b = bookById(id); return !!b && b.status === 'completed'; },
+      onReopened(id, row) {
+        const b = bookById(id);
+        if (b) Object.assign(b, { status: row.status, completed_at: row.completed_at, updated_at: row.updated_at });
+        lastStats = { ...lastStats, inProgress: books.filter((x) => x.status === 'in_progress').length };
+        rerender();
+        showNotice(`Reopened “${b ? workingTitle(b) || 'Untitled book' : 'the book'}”.`);
+        // The card leaves the Completed list: focus goes to the filter, as after a delete.
+        const target = view.querySelector(`[data-book-menu="${CSS.escape(id)}"]`) || view.querySelector(`[data-filter="${filter}"]`);
+        if (target) target.focus();
+      },
+      onReopenFailed: (id, retry) => showError('We couldn\u2019t reopen the book. Try again.', retry),
       onRenamed(id, row) {
         const b = bookById(id);
         if (b) Object.assign(b, { title: row.title, updated_at: row.updated_at });

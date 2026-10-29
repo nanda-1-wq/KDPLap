@@ -146,7 +146,7 @@ const test = async page => {
   ok((await rowText('again')) === `1 sentence is also in another section Rewrite it here or cut it. ${S1} Also in 1.1 and 4.1 Show`, `again row: ${await rowText('again')}`);
   await page.click('[data-chk-row="again"] [data-chk-show]');
   ok((await selected()) === S1, `Show selects the sentence: ${await selected()}`);
-  ok((await rowText('source')) === 'Source not named Name the author or the title, or cut the label. You can always do more. [S3] Show Another source suggests a timer. Show', `source row: ${await rowText('source')}`);
+  ok((await rowText('source')) === 'Source not named Name the author or the title, or cut it. You can always do more. [S3] Show Another source suggests a timer. Show', `source row: ${await rowText('source')}`);
   await page.click('[data-chk-row="source"] [data-chk-show]');
   ok((await selected()) === '[S3]', `Show selects just the label: ${await selected()}`);
   ok((await rowText('repeat')) === '"lift your arms" used 3 times Show' && !(await has('[data-chk-row="repeat"] .is-warn')), 'repeat: info');

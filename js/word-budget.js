@@ -18,6 +18,13 @@
      rule as md_word_count in migration 0018, which sets the saved count:
      markers at the start of a line (# to ######, -, +, 1. or 1)) and every *
      are not words; the rest is split on ASCII whitespace.
+   kdpWords.bookProgress(book) → { text, pct } for a Books card (E12 fix
+     batch 3, item 1; design 01b). book is a kdp.listBooks() row. Words =
+     the sum of each section's current version word_count (saved words; a
+     draft is not counted, owner Q8). Target, in order: the sum of the
+     section word targets (as 06 Write), else the Brief's (target): a range
+     fills the bar against its low end (owner Q2). A completed book: its
+     words and a full bar. pct is 0 to 1.
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -63,5 +70,27 @@
     return t.split(/[ \t\n\r\f\v]+/).filter(Boolean).length;
   }
 
-  root.kdpWords = { WORDS_PER_PAGE, RANGES, pages, target, within, short, count };
+  /** The Books card text and bar (design 01b, table 4). */
+  function bookProgress(book) {
+    const b = book || {};
+    const one = (rel) => (Array.isArray(rel) ? rel[0] : rel) || null;
+    const num = (n) => n.toLocaleString('en-US');
+    const sections = (b.chapters || []).flatMap((c) => c.sections || []);
+    const words = sections.reduce((a, s) => a + ((one(s.current) || {}).word_count || 0), 0);
+    if (b.status === 'completed') return { text: `${num(words)} words`, pct: 1 };
+    const fill = (aim) => Math.min(1, words / aim);
+    const planned = sections.reduce((a, s) => a + (s.word_target || 0), 0);
+    if (planned > 0) return { text: `${num(words)} of ${num(planned)} words`, pct: fill(planned) };
+    const t = target(one(b.book_briefs));
+    if (t && t.kind === 'custom') {
+      return words ? { text: `${num(words)} of ${num(t.aim)} words`, pct: fill(t.aim) } : { text: `Target ${num(t.aim)} words`, pct: 0 };
+    }
+    if (t) {
+      const span = t.max ? `${num(t.min)} to ${num(t.max)}` : `${num(t.min)}+`;
+      return words ? { text: `${num(words)} of ${span} words`, pct: fill(t.min) } : { text: `Target ${span} words`, pct: 0 };
+    }
+    return words ? { text: `${num(words)} words · no target yet`, pct: 0 } : { text: 'No word target yet', pct: 0 };
+  }
+
+  root.kdpWords = { WORDS_PER_PAGE, RANGES, pages, target, within, short, count, bookProgress };
 })(globalThis);

@@ -60,6 +60,7 @@ deno test --allow-read tests/outline-key.test.js
 deno test tests/markdown-lite.test.js
 deno test tests/word-diff.test.js
 deno test --allow-read tests/word-count.test.js
+deno test --allow-read tests/book-words.test.js
 deno test tests/sse-read.test.js
 deno test --allow-read tests/sentences.test.js
 deno test --allow-read tests/text-checks.test.js
@@ -136,7 +137,11 @@ deno test --allow-read tests/user-name.test.js
   are not uses), "Source not named" (a label such as `[S3]`, Show on the label,
   and "another source" with no name; the label pattern and strip against the
   server's `SOURCE_LABEL` and `stripSourceLabels`; a label at the end is not a
-  cut sentence), "Also in another section" (sentences of 8+ words another
+  cut sentence; E12 fix batch 3: "according to one source"), "Check that the
+  source is named" (info: "research shows", "experts say"; not after "this",
+  "that", "these", "those", "the same", a name's "'s" or a possessive; never a
+  sentence with an open mark), "Points back to another part" (info: "earlier
+  in this chapter"; a preview stays in the mention row), "Also in another section" (sentences of 8+ words another
   section has, with where; `sentenceKeys`, `bookRepeats`), the same opener (paragraphs
   only; a heading or a list resets), words vs the target (under 80%, over
   120%, never counted), and under 30 ms on a 16,000-word section.
@@ -154,6 +159,9 @@ deno test --allow-read tests/user-name.test.js
 - `word-count.test.js`: `kdpWords.count` gives the same counts as
   `md_word_count` (0018, and 0020: the source flag is not words); it checks
   that `t0018.sql` and `t0020.sql` have the same cases.
+- `book-words.test.js`: the Books card word bar (`kdpWords.bookProgress`, E12 fix batch 3,
+  design 01b): section targets, the Brief's custom target or range (bar against the low end),
+  no target, over the target, completed, and today's "Target …" texts with no saved words.
 - `sse-read.test.js`: the browser's stream reader (`js/sse-read.js`), the same
   rules as the server's: split chunks, comments, several data lines, a body
   split inside a character, a broken stream.
@@ -210,9 +218,16 @@ status clearing Needs review, "Source not named" and "Also in another section"; 
 edits with the meter, a big edit, Generate, another Improve, Restore, a plan change, a failed read),
 "things left" with Show, no check yet, plain-text sentences; t-chapter for design 23b: Generate chapter,
 the head button and its line, the confirm with the cost line, the limit warning, running, Stop and
-"Generate the rest", done, a failure with "Try again from", the month limit, leaving while it runs), for E11 `settings` (t-settings, t-footer), `export`
+"Generate the rest", done, a failure with "Try again from", the month limit, leaving while it runs;
+t-review-all and t-complete for E12 fix batch 3, design 22f: Mark all as reviewed for a chapter and
+the book (the confirm with the count, Cancel, one update, Saving…, an error with Retry, the server's
+count, the chapter marks line, off while the AI writes), and Mark book as completed (what is left,
+Saving…, errors with Retry or Reload, the strip on every step, Reopen from the strip and from the
+manuscript, a status change that reopens the book)), for E11 `settings` (t-settings, t-footer), `export`
 (t-export, t-cut for E12 M9: the "ends mid-sentence" note never blocks, and t-repeats for E12 fix
-batch 2: the repeated-sentence note, the Needs review hint, no `[S3]` in the .docx or .md) and `books` (t-badge),
+batch 2: the repeated-sentence note, the Needs review hint, no `[S3]` in the .docx or .md) and `books` (t-badge; t-words for E12 fix batch 3, design 01b:
+the card word bar for each target kind, "Needs review" from a section, the "Words this month" stat,
+"Reopen book" in the card menu, the title room),
 and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,

@@ -12,7 +12,15 @@
        ending   the text ends mid-sentence (E12 M9; "Show" selects the cut piece)
        mention  sentences that preview or number another part of the book (E12 Part 3)
        source   a source label left in the text ("[S3]") or a source with no
-                name ("another source suggests"; E12 fix batch 2, items 9, 10)
+                name ("another source suggests", "according to one source";
+                E12 fix batch 2, items 9, 10; fix batch 3, item 5a)
+       named    'info', never counted (fix batch 3, D3): "research shows",
+                "studies suggest", "experts say"… with no name right before
+                ("this", "that", "these", "those", "the same", a name's "'s",
+                his, her, their, its: the source is named nearby, D2)
+       backref  'info', never counted (fix batch 3, 5b): "earlier in this
+                chapter", "in the previous section", "as mentioned earlier"…
+                (the writer checks it points to the right place)
        again    sentences of 8 or more words that another section also has
                 (opts.others; E12 fix batch 2, item 11 A); each sent has where
        repeat   phrases of 3 to 6 words used 3 or more times (at most 5 rows);
@@ -174,6 +182,9 @@
   // previews. Back references ("earlier in this book") are fine. Whole words, any case.
   const MENTION = /\b(?:next\s+(?:section|chapter)|following\s+(?:section|chapter)|later\s+in\s+(?:this|the)\s+book|later\s+in\s+this\s+chapter|(?:section|chapter)\s+\d+(?:\.\d+)?)\b/i;
 
+  // Points back to another part (fix batch 3, 5b): fine, but the writer checks the place.
+  const BACKREF = /\b(?:earlier\s+in\s+(?:this|the)\s+(?:chapter|book|section)|in\s+the\s+(?:previous|last)\s+(?:chapter|section)|as\s+(?:mentioned|described|covered|shown)\s+earlier)\b/i;
+
   /* ── Sources with no name (E12 fix batch 2, items 9 and 10) ── */
 
   // A source label the AI left in the text: the same pattern as the server's
@@ -181,7 +192,11 @@
   const SOURCE_LABEL = /[ \t]*[[(]S\d{1,3}(?:[ \t]*[,;–-][ \t]*S?\d{1,3})*[\])]/g;
   // A source with no name: "another source", "other sources" always; "a source" or
   // "one source" only before a reporting word ("a source of stress" is fine).
-  const VAGUE_SOURCE = /\b(?:another|the\s+other)\s+sources?\b|\bother\s+sources\b|\b(?:a|one|some)\s+sources?\s+(?:says?|suggests?|shows?|puts?|notes?|found|finds|explains?|argues?|reports?|states?|recommends?|adds?|claims?)\b/i;
+  // Fix batch 3, 5a: "according to a / one / another / some source(s)".
+  const VAGUE_SOURCE = /\b(?:another|the\s+other)\s+sources?\b|\bother\s+sources\b|\b(?:a|one|some)\s+sources?\s+(?:says?|suggests?|shows?|puts?|notes?|found|finds|explains?|argues?|reports?|states?|recommends?|adds?|claims?)\b|\baccording\s+to\s+(?:a|one|another|some)\s+sources?\b/i;
+  // A guess, so info only (fix batch 3, D3): research or experts with no name. Not flagged
+  // after "this / that / these / those / the same", a name's "'s" or his / her / their / its (D2).
+  const UNNAMED = /(?<!\b(?:this|that|these|those|same|his|her|their|its)\s+)(?<!['’]s\s+)\b(?:research|stud(?:y|ies)|science|evidence)\s+(?:shows?|suggests?|says?|finds?|found|has\s+shown|have\s+shown|tells\s+us|confirms?)\b|\b(?:experts|scientists|researchers|doctors)\s+(?:say|agree|recommend|suggest)\b/i;
 
   /** The text without source labels: the server's stripSourceLabels. */
   function stripLabels(md) {
@@ -363,7 +378,7 @@
     return rows;
   }
 
-  /* ── All nine ── */
+  /* ── All eleven ── */
 
   function check(md, opts = {}) {
     const text = String(md || '');
@@ -465,9 +480,27 @@
     }
     if (unnamed.length) {
       unnamed.sort((a, b) => a.start - b.start);
-      rows.push({ code: 'source', kind: 'warn', text: 'Source not named', sub: 'Name the author or the title, or cut the label.',
+      rows.push({ code: 'source', kind: 'warn', text: 'Source not named', sub: 'Name the author or the title, or cut it.',
         ranges: unnamed.map((u) => ({ start: u.start, end: u.end })), sents: unnamed });
     }
+
+    // 5b. Check that the source is named, and 5c. Points back to another part (fix batch 3):
+    // info rows, each sentence once, never one the Source or the Mention row already lists. A sentence
+    // with an open Verify mark is in the marks row already (it needs a source), so it is not named here.
+    const taken = (st) => unnamed.some((u) => u.start < st.end && st.start < u.end);
+    const named = [], back = [];
+    for (const l of lines) {
+      if (l.kind !== 'para' && l.kind !== 'item') continue;
+      for (const st of l.sents) {
+        const t = stripLabels(clean(st.text));
+        if (UNNAMED.test(t) && !taken(st) && !st.text.includes(MARKER)) named.push(st);
+        else if (BACKREF.test(t) && !mentions.includes(st)) back.push(st);
+      }
+    }
+    const infoRow = (code, text, sub, list) => ({ code, kind: 'info', text, sub, ranges: list.map((st) => ({ start: st.start, end: st.end })),
+      sents: list.map((st) => ({ start: st.start, end: st.end, text: clean(st.text) })) });
+    if (named.length) rows.push(infoRow('named', 'Check that the source is named', 'Name the author or the title in this sentence or the one before. Not counted.', named));
+    if (back.length) rows.push(infoRow('backref', 'Points back to another part', 'Check that it points to the right place. Not counted.', back));
 
     // 6. The same sentence in another section (fix batch 2, item 11 A).
     const again = bookRepeats(text, opts.others);

@@ -6,7 +6,9 @@
 // target, open marks, and the speed on a 16,000-word section. E12 fix batch 2:
 // repeats as info, never the section's own topic (item 7); "Source not named"
 // and the label strip against the server's (items 9, 10); the same sentence
-// in another section (item 11 A).
+// in another section (item 11 A). E12 fix batch 3: "according to … source"
+// in the Source row (5a), the "Check that the source is named" info row (D2,
+// D3) and the "Points back to another part" info row (5b).
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { completeEnd, endsMidSentence, markUnsourced, SOURCE_LABEL, stripSourceLabels, writeKnown } from "../supabase/functions/generate/lib/section_write.ts";
 import { writeCtx } from "../supabase/functions/generate/test_fakes.ts";
@@ -300,7 +302,7 @@ Deno.test("source row (fix batch 2, items 9 and 10): labels and sources with no 
   const md = "Start small, Fogg says. You can always do more than the minimum. [S3]\n\nAnother source suggests a timer. A source of stress is noise.\n\n- Fogg [S2, S4] says start tiny.\n\nOne source puts it this way: rest.";
   const out = T.check(md, {});
   const row = out.rows.find((r) => r.code === "source");
-  assertEquals([row.kind, row.text, row.sub], ["warn", "Source not named", "Name the author or the title, or cut the label."]);
+  assertEquals([row.kind, row.text, row.sub], ["warn", "Source not named", "Name the author or the title, or cut it."]);
   // Show selects just the label, or the whole sentence for a source with no name.
   assertEquals(row.ranges.map((g) => md.slice(g.start, g.end)), ["[S3]", "Another source suggests a timer.", "[S2, S4]", "One source puts it this way: rest."]);
   assertEquals(row.sents.map((x) => x.text), ["You can always do more than the minimum. [S3]", "Another source suggests a timer.", "Fogg [S2, S4] says start tiny.", "One source puts it this way: rest."]);
@@ -313,6 +315,74 @@ Deno.test("source row (fix batch 2, items 9 and 10): labels and sources with no 
   const r2 = T.check(md2, {}).rows.find((r) => r.code === "source");
   assertEquals(r2.sents.map((x) => [x.text, md2.slice(x.start, x.end)]), [["You can always do more. [S3]", "[S3]"], ["Another source suggests a timer.", "Another source suggests a timer."]]);
   for (const t of ["Sleep is a source of energy.", "The source of the problem is time.", "BJ Fogg says start small.", "## Another source\n\nRest."]) assertEquals(T.check(t, {}).rows.filter((r) => r.code === "source"), [], t);
+});
+
+Deno.test("source row (fix batch 3, 5a): \"according to a / one / another / some source(s)\" is counted", () => {
+  for (const t of ["According to one source, ten minutes is enough.", "According to a source, sleep helps.", "Rest more, according to some sources.", "according to another source it works."]) {
+    const out = T.check(t, {});
+    assert(out.rows.some((r) => r.code === "source"), t);
+    assertEquals(out.rows.some((r) => r.code === "named"), false, t);   // one row per sentence
+    assertEquals(out.warnings, 1, t);
+  }
+  assertEquals(T.check("According to Smith, ten minutes is enough.", {}).rows.some((r) => r.code === "source"), false);
+});
+
+Deno.test("named row (fix batch 3, D2 and D3): research or experts with no name; info, never counted", () => {
+  const flagged = [
+    "Recent research shows that short breaks work.", "Studies show that habits form slowly.", "A study found a link.", "Science says rest matters.",
+    "The evidence suggests otherwise.", "Research has shown this twice.", "Studies have shown this.", "Research tells us to rest.", "One study confirms it.",
+    "Experts agree that posture matters less than movement.", "Scientists say sleep helps.", "Researchers recommend short walks.", "Doctors suggest rest.",
+    "- Research shows lists help.",
+  ];
+  for (const t of flagged) {
+    const out = T.check(t, {});
+    const row = out.rows.find((r) => r.code === "named");
+    assert(row, t);
+    assertEquals([row.kind, row.text, row.sub], ["info", "Check that the source is named", "Name the author or the title in this sentence or the one before. Not counted."], t);
+    assertEquals(out.warnings, 0, t);
+    assertEquals(out.rows.some((r) => r.code === "source"), false, t);
+  }
+  // D2: the source is named nearby.
+  const lally = "Lally's study followed 96 people. This research shows the habit took 66 days.";
+  assertEquals(T.check(lally, {}).rows.filter((r) => r.code === "named" || r.code === "source"), [], lally);
+  const named = [
+    "This study found a link.", "That research suggests a walk.", "These studies show the same.", "Those studies found it too.", "The same research shows it.",
+    "Smith's research shows it too.", "Smith’s study found it.", "Their studies found the same.", "His research says so.", "Her study shows it.", "Its evidence suggests rest.",
+    "Research by Lally shows it.", "Research matters.", "Do your own research and see.", "## Research shows\n\nRest.", "Experts on sleep agree.",
+  ];
+  for (const t of named) assertEquals(T.check(t, {}).rows.some((r) => r.code === "named"), false, t);
+  // Show selects each sentence; the order is source, named.
+  const md = "Another source suggests a timer. Recent research shows that short breaks work.\n\nExperts agree on it.";
+  const out = T.check(md, {});
+  const row = out.rows.find((r) => r.code === "named");
+  assertEquals(row.ranges.map((g) => md.slice(g.start, g.end)), ["Recent research shows that short breaks work.", "Experts agree on it."]);
+  assertEquals(out.rows.map((r) => r.code), ["source", "named"]);
+  assertEquals(out.warnings, 1);
+  // A sentence with an open Verify mark is in the marks row only.
+  assertEquals(T.check("Studies show rest helps." + M, {}).rows.map((r) => r.code), ["marks"]);
+});
+
+Deno.test("backref row (fix batch 3, 5b): points back to another part; info, never counted; previews stay in mention", () => {
+  const flagged = ["As covered earlier in this chapter, breathe out slowly.", "We met this earlier in the book.", "Earlier in this section you tried it.",
+    "Go back to the box breath in the previous chapter.", "In the last section you set a timer.", "As mentioned earlier, rest.", "As described earlier, sit tall.", "As shown earlier, it helps."];
+  for (const t of flagged) {
+    const out = T.check(t, {});
+    const row = out.rows.find((r) => r.code === "backref");
+    assert(row, t);
+    assertEquals([row.kind, row.text, row.sub], ["info", "Points back to another part", "Check that it points to the right place. Not counted."], t);
+    assertEquals(out.warnings, 0, t);
+  }
+  for (const t of ["Do it earlier in the day.", "Sit tall, as you did before.", "The last chapter of your day is sleep.", "## Earlier in this chapter\n\nRest."]) {
+    assertEquals(T.check(t, {}).rows.some((r) => r.code === "backref"), false, t);
+  }
+  // Q5: a preview stays a counted warning, and is not listed again as a back reference.
+  const md = "Later in this chapter you will try it. As covered earlier in this chapter, breathe out slowly.";
+  const out = T.check(md, {});
+  assertEquals(out.rows.map((r) => r.code), ["mention", "backref"]);
+  assertEquals(out.rows[1].sents.map((x) => x.text), ["As covered earlier in this chapter, breathe out slowly."]);
+  assertEquals(out.warnings, 1);
+  const both = "Later in this book, and earlier in this chapter too, we rest.";
+  assertEquals(T.check(both, {}).rows.map((r) => r.code), ["mention"]);
 });
 
 Deno.test("again row (fix batch 2, item 11 A): sentences of 8+ words that another section has, with where", () => {

@@ -8,6 +8,10 @@
    The button must sit outside the card's link (no nested interactive elements).
    E11: "Export" (after Rename) opens js/export-dialog.js when the page loads
    it; opts.onExported(bookId, format) runs after a recorded export.
+   E12 fix batch 3 (design 01b, 3): "Reopen book" (after Export) when
+   opts.isCompleted(bookId); no confirm (Mark book as completed in 06 undoes
+   it). opts.onReopened(bookId, row) after the save, opts.onReopenFailed(bookId,
+   retry) after an error (the book stays completed).
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -21,6 +25,7 @@
     rename: svg(16, 2, '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13 7l4 4"/>'),
     trash: (size) => svg(size, 2, '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'),
     download: svg(16, 2, '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+    reopen: svg(16, 2, '<path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/>'),
     warn: svg(18, 2, '<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/>'),
     x: svg(13, 2.4, '<path d="M6 6l12 12M18 6L6 18"/>'),
     close: svg(20, 2, '<path d="M6 6l12 12M18 6L6 18"/>')
@@ -53,6 +58,7 @@
       <a class="menu-item" role="menuitem" tabindex="-1" href="${esc(opts.bookHref(id))}">${ICON.open}Open</a>
       <button type="button" class="menu-item" role="menuitem" tabindex="-1" data-action="rename">${ICON.rename}Rename</button>
       ${window.kdpExport ? `<button type="button" class="menu-item" role="menuitem" tabindex="-1" data-action="export" aria-haspopup="dialog">${ICON.download}Export</button>` : ''}
+      ${opts.isCompleted && opts.isCompleted(id) ? `<button type="button" class="menu-item" role="menuitem" tabindex="-1" data-action="reopen">${ICON.reopen}Reopen book</button>` : ''}
       <div class="menu-sep" role="separator"></div>
       <button type="button" class="menu-item danger" role="menuitem" tabindex="-1" data-action="delete">${ICON.trash(16)}Delete</button>`;
     btn.after(menu);
@@ -96,6 +102,7 @@
       closeMenu(false);
       if (action.dataset.action === 'rename') openRename(id, opener);
       else if (action.dataset.action === 'export') window.kdpExport.open(id, { opener, returnFocus: () => returnFocus(id, opener), onRecorded: opts.onExported });
+      else if (action.dataset.action === 'reopen') reopen(id);
       else openDelete(id, opener);
       return;
     }
@@ -123,6 +130,19 @@
       case ' ': e.preventDefault(); e.target.click(); break;
     }
   });
+
+  /* ── Reopen (design 01b, 3) ─────────────────── */
+
+  let reopening = null;
+  async function reopen(id) {
+    if (reopening === id) return;
+    reopening = id;
+    let res;
+    try { res = await kdp.reopenBook(id); } catch (err) { res = { error: err }; }
+    reopening = null;
+    if (res.error) { if (opts.onReopenFailed) opts.onReopenFailed(id, () => reopen(id)); return; }
+    opts.onReopened(id, res.data);
+  }
 
   /* ── Shared dialog parts ────────────────────── */
 

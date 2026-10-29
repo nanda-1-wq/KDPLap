@@ -149,7 +149,7 @@ const setup = async page => {
     })
   }));
   const view = (b) => ({
-    id: b.id, title: b.title, subtitle: b.subtitle, status: 'in_progress', current_step: b.current_step, updated_at: b.updated_at, topic_id: null,
+    id: b.id, title: b.title, subtitle: b.subtitle, status: b.status || 'in_progress', completed_at: b.completed_at || null, current_step: b.current_step, updated_at: b.updated_at, topic_id: null,
     pen_name_id: b.pen_name_id, series_name: b.series_name, series_number: b.series_number, title_needs_review: b.title_needs_review, title_examples: b.title_examples,
     outline_approved_at: b.outline_approved_at,
     pen_names: { id: PA, name: 'Nora Hale', voice: store.penVoice }, topics: null,
@@ -176,6 +176,27 @@ const setup = async page => {
     if (method === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...cors, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
     if (path.startsWith('/auth/')) return json(r, 401, { msg: 'mocked: no auth calls' });
 
+    // E12 fix batch 3: Mark book as completed (0026 complete_book) and Reopen.
+    if (path === '/rest/v1/rpc/complete_book') {
+      const id = body().p_book_id;
+      store.writes.push({ table: 'complete_book', id });
+      if (mode('completeSlow')) await delay(mode('completeSlow'));
+      if (mode('completeError')) { globalThis.__modes.completeError--; return json(r, 500, { message: 'mock' }); }
+      if (mode('completeRefuse')) return json(r, 400, { code: 'P0001', message: 'section_not_final', details: '1 section is not Final.' });
+      const b = store.books[id];
+      if (b.status !== 'completed') Object.assign(b, { status: 'completed', completed_at: now() });
+      return json(r, 200, b.completed_at);
+    }
+    if (path === '/rest/v1/books' && method === 'PATCH') {
+      const p = body();
+      store.writes.push({ table: 'books', id: eq('id'), body: p });
+      if (mode('reopenSlow')) await delay(mode('reopenSlow'));
+      if (mode('reopenError')) { globalThis.__modes.reopenError--; return json(r, 500, { message: 'mock' }); }
+      const b = store.books[eq('id')];
+      if (!b) return json(r, 200, []);
+      Object.assign(b, p, p.status === 'in_progress' ? { completed_at: null } : {}, { updated_at: now() });
+      return json(r, 200, [{ id: b.id, status: b.status, completed_at: b.completed_at || null, updated_at: b.updated_at }]);
+    }
     if (path === '/rest/v1/books' && method === 'GET') { const b = store.books[eq('id')]; return json(r, 200, b ? [view(b)] : []); }
     if (path === '/rest/v1/rpc/outline_json') {
       if (mode('outlineError')) return json(r, 500, { message: 'mock' });
@@ -185,6 +206,20 @@ const setup = async page => {
       if (mode('sectionError')) return json(r, 500, { message: 'mock' });
       const hit = sectionOf(eq('id'));
       return json(r, 200, hit ? [{ id: hit.s.id, current_version_id: hit.s.current_version_id }] : []);
+    }
+    // E12 fix batch 3: Mark all as reviewed (chapter_id=in.(…)&needs_review=eq.true), one update.
+    if (path === '/rest/v1/sections' && method === 'PATCH' && param('chapter_id')) {
+      const p = body();
+      const ids = param('chapter_id').replace(/^in\.\(|\)$/g, '').split(',').map((x) => x.replace(/"/g, ''));
+      store.writes.push({ table: 'sections', bulk: ids, filter: param('needs_review'), body: p });
+      if (mode('reviewSlow')) await delay(mode('reviewSlow'));
+      if (mode('reviewError')) { globalThis.__modes.reviewError--; return json(r, 500, { message: 'mock' }); }
+      const rows = [];
+      for (const bid of Object.keys(store.outline)) for (const c of store.outline[bid]) {
+        if (!ids.includes(c.id)) continue;
+        for (const x of c.sections) if (x.needs_review) { Object.assign(x, p); rows.push({ id: x.id, updated_at: now() }); }
+      }
+      return json(r, 200, rows);
     }
     if (path === '/rest/v1/sections' && method === 'PATCH') {
       const p = body();

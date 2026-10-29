@@ -5,7 +5,8 @@
 //   __modes: user ({ meta, providers }), settingsFail, settingsSlow (ms),
 //   settingsPatchFail ({ status, code }), patchSlow (ms), pensNone, usage (the RPC reply),
 //   usageFail, usageSlow (ms), callsFail, badgesFail, exportFail (n calls),
-//   exportSlow (ms), recordFail, docxFail, docxSlow (ms), recoverFail ({ status })
+//   exportSlow (ms), recordFail, docxFail, docxSlow (ms), recoverFail ({ status }),
+//   wordsFail, wordsSlow (ms) (0026 words_month), reopenFail (n calls) (E12 fix batch 3)
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const PB = 'aaaaaaaa-0000-4000-8000-00000000000b';
@@ -74,9 +75,13 @@ async function setupE11(page) {
     pens: [{ id: PA, name: 'Nora Hale', voice: {} }, { id: PB, name: 'Sam Carter', voice: {} }],
     books: [
       { id: B1, title: 'Chair Yoga for Seniors Over 60', subtitle: null, status: 'in_progress', current_step: 6, updated_at: ago(1), topic_id: 't1',
-        pen_names: { name: 'Nora Hale' }, book_briefs: { length_range: null, target_words: 10000, topic_text: 'Chair yoga' }, chapters: [{ word_target: 10000, needs_review: false }] },
+        pen_names: { name: 'Nora Hale' }, book_briefs: { length_range: null, target_words: 10000, topic_text: 'Chair yoga' },
+        // E12 fix batch 3: the card counts each section's current version against the section targets.
+        chapters: [{ needs_review: false, sections: [
+          { word_target: 5000, status: 'final', needs_review: false, current: { word_count: 2000 } },
+          { word_target: 5000, status: 'draft', needs_review: false, current: { word_count: 2120 } }] }] },
       { id: B2, title: 'Budget Smart for College Students', subtitle: null, status: 'in_progress', current_step: 6, updated_at: ago(3), topic_id: 't2',
-        pen_names: { name: 'Sam Carter' }, book_briefs: { length_range: null, target_words: 12000, topic_text: 'Budget' }, chapters: [{ word_target: 12000, needs_review: false }] },
+        pen_names: { name: 'Sam Carter' }, book_briefs: { length_range: null, target_words: 12000, topic_text: 'Budget' }, chapters: [] },
       { id: B3, title: 'Sleep Better After 50', subtitle: null, status: 'in_progress', current_step: 2, updated_at: ago(5), topic_id: 't3',
         pen_names: { name: 'Nora Hale' }, book_briefs: { length_range: '8-12k', target_words: null, topic_text: 'Sleep' }, chapters: [] }
     ],
@@ -89,6 +94,7 @@ async function setupE11(page) {
       { stage: 'positioning_help', model: 'claude-sonnet-5-5', calls: 5, input: 5000, output: 1000 },
       { stage: 'brief_help', model: 'claude-sonnet-5-5', calls: 3, input: 3000, output: 480 },
       { stage: 'drift_check', model: 'claude-sonnet-5-5', calls: 1, input: 1000, output: 0 }] },
+    words: { month_start: '2026-10-01T00:00:00+00:00', words: 6480 },
     lastCalls: null,
     badges: [],
     exportData: { [B1]: exportData('ready'), [B2]: exportData('warn'), [B3]: exportData('empty') },
@@ -166,6 +172,21 @@ async function setupE11(page) {
       if (!id) return json(r, 200, store.books);
       const b = store.books.find((x) => x.id === id);
       return json(r, 200, one ? (b ? bookView(b) : null) : (b ? [bookView(b)] : []));
+    }
+    if (path === '/rest/v1/rpc/words_month') {
+      if (mode('wordsSlow')) await wait(mode('wordsSlow'));
+      if (mode('wordsFail')) return json(r, 500, { message: 'mock: words down' });
+      return json(r, 200, store.words);
+    }
+    if (path === '/rest/v1/books' && method === 'PATCH') {
+      const id = (param('id') || '').replace(/^eq\./, '');
+      const patch = body();
+      store.writes.push({ table: 'books', id, body: patch });
+      if (mode('reopenFail') > 0) { globalThis.__modes.reopenFail--; return json(r, 500, { message: 'mock: reopen down' }); }
+      const b = store.books.find((x) => x.id === id);
+      if (!b) return json(r, 200, []);
+      Object.assign(b, patch, { completed_at: null, updated_at: new Date().toISOString() });
+      return json(r, 200, [{ id: b.id, status: b.status, completed_at: null, updated_at: b.updated_at }]);
     }
     if (path === '/rest/v1/rpc/usage_month') {
       if (mode('usageSlow')) await wait(mode('usageSlow'));

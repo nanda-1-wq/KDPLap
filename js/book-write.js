@@ -46,6 +46,14 @@
      AI check of the saved version on a button (Save and check first when
      typed; autosave paused until the call is sent). The tab shows a count
      (never the words row). Advice only: never blocks Final or Next.
+   - E12 fix batch 3 (design 22f): "Mark all as reviewed" for the book (the
+     box under the manuscript bar) and for one chapter (the first row of an
+     open chapter), the same rule as the section's own Mark as reviewed, in
+     one save after a confirm with the count. Chapter marks clear only by
+     approving the outline (a gray line says so). "Mark book as completed"
+     at the end of the manuscript (0026 complete_book checks the rule again),
+     and "Reopen book" on a completed book. A status change here that breaks
+     the rule reopens the book on the server (0026); a note says why.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -66,6 +74,9 @@
   const SPARKLE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>';
 
   const CHEVRON = (open) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}"/></svg>`;
+  const CHECKS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 13l4 4 9-10"/><path d="M11 16l1 1 9-10"/></svg>';
+  const BOOK_DONE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M9 11l2 2 4-4"/></svg>';
+  const REOPEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg>';
   const INFO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
   const TOOL = {
     bold: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></svg>',
@@ -90,6 +101,9 @@
   let imp = null;                     // the Improve menu (js/write-improve.js)
   let chk = null;                     // the Checks tab (js/write-checks.js)
   let holdDrafts = false;             // Accept: autosave paused (decision A)
+  let review = { busy: null, err: null, done: '' };   // Mark all as reviewed: busy 'book' | chapter id; err { scope, ids }
+  let reviewTimer = null;
+  let fin = { busy: '', err: null };   // Mark book as completed / Reopen: busy 'complete' | 'reopen'; err { kind, of, text }
 
   /* ── Values ──────────────────────────────── */
 
@@ -499,6 +513,12 @@
       return false;
     }
     if (res.data && res.data.updated_at) book.updated_at = res.data.updated_at;
+    // 0026: a section that leaves Final reopens a completed book on the server (design 22f, 14).
+    if (book.status === 'completed' && before === 'final' && value !== 'final') {
+      ctx.setStatus({ status: 'in_progress', completed_at: null });
+      note = { kind: 'info', text: `Status saved. The book is no longer marked completed, because ${sectionLabel(hit.c, hit.s).split(' ')[0]} is not Final.` };
+      if (active()) { renderManuscript(); renderNotes(); }
+    }
     ctx.refresh();
     if (active()) chk.refresh();
     return true;
@@ -531,6 +551,136 @@
     if (h) h.focus();
   }
 
+  /* ── Mark all as reviewed, Mark book as completed (E12 fix batch 3, design 22f) ── */
+
+  const marked = (list) => list.filter((x) => x.s.needs_review);
+  const chapterMarks = () => chapters.filter((c) => c.needs_review).length;
+  /** Off while the AI writes or an Improve suggestion is applied (today's locked() rule), or a section is being marked. */
+  const reviewOff = () => G.busy() || (!!cur && cur.busy === 'apply') || allSections().some((x) => x.s.marking);
+  const plural = (n, one, many) => `${fmt(n)} ${n === 1 ? one : many}`;
+  const listWords = (a) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`);
+  const shortLabel = (c, s) => (c.kind === 'chapter' ? `${numberOf(c)}.${c.sections.indexOf(s) + 1}` : sectionLabel(c, s));
+
+  /** scope: 'book' or a chapter id. A confirm with the count first (states 2, 3). */
+  async function markAllReviewed(scope) {
+    if (review.busy || reviewOff()) return;
+    const list = marked(scope === 'book' ? allSections() : allSections().filter((x) => x.c.id === scope));
+    if (!list.length) return;
+    const n = list.length;
+    const ok = `Mark ${fmt(n)} as reviewed`;
+    const how = 'Check them against 03 Positioning first. Their status stays the same.';
+    let yes;
+    if (scope === 'book') {
+      const rows = list.slice(0, 8).map((x) => (x.c.kind === 'chapter' ? [shortLabel(x.c, x.s), str(x.s.title).trim() || 'Untitled section'] : ['', shortLabel(x.c, x.s)]));
+      yes = await confirmDialog({ title: `Mark ${plural(n, 'section', 'sections')} as reviewed?`, text: how, list: rows, more: n > 8 ? `and ${fmt(n - 8)} more` : '', ok, cancel: 'Cancel', focusOk: true });
+    } else {
+      const c = list[0].c;
+      yes = await confirmDialog({ title: `Mark ${plural(n, 'section', 'sections')} in chapter ${numberOf(c)} as reviewed?`,
+        text: `“${str(c.title).trim() || 'Untitled chapter'}”: ${listWords(list.map((x) => shortLabel(x.c, x.s)))}. ${how}`, ok, cancel: 'Cancel', focusOk: true });
+    }
+    if (yes) saveReviewed(scope, [...new Set(list.map((x) => x.c.id))]);
+  }
+
+  /** One save for all of them (all or none). The count is what the server changed. */
+  async function saveReviewed(scope, ids) {
+    review = { busy: scope, err: null, done: '' };
+    renderManuscript();
+    renderNotes();
+    let res;
+    try { res = await kdp.markSectionsReviewed(ids); } catch (err) { res = { error: err }; }
+    if (res.error) {
+      review = { busy: null, err: { scope, ids }, done: '' };
+      if (active()) { renderManuscript(); renderNotes(); const b = els.ms.querySelector('[data-review-retry]'); if (b) b.focus(); }
+      return;
+    }
+    // No section of these chapters is marked now (another tab may have cleared some first).
+    allSections().filter((x) => ids.includes(x.c.id)).forEach((x) => { x.s.needs_review = false; });
+    const n = res.data.length;
+    if (res.data[0] && res.data[0].updated_at) book.updated_at = res.data[0].updated_at;
+    review = { busy: null, err: null, done: n ? `Marked ${plural(n, 'section', 'sections')} as reviewed.` : 'These sections were already marked as reviewed.' };
+    clearTimeout(reviewTimer);
+    reviewTimer = setTimeout(() => { review.done = ''; if (active()) renderManuscript(); }, 8000);
+    ctx.refresh();
+    if (!active()) return;
+    renderManuscript();
+    renderNotes();
+    chk.refresh();
+    announce(review.done);
+    const first = els.ms.querySelector('[data-section]');
+    if (first) first.focus();
+  }
+
+  /** What is left before the book can be marked completed (state 9), in order. [] = ready. */
+  function completeLeft() {
+    const list = allSections();
+    if (!list.length) return ['The book has no sections yet'];
+    const left = [];
+    const notFinal = list.filter((x) => x.s.status !== 'final').length;
+    const rev = marked(list).length;
+    const noText = list.filter((x) => !x.s.current_version_id || !(x.s.words > 0)).length;
+    if (notFinal) left.push(plural(notFinal, 'section is not Final yet', 'sections are not Final yet'));
+    if (rev) left.push(plural(rev, 'section needs review', 'sections need review'));
+    if (noText) left.push(plural(noText, 'section has no text', 'sections have no text'));
+    if (!book.outline_approved_at || chapterMarks()) left.push('Approve the outline in 05');
+    return left;
+  }
+
+  async function completeBook() {
+    if (fin.busy || completeLeft().length || G.busy()) return;
+    fin = { busy: 'complete', err: null };
+    renderManuscript();
+    let res;
+    try { res = await kdp.completeBook(book.id); } catch (err) { res = { error: err }; }
+    if (res.error) {
+      const e = res.error;
+      // The server checks the same rule (0026): another tab changed the book.
+      fin = { busy: '', err: e.code === 'P0001' || e.code === 'P0002'
+        ? { kind: 'refused', text: `The book changed in another tab. ${e.details || 'It is not ready yet.'} Reload to see it.` }
+        : { kind: 'net', of: 'complete', text: 'We couldn’t mark the book as completed. Try again.' } };
+      if (active()) { renderManuscript(); focusFin(); }
+      return;
+    }
+    fin = { busy: '', err: null };
+    ctx.setStatus({ status: 'completed', completed_at: res.data });
+    if (!active()) return;
+    renderManuscript();
+    announce('The book is marked completed.');
+    const b = els.ms.querySelector('[data-reopen]');
+    if (b) b.focus();
+  }
+
+  async function reopenBook() {
+    if (fin.busy) return;
+    fin = { busy: 'reopen', err: null };
+    renderManuscript();
+    let res;
+    try { res = await kdp.reopenBook(book.id); } catch (err) { res = { error: err }; }
+    if (res.error) {
+      fin = { busy: '', err: { kind: 'net', of: 'reopen', text: 'We couldn’t reopen the book. Try again.' } };
+      if (active()) { renderManuscript(); focusFin(); }
+      return;
+    }
+    fin = { busy: '', err: null };
+    ctx.setStatus({ status: res.data.status, completed_at: res.data.completed_at, updated_at: res.data.updated_at });
+    if (!active()) return;
+    renderManuscript();
+    announce('The book is in progress again.');
+    const b = els.ms.querySelector('[data-complete]');
+    if (b && !b.disabled) b.focus();
+  }
+
+  /** Reload after a refusal: the outline and the book's status from the server. */
+  async function reloadFin() {
+    fin = { busy: '', err: null };
+    await Promise.all([loadOutline(true), ctx.reloadStatus()]);
+    if (active()) renderManuscript();
+  }
+
+  function focusFin() {
+    const b = els.ms.querySelector('[data-fin-retry], [data-fin-reload]');
+    if (b) b.focus();
+  }
+
   /** Leaving the section: a version first. Stays when the text could not be saved at all. */
   async function selectSection(id) {
     if (cur && cur.id === id && cur.state === 'ready') return;
@@ -551,7 +701,7 @@
   const posLocked = () => !!(one(book.positioning) || {}).locked_at;
 
   /** A small confirm dialog. Resolves true for the main button. */
-  function confirmDialog({ title, text, ok, cancel }) {
+  function confirmDialog({ title, text, ok, cancel, list, more, focusOk }) {
     if (!ask) {
       const d = document.createElement('dialog');
       d.className = 'dialog dialog-sm';
@@ -559,6 +709,7 @@
       d.innerHTML = `
         <div class="dialog-inner">
           <div class="dialog-head"><h2 id="wrAskTitle"></h2><p data-ask-text></p></div>
+          <ol class="wr-ask-list" data-ask-list hidden></ol>
           <div class="dialog-foot">
             <button type="button" class="btn btn-secondary" data-ask-no></button>
             <button type="button" class="btn btn-primary" data-ask-yes></button>
@@ -580,11 +731,15 @@
     ask.d.querySelector('[data-ask-text]').textContent = text;
     ask.d.querySelector('[data-ask-yes]').textContent = ok;
     ask.d.querySelector('[data-ask-no]').textContent = cancel;
+    // Mark all as reviewed (22f, 2): the sections that will change.
+    const ol = ask.d.querySelector('[data-ask-list]');
+    ol.hidden = !list;
+    ol.innerHTML = list ? list.map(([n, t]) => `<li><span class="wr-ask-n">${esc(n)}</span><span>${esc(t)}</span></li>`).join('') + (more ? `<li class="wr-ask-more">${esc(more)}</li>` : '') : '';
     ask.back = document.activeElement;
     ask.pending = new Promise((resolve) => {
       ask.resolve = (v) => { ask.pending = null; resolve(v); };
       ask.d.showModal();
-      ask.d.querySelector('[data-ask-no]').focus();
+      ask.d.querySelector(focusOk ? '[data-ask-yes]' : '[data-ask-no]').focus();
     });
     return ask.pending;
   }
@@ -795,13 +950,15 @@
         return s ? `<li>${sectionBtn(c, s, true)}</li>` : '';
       }
       const isOpen = open.has(c.id);
-      const review = (c.sections || []).some((s) => s.needs_review);
+      const toReview = (c.sections || []).filter((s) => s.needs_review).length;
+      const review = toReview > 0;
       return `<li>
           <button type="button" class="wr-ms-ch" data-toggle="${c.id}" aria-expanded="${isOpen}" aria-controls="wrCh-${c.id}">
             <span class="wr-ms-name">${esc(chapterLabel(c))}</span>
             <span class="wr-ms-pills">${review ? reviewPill() : ''}${pill(chapterStatus(c))}<span class="wr-ms-chev">${CHEVRON(isOpen)}</span></span>
           </button>
           <ul class="wr-ms-secs" id="wrCh-${c.id}"${isOpen ? '' : ' hidden'}>
+            ${toReview ? chapterReviewHtml(c, toReview) : ''}
             ${(c.sections || []).map((s) => `<li>${sectionBtn(c, s, false)}</li>`).join('')}
           </ul>
         </li>`;
@@ -812,7 +969,68 @@
         <span class="wr-ms-count"><strong>${fmt(total)}</strong> / ${fmt(planned)}</span>
       </div>
       <div class="wr-bar" role="img" aria-label="${fmt(total)} of ${fmt(planned)} planned words"><span style="width: ${pct}%"></span></div>
-      <ul class="wr-ms-list">${rows}</ul>`;
+      ${reviewHtml()}
+      <ul class="wr-ms-list">${rows}</ul>
+      ${finHtml()}`;
+  }
+
+  const spin = '<span class="spinner" aria-hidden="true"></span>Saving…';
+
+  /** The box under the bar (22f, 1, 4 to 7, 6b): sections to review, the chapter marks line, the error, the done note. */
+  function reviewHtml() {
+    const list = marked(allSections());
+    const chs = chapterMarks();
+    const done = review.done ? `<p class="help-note wr-ms-done-note" role="status">${ICON.check(16)}<span>${esc(review.done)}</span></p>` : '';
+    if (!list.length && !chs && !review.err) return done;
+    const off = reviewOff();
+    const box = [];
+    if (list.length) {
+      box.push(`<p class="wr-ms-review-line">${ICON.warn(16)}<strong>${plural(list.length, 'section needs review', 'sections need review')}</strong></p>`);
+      box.push(`<button type="button" class="btn btn-secondary btn-sm wr-ms-wide" data-review-all${off || review.busy ? ' disabled' : ''}${off ? ' aria-describedby="wrReviewWhy"' : ''}>${review.busy === 'book' ? spin : `${CHECKS}Mark all as reviewed`}</button>`);
+      if (off) box.push(`<p class="wr-ms-why" id="wrReviewWhy">${INFO}<span>Wait for the section to finish writing.</span></p>`);
+    } else if (chs) {
+      box.push(`<p class="wr-ms-review-line">${ICON.warn(16)}<strong>${plural(chs, 'chapter needs review', 'chapters need review')}</strong></p>`);
+    }
+    if (chs) box.push(`<p class="wr-ms-why">${INFO}<span>Approve the outline in 05 to clear the chapter marks.</span></p>`);
+    if (review.err) {
+      box.push(`<div class="alert alert-error wr-ms-err" role="alert">${ICON.x(16)}<div><p class="alert-text">We couldn’t mark them as reviewed. Nothing was changed.</p>
+          <p class="alert-text"><button type="button" class="btn btn-secondary btn-sm" data-review-retry${review.busy ? ' disabled' : ''}>Retry</button></p></div></div>`);
+    }
+    return `${done}<div class="wr-ms-review" data-review-box>${box.join('')}</div>`;
+  }
+
+  /** The first row of an open chapter with sections to review (22f, 1). */
+  function chapterReviewHtml(c, n) {
+    const off = reviewOff() || !!review.busy;
+    return `<li class="wr-ms-ch-review"><button type="button" class="btn btn-secondary btn-sm" data-review-chapter="${c.id}"${off ? ' disabled' : ''}>${review.busy === c.id ? spin : `${CHECKS}Mark chapter as reviewed (${fmt(n)})`}</button></li>`;
+  }
+
+  /** The foot of the manuscript (22f, 8 to 12): Mark book as completed, or Completed with Reopen. */
+  function finHtml() {
+    const e = fin.err;
+    const err = !e ? '' : `<div class="alert alert-error wr-ms-err" role="alert">${ICON.x(16)}<div><p class="alert-text">${esc(e.text)}</p>
+        <p class="alert-text">${e.kind === 'refused' ? '<button type="button" class="btn btn-secondary btn-sm" data-fin-reload>Reload</button>' : '<button type="button" class="btn btn-secondary btn-sm" data-fin-retry>Retry</button>'}</p></div></div>`;
+    if (book.status === 'completed') {
+      const at = book.completed_at ? new Date(book.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      return `<div class="wr-ms-foot" data-fin>
+          <p class="wr-ms-done">${ICON.check(16)}<span><strong>Completed</strong><span class="wr-ms-sub">${at ? `Marked ${esc(at)}. ` : ''}You can still edit it.</span></span></p>
+          <button type="button" class="btn btn-secondary wr-ms-wide" data-reopen${fin.busy ? ' disabled' : ''}>${fin.busy === 'reopen' ? spin : `${REOPEN}Reopen book`}</button>
+          ${err}
+        </div>`;
+    }
+    const left = completeLeft();
+    const gen = !left.length && G.busy();
+    const off = !!left.length || gen || !!fin.busy;
+    const why = left.length
+      ? `<ul class="wr-ms-left" id="wrFinWhy" aria-label="Left before the book is completed">${left.map((t) => `<li><span class="wr-ms-dot" aria-hidden="true"></span><span>${esc(t)}</span></li>`).join('')}</ul>`
+      : gen ? `<p class="wr-ms-why" id="wrFinWhy">${INFO}<span>Wait for the section to finish writing.</span></p>`
+        : `<p class="wr-ms-why is-ok">${ICON.check(16)}<span>Every section is Final and nothing needs review.</span></p>`;
+    return `<div class="wr-ms-foot" data-fin>
+        ${left.length ? '' : why}
+        <button type="button" class="btn ${left.length ? 'btn-secondary' : 'btn-primary'} wr-ms-wide" data-complete${off ? ' disabled' : ''}${left.length || gen ? ' aria-describedby="wrFinWhy"' : ''}>${fin.busy === 'complete' ? spin : `${BOOK_DONE}Mark book as completed`}</button>
+        ${left.length ? why : ''}
+        ${err}
+      </div>`;
   }
 
   function sectionBtn(c, s, top) {
@@ -939,7 +1157,10 @@
             <button type="button" class="btn btn-secondary btn-sm" data-keep-saved${busy ? ' disabled' : ''}>Keep saved version</button>
           </div></div></div>`);
     }
-    if (note) {
+    if (note && note.kind === 'info') {
+      // E12 fix batch 3 (22f, 14): said once, gray, no button.
+      parts.push(`<p class="help-note wr-note" role="status">${INFO}<span>${esc(note.text)}</span></p>`);
+    } else if (note) {
       const cls = note.kind === 'error' ? 'alert-error' : 'alert-warning';
       parts.push(`<div class="alert ${cls} wr-note" role="alert">${ICON.warn(16)}<div><p class="alert-text">${esc(note.text)}</p>${note.retry ? '<p class="alert-text"><button type="button" class="link-btn" data-retry-version>Try again</button></p>' : ''}</div></div>`);
     }
@@ -1096,6 +1317,14 @@
       if (t.dataset.goStep) { e.preventDefault(); ctx.go(Number(t.dataset.goStep)); return; }
       if (els.side.contains(t) && chk.handleClick(t)) return;
       if (t.hasAttribute('data-mark-reviewed')) { markReviewed(); return; }
+      // E12 fix batch 3 (design 22f).
+      if (t.hasAttribute('data-review-all')) { markAllReviewed('book'); return; }
+      if (t.dataset.reviewChapter) { markAllReviewed(t.dataset.reviewChapter); return; }
+      if (t.hasAttribute('data-review-retry') && review.err) { saveReviewed(review.err.scope, review.err.ids); return; }
+      if (t.hasAttribute('data-complete')) { completeBook(); return; }
+      if (t.hasAttribute('data-reopen')) { reopenBook(); return; }
+      if (t.hasAttribute('data-fin-retry') && fin.err) { if (fin.err.of === 'reopen') reopenBook(); else completeBook(); return; }
+      if (t.hasAttribute('data-fin-reload')) { reloadFin(); return; }
       if (t.hasAttribute('data-chk-review')) {
         tab = 'checks';
         renderSide();
@@ -1359,6 +1588,8 @@
     sectionQuery: () => (cur ? `&section=${encodeURIComponent(cur.id)}` : ''),
     retrySave: () => saver && saver.retry(),
     hasUnsaved: () => !!saver && (saver.hasUnsaved() || dirty()),
-    saveState: () => (saver ? saver.state : 'idle')
+    saveState: () => (saver ? saver.state : 'idle'),
+    /** The book's status changed outside this step (the shell's Reopen, a fresh read): redraw the foot. */
+    statusChanged: () => { if (active() && load.state === 'ready' && gateOpen()) renderManuscript(); }
   };
 })();

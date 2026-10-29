@@ -891,7 +891,8 @@ a { color: var(--ink); }
 /* ── Card menu (design 07) ────────────────────── */
 
 /* Leave room for the ⋯ button next to the title. */
-.book-card .book-title { padding-right: var(--space-8); }
+/* E12 fix batch 3, R2: the ⋯ button covers 8 to 52 px from the right edge, so a long title wraps before it. */
+.book-card .book-title { padding-right: var(--space-10); }
 .card-actions {
   position: absolute;
   top: var(--space-2);
@@ -1011,6 +1012,8 @@ div.delete-text p { margin: 0; }
   font-weight: 500;
 }
 .notice svg { flex-shrink: 0; }
+.notice.is-error { color: var(--danger); background: var(--danger-bg); }
+.notice.is-error .link-btn { color: inherit; margin-left: var(--space-2); }
 
 /* ── Book page (design 05) ────────────────────── */
 
@@ -1167,6 +1170,27 @@ div.delete-text p { margin: 0; }
   font-size: var(--text-2xl);
   font-weight: 600;
 }
+/* E12 fix batch 3 (design 22f, 13): a completed book, above every step */
+.book-strip {
+  margin: var(--space-4) var(--space-10) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-md);
+}
+.book-strip[hidden] { display: none; }
+.book-strip-text { flex: 1 1 280px; min-width: 0; display: flex; align-items: center; gap: var(--space-2); line-height: 1.4; color: var(--graphite); }
+.book-strip-text svg { flex-shrink: 0; color: var(--success); }
+.book-strip-text strong { color: var(--ink); font-weight: 600; }
+.book-strip.is-error { border-color: var(--danger); background: var(--danger-bg); }
+.book-strip.is-error .book-strip-text, .book-strip.is-error .book-strip-text svg { color: var(--danger); }
+.book-strip .btn { color: var(--ink); }
+
 .book-content {
   flex-grow: 1;
   padding: var(--space-10);
@@ -2718,6 +2742,53 @@ div.delete-text p { margin: 0; }
   background: var(--surface);
 }
 .wr-pill.is-final { background: var(--ink); color: var(--surface); }
+
+/* E12 fix batch 3 (design 22f): Mark all as reviewed, Mark book as completed */
+.wr-ms-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius-lg);
+}
+.wr-ms-review-line { margin: 0; display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.4; color: var(--ink); }
+.wr-ms-review-line svg { flex-shrink: 0; margin-top: 1px; color: var(--warning); }
+.wr-ms-review-line strong { font-weight: 600; }
+.wr-ms-why { margin: 0; display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.45; color: var(--graphite); }
+.wr-ms-why svg { flex-shrink: 0; margin-top: 2px; }
+.wr-ms-why.is-ok svg { color: var(--success); }
+.wr-ms-wide { width: 100%; }
+.wr-ms-err { margin: 0; font-size: var(--text-sm); }
+.wr-ms-err .btn { color: var(--ink); }
+.wr-ms-done-note { margin: 0 var(--space-2) var(--space-3); padding: var(--space-2) var(--space-3); background: var(--surface); border: 1px solid var(--stone);
+  border-radius: var(--radius-lg); font-size: var(--text-sm); align-items: flex-start; }
+.wr-ms-done-note svg { color: var(--success); margin-top: 2px; }
+.wr-ms-ch-review { margin: 2px 0; }
+.wr-ms-ch-review .btn { width: 100%; justify-content: flex-start; font-size: var(--text-sm); }
+.wr-ms-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) var(--space-2) 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--stone);
+}
+.wr-ms-left { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.wr-ms-left li { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.4; color: var(--ink-2); }
+.wr-ms-dot { flex-shrink: 0; width: 6px; height: 6px; margin: 6px 5px 0; border-radius: var(--radius-pill); background: var(--graphite); }
+.wr-ms-done { margin: 0; display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-md); line-height: 1.4; }
+.wr-ms-done svg { flex-shrink: 0; margin-top: 2px; color: var(--success); }
+.wr-ms-done strong { display: block; font-weight: 600; }
+.wr-ms-sub { display: block; font-size: var(--text-sm); color: var(--graphite); }
+.wr-ask-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--mist); border-radius: var(--radius-lg); }
+.wr-ask-list li { display: grid; grid-template-columns: 40px 1fr; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--mist);
+  font-size: var(--text-md); line-height: 1.45; color: var(--ink-2); }
+.wr-ask-list li:first-child { border-top: none; }
+.wr-ask-n { font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); padding-top: 3px; }
+.wr-ask-list .wr-ask-more { display: block; color: var(--graphite); font-size: var(--text-sm); }
 .wr-pill.is-reviewed { background: var(--mist); border-color: var(--stone-2); }
 .wr-pill.is-not_started { border-color: var(--stone-2); border-style: dashed; color: var(--graphite); font-weight: 400; }
 .wr-review {

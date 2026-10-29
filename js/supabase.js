@@ -153,15 +153,57 @@ window.kdp = {
     return { error };
   },
 
-  /** Books for the Books page, with pen name, brief length, and chapter targets. One query. */
+  /**
+   * Books for the Books page, with pen name, brief length, and each section's
+   * word target, status, "Needs review" and the words of its current version
+   * (E12 fix batch 3, item 1: the card word bar). One query.
+   */
   async listBooks() {
     return window.sb
       .from('books')
-      .select(`id, title, subtitle, status, current_step, updated_at, topic_id,
+      .select(`id, title, subtitle, status, completed_at, current_step, updated_at, topic_id,
                pen_names ( name ),
                book_briefs ( length_range, target_words, topic_text ),
-               chapters ( word_target, needs_review )`)
+               chapters ( needs_review,
+                 sections ( word_target, status, needs_review,
+                   current:section_versions!sections_current_version_id_fkey ( word_count ) ) )`)
       .order('updated_at', { ascending: false });
+  },
+
+  /** Words added this month (0026 words_month, rule 1): data { month_start, words }. */
+  async getWordsMonth() {
+    const { data, error } = await window.sb.rpc('words_month');
+    return { data: error ? null : data, error };
+  },
+
+  /**
+   * Marks the book completed (0026 complete_book: the server checks the rule).
+   * data is completed_at. error.message: outline_not_approved, book_empty,
+   * section_not_final, section_no_text, needs_review (error.details says how many).
+   */
+  async completeBook(id) {
+    const { data, error } = await window.sb.rpc('complete_book', { p_book_id: id });
+    return { data: error ? null : data, error };
+  },
+
+  /** The book's status only (the book page reads it again when a completed book opens a step). */
+  async getBookStatus(id) {
+    const { data, error } = await window.sb
+      .from('books')
+      .select('status, completed_at, updated_at')
+      .eq('id', id)
+      .maybeSingle();
+    return { data: error ? null : data, error };
+  },
+
+  /** Reopen: back to In progress (RLS allows it; 0026 clears completed_at). 0 rows is an error. */
+  async reopenBook(id) {
+    const { data, error } = await window.sb
+      .from('books')
+      .update({ status: 'in_progress' })
+      .eq('id', id)
+      .select('id, status, completed_at, updated_at');
+    return oneRow(data, error, 'Book not found.');
   },
 
   /**
@@ -176,7 +218,7 @@ window.kdp = {
   async getBook(id) {
     return window.sb
       .from('books')
-      .select(`id, title, subtitle, status, current_step, updated_at, topic_id, pen_name_id, series_name, series_number,
+      .select(`id, title, subtitle, status, completed_at, current_step, updated_at, topic_id, pen_name_id, series_name, series_number,
                title_needs_review, title_examples, outline_approved_at,
                pen_names ( id, name, voice ),
                topics ( id, name, checks_passed ),
@@ -608,6 +650,22 @@ window.kdp = {
       .eq('id', id)
       .select('id, updated_at');
     return oneRow(data, error, 'Chapter not found.');
+  },
+
+  /**
+   * "Mark all as reviewed" (E12 fix batch 3, item 4): clears "Needs review" on
+   * every marked section of these chapters, in one update (all or none).
+   * data: the rows it changed ([{ id, updated_at }]); another tab may have
+   * cleared some already, so it can be fewer than the page counted.
+   */
+  async markSectionsReviewed(chapterIds) {
+    const { data, error } = await window.sb
+      .from('sections')
+      .update({ needs_review: false })
+      .in('chapter_id', chapterIds)
+      .eq('needs_review', true)
+      .select('id, updated_at');
+    return { data: error ? null : data || [], error };
   },
 
   /** Writes section fields (title, word_target; status in step 06). 0 rows is an error. */

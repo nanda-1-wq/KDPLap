@@ -500,7 +500,8 @@
       host.renderMainShell();
       host.renderSide();
       // Generate chapter: the manuscript list shows which section is being written (23b, 3).
-      if (chap) host.renderManuscript();
+      // E12 fix batch 3: Mark all as reviewed and Mark book as completed there are off while it writes.
+      host.renderManuscript();
     }
 
     /**
