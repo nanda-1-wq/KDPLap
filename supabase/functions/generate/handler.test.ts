@@ -13,6 +13,19 @@ Deno.test("OPTIONS preflight: 204 with CORS for an allowed origin only", quiet(a
   assertEquals(other.headers.get("access-control-allow-origin"), null);
 }));
 
+Deno.test("nicheink.com (and www) get CORS on the preflight and the call; github.io still does", quiet(async () => {
+  for (const origin of ["https://nicheink.com", "https://www.nicheink.com", "https://nanda-1-wq.github.io"]) {
+    const { handle } = setup();
+    const pre = await handle(new Request("http://x", { method: "OPTIONS", headers: { origin } }));
+    assertEquals([pre.status, pre.headers.get("access-control-allow-origin")], [204, origin]);
+    const r = await handle(post(good, { origin }));
+    assertEquals([r.status, r.headers.get("access-control-allow-origin")], [200, origin]);
+  }
+  const { handle } = setup();
+  const http = await handle(new Request("http://x", { method: "OPTIONS", headers: { origin: "http://nicheink.com" } }));
+  assertEquals(http.headers.get("access-control-allow-origin"), null);
+}));
+
 Deno.test("GET is 405", quiet(async () => {
   const { handle } = setup();
   const r = await handle(new Request("http://x", { method: "GET" }));

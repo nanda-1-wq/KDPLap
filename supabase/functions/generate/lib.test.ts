@@ -50,14 +50,16 @@ Deno.test("limitError: monthly first, then per minute", () => {
   assertEquals(L.limitError({ monthTokens: 500, monthlyLimit: 100, callsLastMinute: 10 }), "monthly_limit");
 });
 
-Deno.test("corsHeaders allows only the listed origins (Pages, 5500, 5501)", () => {
+Deno.test("corsHeaders allows only the listed origins (nicheink.com, Pages, 5500, 5501)", () => {
   assertEquals(L.ALLOWED_ORIGINS, [
+    "https://nicheink.com", "https://www.nicheink.com",
     "https://nanda-1-wq.github.io",
     "http://127.0.0.1:5500", "http://localhost:5500",
     "http://127.0.0.1:5501", "http://localhost:5501",
   ]);
   for (const o of L.ALLOWED_ORIGINS) assertEquals(L.corsHeaders(o)["Access-Control-Allow-Origin"], o);
-  for (const o of [null, "https://evil.example", "http://127.0.0.1:5502", "http://127.0.0.1:55010", "https://nanda-1-wq.github.io.evil.example"]) {
+  for (const o of [null, "https://evil.example", "http://127.0.0.1:5502", "http://127.0.0.1:55010", "https://nanda-1-wq.github.io.evil.example",
+    "http://nicheink.com", "https://nicheink.com.evil.example", "https://evil-nicheink.com", "https://app.nicheink.com", "https://nicheink.com/", "https://NicheInk.com"]) {
     assertEquals(L.corsHeaders(o)["Access-Control-Allow-Origin"], undefined, String(o));
   }
   assertEquals(L.corsHeaders(null).Vary, "Origin");
