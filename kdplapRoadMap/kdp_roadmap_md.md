@@ -71,21 +71,39 @@ Status: ✅ done (E1 to E12, both review gates)
   - drop the github.io origin (generate CORS, Supabase redirect URLs, Google origins) in generate v26, no earlier than Nov 12, 2026 (14 days after Oct 29), and only if the Edge logs show no github.io calls for 7 days.
 
 ## Next
-v2, starting with 09 Cover.
+v2 step B: flow + screen list for design batch 1 (08 + 09).
 
 ## v2 · KDP-ready files
-07 Quality Control · 08 Format · 09 Cover (full wrap) · Print PDF · EPUB ·
-image generation · Google Drive export · mobile layout · dark mode.
-Design starts after E12.
+Scope: owner decisions, v2 step A (Oct 31).
+
+**v2a · publish path**
+1. 08 Format + Print PDF + EPUB (4 styles, book parts on/off, paper type)
+2. 09 Cover (4 templates + upload + blurb; print wrap PDF + Kindle JPG)
+3. Owner publishes the real book "Micro Study Habits for Busy Adult Learners"
+
+**v2b · complete**
+4. 06 Book parts (front and back matter) + Also by
+5. 07 Quality Control
+6. AI cover images
+7. PACKAGE review gate
+
+Tidy-up: Topic Lab note (fix batch 2 item 3).
+
+Design: two design batches on a new canvas. Batch 1 is 08 + 09. Batch 2 is the rest.
+No code before its design is approved.
+
+Parked idea, not v2: book assistant chat (E10.5).
 
 ## v3 · Publish and open to users
 10 Metadata (description, 7 keywords, categories, price) · 11 Publish (preflight) ·
-new landing page · usage plans and billing · name and trademark check.
+new landing page · usage plans and billing · name and trademark check ·
+Google Drive export · browser extension.
 
 **After v2 (owner):**
 - Landing page redesign. The owner redesigns the landing page once v2 is done. The NicheInk rename
   changed only its wordmark, chip, lead, description, title and footer (design 40).
-- Responsive on all devices: every page works on phones, tablets and desktops.
+- Responsive on all devices: every page works on phones, tablets and desktops, with a mobile layout.
+- App dark mode.
 
 ## v4 · Business
 Research Vault · Templates · Assets · Launch tracker · Analytics (royalty report upload) ·
