@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Typst proof bench</title>
+  <!-- E13.0 Typst proof (throwaway, never merged). Not an app page. -->
+  <style>
+    body { font: 14px/1.4 ui-monospace, monospace; margin: 16px; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Typst proof bench</h1>
+  <p>Parameters: <code>?book=test-book&amp;warm=5&amp;checks=1</code>. The book is read from <code>input/</code>.</p>
+  <p><a id="download" hidden>Download the PDF</a></p>
+  <pre id="out">Running…</pre>
+  <script src="md2typst.js"></script>
+  <script src="pdf-check.js"></script>
+  <script src="engine.js"></script>
+  <script src="bench.js"></script>
+</body>
+</html>
