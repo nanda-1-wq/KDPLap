@@ -16,6 +16,19 @@ Books used (all in `input/`, not committed):
 KDP-shaped, and the counts match. The real costs are the first download
 (9.5 MB) and a page freeze during the compile. See the risks at the end.
 
+## Real book (owner's export, Nov 2, 2026)
+
+Same machine and setup, `run.mjs --only=books,checks --books=my-book`. The export
+was removed from the repo after the run, and its PDF was deleted. Numbers only.
+
+| Book | Words | Chapters | Pages before padding | Pages after padding | Spine (white paper) | KDP inside-margin tier | 17 layout checks | First compile | After a one-word edit |
+|---|---|---|---|---|---|---|---|---|---|
+| real book | 8,096 | 9 | 34 | 34 (no blank added) | 0.0766 in | 24 to 150 pages (0.375 in; ours is 0.75 in) | 17 of 17 pass | 149 ms (page frozen 151 ms) | 15 ms |
+
+Also checked: page count 34 from the engine, the PDF reader (Chrome and Node)
+and pdf.js; every page `[0 0 432 648]`, no other boxes; 4 embedded Source
+Serif 4 fonts; no Typst warnings; peak renderer memory 749 MB (+321 MB over the idle page).
+
 ## Versions and CDN URLs (SRI sha384)
 
 - typst.ts **0.7.0** (latest stable, June 1, 2026; 0.8.0 is still rc3).
