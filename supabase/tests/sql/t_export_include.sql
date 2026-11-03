@@ -79,3 +79,17 @@ select pg_temp.chk((c ->> 'name') || ': one section short reads as changed',
          (select changed from public.export_badges() where book_id = md5((c ->> 'name') || ':book')::uuid))
   from cases where jsonb_array_length(c -> 'expected') > 1 order by c ->> 'name';
 reset role;
+
+-- E13.1 (0027): the Print PDF takes Final sections only (owner, Nov 3). For
+-- every "final" case, a format row with the case's parts gives exactly the
+-- dialog's list from pdf_version_ids, the list the PDF export records.
+insert into public.book_formats (book_id, user_id, parts)
+  select md5((c ->> 'name') || ':book')::uuid, '00000000-0000-4000-8000-00000000000a', (c -> 'parts') || '{"also_by": false}'
+    from cases where c ->> 'include' = 'final';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000a';
+select pg_temp.chk((c ->> 'name') || ': pdf_version_ids is the dialog''s Final list',
+         public.pdf_version_ids(md5((c ->> 'name') || ':book')::uuid) = pg_temp.list(c),
+         public.pdf_version_ids(md5((c ->> 'name') || ':book')::uuid)::text)
+  from cases where c ->> 'include' = 'final' order by c ->> 'name';
+reset role;
