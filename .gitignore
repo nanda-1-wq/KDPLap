@@ -23,3 +23,6 @@ tests/browser/shots/
 
 # Supabase CLI link data (project ref, CLI version)
 supabase/.temp/
+
+# E13.0 proof inputs and outputs (local only; the proof lives on claude/e13-0-typst-proof)
+proof/
