@@ -1,8 +1,19 @@
 # E13.1 Part 2 · step 1 · worker spike · results
 
-Status: STOPPED (Nov 4, 2026). The worker fails in Safari for books over about 160 pages.
-Owner decision needed before anything else in Part 2 is built (owner rule: "Do not build
-the fallback without my OK").
+Status: DECIDED (Nov 4, 2026): option A, with the owner's conditions below. Built in
+Part 2 (`js/format/engine.js`); results in `docs/reviews/2026-11-04-e13-1-part2.md`.
+
+**Retest on every typst.ts upgrade (0.8 may expose PDF options).**
+
+## Owner decision (Nov 4): option A, with these conditions
+1. After a worker crash, terminate that worker and start a new one.
+2. Detect the fallback by the error (stack overflow in the PDF step), not by the browser name.
+3. Remember the fallback per book for the session.
+4. On the main-thread path: preview rebuild waits about 1,500 ms after the last change,
+   and "Updating preview" is painted before the build.
+5. Tests: a browser test that forces the fallback (a test-only flag), and a real Safari
+   run on a placeholder book of about 164 pages.
+Keep `set document(date: none)` in the real template.
 Branch `claude/e13-1-format`. Plan: `docs/reviews/2026-11-03-e13-1-plan.md` (Part 2, Q1).
 
 ## Setup
