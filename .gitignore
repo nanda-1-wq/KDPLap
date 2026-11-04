@@ -26,3 +26,6 @@ supabase/.temp/
 
 # E13.0 proof inputs and outputs (local only; the proof lives on claude/e13-0-typst-proof)
 proof/
+
+# Real-engine test results (tests/browser/format/*.mjs): numbers only, made on every run
+tests/browser/format/out/

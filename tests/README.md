@@ -72,6 +72,10 @@ deno test --allow-read tests/export-build.test.js
 deno test --allow-read tests/usage-rules.test.js
 deno test --allow-read tests/user-name.test.js
 deno test --allow-read tests/brand-name.test.js
+deno test --allow-read tests/format-typst.test.js
+deno test --allow-read tests/font-cmap.test.js
+deno test --allow-read tests/pdf-check.test.js
+deno test --allow-read tests/format-rules.test.js
 ```
 
 - Rename to NicheInk (design 40): `brand-name.test.js` scans every served
@@ -179,6 +183,56 @@ deno test --allow-read tests/brand-name.test.js
   (`js/outline-key.js`) and in the function (`lib/outline_check.ts`) give the
   same key (real-length outline, quotes, emoji), a pinned value, and the AI
   check caps against 0017.
+
+- E13.1 (08 Format, print engine): `format-typst.test.js` is the book →
+  Typst converter (`js/format/md2typst.js`): every case of the E13.0 proof
+  (`tests/fixtures/typst-cases.js`, exact output), 300 seeded fuzz strings
+  that must never leave markup unescaped, and `main.typ` from the export
+  model and the 08 settings (Final sections only, against the shared include
+  fixture; chapter labels; drop cap and the indent after it; parts; ISBN;
+  About the author; Also by; header title; recto start; hostile titles).
+  `font-cmap.test.js`: the TrueType cmap reader (format 4 and 12 fonts built
+  byte by byte) and the missing-character list with where each one is.
+  `pdf-check.test.js`: the PDF reader and the checks before a Print PDF
+  download, on small PDFs written by hand. `format-rules.test.js`: the 08
+  rules (`js/format-rules.js`); styles, labels, papers, every default, the
+  header and Also by limits and the ISBN rule are read from 0027 and must match.
+
+## Print engine (E13.1, real CDN, Node + playwright-core)
+
+```sh
+node tests/browser/format/t-engine-real.mjs   # Chrome: sizes, times, SRI on both CDNs, 5 fonts, 4 styles x 4 trims, 17 checks
+node tests/browser/format/t-fallback.mjs      # Chrome: the main-thread fallback, forced with the test-only flag
+node tests/browser/format/t-safari.mjs        # real Safari: a 164-page book falls back by itself
+node tests/browser/format/t-cdn.mjs           # Chrome: jsdelivr down, a wrong file, both CDNs down
+node tools/check-format-cdn.mjs               # every pinned file on jsdelivr, unpkg and in the npm tarball
+node tools/make-style-samples.mjs             # once: app/format/style-*.png
+```
+
+- They load the real engine (typst.ts 0.7.0, Typst 0.14.2) and fonts from the
+  CDNs on `tests/browser/format/engine.html` (no app UI, no Supabase), served
+  by `tests/browser/serve.py` on port 5500 (started if nothing answers).
+  Books are placeholder text from a fixed seed (`placeholder.js`), never a
+  real book. Results (numbers only) go to `tests/browser/format/out/` (ignored).
+- `t-engine-real.mjs`: a cold first visit (bytes on the wire and decoded per
+  file and family, the worker's requests too), compile times, three next
+  visits (engine ready, style switch), the main thread during a worker build
+  (164 pages, longest timer gap under 50 ms), every file's hash on jsdelivr and
+  unpkg, the characters of a test text each face lacks, and each style on each
+  group A trim (plus two option sets): PDF checks, fonts embedded as FontFile2
+  and only the style's families, no Typst warning, the 17 layout checks
+  (`layout-checks.js`, from the E13.0 bench), words per page within 10% across
+  styles; then the converter cases printed and read back.
+- `t-fallback.mjs` checks the owner's four rules for the fallback (Nov 4):
+  the worker ended and restarted after a crash; the fallback chosen by the
+  error (an overflow in the PDF step), never the browser; the book remembered
+  for the session (after a reload too); preview delay 1,500 ms and "Updating
+  preview" painted before the compile. The test-only flag is
+  `kdpFormatEngine.create({ test: { overflowPdfFor: [bookId] } })`.
+- `t-safari.mjs` needs Safari > Settings > Developer > "Allow remote
+  automation" (it starts `safaridriver -p 4567`). No test flag: Safari's
+  worker overflows on its own from about 160 pages. The PDF must equal
+  Chrome's worker PDF byte for byte.
 
 ## Database (local Postgres 18)
 
