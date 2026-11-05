@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Final · 07 Quality Control states</title>
+<!-- NicheInk v2 final design · source: NicheInk v2 Design canvas, artboard F55-QC-States · exported Nov 2026 -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#1C1C1A;background:#F3F3F1}
+a{color:#1C1C1A}a:hover{color:#000000}
+.lbl{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;color:#55554F;margin:0}
+.card{background:#FFFFFF;border:1px solid #D9D9D5;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:14px;box-sizing:border-box}
+.btn{height:44px;box-sizing:border-box;padding:0 18px;display:inline-flex;align-items:center;gap:8px;border-radius:8px;font-family:inherit;font-size:15px;font-weight:500;white-space:nowrap;cursor:pointer;text-decoration:none}
+.b2{border:1px solid #D9D9D5;background:#FFFFFF;color:#1C1C1A}
+.b1{border:none;background:#1C1C1A;color:#FFFFFF}
+.note{font-size:13px;color:#55554F;line-height:1.5;margin:0}
+.box{flex-grow:1;display:flex;flex-direction:column;gap:12px;border-radius:10px;padding:20px}
+.bar{height:6px;border-radius:3px;background:#E6E6E2;width:220px}
+.bar i{display:block;height:6px;border-radius:3px;background:#1C1C1A}
+</style>
+</head>
+<body>
+<div style="width:1440px;height:900px;box-sizing:border-box;padding:40px;background:#F3F3F1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+
+<section class="card">
+<p class="lbl">A · RUNNING (FREE CHECKS)</p>
+<div class="box" role="status" style="align-items:center;justify-content:center;text-align:center;background:#F8F8F6">
+<strong style="font-size:16px">Checking [N] sections</strong>
+<div class="bar"><i style="width:60%"></i></div>
+<span style="font-size:14px;color:#55554F">Repeats and pointers…</span>
+</div>
+<p class="note">About 2 seconds. Runs in your browser. Nothing in your text changes.</p>
+</section>
+
+<section class="card">
+<p class="lbl">B · OUT OF DATE</p>
+<div class="box" role="status" style="border:1px solid #8A5A00;background:#FDF3DC">
+<strong style="font-size:16px;color:#8A5A00;display:flex;align-items:center;gap:8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Out of date</strong>
+<span style="font-size:14px;line-height:1.5">You changed [3.2 section title] after the last run on [date]. These results may be wrong.</span>
+<button class="btn b1" style="align-self:flex-start">Run again</button>
+</div>
+<p class="note">Same rule as the AI checks in 06. The old results stay visible, grayed, until you run again. Step 07 loses its done mark.</p>
+</section>
+
+<section class="card">
+<p class="lbl">C · NO TEXT YET</p>
+<div class="box" style="align-items:center;justify-content:center;text-align:center;background:#F8F8F6">
+<strong style="font-size:16px">Nothing to check yet</strong>
+<span style="font-size:14px;color:#55554F;line-height:1.5">Quality Control checks sections that have text. Write at least one section in 06 Write.</span>
+<a href="#" class="btn b2">Go to 06 Write</a>
+</div>
+<p class="note">Next to 08 still works. QC never blocks.</p>
+</section>
+
+<section class="card">
+<p class="lbl">D · PROMISE CHECK FAILED</p>
+<div class="box" role="alert" style="border:1px solid #B42318;background:#FDECEA">
+<strong style="font-size:16px;color:#B42318">The AI did not answer for chapter [5].</strong>
+<span style="font-size:14px;line-height:1.5">Chapters 1 to 4 are saved. This attempt was not counted in your usage.</span>
+<div style="display:flex;gap:10px"><button class="btn b1">Try chapter 5 again</button><button class="btn b2">Close</button></div>
+</div>
+<p class="note">Same wording style as the 06 Write "Generation stopped" state.</p>
+</section>
+
+<section class="card">
+<p class="lbl">E · ALL PASS</p>
+<div class="box" role="status" style="border:1px solid #1E7A46;background:#E7F4EC">
+<strong style="font-size:16px;color:#1E7A46">Ready for Format</strong>
+<span style="font-size:14px;line-height:1.5">No problems found in [N] sections. [2] issues are marked as OK.</span>
+<a href="#" class="btn b1" style="align-self:flex-start">Go to 08 Format</a>
+</div>
+<p class="note">Promise check not run? The line under the verdict says so, as a suggestion only.</p>
+</section>
+
+<section class="card">
+<p class="lbl">F · MARK AS OK</p>
+<div class="box" style="background:#F8F8F6">
+<span style="font-size:14px;line-height:1.5;color:#3D3D39">"[7.3 section title] · [N] of [N] words, under 80% of its target."</span>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:#FFFFFF;border:1px solid #D9D9D5;font-size:14px"><span style="color:#1E7A46;display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span style="flex:1">Marked as OK. It will not come back.</span><button style="border:none;background:none;font-family:inherit;font-size:13px;font-weight:500;text-decoration:underline;min-height:36px;cursor:pointer">Undo</button></div>
+</div>
+<p class="note">Saved per book. If the text of that spot changes, the issue can come back.</p>
+</section>
+
+</div>
+</body>
+</html>

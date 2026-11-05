@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Final · Promise check</title>
+<!-- NicheInk v2 final design · source: NicheInk v2 Design canvas, artboard F54-QC-Promise · exported Nov 2026 -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#1C1C1A;background:#F3F3F1}
+a{color:#1C1C1A}a:hover{color:#000000}
+.lbl{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;color:#55554F;margin:0}
+.card{background:#FFFFFF;border:1px solid #D9D9D5;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:14px;box-sizing:border-box}
+.btn{height:44px;box-sizing:border-box;padding:0 18px;display:inline-flex;align-items:center;gap:8px;border-radius:8px;font-family:inherit;font-size:15px;font-weight:500;white-space:nowrap;cursor:pointer}
+.b2{border:1px solid #D9D9D5;background:#FFFFFF;color:#1C1C1A}
+.b1{border:none;background:#1C1C1A;color:#FFFFFF}
+.note{font-size:13px;color:#55554F;line-height:1.5;margin:0}
+.row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #E6E6E2;font-size:14px}
+.num{font-family:"IBM Plex Mono",monospace;font-size:13px;color:#55554F;width:24px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.cw{background:#FDF3DC;color:#8A5A00}
+.co{background:#E7F4EC;color:#1E7A46}
+.ci{background:#F3F3F1;color:#55554F;border:1px solid #D9D9D5}
+.bar{height:6px;border-radius:3px;background:#E6E6E2}
+.bar i{display:block;height:6px;border-radius:3px;background:#1C1C1A}
+</style>
+</head>
+<body>
+<div style="width:1440px;height:820px;box-sizing:border-box;padding:40px;background:#F3F3F1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-content:start">
+
+<section class="card" role="dialog" aria-label="Check the promise">
+<p class="lbl">A · CONFIRM THE COST</p>
+<h2 style="margin:0;font-size:20px;font-weight:600">Check the promise?</h2>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#3D3D39">The AI compares each chapter with your locked promise and the chapter's objective from 05 Outline.</p>
+<div style="background:#F8F8F6;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;font-size:14px">
+<div style="display:flex;justify-content:space-between"><span>Chapters</span><b>[N]</b></div>
+<div style="display:flex;justify-content:space-between"><span>AI calls</span><b>[N], one per chapter</b></div>
+<div style="display:flex;justify-content:space-between"><span>Estimated cost</span><b>about $[0.0X]</b></div>
+</div>
+<p class="note">Counts in your AI usage in Settings. Chapters with no text are skipped.</p>
+<div style="display:flex;gap:10px;margin-top:auto"><button class="btn b1">Check [N] chapters</button><button class="btn b2">Cancel</button></div>
+</section>
+
+<section class="card">
+<p class="lbl">B · RUNNING</p>
+<h2 style="margin:0;font-size:20px;font-weight:600">Checking chapter [3] of [N]</h2>
+<div class="bar" role="progressbar" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100" aria-label="Promise check progress"><i style="width:30%"></i></div>
+<div>
+<div class="row"><span class="num">1</span><span style="flex:1">[Chapter 1 title]</span><span class="chip co"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Done</span></div>
+<div class="row"><span class="num">2</span><span style="flex:1">[Chapter 2 title]</span><span class="chip co"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Done</span></div>
+<div class="row"><span class="num">3</span><span style="flex:1">[Chapter 3 title]</span><span class="chip ci">Checking…</span></div>
+<div class="row"><span class="num">4</span><span style="flex:1;color:#75756F">[Chapter 4 title]</span><span class="chip ci">Waiting</span></div>
+</div>
+<p class="note">You can leave this page. Finished chapters are saved.</p>
+<button class="btn b2" style="align-self:flex-start;margin-top:auto">Stop</button>
+</section>
+
+<section class="card">
+<p class="lbl">C · RESULT</p>
+<div style="display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:10px;border:1px solid #8A5A00;background:#FDF3DC;font-size:14px;line-height:1.45"><span style="color:#8A5A00;display:flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg></span><b style="color:#8A5A00">[N] of [N] chapters keep the promise.</b></div>
+<div>
+<div class="row" style="border-top:none"><span class="num">1</span><span style="flex:1">[Chapter 1 title]</span><span class="chip co"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Keeps it</span></div>
+<div class="row"><span class="num">2</span><span style="flex:1">[Chapter 2 title]</span><span class="chip co"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Keeps it</span></div>
+<div class="row" style="flex-wrap:wrap"><span class="num">3</span><span style="flex:1">[Chapter 3 title]</span><span class="chip cw"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Drifts</span>
+<span style="flex-basis:100%;padding-left:36px;font-size:13px;line-height:1.5;color:#3D3D39">"[Short reason from the AI, one sentence.]"</span>
+<span style="padding-left:36px;display:flex;gap:14px"><a href="#" style="font-size:13px;font-weight:500;min-height:36px;display:inline-flex;align-items:center">Open in 06</a><button style="border:none;background:none;font-family:inherit;font-size:13px;color:#55554F;min-height:36px;cursor:pointer">Mark as OK</button></span></div>
+<div class="row"><span class="num">4</span><span style="flex:1">[Chapter 4 title]</span><span class="chip ci">Out of date</span></div>
+</div>
+<p class="note">The book result comes from the chapter results. No extra AI call. A chapter edited after its check shows "Out of date" and can be checked alone.</p>
+</section>
+
+<section class="card" style="grid-column:1 / -1;flex-direction:row;align-items:center;gap:24px;background:#F8F8F6">
+<p class="lbl" style="width:180px">RULES</p>
+<p style="margin:0;flex:1;font-size:14px;line-height:1.6;color:#3D3D39">Never runs by itself. One call per chapter, so a full book never goes in one call. Uses the locked 03 Positioning and the 05 objectives as data. A failed chapter is not counted in usage and can be tried again alone.</p>
+</section>
+
+</div>
+</body>
+</html>

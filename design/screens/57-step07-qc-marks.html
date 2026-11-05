@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Final · 07 marks in the sidebar and rail</title>
+<!-- NicheInk v2 final design · source: NicheInk v2 Design canvas, artboard F57-QC-Marks · exported Nov 2026 -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#1C1C1A;background:#F3F3F1}
+a{color:#1C1C1A;text-decoration:none}
+.lbl{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;color:#55554F;margin:0}
+.card{background:#FFFFFF;border:1px solid #D9D9D5;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:16px;box-sizing:border-box}
+.st{height:44px;display:flex;align-items:center;gap:12px;padding:0 12px;border-radius:8px;font-size:15px;color:#3D3D39;border:1px solid #E6E6E2}
+.mk{width:22px;display:flex;justify-content:center;align-items:center;color:#1C1C1A}
+.num{font-family:"IBM Plex Mono",monospace;font-size:13px;color:#55554F}
+.ring{width:12px;height:12px;box-sizing:border-box;border-radius:50%;border:2px solid #B8B8B3}
+.dot{width:12px;height:12px;border-radius:50%;background:#1C1C1A}
+.rs{width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;border:1px solid #E6E6E2}
+.rs .num{font-size:12px}
+.tag{margin-left:auto;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px}
+.note{font-size:13px;color:#55554F;line-height:1.5;margin:0}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+</style>
+</head>
+<body>
+<div style="width:1440px;height:620px;box-sizing:border-box;padding:40px;background:#F3F3F1;display:flex;flex-direction:column;gap:24px">
+
+<section class="card">
+<p class="lbl">07 IN THE FULL SIDEBAR</p>
+<div class="grid">
+<div style="display:flex;flex-direction:column;gap:8px"><span class="note">Not run yet</span>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><span class="ring"></span></span><span class="num">07</span>Quality Control</a></div>
+<div style="display:flex;flex-direction:column;gap:8px"><span class="note">Current step</span>
+<a href="#" class="st" style="background:#E6E6E2;font-weight:600;color:#1C1C1A" aria-current="step"><span class="mk" aria-hidden="true"><span class="dot"></span></span><span class="num">07</span>Quality Control</a></div>
+<div style="display:flex;flex-direction:column;gap:8px"><span class="note">Done: ran, and no text changed since</span>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">07</span>Quality Control</a></div>
+<div style="display:flex;flex-direction:column;gap:8px"><span class="note">Out of date: text changed after the run</span>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><span class="ring"></span></span><span class="num">07</span>Quality Control<span class="tag" style="background:#FDF3DC;color:#8A5A00">Out of date</span></a></div>
+</div>
+<p class="note">Warnings do not change the mark. A run with warnings is still done, because QC never blocks.</p>
+</section>
+
+<section class="card">
+<p class="lbl">07 IN THE RAIL (WIDE STEPS 06, 08, 09)</p>
+<div style="display:flex;gap:16px;align-items:flex-end">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><a href="#" class="rs" aria-label="07 Quality Control, not run"><span class="ring" aria-hidden="true"></span><span class="num">07</span></a><span class="note">Not run</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><a href="#" class="rs" aria-label="07 Quality Control, done"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span class="num">07</span></a><span class="note">Done</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><a href="#" class="rs" aria-label="07 Quality Control, out of date" style="position:relative"><span class="ring" aria-hidden="true"></span><span class="num">07</span><span aria-hidden="true" style="position:absolute;top:6px;right:8px;width:8px;height:8px;border-radius:50%;background:#8A5A00"></span></a><span class="note">Out of date</span></div>
+<p class="note" style="margin-left:24px;max-width:520px">In the rail the word "Out of date" does not fit, so a small amber dot shows it, and the label for screen readers says it in words. Hover shows the full name.</p>
+</div>
+</section>
+
+</div>
+</body>
+</html>

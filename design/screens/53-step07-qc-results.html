@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Final · 07 Quality Control, results</title>
+<!-- NicheInk v2 final design · source: NicheInk v2 Design canvas, artboard F53-QC-Results · exported Nov 2026 -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#1C1C1A;background:#F3F3F1}
+a{color:#1C1C1A;text-decoration:none}a:hover{color:#000000}
+.sh{display:flex;background:#F3F3F1;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#1C1C1A}
+.nav{width:280px;flex-shrink:0;box-sizing:border-box;background:#FFFFFF;border-right:1px solid #D9D9D5;padding:20px 16px;display:flex;flex-direction:column;gap:18px}
+.exit{height:44px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:8px;font-size:14px;color:#3D3D39;align-self:flex-start}
+.bid{display:flex;gap:12px;padding:0 8px}
+.mini{width:46px;height:69px;flex-shrink:0;box-sizing:border-box;border-radius:3px 5px 5px 3px;background:#E6E6E2;box-shadow:inset 3px 0 0 rgba(0,0,0,.12),0 1px 2px rgba(28,28,26,.18);padding:5px 4px 4px;display:flex;flex-direction:column;color:#3D3D39}
+.mini b{font-size:6px;line-height:1.2;font-weight:700;text-transform:uppercase}
+.mini i{display:block;width:12px;height:1px;background:#75756F;margin:3px 0 auto}
+.mini span{font-size:6px;letter-spacing:.06em;text-transform:uppercase}
+.bt{font-size:15px;font-weight:600;line-height:1.3}
+.bp{margin-top:4px;font-size:13px;color:#55554F}
+.grp{display:flex;flex-direction:column;gap:2px}
+.gh{height:32px;display:flex;justify-content:space-between;align-items:center;padding:0 8px}
+.gn{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;font-weight:500;color:#1C1C1A}
+.gc{font-size:12px;color:#55554F}
+.gr{height:44px;display:flex;justify-content:space-between;align-items:center;padding:0 8px;color:#75756F}
+.gr .gn{color:#75756F;font-weight:400}
+.vt{font-size:12px;padding:2px 8px;border:1px solid #B8B8B3;border-radius:999px;color:#75756F}
+.st{height:44px;display:flex;align-items:center;gap:12px;padding:0 12px;border-radius:8px;font-size:15px;color:#3D3D39}
+.st.cur{background:#E6E6E2;font-weight:600;color:#1C1C1A}
+.st.lock{color:#75756F}
+.mk{width:22px;display:flex;justify-content:center;align-items:center;color:#1C1C1A}
+.dot{width:12px;height:12px;border-radius:50%;background:#1C1C1A}
+.ring{width:12px;height:12px;box-sizing:border-box;border-radius:50%;border:2px solid #B8B8B3}
+.num{font-family:"IBM Plex Mono",monospace;font-size:13px;color:#55554F}
+.sp{flex-grow:1}
+.saved{display:flex;align-items:center;gap:8px;padding:12px 8px 0;border-top:1px solid #D9D9D5;font-size:13px;color:#55554F}
+.main{flex-grow:1;min-width:0;display:flex;flex-direction:column}
+.head{height:80px;flex-shrink:0;box-sizing:border-box;padding:0 40px;background:#FFFFFF;border-bottom:1px solid #D9D9D5;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px}
+.hc{text-align:center}
+.hl{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;color:#55554F}
+.head h1{margin:2px 0 0;font-size:22px;font-weight:600}
+.hn{justify-self:end;display:flex;align-items:center;gap:12px}
+.btn{height:44px;box-sizing:border-box;padding:0 18px;display:inline-flex;align-items:center;gap:8px;border-radius:8px;font-family:inherit;font-size:15px;font-weight:500;white-space:nowrap;cursor:pointer}
+.b2{border:1px solid #D9D9D5;background:#FFFFFF;color:#1C1C1A}
+.b1{border:none;background:#1C1C1A;color:#FFFFFF}
+.sm{height:36px;padding:0 12px;font-size:13px}
+.body{flex-grow:1;padding:32px 40px;display:flex;gap:24px;align-items:flex-start}
+.card{background:#FFFFFF;border:1px solid #D9D9D5;border-radius:12px;box-sizing:border-box}
+.lbl{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;color:#55554F;margin:0}
+.verdict{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:12px;border:1px solid #8A5A00;background:#FDF3DC}
+.g{border-top:1px solid #E6E6E2}
+.g:first-child{border-top:none}
+.gb{width:100%;min-height:56px;display:flex;align-items:center;gap:14px;padding:0 20px;border:none;background:transparent;font-family:inherit;font-size:15px;color:#1C1C1A;text-align:left;cursor:pointer}
+.gb .t{flex:1;font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.cw{background:#FDF3DC;color:#8A5A00}
+.co{background:#E7F4EC;color:#1E7A46}
+.ci{background:#F3F3F1;color:#55554F;border:1px solid #D9D9D5}
+.items{list-style:none;margin:0;padding:0 20px 16px 56px;display:flex;flex-direction:column}
+.it{display:flex;align-items:center;gap:16px;padding:12px 0;border-top:1px solid #E6E6E2}
+.it .sec{font-family:"IBM Plex Mono",monospace;font-size:12px;color:#55554F;width:150px;flex-shrink:0}
+.it .tx{flex:1;font-size:14px;line-height:1.45;color:#3D3D39}
+.lk{min-height:36px;display:inline-flex;align-items:center;font-size:13px;font-weight:500;text-decoration:underline;text-underline-offset:3px}
+.lk2{min-height:36px;display:inline-flex;align-items:center;padding:0 10px;border:none;background:transparent;font-family:inherit;font-size:13px;color:#55554F;cursor:pointer}
+.note{font-size:13px;color:#55554F;line-height:1.5;margin:0}
+</style>
+</head>
+<body>
+<div class="sh" style="width:1440px;height:1300px">
+<nav class="nav" aria-label="Book steps">
+<a href="#" class="exit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg> Exit to Books</a>
+<div class="bid"><div class="mini" aria-hidden="true"><b>Micro Study Habits for Busy Adult Learners</b><i></i><span>Adnan Haroun</span></div><div><div class="bt">Micro Study Habits for Busy Adult Learners</div><div class="bp">Adnan Haroun</div></div></div>
+<div class="grp"><div class="gh"><span class="gn">PLAN</span><span class="gc">4 of 4 done</span></div>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">01</span>Brief</a>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">02</span>Research</a>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">03</span>Positioning</a>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">04</span>Title</a></div>
+<div class="grp"><div class="gh"><span class="gn">PRODUCE</span></div>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">05</span>Outline</a>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">06</span>Write</a>
+<a href="#" class="st cur" aria-current="step"><span class="mk" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span class="num">07</span>Quality Control</a></div>
+<div class="grp"><div class="gh"><span class="gn">PACKAGE</span></div>
+<a href="#" class="st"><span class="mk" aria-hidden="true"><span class="ring"></span></span><span class="num">08</span>Format</a>
+<a href="#" class="st lock"><span class="mk" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></span><span class="num">09</span>Cover</a></div>
+<div class="grp"><div class="gr"><span class="gn">RELEASE</span><span class="vt">Coming in v3</span></div></div>
+<div class="sp"></div>
+<div class="saved"><span style="color:#1E7A46;display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span><span>Saved</span></div>
+</nav>
+<div class="main">
+<header class="head"><a href="#" class="btn b2" style="justify-self:start"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg> Back</a>
+<div class="hc"><div class="hl">PRODUCE · STEP 7 OF 11</div><h1>Quality Control</h1></div>
+<div class="hn"><button class="btn b2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg> Export</button><a href="#" class="btn b1">Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></div></header>
+<div class="body">
+<div style="flex:1;display:flex;flex-direction:column;gap:20px;min-width:0">
+
+<div class="verdict" role="status">
+<span style="color:#8A5A00;display:flex"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg></span>
+<div style="flex:1;display:flex;flex-direction:column;gap:2px">
+<strong style="font-size:17px;color:#8A5A00">Ready for Format, with [N] warnings</strong>
+<span style="font-size:13px;color:#3D3D39">Checked [N] sections with text · [time] · Warnings never block 08.</span>
+</div>
+<button class="btn b2">Run again</button>
+</div>
+
+<section class="card">
+<div class="g">
+<button class="gb" aria-expanded="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg><span class="num">1</span><span class="t">Complete</span><span class="chip cw"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>3 to check</span></button>
+<ul class="items">
+<li class="it"><span class="sec">[3.2 section title]</span><span class="tx">Draft, not Final. Only Final sections go into the book in 08.</span><a href="#" class="lk">Open in 06</a><button class="lk2">Mark as OK</button></li>
+<li class="it"><span class="sec">[5.1 section title]</span><span class="tx">Needs review: written before 03 Positioning changed.</span><a href="#" class="lk">Open in 06</a><button class="lk2">Mark as OK</button></li>
+<li class="it"><span class="sec">[7.3 section title]</span><span class="tx">[N] of [N] words, under 80% of its target.</span><a href="#" class="lk">Open in 06</a><button class="lk2">Mark as OK</button></li>
+</ul>
+</div>
+<div class="g"><button class="gb" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="num">2</span><span class="t">Sources</span><span class="chip cw"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>1 Verify mark left</span><span class="chip ci">[N] sources named</span></button></div>
+<div class="g"><button class="gb" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="num">3</span><span class="t">Repeats</span><span class="chip cw"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>2 to check</span></button></div>
+<div class="g"><button class="gb" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="num">4</span><span class="t">Pointers</span><span class="chip co"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>All clear</span></button></div>
+<div class="g"><button class="gb" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="num">5</span><span class="t">Consistency</span><span class="chip cw"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>1 to check</span></button></div>
+<div class="g"><button class="gb" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span class="num">6</span><span class="t">Promise</span><span class="chip ci">Not run · AI, paid</span></button></div>
+<div class="g">
+<button class="gb" aria-expanded="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg><span class="num">7</span><span class="t">KDP rules</span><span class="chip cw"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>2 to check</span></button>
+<ul class="items">
+<li class="it"><span class="sec">[3.4 section title]</span><span class="tx">A web link in print text. Paperback readers cannot click it.</span><a href="#" class="lk">Open in 06</a><button class="lk2">Mark as OK</button></li>
+<li class="it"><span class="sec">Whole book</span><span class="tx">The topic is close to health, and the book has no disclaimer.</span><a href="#" class="lk">How to add one</a><button class="lk2">Mark as OK</button></li>
+</ul>
+</div>
+</section>
+
+
+</div>
+
+<aside style="width:340px;display:flex;flex-direction:column;gap:16px">
+<section class="card" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+<p class="lbl">6 · PROMISE CHECK · AI</p>
+<p style="margin:0;font-size:14px;line-height:1.55;color:#3D3D39">Checks each of the [N] chapters against your locked promise. One call per chapter.</p>
+<button class="btn b2" style="align-self:flex-start">Check the promise</button>
+<p class="note">About $[0.0X]. You confirm before it runs.</p>
+</section>
+<section class="card" style="padding:20px;display:flex;flex-direction:column;gap:10px">
+<p class="lbl">MARKED AS OK · 2</p>
+<p class="note">These stay hidden on the next run. You can bring them back.</p>
+<div class="it" style="border-top:1px solid #E6E6E2"><span class="tx" style="font-size:13px">[1.2] under target, on purpose</span><button class="lk2">Undo</button></div>
+<div class="it"><span class="tx" style="font-size:13px">"focus" used [N] times</span><button class="lk2">Undo</button></div>
+</section>
+<section class="card" style="padding:20px;display:flex;flex-direction:column;gap:8px;background:#F8F8F6">
+<p class="lbl">SOURCES NAMED IN THE TEXT</p>
+<p class="note">Approximate. Built from source names found in the text, not from exact links.</p>
+</section>
+</aside>
+</div></div></div>
+</body>
+</html>
