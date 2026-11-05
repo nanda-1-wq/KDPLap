@@ -51,6 +51,17 @@ insert into public.book_exports (user_id, book_id, format, include, parts, versi
   ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'docx', 'all',
    '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}',
    array['a6000000-0000-4000-8000-000000000001']::uuid[]);
+-- 0027: A's format row (A's second book, same pen name, ticked in Also by), and B's own row.
+insert into public.books (id, user_id, pen_name_id, title) values
+  ('a3000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 'Book A2');
+insert into public.book_formats (book_id, user_id, also_by) values
+  ('a3000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', array['a3000000-0000-4000-8000-000000000002']::uuid[]);
+insert into public.book_formats (book_id, user_id) values ('b3000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000b');
+update public.sections set status = 'final' where id = 'a5000000-0000-4000-8000-000000000001';
+insert into public.book_exports (user_id, book_id, format, include, parts, versions, page_count, settings_key, engine) values
+  ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'pdf', 'final',
+   '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}',
+   array['a6000000-0000-4000-8000-000000000001']::uuid[], 36, public.format_key('a3000000-0000-4000-8000-000000000001'), 'typst 0.14.2 · t1');
 
 -- The tables under test: every table in public.
 create temp table rls_tables as
@@ -71,7 +82,8 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('22 public tables (0025: book_exports)', (select count(*) from rls_tables) = 22, (select count(*) from rls_tables)::text);
+select pg_temp.chk('23 public tables (0027: book_formats)', (select count(*) from rls_tables) = 23, (select count(*) from rls_tables)::text);
+select pg_temp.chk('A''s Print PDF row recorded', (select count(*) from public.book_exports where format = 'pdf') = 1);
 select pg_temp.chk('RLS on for every public table', not exists (
   select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
 select pg_temp.chk('A has a row in every table', (select bool_and(n > 0) from (
@@ -86,11 +98,11 @@ select pg_temp.chk(t || ': B reads 0 of A''s rows',
 -- outline_checks (0017) and section_checks (0022) give the browser no write privilege at all,
 -- section_versions (0018) no update or delete, section_runs (0020) and
 -- section_suggestions (0021) no delete (their update goes through RLS: 0
--- rows), kept_findings (0024) no update, and book_exports (0025) no update
--- and no delete: refused, not 0 rows.
+-- rows), kept_findings (0024) no update, book_exports (0025) no update
+-- and no delete, and book_formats (0027) no delete: refused, not 0 rows.
 select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -136,6 +148,16 @@ select pg_temp.expect('complete_book: A''s book reads as not found', $q$select p
 select pg_temp.expect('books: B cannot reopen A''s book', $q$update public.books set status = 'in_progress' where id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
 select pg_temp.expect('books: B cannot touch A''s completed_at', $q$update public.books set completed_at = null where id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
 select pg_temp.expect('words_month: none of A''s words', $q$select 1 where (public.words_month() ->> 'words')::int = 0$q$, 'OK 1');
+select pg_temp.expect('book_formats: on A''s book refused', $q$insert into public.book_formats (book_id) values ('a3000000-0000-4000-8000-000000000002')$q$, '42501%');
+select pg_temp.expect('book_formats: B cannot tick A''s book in Also by', $q$update public.book_formats set also_by = array['a3000000-0000-4000-8000-000000000002']::uuid[] where book_id = 'b3000000-0000-4000-8000-000000000001'$q$, 'P0001 also_by_not_allowed%');
+select pg_temp.expect('book_formats: B cannot move B''s row to A''s book', $q$update public.book_formats set book_id = 'a3000000-0000-4000-8000-000000000002' where book_id = 'b3000000-0000-4000-8000-000000000001'$q$, 'P0001 format_fixed%');
+select pg_temp.expect('book_exports: B cannot record a Print PDF of A''s book', $q$insert into public.book_exports (book_id, format, include, parts, versions, page_count, settings_key, engine) values ('a3000000-0000-4000-8000-000000000001', 'pdf', 'final', '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}', array['a6000000-0000-4000-8000-000000000001']::uuid[], 36, '0123456789abcdef0123456789abcdef', 'typst 0.14.2 · t1')$q$, '42501%');
+select pg_temp.expect('format_json: A''s book reads as null', $q$select 1 where public.format_json('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('format_key: A''s book reads as null', $q$select 1 where public.format_key('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('pdf_marks: none of A''s books', $q$select 1 from public.pdf_marks() where book_id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('pdf_marks(A''s book): no row', $q$select 1 from public.pdf_marks('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
+select pg_temp.expect('pdf_version_ids: none of A''s versions', $q$select 1 where public.pdf_version_ids('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
+select pg_temp.expect('also_by_valid: none of A''s ticks', $q$select 1 where public.also_by_valid('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
 select pg_temp.expect('user_settings: B''s settings with A''s pen name refused', $q$insert into public.user_settings (default_pen_name_id) values ('a1000000-0000-4000-8000-000000000001')$q$, '42501%');
 
 -- ── As user B: moving own rows to A is refused ──

@@ -171,8 +171,9 @@ select pg_temp.chk('the ai_usage (user_id, created_at) index', exists (select 1 
 
 -- ── 3. book_exports: shape ──
 :ASA
+-- 'pdf' joined the list in 0027 (E13.1), so the case uses a format still outside it.
 select pg_temp.expect('format outside the list refused',
-  format($q$insert into public.book_exports (book_id, format, include, parts, versions) values (%L, 'pdf', 'all', %L, array[%L]::uuid[])$q$, :BOOK1, :ALL, :VI1), '23514%book_exports_format_check%');
+  format($q$insert into public.book_exports (book_id, format, include, parts, versions) values (%L, 'odt', 'all', %L, array[%L]::uuid[])$q$, :BOOK1, :ALL, :VI1), '23514%book_exports_format_check%');
 select pg_temp.expect('include outside the list refused',
   format($q$insert into public.book_exports (book_id, format, include, parts, versions) values (%L, 'docx', 'some', %L, array[%L]::uuid[])$q$, :BOOK1, :ALL, :VI1), '23514%book_exports_include_check%');
 select pg_temp.expect('parts with a key missing refused',
