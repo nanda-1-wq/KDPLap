@@ -72,6 +72,9 @@ deno test --allow-read tests/export-build.test.js
 deno test --allow-read tests/usage-rules.test.js
 deno test --allow-read tests/user-name.test.js
 deno test --allow-read tests/brand-name.test.js
+deno test --allow-read tests/qc-rules.test.js
+deno test --allow-read tests/qc-glyphs.test.js
+deno test --allow-read tests/qc-promise-key.test.js
 ```
 
 - Rename to NicheInk (design 40): `brand-name.test.js` scans every served
@@ -121,6 +124,19 @@ deno test --allow-read tests/brand-name.test.js
   max_tokens; the AI section check: types, findings, message and quote sizes,
   empty quotes and words in 0022). It fails
   when a value disagrees or can no longer be found.
+- `qc-rules.test.js`: 07 Quality Control's free checks (`js/qc-rules.js`, `js/qc-lists.js`,
+  plan section 5, E14.2): a hit and a near miss for each of the 25 rules, keys, spots, the
+  caps and `more`, US/UK majority and tie, noun/verb pairs, © ® ™ not emoji, "Chapter N",
+  the disclaimer cases, sources named, the verdict with dismissals and drifts, and a
+  120,000-word book under 1 s. Every output is checked by `tests/lib/qc-shape.js`, a copy of
+  `qc_results_ok` (0028) whose numbers and rule ids `limits-parity.test.js` reads from the
+  migration. Books come from `tests/fixtures/qc-books.js`: generated or made up, never real
+  book text.
+- `qc-glyphs.test.js`: the table of characters per 08 style (`js/qc-glyphs.js`, made by
+  `tools/qc-glyphs.mjs` from the pinned fonts, sha384 checked). To compare it with the real
+  fonts: `deno run --allow-read --allow-write --allow-net tools/qc-glyphs.mjs --check`.
+- `qc-promise-key.test.js`: `promiseKey` (`js/qc-promise-key.js`) against the fixed values in
+  `tests/fixtures/qc-promise-key.json`. E14.5 runs the same file against the server twin.
 - `markdown-lite.test.js`: the step 06 text format (`js/markdown-lite.js`): the
   Markdown subset to HTML (everything escaped) and back from the editor's DOM
   (only an allowlist is read; pasted markup and scripts are dropped), the

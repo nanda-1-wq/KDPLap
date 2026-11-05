@@ -1,0 +1,111 @@
+{
+  "about": "E14.2. Fixed promiseKey values (plan 4.9). js/qc-promise-key.js and lib/promise_check.ts (E14.5) must both give these keys. Made with the server's keyHash and the plan's order: version ids joined by U+0002, then chapter title, objective, lock time, all joined by U+0001, each text trimmed.",
+  "cases": [
+    {
+      "name": "three sections",
+      "input": {
+        "versionIds": [
+          "70000001-0000-4000-8000-000000000000",
+          "70000002-0000-4000-8000-000000000000",
+          "70000003-0000-4000-8000-000000000000"
+        ],
+        "chapterTitle": "Upper Body: Neck, Shoulders, Arms",
+        "objective": "Reader can do 6 upper-body moves, none overhead",
+        "lockedAt": "2026-10-01T09:00:00.123456+00:00"
+      },
+      "key": "aaf58d5b3384fd1e"
+    },
+    {
+      "name": "one section",
+      "input": {
+        "versionIds": [
+          "70000001-0000-4000-8000-000000000000"
+        ],
+        "chapterTitle": "Upper Body: Neck, Shoulders, Arms",
+        "objective": "Reader can do 6 upper-body moves, none overhead",
+        "lockedAt": "2026-10-01T09:00:00.123456+00:00"
+      },
+      "key": "c06ec0201841ee25"
+    },
+    {
+      "name": "no text yet",
+      "input": {
+        "versionIds": [],
+        "chapterTitle": "Upper Body: Neck, Shoulders, Arms",
+        "objective": "Reader can do 6 upper-body moves, none overhead",
+        "lockedAt": "2026-10-01T09:00:00.123456+00:00"
+      },
+      "key": "d952b84318ed2859"
+    },
+    {
+      "name": "no objective",
+      "input": {
+        "versionIds": [
+          "70000001-0000-4000-8000-000000000000",
+          "70000002-0000-4000-8000-000000000000",
+          "70000003-0000-4000-8000-000000000000"
+        ],
+        "chapterTitle": "Upper Body: Neck, Shoulders, Arms",
+        "objective": null,
+        "lockedAt": "2026-10-01T09:00:00.123456+00:00"
+      },
+      "key": "f24ed16dc8b8ce53"
+    },
+    {
+      "name": "never locked",
+      "input": {
+        "versionIds": [
+          "70000001-0000-4000-8000-000000000000",
+          "70000002-0000-4000-8000-000000000000",
+          "70000003-0000-4000-8000-000000000000"
+        ],
+        "chapterTitle": "Upper Body: Neck, Shoulders, Arms",
+        "objective": "Reader can do 6 upper-body moves, none overhead",
+        "lockedAt": null
+      },
+      "key": "4420277773ade77a"
+    },
+    {
+      "name": "spaces around the text",
+      "input": {
+        "versionIds": [
+          "70000001-0000-4000-8000-000000000000",
+          "70000002-0000-4000-8000-000000000000",
+          "70000003-0000-4000-8000-000000000000"
+        ],
+        "chapterTitle": "  Upper Body: Neck, Shoulders, Arms\n",
+        "objective": "\tReader can do 6 upper-body moves, none overhead ",
+        "lockedAt": "2026-10-01T09:00:00.123456+00:00"
+      },
+      "key": "aaf58d5b3384fd1e"
+    },
+    {
+      "name": "quotes, accents, emoji and CJK",
+      "input": {
+        "versionIds": [
+          "70000001-0000-4000-8000-000000000000",
+          "70000002-0000-4000-8000-000000000000",
+          "70000003-0000-4000-8000-000000000000"
+        ],
+        "chapterTitle": "“Pain-Free” Yoga — Café Moves 🧘 椅子ヨガ",
+        "objective": "Reader can do 6 upper-body moves, none overhead",
+        "lockedAt": "2026-10-01T09:00:00.123456+00:00"
+      },
+      "key": "a0d7bc3fc6f68970"
+    },
+    {
+      "name": "the separator inside a title",
+      "input": {
+        "versionIds": [
+          "70000001-0000-4000-8000-000000000000",
+          "70000002-0000-4000-8000-000000000000",
+          "70000003-0000-4000-8000-000000000000"
+        ],
+        "chapterTitle": "a\u0001b\u0002c",
+        "objective": "Reader can do 6 upper-body moves, none overhead",
+        "lockedAt": "2026-10-01T09:00:00.123456+00:00"
+      },
+      "key": "a27c85c7bef918af"
+    }
+  ]
+}

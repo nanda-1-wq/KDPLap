@@ -6,6 +6,16 @@ import { assertEquals } from "jsr:@std/assert@1";
 import * as L from "../supabase/functions/generate/lib/limits.ts";
 import * as G from "../supabase/functions/generate/lib/common.ts";
 import "../js/title-checks.js";
+import "../js/format-rules.js";
+import "../js/word-budget.js";
+import "../js/sentences.js";
+import "../js/text-checks.js";
+import "../js/export-rules.js";
+import "../js/section-check-key.js";
+import "../js/qc-promise-key.js";
+import "../js/qc-lists.js";
+import "../js/qc-glyphs.js";
+import "../js/qc-rules.js";
 
 const read = (p) => Deno.readTextFileSync(new URL(`../${p}`, import.meta.url));
 
@@ -343,4 +353,36 @@ Deno.test("Settings and Export (E11 STOP 3): the browser files match 0025, the B
   // Export: a section "being written" uses Write's run freshness (0020); the AI edit sources are 0025's.
   assertEquals(jsConst("js/export-rules.js", "RUN_FRESH"), jsConst("js/book-write.js", "RUN_FRESH"));
   assertEquals(quoted(read("js/export-rules.js").match(/const AI_EDITS = \[([^\]]*)\]/)[1]), quoted(read(f).match(/h\.source in \(([^)]*)\)/)[1]));
+});
+
+Deno.test("07 Quality Control: rule ids, groups and caps equal 0028; the shape copy cannot drift", () => {
+  const Q = globalThis.kdpQcRules;
+  const sql = read(M("0028_quality_control.sql"));
+  const rules = sql.match(/select coalesce\(p = any \(array\[([\s\S]*?)\]\), false\)/);
+  assertEquals(rules[1].split(",").map((x) => x.trim().replace(/^'|'$/g, "")), Q.RULES);
+  const groups = sql.match(/when e ->> 'g' not in \(([^)]*)\)/);
+  assertEquals(groups[1].split(",").map((x) => Number(x.trim().replace(/'/g, ""))), Q.GROUPS);
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`jsonb_array_length\(j -> 'items'\) > (\d+)`), Q.CAPS.total);
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`jsonb_array_length\(j -> 'sources'\) > (\d+)`), Q.CAPS.sources);
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`jsonb_array_length\(e -> 'sections'\) > (\d+)`), Q.CAPS.sourceSections);
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`char_length\(e ->> 'key'\) not between 1 and (\d+)`), Q.CAPS.key);
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`char_length\(e ->> 'message'\) not between 1 and (\d+)`), Q.CAPS.message);
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`char_length\(e ->> 'quote'\) > (\d+)`), Q.CAPS.quote);
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`char_length\(e ->> 'citation'\) not between 1 and (\d+)`), Q.CAPS.citation);
+  const size = one(M("0028_quality_control.sql"), String.raw`octet_length\(results::text\) <= (\d+)`);
+  assertEquals(Q.CAPS.bytes < size, true);
+  // The saved run's words column: the same top as 0028.
+  assertEquals(one(M("0028_quality_control.sql"), String.raw`words\s+between 0 and (\d+)`), Q.CAPS.words);
+});
+
+Deno.test("07 Quality Control: the 08 defaults equal 0027, qc_inputs_key and js/format-rules.js", () => {
+  const Q = globalThis.kdpQcRules;
+  const sql = read(M("0028_quality_control.sql"));
+  const d = globalThis.kdpFormatRules.defaults();
+  assertEquals(sql.match(/'style', coalesce\(f\.style, '(\w+)'\)/)[1], Q.DEFAULTS.style);
+  assertEquals(sql.match(/'copyright', coalesce\(\(f\.parts ->> 'copyright'\)::boolean, (\w+)\)/)[1], String(Q.DEFAULTS.copyright));
+  assertEquals(d.style, Q.DEFAULTS.style);
+  assertEquals(d.parts.copyright, Q.DEFAULTS.copyright);
+  assertEquals(globalThis.kdpQcGlyphs.STYLES, globalThis.kdpFormatRules.STYLES);
+  assertEquals(sql.match(/qc_runs_style_check check \(style in \(([^)]*)\)\)/)[1].split(",").map((x) => x.trim().replace(/'/g, "")), globalThis.kdpFormatRules.STYLES);
 });
