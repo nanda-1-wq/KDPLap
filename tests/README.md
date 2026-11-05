@@ -259,7 +259,14 @@ signed out and the landing page in light and dark at 1440 and 390, the root redi
 2 px gap before "Ink" and the mark keeping its size at 200% text; for 40c the 22 px and 21 px sizes, and
 at 200% text the sidebar logo wrapping, the wordmark under the mark with no sideways scroll; it loads the
 real Google Fonts for its own screenshots, with an 8 s cap),
-and for E12 `pen` (t-label: the "Point of view in your books" field and its help line).
+and for E12 `pen` (t-label: the "Point of view in your books" field and its help line),
+and for E14.3 `qc` (07 Quality Control and the shared shell, designs 51, 51b, 52, 53, 55, 57): t-first (52), t-run
+(55 A to 53, the row sent, the first group open, Open in 06), t-states (55 B, C, E, qc_stale, the save
+and load errors, a removed section), t-ok (55 F, Undo, 23505, the limit, an issue back after a text
+change), t-marks (the sidebar and the rail, 01 to 09, 08 and 09 Coming next, the mark 2 s after a save),
+t-a11y (keyboard, focus rings, 44 px, 900 px with no sideways scroll). `t-shots` makes the compare
+images of plan section 8.5 in `docs/reviews/e14-3-stop3/` with the real fonts; it is not a check. The
+qc mock answers as 0028 does (the qc_stale guard, the unique key, the results shape).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every

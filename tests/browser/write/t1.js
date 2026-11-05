@@ -61,7 +61,7 @@ const test = async page => {
   ok(page.url().includes(`&section=${st.s42}`), 'URL keeps the section');
   ok((await reason(6)) === '23 sections not final', `sidebar 06 reason: "${await reason(6)}"`);
   ok((await txt('[data-next-note]')) === 'Not done yet: 23 sections not final.', `Next note: "${await txt('[data-next-note]')}"`);
-  ok(await page.$eval('[data-next]', (b) => b.disabled), 'Next is off on the last v1 step');
+  ok(await page.$eval('[data-next]', (b) => !b.disabled), 'Next is on: 06 goes to 07 (E14.3)');
 
   // Right panel: Versions (design 22), Checks, Brief.
   const vers = await page.$$eval('.wr-ver', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ').trim()));
