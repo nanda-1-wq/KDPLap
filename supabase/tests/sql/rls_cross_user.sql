@@ -62,6 +62,18 @@ insert into public.book_exports (user_id, book_id, format, include, parts, versi
   ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'pdf', 'final',
    '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}',
    array['a6000000-0000-4000-8000-000000000001']::uuid[], 36, public.format_key('a3000000-0000-4000-8000-000000000001'), 'typst 0.14.2 · t1');
+-- 0028: A's run, Mark as OK and promise check.
+insert into public.qc_runs (user_id, book_id, versions, inputs_key, results, sections, words, style) values
+  ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001',
+   public.qc_versions('a3000000-0000-4000-8000-000000000001'), public.qc_inputs_key('a3000000-0000-4000-8000-000000000001'),
+   '{"items": [], "more": {}, "sources": [], "notes": {"unsaved": 0, "running": 0}}', 1, 2, 'classic');
+insert into public.qc_dismissed (id, user_id, book_id, section_id, rule, issue_key, label) values
+  ('a9000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001',
+   'a5000000-0000-4000-8000-000000000001', 'not_final', 'a5|a6', 'Dismissed A');
+insert into public.book_checks (chapter_id, user_id, book_id, verdict, reason, quote, section_id, versions, words, inputs_key, checked_at) values
+  ('a4000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001',
+   'drifts', 'A new audience.', 'Writing A', 'a5000000-0000-4000-8000-000000000001',
+   array['a6000000-0000-4000-8000-000000000001']::uuid[], 100, '0123456789abcdef', now());
 
 -- The tables under test: every table in public.
 create temp table rls_tables as
@@ -82,7 +94,7 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('23 public tables (0027: book_formats)', (select count(*) from rls_tables) = 23, (select count(*) from rls_tables)::text);
+select pg_temp.chk('26 public tables (0028: qc_runs, qc_dismissed, book_checks)', (select count(*) from rls_tables) = 26, (select count(*) from rls_tables)::text);
 select pg_temp.chk('A''s Print PDF row recorded', (select count(*) from public.book_exports where format = 'pdf') = 1);
 select pg_temp.chk('RLS on for every public table', not exists (
   select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
@@ -99,10 +111,12 @@ select pg_temp.chk(t || ': B reads 0 of A''s rows',
 -- section_versions (0018) no update or delete, section_runs (0020) and
 -- section_suggestions (0021) no delete (their update goes through RLS: 0
 -- rows), kept_findings (0024) no update, book_exports (0025) no update
--- and no delete, and book_formats (0027) no delete: refused, not 0 rows.
-select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports') then '42501%' else 'OK 0' end)
+-- and no delete, book_formats (0027) no delete, qc_runs and book_checks
+-- (0028) no update and no delete, and qc_dismissed (0028) no update: refused,
+-- not 0 rows.
+select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports', 'qc_runs', 'qc_dismissed', 'book_checks') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats', 'qc_runs', 'book_checks') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -158,6 +172,17 @@ select pg_temp.expect('pdf_marks: none of A''s books', $q$select 1 from public.p
 select pg_temp.expect('pdf_marks(A''s book): no row', $q$select 1 from public.pdf_marks('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
 select pg_temp.expect('pdf_version_ids: none of A''s versions', $q$select 1 where public.pdf_version_ids('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
 select pg_temp.expect('also_by_valid: none of A''s ticks', $q$select 1 where public.also_by_valid('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
+select pg_temp.expect('qc_runs: B cannot record a run of A''s book', $q$insert into public.qc_runs (book_id, versions, inputs_key, results, sections, words, style) values ('a3000000-0000-4000-8000-000000000001', array['a6000000-0000-4000-8000-000000000001']::uuid[], '0123456789abcdef0123456789abcdef', '{"items": [], "more": {}, "sources": [], "notes": {"unsaved": 0, "running": 0}}', 1, 2, 'classic')$q$, '42501%');
+select pg_temp.expect('qc_runs: B''s book with A''s version list is stale', $q$insert into public.qc_runs (book_id, versions, inputs_key, results, sections, words, style) values ('b3000000-0000-4000-8000-000000000001', array['a6000000-0000-4000-8000-000000000001']::uuid[], '0123456789abcdef0123456789abcdef', '{"items": [], "more": {}, "sources": [], "notes": {"unsaved": 0, "running": 0}}', 1, 2, 'classic')$q$, 'P0001 qc_stale%');
+select pg_temp.expect('qc_dismissed: on A''s book refused', $q$insert into public.qc_dismissed (book_id, rule, issue_key, label) values ('a3000000-0000-4000-8000-000000000001', 'length', 'length', 'X')$q$, '42501%');
+select pg_temp.expect('qc_dismissed: A''s section on B''s book refused', $q$insert into public.qc_dismissed (book_id, section_id, rule, issue_key, label) values ('b3000000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000001', 'length', 'length', 'X')$q$, 'P0001 qc_dismissed_section%');
+select pg_temp.expect('qc_dismissed: B cannot undo A''s row', $q$delete from public.qc_dismissed where id = 'a9000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('book_checks: on A''s chapter refused (server only)', $q$insert into public.book_checks (chapter_id, user_id, book_id, verdict, reason, quote, versions, words, inputs_key, checked_at) values ('a4000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'keeps', 'X', '', array['a6000000-0000-4000-8000-000000000001']::uuid[], 100, '0123456789abcdef', now())$q$, '42501%');
+select pg_temp.expect('book_checks: B cannot insert a check as B (server only)', $q$insert into public.book_checks (chapter_id, user_id, book_id, verdict, reason, quote, versions, words, inputs_key, checked_at) values ('b4000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000b', 'b3000000-0000-4000-8000-000000000001', 'keeps', 'X', '', array['a6000000-0000-4000-8000-000000000001']::uuid[], 100, '0123456789abcdef', now())$q$, '42501%');
+select pg_temp.expect('qc_json: A''s book reads as null', $q$select 1 where public.qc_json('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('qc_inputs_key: A''s book reads as null', $q$select 1 where public.qc_inputs_key('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('qc_versions: none of A''s versions', $q$select 1 where public.qc_versions('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
+select pg_temp.expect('qc_mark: no row for A''s book', $q$select 1 from public.qc_mark('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
 select pg_temp.expect('user_settings: B''s settings with A''s pen name refused', $q$insert into public.user_settings (default_pen_name_id) values ('a1000000-0000-4000-8000-000000000001')$q$, '42501%');
 
 -- ── As user B: moving own rows to A is refused ──
