@@ -95,6 +95,25 @@
   --app-import-card-num: var(--text-3xl);
   --app-import-book-w: 200px;
   --app-checkbox: 18px;
+  --app-qc-w: 1080px;            /* step 07 page (designs 52, 53) */
+  --app-qc-side-w: 340px;
+  --app-qc-first-side-w: 360px;
+  --app-qc-label-w: 150px;       /* a result row's section label */
+  --app-qc-link-h: 36px;         /* the look of a row link; its hit area is --control-h */
+  --app-qc-state-h: 266px;       /* 55 A and C */
+  --app-qc-bar-w: 220px;
+  --app-qc-bar-h: 6px;
+  --app-qc-card-gap: 18px;
+  --app-qc-row-gap: 14px;
+  --app-qc-item-indent: 56px;
+  --app-qc-chip-pad: 3px 10px;
+  --app-qc-chip-gap: 6px;
+  --app-qc-tag-pad: 1px var(--space-2);
+  --app-qc-gap: 10px;
+  --app-qc-hair: 2px;
+  --app-qc-underline: 3px;
+  --app-rail-dot: 8px;           /* 07 out of date in the rail (design 57) */
+  --app-rail-dot-top: 6px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -2661,9 +2680,11 @@ div.delete-text p { margin: 0; }
 .book-layout.is-rail .book-id > div:last-child,
 .book-layout.is-rail .step-group-head,
 .book-layout.is-rail .group-row,
-.book-layout.is-rail .step-link.is-future,
 .book-layout.is-rail .step-name,
 .book-layout.is-rail .step-flag { display: none; }
+/* E14.3 (design 51b): the rail lists every step, 01 to 09, one by one. */
+.book-layout.is-rail .step-group { gap: var(--space-2); }
+.book-layout.is-rail .step-link.is-future .version-tag { display: none; }
 /* The rail keeps the save state's icon and Retry; its words stay for screen readers. */
 .book-layout.is-rail .saved-line span:not(.spinner):not(.save-error),
 .book-layout.is-rail .saved-line .save-error span {
@@ -2679,6 +2700,7 @@ div.delete-text p { margin: 0; }
   font-size: 0;
 }
 .book-layout.is-rail .step-link .step-num { font-size: var(--text-xs); }
+.book-layout.is-rail .step-link.has-missing { padding: 0; min-height: 0; height: var(--app-rail-step); }
 .book-layout.is-rail .step-mark { width: auto; }
 .book-layout.is-rail .saved-line { border-top: none; padding: 0; flex-direction: column; justify-content: center; }
 .book-layout.is-rail .saved-line .link-btn { margin: 0; min-height: var(--control-h); }
@@ -3415,3 +3437,177 @@ div.delete-text p { margin: 0; }
 .exp-file-name { font-size: var(--text-base); font-weight: 500; overflow-wrap: anywhere; }
 .exp-textbtn { min-height: var(--control-h); margin: 0; padding: 0 var(--space-2); }
 
+/* ── Step 07 marks (designs 51, 51b, 57) ── */
+
+/* 07 open on its screen and done: the check, not the dot (design 53). */
+.step-link.has-check .step-mark::before { display: none; }
+.step-link.is-future.is-locked .step-mark { color: var(--ink); }
+.step-link.is-future { min-width: 0; }
+/* The word does not fit beside the name in a 280 px sidebar: it takes a second line. */
+.step-flag.is-tag {
+  margin: var(--app-qc-hair) 0 0;
+  padding: var(--app-qc-hair) var(--space-2);
+  display: flex;
+  width: fit-content;
+  border-radius: var(--radius-pill);
+  background: var(--warning-bg);
+}
+.step-dot { display: none; }
+.book-layout.is-rail .step-link { position: relative; }
+.book-layout.is-rail .step-dot {
+  display: block;
+  position: absolute;
+  top: var(--app-rail-dot-top);
+  right: var(--space-2);
+  width: var(--app-rail-dot);
+  height: var(--app-rail-dot);
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+/* ── Step 07 Quality Control (designs 52, 53, 55) ── */
+
+.qc {
+  width: 100%;
+  max-width: var(--app-qc-w);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+}
+.qc .center-state { padding: var(--space-8) 0; }
+.qc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-5); }
+.qc-side { width: var(--app-qc-side-w); flex-shrink: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.qc-card { background: var(--surface); border: 1px solid var(--stone); border-radius: var(--radius-xl); }
+.qc-side.is-first { width: var(--app-qc-first-side-w); padding: var(--space-6); gap: var(--app-qc-row-gap); background: var(--surface-2); }
+.qc-side-card { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
+.qc-side-card.is-soft { gap: var(--space-2); background: var(--surface-2); }
+.qc .chip-label { margin: 0; }
+.qc-fact { margin: 0; font-size: var(--text-md); line-height: 1.55; color: var(--ink-2); }
+.qc-fact b { font-weight: 600; color: var(--ink); }
+.qc-note { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }
+.qc-lead { margin: 0; font-size: var(--text-base); line-height: 1.6; color: var(--ink-2); }
+
+.qc-first { padding: var(--space-6); display: flex; flex-direction: column; gap: var(--app-qc-card-gap); }
+.qc-first h2 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
+.qc-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-6); }
+.qc-list li { display: flex; align-items: flex-start; gap: var(--app-qc-gap); padding: var(--space-2) 0; border-top: 1px solid var(--mist); font-size: var(--text-md); line-height: 1.45; color: var(--ink-2); }
+.qc-list b { font-weight: 600; color: var(--ink); }
+.qc-tag { padding: var(--app-qc-tag-pad); border: 1px solid var(--stone-2); border-radius: var(--radius-pill); font-size: var(--text-xs); color: var(--graphite); white-space: nowrap; }
+.qc-run { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4); }
+.qc-promise-wide { padding: var(--space-6); display: flex; align-items: center; gap: var(--space-5); border-style: dashed; border-color: var(--stone-2); }
+.qc-promise-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+/* A button that is off, with the word that says why. */
+.qc-off { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.qc-promise-wide .qc-off { flex-direction: column; align-items: flex-start; flex-shrink: 0; }
+.qc-side-card .qc-off { flex-direction: column; align-items: flex-start; }
+
+.qc-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--app-qc-card-gap) var(--space-5);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-xl);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.qc-verdict > svg { flex-shrink: 0; }
+.qc-verdict:focus, .qc-box:focus { outline: none; }
+.qc-verdict-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--app-qc-hair); }
+.qc-verdict-text strong { font-size: var(--text-lg); font-weight: 600; }
+.qc-verdict-text span { font-size: var(--text-sm); color: var(--ink-2); }
+
+.qc-box { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); border-radius: var(--radius-lg); }
+.qc-box strong { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-lg); font-weight: 600; }
+.qc-sub { font-size: var(--text-md); line-height: 1.5; }
+.qc-self { align-self: flex-start; }
+.qc-box.is-warning { border: 1px solid var(--warning); background: var(--warning-bg); }
+.qc-box.is-warning strong { color: var(--warning); }
+.qc-box.is-success { border: 1px solid var(--success); background: var(--success-bg); }
+.qc-box.is-success strong { color: var(--success); }
+.qc-box.is-plain { min-height: var(--app-qc-state-h); align-items: center; justify-content: center; text-align: center; background: var(--surface-2); }
+.qc-box.is-plain .qc-sub { color: var(--graphite); }
+.qc-state-card { padding: var(--space-6); }
+.qc-bar { width: var(--app-qc-bar-w); max-width: 100%; height: var(--app-qc-bar-h); border-radius: var(--radius-pill); background: var(--mist); }
+.qc-bar i { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--ink); }
+
+.qc-g + .qc-g { border-top: 1px solid var(--mist); }
+.qc-gb {
+  width: 100%;
+  min-height: calc(var(--control-h) + var(--space-3));
+  display: flex;
+  align-items: center;
+  gap: var(--app-qc-row-gap);
+  padding: 0 var(--space-5);
+  border: none;
+  border-radius: var(--radius-xl);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-base);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.qc-gb > svg { flex-shrink: 0; }
+.qc-gt { flex: 1; min-width: 0; font-weight: 600; }
+.qc-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-3); }
+.qc-chip { display: inline-flex; align-items: center; gap: var(--app-qc-chip-gap); padding: var(--app-qc-chip-pad); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
+.qc-chip.is-warn { background: var(--warning-bg); color: var(--warning); }
+.qc-chip.is-ok { background: var(--success-bg); color: var(--success); }
+.qc-chip.is-info { border: 1px solid var(--stone); background: var(--paper); color: var(--graphite); }
+.qc-items { list-style: none; margin: 0; padding: 0 var(--space-5) var(--space-4) var(--app-qc-item-indent); display: flex; flex-direction: column; }
+.qc-empty { margin: 0; padding: var(--space-3) var(--space-5) var(--space-4) var(--app-qc-item-indent); font-size: var(--text-md); color: var(--graphite); }
+.qc-more { padding: var(--space-3) 0; border-top: 1px solid var(--mist); font-size: var(--text-sm); color: var(--graphite); }
+.qc-it { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); padding: var(--space-3) 0; border-top: 1px solid var(--mist); }
+.qc-sec { width: var(--app-qc-label-w); flex-shrink: 0; font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); overflow-wrap: anywhere; }
+.qc-tx { flex: 1 1 0; min-width: 0; font-size: var(--text-md); line-height: 1.45; color: var(--ink-2); overflow-wrap: anywhere; }
+.qc-it.is-side { flex-wrap: nowrap; }
+.qc-it.is-side .qc-tx { font-size: var(--text-sm); }
+/* Open in 06, Mark as OK, Undo: a 36 px look, a 44 px hit area (V1, owner Q7). */
+.qc-lk, .qc-lk2, .qc-undo {
+  min-height: var(--control-h);
+  margin: calc((var(--app-qc-link-h) - var(--control-h)) / 2) 0;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.qc-lk { font-weight: 500; color: var(--ink); text-decoration: underline; text-underline-offset: var(--app-qc-underline); }
+.qc-lk.is-off { color: var(--muted); text-decoration: none; cursor: default; }
+.qc-lk2 { padding: 0 var(--app-qc-gap); color: var(--graphite); }
+.qc-lk2:hover { color: var(--ink); }
+.qc-lk2:disabled, .qc-undo:disabled { color: var(--muted); cursor: default; }
+.qc-undo { padding: 0 var(--space-1); font-weight: 500; color: var(--ink); text-decoration: underline; }
+.qc-okrow { margin: var(--space-2) 0; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); border-radius: var(--radius-lg); background: var(--surface-2); }
+.qc-ok-was { font-size: var(--text-md); line-height: 1.5; color: var(--ink-2); overflow-wrap: anywhere; }
+.qc-ok-line { display: flex; align-items: center; gap: var(--app-qc-gap); padding: var(--app-qc-gap) var(--space-3); border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-md); }
+.qc-ok-line > svg { flex-shrink: 0; color: var(--success); }
+.qc-ok-line > span { flex: 1; min-width: 0; }
+.qc-row-err { flex-basis: 100%; margin: 0; display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--danger); }
+.qc-row-err svg { flex-shrink: 0; }
+
+/* 55 B: the old results stay, grayed, and still work. */
+.qc-groups.is-old .qc-gt, .qc-groups.is-old .qc-tx, .qc-groups.is-old .qc-sec, .qc-groups.is-old .step-num { color: var(--muted); }
+.qc-groups.is-old .qc-chip { border: 1px solid var(--stone); background: var(--paper); color: var(--muted); }
+
+@media (max-width: 1200px) {
+  .qc { flex-direction: column; align-items: stretch; }
+  .qc-side, .qc-side.is-first { width: 100%; }
+  /* The long step name and "Coming next" share the head: the note goes under the buttons. */
+  .book-layout:has(.qc) .book-head { height: auto; min-height: var(--app-book-head-h); padding-top: var(--space-1); padding-bottom: var(--space-1); grid-template-columns: auto minmax(0, 1fr) auto; }
+  .book-layout:has(.qc) .book-head-next { display: grid; grid-template-columns: auto auto; gap: 0 var(--space-3); justify-items: end; }
+  .book-layout:has(.qc) .next-note { order: 1; grid-column: 1 / -1; }
+}
+@media (max-width: 900px) {
+  .qc-list { grid-template-columns: minmax(0, 1fr); }
+  .qc-promise-wide { flex-wrap: wrap; }
+  .qc-items, .qc-empty { padding-left: var(--space-5); }
+  .qc-sec { width: 100%; }
+  .qc-tx { flex-basis: 100%; }
+  .qc-verdict { flex-wrap: wrap; }
+  .qc-gb { flex-wrap: wrap; padding-top: var(--space-2); padding-bottom: var(--space-2); }
+}

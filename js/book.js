@@ -33,11 +33,20 @@
    status (Write's Mark book as completed); ctx.reloadStatus() reads it again.
    Opening a step of a completed book reads the status again, because a
    change elsewhere (an outline edit, an unlock of 03) reopens it (0026).
+   E14.3 (designs 51, 51b, 57): one sidebar lists 01 to 09, and the rail on
+   wide steps lists them one by one. 07 Quality Control is js/book-qc.js. Its
+   mark comes from qc_mark: read at load, on every step change, after a run
+   (ctx.readQcMark) and 2 s after 06 saves (ctx.refresh, debounced; a draft
+   passes { draft: true } and is left out: a draft is not in the run's key).
+   08 and 09 show "Coming next" and are not links until their screens land.
 ═══════════════════════════════════════════════════ */
 
 (async function () {
   const TOTAL_STEPS = 11;
-  const LAST_V1_STEP = 6;
+  const LAST_STEP = 7;                  // the last step with a screen; 08 is next
+  const WIDE_STEPS = new Set([6]);      // these fold the sidebar to the rail (08 and 09 join them)
+  const QC_STEP = 7;
+  const MARK_DELAY = 2000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   const STEPS = {
@@ -46,8 +55,10 @@
     3: { group: 'Plan', name: 'Positioning', task: 'E8', text: 'Choose and lock the angle that makes this book different.' },
     4: { group: 'Plan', name: 'Title', task: 'E8', text: 'Pick a title and subtitle that match the positioning.' },
     5: { group: 'Produce', name: 'Outline', task: 'E9', text: 'Plan the chapters and their word targets.' },
-    6: { group: 'Produce', name: 'Write', task: 'E10', text: 'Write the book one section at a time, with AI help.' }
+    6: { group: 'Produce', name: 'Write', task: 'E10', text: 'Write the book one section at a time, with AI help.' },
+    7: { group: 'Produce', name: 'Quality Control', task: 'E14', text: 'Check the whole book before you format it.' }
   };
+  const COMING = { 8: 'Format', 9: 'Cover' };
 
   const nav = document.querySelector('[data-book-nav]');
   const head = document.querySelector('[data-book-head]');
@@ -64,6 +75,7 @@
   const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
   const REOPEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg>';
   const LOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  const LOCK_SM = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
   const WARN = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
 
   const { esc, ICON } = kdpUi;
@@ -77,12 +89,15 @@
   let book = null;
   const saves = {};   // step number → its last save state { state, message, canRetry, at }
   const layout = document.querySelector('.book-layout');
-  let railOpen = false;   // on step 06 the sidebar is a rail until the writer opens it
+  let railOpen = false;   // on a wide step the sidebar is a rail until the writer opens it
   let saveSeq = 0;
+  let qcMark = null;      // { checked_at, current } of the last run, null before the first
+  let markSeq = 0, markTimer = null;
+  let leaving = Promise.resolve();   // the version 06 saves when it is left
 
   function readStep(value) {
     const n = parseInt(value, 10);
-    return n >= 1 && n <= LAST_V1_STEP ? n : 1;
+    return n >= 1 && n <= LAST_STEP ? n : 1;
   }
 
   function workingTitle(b) {
@@ -152,6 +167,7 @@
   }
 
   function stepLink(n) {
+    if (n === QC_STEP) return qcLink();
     const s = STEPS[n];
     const current = n === step ? ' aria-current="step"' : '';
     const done = isDone(n);
@@ -167,16 +183,75 @@
         <span class="step-mark" aria-hidden="true">${mark}</span><span class="step-num">${pad(n)}</span>${name}${state ? `<span class="sr-only">${state}</span>` : ''}${review ? `<span class="step-flag">${SAVE_WARN}Needs review</span>` : ''}</a>`;
   }
 
-  /** Step 06 folds the sidebar to a rail (design 22); the button opens it again. */
+  /**
+   * 07 in the sidebar and the rail (design 57). A run with warnings is still
+   * done. Open on the screen, the row shows its check when done (design 53).
+   * "Out of date" takes a second line: the row has no room for it beside the name.
+   */
+  function qcLink() {
+    const done = !!(qcMark && qcMark.current);
+    const stale = !!qcMark && !qcMark.current;
+    const label = `07 ${STEPS[QC_STEP].name}, ${done ? 'done' : stale ? 'out of date' : 'not run'}`;
+    const name = stale
+      ? `<span class="step-name">${STEPS[QC_STEP].name}<span class="step-flag is-tag">${SAVE_WARN}Out of date</span></span><span class="step-dot" aria-hidden="true"></span>`
+      : STEPS[QC_STEP].name;
+    return `<a class="step-link${done ? ' is-done has-check' : ''}${stale ? ' has-missing' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${QC_STEP}" data-step="${QC_STEP}" aria-label="${label}"${step === QC_STEP ? ' aria-current="step"' : ''}>
+        <span class="step-mark" aria-hidden="true">${done ? CHECK : ''}</span><span class="step-num">${pad(QC_STEP)}</span>${name}</a>`;
+  }
+
+  /** 08 and 09: not links until their screens land (approved difference V9). */
+  function comingRow(n) {
+    const lock = n === 9;
+    return `<div class="step-link is-future${lock ? ' is-locked' : ''}" role="link" aria-disabled="true" title="${pad(n)} ${COMING[n]}, coming next" data-coming="${n}">
+        <span class="step-mark" aria-hidden="true">${lock ? LOCK_SM : ''}</span><span class="step-num">${pad(n)}</span>${COMING[n]}<span class="sr-only">, </span><span class="version-tag">Coming next</span></div>`;
+  }
+
+  /** A wide step folds the sidebar to a rail (designs 22, 51b); the button opens it again. */
   function applyRail() {
-    const rail = step === LAST_V1_STEP && !railOpen;
+    const wide = WIDE_STEPS.has(step);
+    const rail = wide && !railOpen;
     layout.classList.toggle('is-rail', rail);
     const btn = nav.querySelector('[data-rail-toggle]');
     if (btn) {
-      btn.hidden = step !== LAST_V1_STEP;
+      btn.hidden = !wide;
       btn.setAttribute('aria-expanded', String(!rail));
       btn.setAttribute('aria-label', rail ? 'Open the steps sidebar' : 'Fold the steps sidebar');
     }
+    // The rail has no word for the 07 mark: hover shows the full name (design 57).
+    const qc = nav.querySelector(`[data-step="${QC_STEP}"]`);
+    if (qc) {
+      if (rail) qc.title = qc.getAttribute('aria-label');
+      else qc.removeAttribute('title');
+    }
+  }
+
+  /** Reads the 07 mark. A failed read keeps the mark on screen. */
+  async function readMark() {
+    clearTimeout(markTimer);
+    const seq = ++markSeq;
+    let res;
+    try { res = await kdp.getQcMark(bookId); } catch (e) { return; }
+    if (seq !== markSeq || res.error) return;
+    const was = qcMark;
+    qcMark = res.data;
+    if (!was === !qcMark && (!was || was.current === qcMark.current)) return;
+    const row = nav.querySelector(`[data-step="${QC_STEP}"]`);
+    if (!row) return;
+    const focused = document.activeElement === row;
+    row.outerHTML = qcLink();
+    applyRail();
+    if (focused) nav.querySelector(`[data-step="${QC_STEP}"]`).focus();
+  }
+
+  /** After a version 06 is still saving: then the mark sees it. */
+  function markAfterLeave() {
+    const at = leaving;
+    at.then(() => { if (at === leaving) readMark(); });
+  }
+
+  function markSoon() {
+    clearTimeout(markTimer);
+    markTimer = setTimeout(readMark, MARK_DELAY);
   }
 
   function renderNav() {
@@ -202,14 +277,13 @@
       </div>
       <div class="step-group">
         <div class="step-group-head"><span class="group-name">PRODUCE</span></div>
-        ${[5, 6].map(stepLink).join('')}
-        <div class="step-link is-future" aria-disabled="true">
-          <span class="step-mark" aria-hidden="true"></span><span class="step-num">07</span>Quality Control
-          <span class="version-tag">v2</span>
-        </div>
+        ${[5, 6, QC_STEP].map(stepLink).join('')}
       </div>
       <div class="step-group">
-        <div class="group-row"><span class="group-name">PACKAGE</span><span class="version-tag">Coming in v2</span></div>
+        <div class="step-group-head"><span class="group-name">PACKAGE</span></div>
+        ${[8, 9].map(comingRow).join('')}
+      </div>
+      <div class="step-group">
         <div class="group-row"><span class="group-name">RELEASE</span><span class="version-tag">Coming in v3</span></div>
       </div>
       <div class="sidebar-spacer"></div>
@@ -259,11 +333,12 @@
   function setGate() {
     const m = MODULES[step];
     const left = m && m.blockers ? m.blockers() : 0;
-    nextBtn.disabled = step === LAST_V1_STEP || left > 0;
+    nextBtn.disabled = step === LAST_STEP || left > 0;
     const need = m && m.missing ? m.missing() : '';
     let note = '';
     if (left) note = need || `${left} required field${left === 1 ? '' : 's'} left`;
     else if (need && !isDone(step)) note = `Not done yet: ${lowerFirst(need)}.`;
+    else if (step === LAST_STEP) note = 'Coming next';
     nextNote.textContent = note;
     nextNote.hidden = !note;
   }
@@ -272,11 +347,18 @@
     content: () => content,
     isActive: (n) => n === step,
     setGate,
-    refresh() {
+    /** opts.draft: only a draft was saved, which never moves the 07 mark. */
+    refresh(opts) {
       renderNav();
       setGate();
       document.title = `${STEPS[step].name} · ${workingTitle(book)} · NicheInk`;
+      if (step === 6 && !(opts && opts.draft)) markSoon();
     },
+    /** The 07 mark: { checked_at, current }, or null before the first run. */
+    qcMark: () => qcMark,
+    readQcMark: () => readMark(),
+    /** Resolves when the version 06 saves on leaving is in, at most 4 s (as Exit). */
+    settled: () => Promise.race([leaving, new Promise((r) => setTimeout(r, 4000))]),
     /** owner = the step number that saves (default 1, the Brief). */
     renderSave(state, message, canRetry, owner = 1) {
       saves[owner] = { state, message, canRetry, at: ++saveSeq };
@@ -305,6 +387,7 @@
     renderNav();
     renderStrip();
     if (book.status === 'completed') readStatus();
+    markAfterLeave();
     if (MODULES[step]) {
       content.classList.add('has-step');
       MODULES[step].render(content);
@@ -373,10 +456,10 @@
   }
 
   async function go(n, moveFocus = true) {
-    if (n < 1 || n > LAST_V1_STEP || n === step) return;
+    if (n < 1 || n > LAST_STEP || n === step) return;
     if (!(await mayLeave())) return;
     // Write keeps the typed text as a draft; leaving makes it a version. Errors show on the save line.
-    if (MODULES[step] && MODULES[step].leave) MODULES[step].leave().catch(() => {});
+    if (MODULES[step] && MODULES[step].leave) leaving = MODULES[step].leave().catch(() => {});
     step = n;
     history.pushState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}`);
     renderStep(moveFocus);
@@ -436,7 +519,7 @@
       history.pushState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}${step === 6 && MODULES[6] && MODULES[6].sectionQuery ? MODULES[6].sectionQuery() : ''}`);
       return;
     }
-    if (book && MODULES[step] && MODULES[step].leave) MODULES[step].leave().catch(() => {});
+    if (book && MODULES[step] && MODULES[step].leave) leaving = MODULES[step].leave().catch(() => {});
     step = to;
     if (book) renderStep(false);
   });
@@ -455,7 +538,7 @@
     head.hidden = false;
     // Normalise the URL (for example a missing or bad step) without a new history entry.
     // Step 06 keeps the open section (?section=, js/book-write.js).
-    const section = step === LAST_V1_STEP ? params.get('section') : null;
+    const section = step === 6 ? params.get('section') : null;
     history.replaceState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}${section && UUID.test(section) ? `&section=${encodeURIComponent(section)}` : ''}`);
     renderStep(false);
   }

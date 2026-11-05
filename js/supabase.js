@@ -1338,6 +1338,55 @@ window.kdp = {
     return { data: error ? null : (data && data[0]) || null, error };
   },
 
+  /** Everything 07 Quality Control reads, in one read (0028 qc_json). data is null for another user's book. */
+  async getQcData(bookId) {
+    const { data, error } = await window.sb.rpc('qc_json', { p_book_id: bookId });
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: notFound('Book not found.') };
+    return { data, error: null };
+  },
+
+  /**
+   * Saves one Quality Control run (0028 qc_runs). The guard refuses it with
+   * "qc_stale" when versions or inputs_key are not today's.
+   */
+  async saveQcRun({ bookId, versions, inputsKey, results, sections, words, style }) {
+    const { data, error } = await window.sb
+      .from('qc_runs')
+      .insert({ book_id: bookId, versions, inputs_key: inputsKey, results, sections, words, style })
+      .select('id, created_at');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /** The 07 mark: { checked_at, current }, or null before the first run (0028 qc_mark). */
+  async getQcMark(bookId) {
+    const { data, error } = await window.sb.rpc('qc_mark', { p_book_id: bookId });
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /**
+   * Mark as OK (0028 qc_dismissed). A second Mark as OK (double click, other
+   * tab) is 23505: already done, so the row that exists comes back.
+   */
+  async dismissQcIssue({ bookId, sectionId, rule, issueKey, label }) {
+    const cols = 'id, section_id, rule, issue_key, label, created_at';
+    const { data, error } = await window.sb
+      .from('qc_dismissed')
+      .insert({ book_id: bookId, section_id: sectionId, rule, issue_key: issueKey, label })
+      .select(cols);
+    if (!error) return { data: (data && data[0]) || null, error: null };
+    if (error.code !== '23505') return { data: null, error };
+    const again = await window.sb.from('qc_dismissed').select(cols)
+      .eq('book_id', bookId).eq('rule', rule).eq('issue_key', issueKey).maybeSingle();
+    return { data: again.error ? null : again.data, error: again.error };
+  },
+
+  /** Undo a Mark as OK. A row that is already gone counts as done. */
+  async undismissQcIssue(id) {
+    const { error } = await window.sb.from('qc_dismissed').delete().eq('id', id);
+    return { error };
+  },
+
   /** The Books badge: [{ book_id, exported_at, changed }] (0025 export_badges). */
   async listExportBadges() {
     const { data, error } = await window.sb.rpc('export_badges');

@@ -199,7 +199,7 @@
     const hit = findSection(d.sectionId);
     if (hit) Object.assign(hit.s, { has_draft: true, has_writing: true, draft_words: W.count(d.content), draft_at: res.data.saved_at || new Date().toISOString() });
     if (cur && cur.id === d.sectionId) cur.hasDraft = true;
-    ctx.refresh();
+    ctx.refresh({ draft: true });
     if (active()) { renderManuscript(); renderFoot(); }
   }
 
@@ -233,7 +233,9 @@
       note = { kind: 'warning', text: 'The section you had open was removed in 05 Outline. Your other writing is safe.' };
       cur = null;
     }
-    if (!cur && gateOpen()) {
+    // 07 "Open in 06" may ask for another section than the open one.
+    if (wantSection && !findSection(wantSection)) wantSection = null;
+    if ((!cur || wantSection) && gateOpen()) {
       const pick = firstSection();
       if (pick) { openSection(pick, { quiet: true }); return; }
     }
@@ -1586,6 +1588,8 @@
     confirmLeave: () => confirmLeave(),
     /** "&section=<id>" for the open section (book.js puts the address back after a cancelled Back). */
     sectionQuery: () => (cur ? `&section=${encodeURIComponent(cur.id)}` : ''),
+    /** 07 "Open in 06": this section opens with the step (E14.3: the section only; E14.4 adds the spot and the bar). */
+    pickSection: (id) => { wantSection = cur && cur.id === id ? null : id; },
     retrySave: () => saver && saver.retry(),
     hasUnsaved: () => !!saver && (saver.hasUnsaved() || dirty()),
     saveState: () => (saver ? saver.state : 'idle'),
