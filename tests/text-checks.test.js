@@ -8,7 +8,8 @@
 // and the label strip against the server's (items 9, 10); the same sentence
 // in another section (item 11 A). E12 fix batch 3: "according to … source"
 // in the Source row (5a), the "Check that the source is named" info row (D2,
-// D3) and the "Points back to another part" info row (5b).
+// D3) and the "Points back to another part" info row (5b). E14.2: the D6
+// mention rule ("chapter N" of a real chapter is fine) and the additions 07 reads.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { completeEnd, endsMidSentence, markUnsourced, SOURCE_LABEL, stripSourceLabels, writeKnown } from "../supabase/functions/generate/lib/section_write.ts";
 import { writeCtx } from "../supabase/functions/generate/test_fakes.ts";
@@ -215,6 +216,54 @@ Deno.test("mention row (E12 Part 3): every listed phrase, any case and spacing, 
   const item = T.check("- Then read the next section.", {}).rows.find((r) => r.code === "mention");
   assertEquals(item.sents.length, 1);
   assertEquals(T.check("## What the next chapter covers\n\nRest well.", {}).rows.some((r) => r.code === "mention"), false);
+});
+
+Deno.test("mention row, D6 (E14.2): with the chapter count, chapter N is flagged only when it does not exist", () => {
+  const row = (t, chapters) => T.check(t, { chapters }).rows.find((r) => r.code === "mention");
+  // Without the count: every chapter N, the old rule.
+  assert(row("See chapter 3 for more."));
+  assert(row("See chapter 3 for more.", undefined));
+  // With it: 1 to the count is fine, 0 and above the count are flagged, any case, any spacing.
+  for (const t of ["See chapter 3 for more.", "See Chapter 8 for more.", "See CHAPTER  1 for more.", "Read chapter 3.", "Chapter 03 helps."]) assertEquals(row(t, 8), undefined, t);
+  for (const t of ["See chapter 9 for more.", "See Chapter 0 for more.", "See CHAPTER  12 for more."]) assert(row(t, 8), t);
+  assertEquals(row("See chapter 1.", 0)?.hits[0].kind, "chapter");
+  // A real chapter does not excuse a preview or a number in the same sentence.
+  assertEquals(row("See chapter 3 and the next chapter.", 8).hits.map((h) => h.kind), ["preview"]);
+  assertEquals(row("See chapter 3 and chapter 9.", 8).hits.map((h) => h.kind), ["chapter"]);
+  // Section numbers and previews stay flagged, "chapter 5.2" is a section number.
+  for (const [t, kind] of [["See section 2.3 now.", "section"], ["See section 4 now.", "section"], ["See chapter 5.2 now.", "section"], ["The next chapter is short.", "preview"],
+    ["The following section is short.", "preview"], ["Later in this book we rest.", "preview"], ["Later in this chapter we rest.", "preview"]]) {
+    assertEquals(row(t, 8).hits.map((h) => h.kind), [kind], t);
+  }
+  // Hits carry offsets in the text and their sentence.
+  const md = "First part. See chapter 9 now. Then section 2.1 and more.";
+  const r = row(md, 8);
+  assertEquals(r.hits.map((h) => md.slice(h.start, h.end)), ["chapter 9", "section 2.1"]);
+  assertEquals(r.hits.map((h) => h.sentence), [0, 1]);
+  assertEquals(r.sents.map((x) => x.text), ["See chapter 9 now.", "Then section 2.1 and more."]);
+  // A sentence with a mark: the mark is not in the way, and the offsets stay right.
+  const marked = "See the next" + M + " chapter now.";
+  assertEquals(row(marked, 8).hits.length, 1);
+  // A real chapter N is no longer a mention, so a back reference in that sentence shows as one.
+  assertEquals(T.check("As mentioned earlier, chapter 3 helps.", { chapters: 8 }).rows.map((x) => x.code), ["backref"]);
+  assertEquals(T.check("As mentioned earlier, chapter 3 helps.", {}).rows.map((x) => x.code), ["mention"]);
+});
+
+Deno.test("additions for 07 (E14.2): number spots, the under flag, textKey, paragraphs, forms", () => {
+  const nums = T.check("A survey of 200 cats. Then 37% agree.", { known: "" }).rows.find((r) => r.code === "number");
+  assertEquals(nums.spots.map((x) => x.shown), ["200", "37%"]);
+  assertEquals(nums.spots.map((x) => ({ start: x.start, end: x.end })), nums.ranges);
+  const words = (target, n) => T.check("word ".repeat(n).trim() + ".", { target }).rows.find((r) => r.code === "words");
+  assertEquals(words(100, 70).under, true);
+  assertEquals(words(100, 130).under, false);
+  assertEquals(T.textKey("  Rest **well**, [S3] now." + M), "rest well now");
+  assertEquals(T.textKey("- Rest’s well."), "rest's well");
+  assertEquals(T.textKey(""), "");
+  const md = "One line\nsame para.\n\n## Head\n\nTwo.\n- item\n  Three.   \n\n";
+  assertEquals(T.paragraphs(md).map((p) => [p.text, md.slice(p.start, p.end) === p.text]), [["One line\nsame para.", true], ["Two.", true], ["Three.", true]]);
+  assertEquals(T.paragraphs(""), []);
+  assertEquals(T.forms("habits").includes("habit"), true);
+  assertEquals(T.forms("touches").includes("touch"), true);
 });
 
 Deno.test("mention row (E12 Part 3): one entry per sentence, Show on the sentence, counted, after the ending row", () => {

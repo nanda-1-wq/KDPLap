@@ -6,6 +6,7 @@
    kdpSectionCheckKey({ versionId, kind, chapterTitle, objective, sectionTitle,
                         lockedAt, penName, voice, wordTarget, siblings }) → 16 hex
    kdpSectionCheckKey.siblings(kind, sections, ownId) → ['1 Title', ...]
+   kdpSectionCheckKey.hash(text) → 16 hex (js/qc-promise-key.js and js/qc-rules.js use it)
 
    A short fingerprint (a plain hash, not a security feature) of what the AI
    section check reads besides the Brief and Research: the version id, the
@@ -58,5 +59,6 @@
   }
 
   sectionCheckKey.siblings = siblingParts;
+  sectionCheckKey.hash = keyHash;
   root.kdpSectionCheckKey = sectionCheckKey;
 })(globalThis);

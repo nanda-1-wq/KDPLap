@@ -5,6 +5,7 @@
 // "Out of date". This test fails if they ever give different keys.
 import { assertEquals, assertMatch, assertNotEquals } from "jsr:@std/assert@1";
 import { sectionCheckKey, siblingParts } from "../supabase/functions/generate/lib/section_check.ts";
+import { keyHash } from "../supabase/functions/generate/lib/outline_check.ts";
 import "../js/section-check-key.js";
 
 const browserKey = globalThis.kdpSectionCheckKey;
@@ -17,6 +18,10 @@ const base = {
   // G3 P10: the word target and the chapter's other sections ("<n> <title>").
   wordTarget: 450, siblings: ["1 Neck turns and tilts", "3 Arm circles below the shoulder"],
 };
+
+Deno.test("the hash the browser shares (07 Quality Control) is the server's keyHash", () => {
+  for (const t of ["", "a", "“Pain-Free” Yoga 🧘 椅子ヨガ", "x".repeat(5000)]) assertEquals(browserKey.hash(t), keyHash(t));
+});
 
 Deno.test("section check key: browser and server give the same key", () => {
   const cases = [

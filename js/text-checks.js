@@ -5,12 +5,19 @@
 
    What our code checks in the browser, live and free. Never the AI.
 
-   kdpTextChecks.check(md, { known, target, title, others }) → { rows, warnings }
+   kdpTextChecks.check(md, { known, target, title, others, chapters }) → { rows, warnings }
+     chapters (E14.2, D6): the outline's count of kind "chapter". With it,
+     "chapter N" is flagged only when N is 0 or above the count. Without it,
+     every "chapter N" is flagged. "Section N", "chapter N.N" and previews
+     are always flagged.
      rows, in this order (every offset is in md, so "Show" can select it):
        marks    open " [Verify: no source]" marks: one row, each sentence listed
-       number   claim numbers with no source and no mark (the server's rule)
+       number   claim numbers with no source and no mark (the server's rule);
+                spots: [{ start, end, shown }], the sentence of each number
        ending   the text ends mid-sentence (E12 M9; "Show" selects the cut piece)
-       mention  sentences that preview or number another part of the book (E12 Part 3)
+       mention  sentences that preview or number another part of the book (E12 Part 3);
+                hits: [{ kind: 'chapter' | 'section' | 'preview', start, end, sentence }],
+                the match of each mention and the sents index it is in
        source   a source label left in the text ("[S3]") or a source with no
                 name ("another source suggests", "according to one source";
                 E12 fix batch 2, items 9, 10; fix batch 3, item 5a)
@@ -27,7 +34,8 @@
                 'info', never counted, and never the words of the section
                 title (opts.title) or its own subheadings (fix batch 2, item 7)
        opener   3 or more sentences in a row that start with the same word
-       words    under 80% or over 120% of the section's word target
+       words    under 80% or over 120% of the section's word target (under: true
+                for the first)
      each row: { code, kind: 'warn' | 'info', text, sub, ranges: [{ start, end }],
                  sents: [{ start, end, text }] (marks, and numbers when more than one) }
      warnings: the number of 'warn' rows (the Checks tab count; the words row
@@ -48,6 +56,11 @@
      words in lower case (marks, labels and punctuation left out).
    kdpTextChecks.bookRepeats(md, others) → [{ start, end, text, where }]: the
      sentences of md that a section in others ([{ label, text }]) also has.
+   kdpTextChecks.textKey(t) → the words of t in lower case, marks and labels
+     left out: the key of a sentence or a paragraph.
+   kdpTextChecks.paragraphs(md) → [{ start, end, text }]: the runs of plain lines
+     between blank lines, headings and list items (07 Quality Control).
+   kdpTextChecks.forms(w) → w and its singular forms ("habits" → "habit").
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -180,7 +193,24 @@
 
   // A preview or a section or chapter number: the file has no section numbers and no
   // previews. Back references ("earlier in this book") are fine. Whole words, any case.
-  const MENTION = /\b(?:next\s+(?:section|chapter)|following\s+(?:section|chapter)|later\s+in\s+(?:this|the)\s+book|later\s+in\s+this\s+chapter|(?:section|chapter)\s+\d+(?:\.\d+)?)\b/i;
+  const MENTION = /\b(?:next\s+(?:section|chapter)|following\s+(?:section|chapter)|later\s+in\s+(?:this|the)\s+book|later\s+in\s+this\s+chapter|(?:section|chapter)\s+\d+(?:\.\d+)?)\b/gi;
+  const NUMBERED = /^(section|chapter)\s+(\d+)(\.\d+)?$/i;
+
+  /**
+   * The mentions in one sentence, with their offsets in it: [{ kind, start, end }].
+   * D6: "chapter N" of a real chapter points to a real place, so it is left out when
+   * `chapters` (the outline's count) is given. "chapter 5.2" is a section number.
+   */
+  function mentionsIn(body, chapters) {
+    const out = [];
+    for (const m of body.split(MARKER).join(' '.repeat(MARKER.length)).matchAll(MENTION)) {
+      const n = m[0].match(NUMBERED);
+      const kind = !n ? 'preview' : n[1].toLowerCase() === 'chapter' && !n[3] ? 'chapter' : 'section';
+      if (kind === 'chapter' && Number.isInteger(chapters) && Number(n[2]) >= 1 && Number(n[2]) <= chapters) continue;
+      out.push({ kind, start: m.index, end: m.index + m[0].length });
+    }
+    return out;
+  }
 
   // Points back to another part (fix batch 3, 5b): fine, but the writer checks the place.
   const BACKREF = /\b(?:earlier\s+in\s+(?:this|the)\s+(?:chapter|book|section)|in\s+the\s+(?:previous|last)\s+(?:chapter|section)|as\s+(?:mentioned|described|covered|shown)\s+earlier)\b/i;
@@ -321,6 +351,9 @@
 
   const AGAIN_MIN_WORDS = 8;
 
+  /** The words of a text in lower case: the key of a sentence or a paragraph. */
+  const textKey = (t) => [...stripLabels(clean(String(t || '')).replace(ITEM, '')).matchAll(WORD)].map((m) => m[0].toLowerCase().replace(/’/g, "'")).join(' ');
+
   /** Every sentence of 8 or more words in paragraphs and list items, with its key. */
   function sentenceKeys(md) {
     const text = String(md || '');
@@ -328,11 +361,26 @@
     for (const l of linesOf(text)) {
       if (l.kind !== 'para' && l.kind !== 'item') continue;
       for (const st of l.sents) {
-        const words = [...stripLabels(clean(st.text).replace(ITEM, '')).matchAll(WORD)].map((m) => m[0].toLowerCase().replace(/’/g, "'"));
-        if (words.length >= AGAIN_MIN_WORDS) out.push({ key: words.join(' '), start: st.start, end: st.end, text: clean(st.text).replace(ITEM, '') });
+        const key = textKey(st.text);
+        if (key.split(' ').length >= AGAIN_MIN_WORDS) out.push({ key, start: st.start, end: st.end, text: clean(st.text).replace(ITEM, '') });
       }
     }
     return out;
+  }
+
+  /** The runs of plain lines between blank lines, headings and list items. */
+  function paragraphs(md) {
+    const text = String(md || '');
+    const out = [];
+    let run = null;
+    for (const l of linesOf(text)) {
+      if (l.kind !== 'para') { run = null; continue; }
+      const lead = l.text.length - l.text.trimStart().length;
+      const end = l.from + l.text.trimEnd().length;
+      if (run) run.end = end;
+      else out.push(run = { start: l.from + lead, end });
+    }
+    return out.map((p) => ({ ...p, text: text.slice(p.start, p.end) }));
   }
 
   /** The sentences of md that another section also has: [{ start, end, text, where: [labels] }]. */
@@ -418,7 +466,8 @@
         text: nums.length === 1 ? `"${nums[0].shown}" has no source` : `${fmt(nums.length)} numbers have no source`,
         sub: 'Add a source in 02 Research, or mark it.',
         ranges: nums.map((x) => ({ start: x.s.start, end: x.s.end })),
-        sents: nums.length > 1 ? nums.map((x) => ({ start: x.s.start, end: x.s.end, text: clean(x.s.text) })) : []
+        sents: nums.length > 1 ? nums.map((x) => ({ start: x.s.start, end: x.s.end, text: clean(x.s.text) })) : [],
+        spots: nums.map((x) => ({ start: x.s.start, end: x.s.end, shown: x.shown }))
       });
     }
 
@@ -431,13 +480,19 @@
 
     // 4. Mentions another part of the book (E12 Part 3): paragraphs and list items, each sentence once.
     const mentions = [];
+    const hits = [];
     for (const l of lines) {
       if (l.kind !== 'para' && l.kind !== 'item') continue;
-      for (const st of l.sents) if (MENTION.test(clean(st.text))) mentions.push(st);
+      for (const st of l.sents) {
+        const found = mentionsIn(text.slice(st.start, st.end), opts.chapters);
+        if (!found.length) continue;
+        for (const h of found) hits.push({ kind: h.kind, start: st.start + h.start, end: st.start + h.end, sentence: mentions.length });
+        mentions.push(st);
+      }
     }
     if (mentions.length) {
       rows.push({ code: 'mention', kind: 'warn', text: 'Mentions another part of the book', sub: 'Cut it, or say what that part covers.',
-        ranges: mentions.map((st) => ({ start: st.start, end: st.end })), sents: mentions.map((st) => ({ start: st.start, end: st.end, text: clean(st.text) })) });
+        ranges: mentions.map((st) => ({ start: st.start, end: st.end })), sents: mentions.map((st) => ({ start: st.start, end: st.end, text: clean(st.text) })), hits });
     }
 
     // 5. Source not named (fix batch 2, items 9 and 10): each label (Show selects just the label;
@@ -517,12 +572,13 @@
     if (target > 0) {
       const n = root.kdpWords.count(text);
       if (n < target * 0.8 || n > target * 1.2) {
-        rows.push({ code: 'words', kind: 'info', text: `${fmt(n)} of ${fmt(target)} words`, sub: n < target * 0.8 ? 'Under 80% of the target.' : 'Over 120% of the target.',
-          ranges: [], sents: [] });
+        const under = n < target * 0.8;
+        rows.push({ code: 'words', kind: 'info', text: `${fmt(n)} of ${fmt(target)} words`, sub: under ? 'Under 80% of the target.' : 'Over 120% of the target.',
+          ranges: [], sents: [], under });
       }
     }
     return { rows, warnings: rows.filter((r) => r.kind === 'warn').length, empty: false };
   }
 
-  root.kdpTextChecks = { check, mark, knownOf, ending, stripLabels, sentenceKeys, bookRepeats, SOURCE_LABEL };
+  root.kdpTextChecks = { check, mark, knownOf, ending, stripLabels, sentenceKeys, bookRepeats, textKey, paragraphs, forms, SOURCE_LABEL };
 })(globalThis);

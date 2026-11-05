@@ -464,5 +464,19 @@ const test = async page => {
   ok((await selected()) === 'In section 3.1, you met four practices.', `Show 2: "${await selected()}"`);
   ok(await shots('mention') === false, 'mention: no sideways scroll at 900 px');
 
+  // 18. D6 (E14.2): "Chapter N" of a chapter that exists is fine; above the outline's chapters it is flagged.
+  // The count is kind "chapter" only: the Introduction and the Conclusion have no number.
+  const real = st.outline[W1].filter((c) => c.kind === 'chapter').length;
+  ok(st.outline[W1].length > real, `D6: the outline also has parts with no number: ${st.outline[W1].length} rows, ${real} chapters`);
+  st.addVersion(st.s51, `Breathe out slowly and let your shoulders drop. Go back to Chapter ${real} and rest well before bed.`, 'manual');
+  await open(W1, st.s51);
+  await checksTab();
+  ok(!(await has('[data-chk-row="mention"]')) && (await tabLabel()) === 'Checks', `D6: chapter ${real} of ${real}: no mention row: "${await tabLabel()}"`);
+  st.addVersion(st.s51, `Breathe out slowly and let your shoulders drop. Go back to Chapter ${real + 1} and rest well before bed.`, 'manual');
+  await open(W1, st.s51);
+  await checksTab();
+  ok((await rowText('mention')) === `Mentions another part of the book Cut it, or say what that part covers. Go back to Chapter ${real + 1} and rest well before bed. Show`, `D6: chapter ${real + 1} of ${real}: flagged: "${await rowText('mention')}"`);
+  ok((await tabLabel()) === 'Checks 1', `D6: counted in the tab: "${await tabLabel()}"`);
+
   return log.join('\n');
 };

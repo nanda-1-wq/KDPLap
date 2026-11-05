@@ -92,10 +92,12 @@
       const target = hit ? hit.s.word_target || 0 : 0;
       const k = known();
       const title = hit ? hit.s.title || '' : '';
-      const key = `${cur().text}\u0000${k}\u0000${target}\u0000${title}\u0000${others.seq}`;
+      // D6: "Chapter N" is fine when chapter N exists. Only kind "chapter" has a number (not the Introduction or Conclusion).
+      const chapters = host.chapters().filter((c) => c.kind === 'chapter').length;
+      const key = `${cur().text}\u0000${k}\u0000${target}\u0000${title}\u0000${others.seq}\u0000${chapters}`;
       // Only the list read for this section (never one that holds its own text).
       const list = others.id === cur().id ? others.list : [];
-      if (memo.key !== key) memo = { key, out: T.check(cur().text, { known: k, target, title, others: list }) };
+      if (memo.key !== key) memo = { key, out: T.check(cur().text, { known: k, target, title, others: list, chapters }) };
       return memo.out;
     }
 
