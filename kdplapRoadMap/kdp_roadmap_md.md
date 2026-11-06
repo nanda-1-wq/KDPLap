@@ -68,10 +68,20 @@ Status: ✅ done (E1 to E12, both review gates)
 - [x] Live check on nicheink.com, steps 1 to 5 and 8 (`docs/reviews/rename-live/`)
 - Pending:
   - the Google OAuth consent-screen app name (NicheInk);
-  - drop the github.io origin (generate CORS, Supabase redirect URLs, Google origins) in generate v26, no earlier than Nov 12, 2026 (14 days after Oct 29), and only if the Edge logs show no github.io calls for 7 days.
+  - drop the github.io origin (generate CORS, Supabase redirect URLs, Google origins) in generate v27, no earlier than Nov 12, 2026 (14 days after Oct 29), and only if the Edge logs show no github.io calls for 7 days.
+
+## E14 · 07 Quality Control · ✅ done (Nov 6)
+- [x] Migration 0028 live Nov 5
+- [x] generate v26 live Nov 6 (promise_check)
+- [x] Live check passed (E14.7, $0.089 on the test account): `docs/reviews/2026-11-06-e14-7-live.md`
+- Plan: `docs/reviews/2026-11-05-e14-qc-plan.md`
+- Open items:
+  - the `write/t-chapter` "done" flake (see the watch list): a small separate task;
+  - the server "AI failed, not counted" path: only mock and server tests cover it, not a live run;
+  - the estimate: input about 12% low, output about 60% high. Watch it on the real book.
 
 ## Next
-v2 step B: flow + screen list for design batch 1 (08 + 09).
+08 Format: rebuild the 08 screen from design 41 on `claude/e13-1-format`. Then 09 Cover (E15).
 
 ## v2 · KDP-ready files
 Scope: owner decisions, v2 step A (Oct 31).
@@ -83,7 +93,7 @@ Scope: owner decisions, v2 step A (Oct 31).
 
 **v2b · complete**
 4. 06 Book parts (front and back matter) + Also by
-5. 07 Quality Control
+5. 07 Quality Control ✅ done Nov 6 (E14)
 6. AI cover images
 7. PACKAGE review gate
 
