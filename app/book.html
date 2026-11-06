@@ -46,6 +46,8 @@
       </header>
       <!-- E12 fix batch 3 (design 22f, 13): a completed book. Filled by js/book.js -->
       <div class="book-strip" data-book-strip hidden></div>
+      <!-- E14.4 (design 56): 06 opened from 07. Filled by js/write-qc.js -->
+      <div class="qc-wbar" data-qc-bar role="region" aria-label="Quality Control issue" hidden></div>
       <main class="book-content" data-book-content aria-live="polite"></main>
     </div>
   </div>
@@ -78,6 +80,7 @@
   <script src="../js/write-checks.js"></script>
   <script src="../js/usage-rules.js"></script>
   <script src="../js/write-generate.js"></script>
+  <script src="../js/write-qc.js"></script>
   <script src="../js/book-write.js"></script>
   <script src="../js/export-rules.js"></script>
   <script src="../js/export-build.js"></script>

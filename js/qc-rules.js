@@ -554,7 +554,7 @@
     for (const r of reads) {
       const s = r.sec;
       const marks = r.rows.get('marks');
-      for (const x of marks ? marks.sents : []) add(2, 'verify_mark', `${s.id}|${hText(x.text)}`, s, 'A Verify mark is left in the text. Add a source, or cut the claim.', x);
+      for (const x of marks ? marks.sents : []) add(2, 'verify_mark', `${s.id}|${hText(x.text)}`, s, '"Verify: no source" is still in the text.', x);
       const nums = r.rows.get('number');
       for (const x of nums ? nums.spots : []) {
         const body = r.md.slice(x.start, x.end);

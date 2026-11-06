@@ -54,6 +54,9 @@
      at the end of the manuscript (0026 complete_book checks the rule again),
      and "Reopen book" on a completed book. A status change here that breaks
      the rule reopens the book on the server (0026); a note says why.
+   - Opened from 07 (E14.4, design 56, js/write-qc.js): openSpot names the
+     section and the spot, a QC bar sits above the columns until the step
+     changes. The editor is rebuilt often, so the mark is put back each time.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -100,6 +103,7 @@
   let G = null;                       // Generate (js/write-generate.js)
   let imp = null;                     // the Improve menu (js/write-improve.js)
   let chk = null;                     // the Checks tab (js/write-checks.js)
+  let Q = null;                       // opened from 07: the QC bar and the spot (js/write-qc.js)
   let holdDrafts = false;             // Accept: autosave paused (decision A)
   let review = { busy: null, err: null, done: '' };   // Mark all as reviewed: busy 'book' | chapter id; err { scope, ids }
   let reviewTimer = null;
@@ -237,6 +241,8 @@
     if (wantSection && !findSection(wantSection)) wantSection = null;
     if ((!cur || wantSection) && gateOpen()) {
       const pick = firstSection();
+      // Only 07 "Open in 06" gets here with a section open: the normal leave rules apply.
+      if (pick && cur) { await moveToSection(pick); return; }
       if (pick) { openSection(pick, { quiet: true }); return; }
     }
     renderAll();
@@ -291,6 +297,7 @@
       }
     }
     if (hit) Object.assign(hit.s, { current_version_id: base, words: version ? version.word_count : 0, version_at: version ? version.created_at : null });
+    Q.arrive(id);
     if (active()) renderAll();
     loadVersions();
     G.loadRun();
@@ -683,17 +690,26 @@
     if (b) b.focus();
   }
 
-  /** Leaving the section: a version first. Stays when the text could not be saved at all. */
-  async function selectSection(id) {
-    if (cur && cur.id === id && cur.state === 'ready') return;
-    if (!(await confirmLeave())) return;
+  /**
+   * Leaving the section: a version first. Stays when the text could not be saved at all.
+   * Resolves true when the section is the open one.
+   */
+  async function moveToSection(id) {
+    if (cur && cur.id === id && cur.state === 'ready') return true;
+    if (!(await confirmLeave())) return false;
     const ok = await makeVersion('leave');
     if (!ok) {
       note = { kind: 'error', text: 'Your text is not saved yet. Use Retry next to “Couldn’t save”, then open another section.' };
       renderNotes();
-      return;
+      return false;
     }
     await openSection(id);
+    return true;
+  }
+
+  async function selectSection(id) {
+    if (cur && cur.id === id && cur.state === 'ready') return;
+    if (!(await moveToSection(id))) return;
     const h = els && els.root.querySelector('[data-sec-title]');
     if (h) h.focus();
   }
@@ -888,11 +904,14 @@
       live: root.querySelector('[data-live]')
     };
     bind(root.querySelector('.wr'));
+    Q.render();
     // The number check knows the Research sources (as the server's rule): read on each step open.
     chk.loadResearch();
     if (load.state === 'idle' || load.state === 'error') { loadOutline(); return; }
     renderAll();
     if (load.state !== 'ready') return;
+    // The step's address has no section yet. A reload keeps it, also when the section is not read again below.
+    if (cur) history.replaceState(history.state, '', `?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(cur.id)}`);
     // Back from another step: the outline may have changed there (05 edits, an unlock in 03).
     loadOutline(true).then(() => {
       if (active() && cur && cur.state === 'ready' && !dirty() && !saver.hasUnsaved()) openSection(cur.id, { keepNote: true });
@@ -1095,6 +1114,7 @@
     renderWords();
     renderFoot();
     imp.render();
+    Q.paint();
   }
 
   /** Generate section, and in a chapter Generate chapter with its line on a row of their own (design 23b, 1A). */
@@ -1461,9 +1481,34 @@
 
   const needsReview = () => load.state === 'ready' && allSections().some((x) => x.s.needs_review);
 
+  /** The section of a QC issue: its own, or the chapter's first section with text (a chapter-wide issue). */
+  function qcSection(x) {
+    if (x.sectionId) return x.sectionId;
+    const c = chapters.find((y) => y.id === x.chapterId);
+    const list = (c && c.sections) || [];
+    const s = list.find(hasWriting) || list[0];
+    return s ? s.id : null;
+  }
+
+  /** 07 "Open in 06": this section opens with the step, with its spot marked. */
+  function openSpot(x) {
+    const id = Q.setSpot(x);
+    wantSection = cur && cur.id === id ? null : id;
+  }
+
   function init(b, c) {
     ctx = c;
     book = b;
+    Q = kdpWriteQc.create({
+      els: () => els,
+      cur: () => cur,
+      active,
+      editor: () => (els ? els.main.querySelector('[data-editor]') : null),
+      announce,
+      sectionOf: qcSection,
+      moveTo: moveToSection,
+      go: (n) => ctx.go(n)
+    });
     imp = kdpWriteImprove.create({
       els: () => els,
       cur: () => cur,
@@ -1583,13 +1628,14 @@
     blockers: () => 0,
     flush: () => (saver ? saver.flush() : Promise.resolve()),
     /** Leaving the step or the page: the typed text becomes a version (owner, E10). */
-    leave: () => makeVersion('leave'),
+    leave: () => { Q.end(); return makeVersion('leave'); },
     /** Another step, Back/Forward or Exit while the AI writes: ask first (E10.2). Resolves false to stay. */
     confirmLeave: () => confirmLeave(),
     /** "&section=<id>" for the open section (book.js puts the address back after a cancelled Back). */
     sectionQuery: () => (cur ? `&section=${encodeURIComponent(cur.id)}` : ''),
-    /** 07 "Open in 06": this section opens with the step (E14.3: the section only; E14.4 adds the spot and the bar). */
-    pickSection: (id) => { wantSection = cur && cur.id === id ? null : id; },
+    /** 07 "Open in 06": the session first, then the spot, then ctx.go(6). */
+    qcSession: (s) => Q.start(s),
+    openSpot,
     retrySave: () => saver && saver.retry(),
     hasUnsaved: () => !!saver && (saver.hasUnsaved() || dirty()),
     saveState: () => (saver ? saver.state : 'idle'),

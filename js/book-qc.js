@@ -15,8 +15,12 @@
    Mark as OK writes qc_dismissed at once and hides the row. The key holds the
    text at the spot, so a changed spot brings the issue back.
 
-   E14.3 limits: "Open in 06" only selects the section (the spot and the QC bar
-   are E14.4). Group 6 and the promise cards are drawn, their button is off
+   Open in 06 (E14.4, design 56) starts a QC session: the group and its open
+   issues that open in 06. js/write-qc.js moves through them. Back to Quality
+   Control comes back here with the groups and the scroll as left, the focus on
+   that issue's row. Any other step change ends the session.
+
+   E14.3 limits: group 6 and the promise cards are drawn, their button is off
    (E14.6). 08 is not built: "Go to 08 Format" and "How to add one" show
    Coming next (V9).
 ═══════════════════════════════════════════════════ */
@@ -54,6 +58,8 @@
   const justOk = new Set();        // issues marked on this visit: their line stays, with Undo
   const rowError = new Map();      // issue → the line under its row
   let focusAfter = null;
+  let session = null;              // the QC session sent to 06 (js/write-qc.js writes index and back)
+  let comeBack = null;             // the session Back to Quality Control returned with
 
   const active = () => !!ctx && ctx.isActive(STEP);
   const plural = (n, one, many) => `${Number(n).toLocaleString('en-US')} ${n === 1 ? one : many}`;
@@ -151,11 +157,14 @@
     return !x.section_id ? 'Whole book' : labels.get(x.section_id) || 'Removed section';
   }
 
+  /** An issue of a section that still exists opens in 06. Chapter and book-wide issues do not. */
+  const opensIn06 = (x, labels) => x.rule !== 'chapter_review' && x.rule !== 'disclaimer' && !!x.section_id && labels.has(x.section_id);
+
   /** The link of one row: Open in 06, Open in 05, How to add one, or nothing. */
   function rowLink(x, labels) {
     if (x.rule === 'chapter_review') return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=5" data-go="5">Open in 05</a>`;
     if (x.rule === 'disclaimer') return '<span class="qc-lk is-off">How to add one</span><span class="version-tag">Coming next</span>';
-    if (!x.section_id || !labels.has(x.section_id)) return '';
+    if (!opensIn06(x, labels)) return '';
     return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(x.section_id)}" data-open="${esc(x.section_id)}">Open in 06</a>`;
   }
 
@@ -179,10 +188,14 @@
       </li>`;
   }
 
-  function groupOf(g, name, r, off, labels) {
-    // Book-wide issues come after the sections (design 53).
+  /** A group's issues in row order, each with its index in the run. Book-wide ones come last (design 53). */
+  function inRowOrder(r, g) {
     const place = (x) => (x.section_id ? 0 : 1);
-    const all = itemsOf(r).map((x, i) => [x, i]).filter(([x]) => x.g === g).sort(([a], [b]) => place(a) - place(b));
+    return itemsOf(r).map((x, i) => [x, i]).filter(([x]) => x.g === g).sort(([a], [b]) => place(a) - place(b));
+  }
+
+  function groupOf(g, name, r, off, labels) {
+    const all = inRowOrder(r, g);
     const open = all.filter(([x]) => !off.has(idOf(x)));
     const more = (r.results && r.results.more && r.results.more[g]) || 0;
     const sources = (r.results && r.results.sources) || [];
@@ -385,6 +398,19 @@
     const el = focusAfter ? focusAfter() : held && host.querySelector(held);
     focusAfter = null;
     if (el) el.focus();
+    if (comeBack && state === 'ready') backInPlace();
+  }
+
+  /** Back to Quality Control: the scroll as left, the focus on that issue's row. */
+  function backInPlace() {
+    const b = comeBack;
+    comeBack = null;
+    window.scrollTo(0, b.scroll);
+    const r = shownRun();
+    const row = r && r.id === b.runId ? host.querySelector(`[data-item="${b.items[b.index].i}"]`) : null;
+    if (!row) return;
+    (row.querySelector('[data-open]') || row).focus({ preventScroll: true });
+    row.scrollIntoView({ block: 'nearest' });
   }
 
   /* ── Reading and running ────────────────── */
@@ -400,7 +426,7 @@
     state = 'loading';
     focusAfter = null;
     banner = banner === 'save' ? banner : '';
-    justOk.clear();
+    if (!comeBack) justOk.clear();   // back from 06: the list stays as it was left
     rowError.clear();
     paint();
     // Coming from 06: the version it saves on leaving must be in first.
@@ -569,6 +595,28 @@
     paint();
   }
 
+  /* ── Open in 06 (design 56) ─────────────── */
+
+  /** Sets the QC session, tells 06 the section and the spot, then opens it. */
+  function openIn06(i) {
+    const r = shownRun();
+    const x = itemsOf(r)[i];
+    if (!x) return;
+    const off = offKeys();
+    const labels = sectionLabels();
+    const items = inRowOrder(r, x.g).filter(([y]) => !off.has(idOf(y)) && opensIn06(y, labels)).map(([y, n]) => ({
+      i: n, sectionId: y.section_id, message: y.message, quote: y.quote,
+      spot: y.start == null ? null : { start: y.start, end: y.end, versionId: y.version_id }
+    }));
+    const index = items.findIndex((y) => y.i === i);
+    if (index < 0) return;
+    session = { group: x.g, name: GROUPS.find(([g]) => g === x.g)[1], items, index, runId: r.id, scroll: window.scrollY, back: false };
+    const write = window.kdpBookSteps[6];
+    write.qcSession(session);
+    write.openSpot(items[index]);
+    ctx.go(6);
+  }
+
   /* ── Events ─────────────────────────────── */
 
   function onClick(e) {
@@ -590,15 +638,15 @@
     if (t.dataset.go && plainClick) { e.preventDefault(); ctx.go(Number(t.dataset.go)); return; }
     if (t.dataset.open && plainClick) {
       e.preventDefault();
-      const write = window.kdpBookSteps[6];
-      if (write && write.pickSection) write.pickSection(t.dataset.open);
-      ctx.go(6);
+      openIn06(Number(t.closest('[data-item]').dataset.item));
     }
   }
 
   /* ── Step API for js/book.js ─────────────── */
 
   function render(root) {
+    comeBack = session && session.back ? session : null;
+    session = null;
     root.innerHTML = '<div class="qc" data-qc></div>';
     host = root.querySelector('[data-qc]');
     host.addEventListener('click', onClick);

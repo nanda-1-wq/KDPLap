@@ -3594,7 +3594,37 @@ div.delete-text p { margin: 0; }
 .qc-groups.is-old .qc-gt, .qc-groups.is-old .qc-tx, .qc-groups.is-old .qc-sec, .qc-groups.is-old .step-num { color: var(--muted); }
 .qc-groups.is-old .qc-chip { border: 1px solid var(--stone); background: var(--paper); color: var(--muted); }
 
+/* ── Step 06 opened from Quality Control (design 56) ── */
+
+.qc-wbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--app-qc-row-gap);
+  padding: var(--app-qc-gap) var(--space-10);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--stone);
+  font-size: var(--text-md);
+}
+.qc-wbar[hidden], .qc-wbar-lost[hidden] { display: none; }
+.qc-wbar-icon { display: flex; flex-shrink: 0; color: var(--warning); }
+.qc-wbar-text { flex: 1; min-width: 0; margin: 0; line-height: 1.45; color: var(--ink-2); overflow-wrap: anywhere; }
+.qc-wbar-text strong { font-weight: 700; color: var(--ink); }
+.qc-wbar-lost { margin-left: var(--space-2); display: inline-flex; align-items: center; gap: var(--space-1); font-weight: 600; color: var(--warning); }
+.qc-wbar-lost svg { flex-shrink: 0; }
+.qc-wbar-btns { flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--app-qc-row-gap); }
+/* A 36 px look, a 44 px hit area (V1): the button's own box reaches past what is drawn. */
+.qc-wbar-btn { position: relative; height: var(--app-qc-link-h); min-height: 0; padding: 0 var(--space-3); font-size: var(--text-sm); }
+.qc-wbar-btn::after { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: var(--control-h); transform: translateY(-50%); }
+/* The spot (V4): a highlight cannot draw an outline, so the line is an underline. */
+::highlight(qc-spot) {
+  background-color: var(--warning-bg);
+  text-decoration: underline var(--app-qc-hair) var(--warning);
+}
+
 @media (max-width: 1200px) {
+  .qc-wbar { flex-wrap: wrap; }
+  .qc-wbar-text { flex-basis: calc(100% - var(--space-8)); }
   .qc { flex-direction: column; align-items: stretch; }
   .qc-side, .qc-side.is-first { width: 100%; }
   /* The long step name and "Coming next" share the head: the note goes under the buttons. */
@@ -3603,6 +3633,7 @@ div.delete-text p { margin: 0; }
   .book-layout:has(.qc) .next-note { order: 1; grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
+  .qc-wbar { padding-left: var(--space-4); padding-right: var(--space-4); }
   .qc-list { grid-template-columns: minmax(0, 1fr); }
   .qc-promise-wide { flex-wrap: wrap; }
   .qc-items, .qc-empty { padding-left: var(--space-5); }
