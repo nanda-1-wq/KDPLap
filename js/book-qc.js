@@ -20,9 +20,11 @@
    Control comes back here with the groups and the scroll as left, the focus on
    that issue's row. Any other step change ends the session.
 
-   E14.3 limits: group 6 and the promise cards are drawn, their button is off
-   (E14.6). 08 is not built: "Go to 08 Format" and "How to add one" show
-   Coming next (V9).
+   Group 6 and the promise card (designs 53, 54, 55 D) are js/qc-promise.js. Its
+   rows have the shape of a run's items, and a ref of "d:" + the chapter id in
+   place of the item's index. They are never saved in a run.
+
+   08 is not built: "Go to 08 Format" and "How to add one" show Coming next (V9).
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -61,6 +63,8 @@
   let session = null;              // the QC session sent to 06 (js/write-qc.js writes index and back)
   let comeBack = null;             // the session Back to Quality Control returned with
 
+  let P = null;                    // the promise check (js/qc-promise.js)
+
   const active = () => !!ctx && ctx.isActive(STEP);
   const plural = (n, one, many) => `${Number(n).toLocaleString('en-US')} ${n === 1 ? one : many}`;
   const idOf = (x) => `${x.rule}\u0000${x.key}`;
@@ -73,7 +77,6 @@
   /* ── What the screen reads ──────────────── */
 
   const chaptersOf = () => (qc && qc.data && qc.data.chapters) || [];
-  const chapterCount = () => chaptersOf().filter((c) => c.kind === 'chapter').length;
 
   /** Today's outline: section id → "3.2 Title", "Introduction" or "Conclusion" (as 06 and Export). */
   function sectionLabels() {
@@ -108,7 +111,20 @@
 
   const isStale = () => !unsaved && !!qc.last_run && !qc.current;
   const offKeys = () => new Set((qc.dismissed || []).map(idOfRow));
-  const itemsOf = (r) => (r.results && r.results.items) || [];
+  const itemsOf = (r) => (r && r.results && r.results.items) || [];
+  const refOfChapter = (id) => `d:${id}`;
+
+  /** A row's item: its index in the run, or "d:" + the chapter of a drift. */
+  function itemAt(ref) {
+    const t = String(ref);
+    return t.startsWith('d:') ? P.item(t.slice(2)) : itemsOf(shownRun())[Number(t)];
+  }
+
+  /** The ref of an issue, from its rule and key. */
+  function refOf(key) {
+    const drift = P.items().find((x) => idOf(x) === key);
+    return drift ? refOfChapter(drift.chapter_id) : String(itemsOf(shownRun()).findIndex((x) => idOf(x) === key));
+  }
 
   /** The text of 55 B: the first section changed since the run, or the inputs. */
   function staleText() {
@@ -142,8 +158,18 @@
 
   const chip = (kind, text, ic = '') => `<span class="qc-chip is-${kind}">${ic}${esc(text)}</span>`;
 
+  /** Group 6: drifts to check, then what is out of date or not checked yet. */
+  function promiseChips(open) {
+    const s = P.summary();
+    const rest = (s.stale ? chip('info', `${s.stale.toLocaleString('en-US')} out of date`) : '')
+      + (s.current && s.none ? chip('info', `${s.none.toLocaleString('en-US')} not checked`) : '');
+    if (open) return chip('warn', `${open.toLocaleString('en-US')} to check`, WARN(14)) + rest;
+    if (s.current) return chip('ok', 'All clear', CHECK(14, 2.4)) + rest;
+    return rest || chip('info', 'Not run · AI, paid');
+  }
+
   function chipsOf(g, items, more, sources) {
-    if (g === 6) return chip('info', 'Not run · AI, paid');
+    if (g === 6) return promiseChips(items.length);
     const n = items.length + more;
     const named = g === 2 && sources.length ? chip('info', plural(sources.length, 'source named', 'sources named')) : '';
     if (!n) return chip('ok', 'All clear', CHECK(14, 2.4)) + named;
@@ -153,25 +179,28 @@
 
   /** The label of a row: a section, a chapter, or the whole book. */
   function whereOf(x, labels) {
-    if (x.rule === 'chapter_review') return chapterName(x.key);
+    if (x.rule === 'chapter_review' || (x.rule === 'promise_drift' && !labels.has(x.section_id))) return chapterName(x.key);
     return !x.section_id ? 'Whole book' : labels.get(x.section_id) || 'Removed section';
   }
 
+  /** The section an issue opens: a drift with no quote opens its chapter's first section with text. */
+  const sectionToOpen = (x) => x.open_id || x.section_id;
+
   /** An issue of a section that still exists opens in 06. Chapter and book-wide issues do not. */
-  const opensIn06 = (x, labels) => x.rule !== 'chapter_review' && x.rule !== 'disclaimer' && !!x.section_id && labels.has(x.section_id);
+  const opensIn06 = (x, labels) => x.rule !== 'chapter_review' && x.rule !== 'disclaimer' && !!sectionToOpen(x) && labels.has(sectionToOpen(x));
 
   /** The link of one row: Open in 06, Open in 05, How to add one, or nothing. */
   function rowLink(x, labels) {
     if (x.rule === 'chapter_review') return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=5" data-go="5">Open in 05</a>`;
     if (x.rule === 'disclaimer') return '<span class="qc-lk is-off">How to add one</span><span class="version-tag">Coming next</span>';
     if (!opensIn06(x, labels)) return '';
-    return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(x.section_id)}" data-open="${esc(x.section_id)}">Open in 06</a>`;
+    return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(sectionToOpen(x))}" data-open="${esc(sectionToOpen(x))}">Open in 06</a>`;
   }
 
   function rowOf(x, i, labels) {
     const err = rowError.get(idOf(x));
     return `<li class="qc-it" data-item="${i}">
-        <span class="qc-sec">${esc(whereOf(x, labels))}</span><span class="qc-tx">${esc(x.message)}</span>
+        <span class="qc-sec">${esc(whereOf(x, labels))}</span><span class="qc-tx">${esc(x.message)}${x.rule === 'promise_drift' ? P.verify(x.unsourced) : ''}</span>
         ${rowLink(x, labels)}<button type="button" class="qc-lk2" data-ok="${i}"${run.on ? ' disabled' : ''}>Mark as OK</button>
         ${err ? `<p class="qc-row-err" role="alert">${ICON.warn(14)}<span>${esc(err)}</span></p>` : ''}
       </li>`;
@@ -190,6 +219,7 @@
 
   /** A group's issues in row order, each with its index in the run. Book-wide ones come last (design 53). */
   function inRowOrder(r, g) {
+    if (g === 6) return P.items().map((x) => [x, refOfChapter(x.chapter_id)]);
     const place = (x) => (x.section_id ? 0 : 1);
     return itemsOf(r).map((x, i) => [x, i]).filter(([x]) => x.g === g).sort(([a], [b]) => place(a) - place(b));
   }
@@ -208,11 +238,9 @@
       seen.add(idOf(x));
       return [okRow(x, i, rows.get(idOf(x)), labels)];
     });
-    const body = g === 6
-      ? '<p class="qc-empty">Comes in the next part.</p>'
-      : lines.length || more
-        ? `<ul class="qc-items">${lines.join('')}${more ? `<li class="qc-more">and ${more.toLocaleString('en-US')} more</li>` : ''}</ul>`
-        : '<p class="qc-empty">No issues here.</p>';
+    const body = lines.length || more
+      ? `<ul class="qc-items">${lines.join('')}${more ? `<li class="qc-more">and ${more.toLocaleString('en-US')} more</li>` : ''}</ul>`
+      : `<p class="qc-empty">${esc(g === 6 ? P.emptyLine() : 'No issues here.')}</p>`;
     return `<div class="qc-g">
         <button type="button" class="qc-gb" aria-expanded="${isOpen}" aria-controls="qc-g${g}" data-group="${g}">${isOpen ? CHEV_OPEN : CHEV_SHUT}<span class="step-num">${g}</span><span class="qc-gt">${name}</span><span class="qc-chips">${chipsOf(g, open.map(([x]) => x), more, sources)}</span></button>
         <div class="qc-gbody" id="qc-g${g}"${isOpen ? '' : ' hidden'}>${body}</div>
@@ -235,8 +263,6 @@
       </aside>`;
   }
 
-  const promiseOff = '<button type="button" class="btn btn-secondary" disabled>Check the promise</button>';
-
   function firstCard() {
     const item = (n, title, text, tag = '') => `<li><span class="step-num">${n}</span><span><b>${title}</b> ${text}${tag}</span></li>`;
     return `<section class="qc-card qc-first">
@@ -255,13 +281,7 @@
         </ul>
         <div class="qc-run">${runButton('btn-primary', 'Run checks', CHECK(18))}<p class="qc-note">Free. About 2 seconds. Runs groups 1 to 5 and 7.</p></div>
       </section>
-      <section class="qc-card qc-promise-wide">
-        <div class="qc-promise-text">
-          <p class="chip-label">6 · PROMISE CHECK · AI</p>
-          <p class="qc-lead">Compares each chapter with your locked promise in 03 Positioning. One AI call per chapter. You see the cost before it runs.</p>
-        </div>
-        <div class="qc-off">${promiseOff}<p class="qc-note">Comes in the next part</p></div>
-      </section>`;
+      ${P.card(true)}`;
   }
 
   function noText() {
@@ -307,7 +327,7 @@
           <span class="qc-sub">No problems found in ${plural(r.sections, 'section', 'sections')}.${ok}</span>
           <div class="qc-off"><button type="button" class="btn btn-primary" disabled>Go to 08 Format</button><span class="version-tag">Coming next</span></div>
         </div>
-        <p class="qc-note">Promise check not run. It is optional.</p>${noteLine}`;
+        ${P.summary().current ? '' : '<p class="qc-note">Promise check not run. It is optional.</p>'}${noteLine}`;
     }
     return `<div class="qc-verdict" role="status" tabindex="-1" data-verdict>
         ${WARN(22, 2)}
@@ -319,15 +339,10 @@
 
   function resultsSide(r) {
     const rows = new Map((qc.dismissed || []).map((d) => [idOfRow(d), d]));
-    const marked = [...new Set(itemsOf(r).map(idOf))].map((k) => rows.get(k)).filter(Boolean);
+    const marked = [...new Set([...itemsOf(r), ...P.items()].map(idOf))].map((k) => rows.get(k)).filter(Boolean);
     const list = marked.map((d) => `<div class="qc-it is-side"><span class="qc-tx">${esc(d.label)}</span><button type="button" class="qc-lk2" data-undo="${esc(d.id || '')}"${d.id && !run.on ? '' : ' disabled'}>Undo</button></div>`).join('');
-    const n = chapterCount();
     return `<aside class="qc-side">
-        <section class="qc-card qc-side-card">
-          <p class="chip-label">6 · PROMISE CHECK · AI</p>
-          <p class="qc-fact">Checks each of the ${plural(n, 'chapter', 'chapters')} against your locked promise. One call per chapter.</p>
-          <div class="qc-off">${promiseOff}<p class="qc-note">Comes in the next part</p></div>
-        </section>
+        ${P.card(false)}
         ${marked.length ? `<section class="qc-card qc-side-card" data-marked>
           <p class="chip-label">MARKED AS OK · ${marked.length.toLocaleString('en-US')}</p>
           <p class="qc-note">These stay hidden on the next run. You can bring them back.</p>
@@ -353,7 +368,7 @@
     if (key === openFor) return;
     openFor = key;
     const off = offKeys();
-    const hit = itemsOf(r || {}).find((x) => !off.has(idOf(x)));
+    const hit = [...itemsOf(r), ...P.items()].filter((x) => !off.has(idOf(x))).sort((a, b) => a.g - b.g)[0];
     const more = Object.keys((r && r.results && r.results.more) || {}).map(Number).sort((a, b) => a - b)[0];
     openFirst = hit ? hit.g : more || null;
   }
@@ -362,7 +377,7 @@
   function focusMark() {
     const a = document.activeElement;
     if (!a || !host.contains(a)) return null;
-    const attr = ['data-ok', 'data-group', 'data-justok'].find((n) => a.hasAttribute(n));
+    const attr = ['data-ok', 'data-group', 'data-justok', 'data-pr-ok', 'data-pr-open', 'data-pr-again', 'data-pr-row'].find((n) => a.hasAttribute(n));
     return attr ? `[${attr}="${a.getAttribute(attr)}"]` : null;
   }
 
@@ -407,9 +422,12 @@
     comeBack = null;
     window.scrollTo(0, b.scroll);
     const r = shownRun();
-    const row = r && r.id === b.runId ? host.querySelector(`[data-item="${b.items[b.index].i}"]`) : null;
+    const at = b.items[b.index].i;
+    // Drift rows do not belong to a run. A drift opened from the promise card goes back to its row there.
+    const sel = b.card ? `[data-pr-row="${String(at).slice(2)}"]` : `[data-item="${at}"]`;
+    const row = b.group === 6 || (r && r.id === b.runId) ? host.querySelector(sel) : null;
     if (!row) return;
-    (row.querySelector('[data-open]') || row).focus({ preventScroll: true });
+    (row.querySelector('[data-open], [data-pr-open]') || row).focus({ preventScroll: true });
     row.scrollIntoView({ block: 'nearest' });
   }
 
@@ -418,6 +436,7 @@
   async function read() {
     let res;
     try { res = await kdp.getQcData(book.id); } catch (e) { res = { error: e }; }
+    if (!res.error) P.adopt(res.data);
     return res;
   }
 
@@ -542,8 +561,9 @@
     return x.section_id && labels.has(x.section_id) && x.key.startsWith(`${x.section_id}|`) ? x.section_id : null;
   }
 
-  async function markOk(i) {
-    const x = itemsOf(shownRun())[i];
+  /** ref: the row's. card: Mark as OK was pressed in the promise card, so the focus stays there. */
+  async function markOk(ref, card = false) {
+    const x = itemAt(ref);
     if (!x) return;
     const key = idOf(x);
     if (offKeys().has(key)) return;
@@ -554,7 +574,9 @@
     qc.dismissed = [row, ...(qc.dismissed || [])];
     justOk.add(key);
     rowError.delete(key);
-    focusAfter = () => host.querySelector(`[data-justok="${i}"]`);
+    const shown = card ? `[data-pr-row="${String(ref).slice(2)}"]` : `[data-justok="${ref}"]`;
+    const button = card ? `[data-pr-ok="${String(ref).slice(2)}"]` : `[data-ok="${ref}"]`;
+    focusAfter = () => host.querySelector(shown);
     paint();
     let res;
     try { res = await kdp.dismissQcIssue({ bookId: book.id, sectionId: sectionFor(x, labels), rule: x.rule, issueKey: x.key, label }); } catch (e) { res = { error: e }; }
@@ -564,18 +586,18 @@
       rowError.set(key, /qc_dismissed_limit/.test((res.error && res.error.message) || '')
         ? 'You marked 500 issues as OK in this book. Undo one first.'
         : "We couldn't save that. Try again.");
-      focusAfter = () => host.querySelector(`[data-ok="${i}"]`);
+      focusAfter = () => host.querySelector(button);
       paint();
       return;
     }
     Object.assign(row, res.data);
     // Undo is ready. Focus moves to it only if the writer has not moved on.
-    const here = document.activeElement && document.activeElement.closest && document.activeElement.closest(`[data-justok="${i}"]`);
-    if (here) focusAfter = () => host.querySelector(`[data-justok="${i}"] [data-undo]`);
+    const here = document.activeElement && document.activeElement.closest && document.activeElement.closest(shown);
+    if (here) focusAfter = () => host.querySelector(`${shown} [data-undo]`);
     paint();
   }
 
-  async function undo(id) {
+  async function undo(id, card = false) {
     const row = (qc.dismissed || []).find((d) => d.id === id);
     if (!row) return;
     const key = idOfRow(row);
@@ -590,27 +612,27 @@
     qc.dismissed = qc.dismissed.filter((d) => d !== row);
     justOk.delete(key);
     rowError.delete(key);
-    const i = itemsOf(shownRun()).findIndex((x) => idOf(x) === key);
-    focusAfter = () => host.querySelector(`[data-ok="${i}"]`);
+    const ref = refOf(key);
+    focusAfter = () => host.querySelector(card ? `[data-pr-ok="${ref.slice(2)}"]` : `[data-ok="${ref}"]`);
     paint();
   }
 
   /* ── Open in 06 (design 56) ─────────────── */
 
   /** Sets the QC session, tells 06 the section and the spot, then opens it. */
-  function openIn06(i) {
+  function openIn06(ref, card = false) {
     const r = shownRun();
-    const x = itemsOf(r)[i];
+    const x = itemAt(ref);
     if (!x) return;
     const off = offKeys();
     const labels = sectionLabels();
     const items = inRowOrder(r, x.g).filter(([y]) => !off.has(idOf(y)) && opensIn06(y, labels)).map(([y, n]) => ({
-      i: n, sectionId: y.section_id, message: y.message, quote: y.quote,
+      i: n, sectionId: sectionToOpen(y), message: y.message, quote: y.quote,
       spot: y.start == null ? null : { start: y.start, end: y.end, versionId: y.version_id }
     }));
-    const index = items.findIndex((y) => y.i === i);
+    const index = items.findIndex((y) => String(y.i) === String(ref));
     if (index < 0) return;
-    session = { group: x.g, name: GROUPS.find(([g]) => g === x.g)[1], items, index, runId: r.id, scroll: window.scrollY, back: false };
+    session = { group: x.g, name: GROUPS.find(([g]) => g === x.g)[1], items, index, runId: r && r.id, scroll: window.scrollY, back: false, card };
     const write = window.kdpBookSteps[6];
     write.qcSession(session);
     write.openSpot(items[index]);
@@ -625,6 +647,7 @@
     const plainClick = !(e.metaKey || e.ctrlKey || e.shiftKey);
     if (t.matches('[data-run]')) { runChecks(); return; }
     if (t.matches('[data-reload]')) { load(); return; }
+    if (P.click(t)) return;
     if (t.matches('[data-retry-save]')) { retrySave(); return; }
     if (t.dataset.group) {
       const g = Number(t.dataset.group);
@@ -633,12 +656,17 @@
       paint();
       return;
     }
-    if (t.dataset.ok !== undefined) { markOk(Number(t.dataset.ok)); return; }
-    if (t.dataset.undo) { undo(t.dataset.undo); return; }
+    if (t.dataset.ok !== undefined) { markOk(t.dataset.ok); return; }
+    if (t.dataset.prOk) { markOk(refOfChapter(t.dataset.prOk), true); return; }
+    if (t.dataset.undo) { undo(t.dataset.undo, !!t.closest('[data-pr-row]')); return; }
     if (t.dataset.go && plainClick) { e.preventDefault(); ctx.go(Number(t.dataset.go)); return; }
     if (t.dataset.open && plainClick) {
       e.preventDefault();
-      openIn06(Number(t.closest('[data-item]').dataset.item));
+      openIn06(t.closest('[data-item]').dataset.item);
+    }
+    if (t.dataset.prOpen && plainClick) {
+      e.preventDefault();
+      openIn06(refOfChapter(t.dataset.prOpen), true);
     }
   }
 
@@ -656,8 +684,22 @@
 
   window.kdpBookSteps = window.kdpBookSteps || {};
   window.kdpBookSteps[STEP] = {
-    init(b, c) { book = b; ctx = c; },
+    init(b, c) {
+      book = b;
+      ctx = c;
+      P = kdpQcPromise.create({
+        book: () => book,
+        qc: () => qc,
+        setQc: (q) => { qc = q; },
+        read,
+        paint,
+        focus: (sel) => { focusAfter = () => host.querySelector(sel); },
+        okState: (x) => ({ row: (qc.dismissed || []).find((d) => idOfRow(d) === idOf(x)) || null, err: rowError.get(idOf(x)) || '', off: run.on }),
+        ui: { chip, CHECK, WARN }
+      });
+    },
     render,
+    async leave() { P.close(); },
     /** Done = the last run is still current. Warnings do not change it (design 57). */
     isDone: () => { const m = ctx && ctx.qcMark(); return !!(m && m.current); },
     blockers: () => 0

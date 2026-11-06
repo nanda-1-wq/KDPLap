@@ -5,6 +5,10 @@
 //   __modes: qcFail (n calls), qcSlow (ms), markFail, runFail ({ status, code, message }, n in runFailN),
 //   runSlow (ms), stale (n saves), okFail (n calls), okLimit, okSlow (ms), undoFail (n calls), versionSlow (ms),
 //   versionFail, draftFail (06 cannot save)
+//   Promise check (generate v26, stage promise_check): store.checks holds book_checks. store.plan[n] sets chapter n's
+//   answer ({ verdict, reason, quote, section_id, unsourced }; default keeps). __modes.prFail { n: code } fails chapter n
+//   once; code 'network' drops the connection, 'saved' saves the check and then drops it. prSlow (ms), prHold (a chapter
+//   number waits until the test clears it), usage (usage_month reply), usageFail, usageSlow (ms).
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const QB = 'c1c1c1c1-0000-4000-8000-000000000001';   // the book of design 52, 53
@@ -49,6 +53,8 @@ async function setupQc(page) {
     pos: { locked_at: ago(2), one_sentence: 'Study habits for busy adults.', reader_promise: 'You can study ten minutes a day.', approach: null, lacks: null, selling_points: [], focus_tags: [] },
     key: '0'.repeat(31) + '1',
     runs: [], dismissed: [], writes: [], calls: [], drafts: {}, marks: 0, qcReads: 0, nextId: 1,
+    checks: [], plan: {}, posts: [], usage: { limit: 2000000, tokens: 400000, resets: '2026-12-01T00:00:00+00:00', by_stage: [] },
+    chapter: (n) => chapters.filter((x) => x.kind === 'chapter')[n - 1],
     sections: () => chapters.flatMap((c) => c.sections),
     section: (n) => {
       // "3.2" = chapter 3, section 2.
@@ -100,7 +106,7 @@ async function setupQc(page) {
       data: data(), versions: versions(), inputs_key: store.key, format: copy(store.format), positioning: copy(store.pos),
       last_run: last ? copy(last) : null,
       current: !!last && same(last.versions, versions()) && last.inputs_key === store.key,
-      dismissed: copy(store.dismissed), promise: [], now: now()
+      dismissed: copy(store.dismissed), promise: copy(store.checks), now: now()
     };
   };
   const qcMark = () => {
@@ -229,6 +235,13 @@ async function setupQc(page) {
       return json(r, 204);
     }
 
+    if (path === '/rest/v1/rpc/usage_month') {
+      if (mode('usageSlow')) await wait(mode('usageSlow'));
+      if (mode('usageFail')) return json(r, 500, { message: 'mock: usage down' });
+      return json(r, 200, copy(store.usage));
+    }
+    if (path === '/functions/v1/generate') return promiseCheck(r, body());
+
     // 06 Write.
     if (path === '/rest/v1/rpc/outline_json') return json(r, 200, outlineJson());
     if (path === '/rest/v1/sections' && method === 'GET') {
@@ -277,6 +290,42 @@ async function setupQc(page) {
     if (path === '/rest/v1/pen_names' && method === 'GET') return json(r, 200, [{ id: PA, name: store.book.pen_name, voice: {} }]);
     if (path.startsWith('/rest/v1/')) return json(r, 200, one ? null : []);
     return json(r, 404, { message: 'mock: unknown' });
+  }
+
+  /** generate v26: the checks in plan 4.3, in order, then the answer of store.plan. */
+  async function promiseCheck(r, input) {
+    store.posts.push(input);
+    const refuse = (status, error, extra = {}) => r.fulfill({ status, contentType: 'application/json', headers: cors, body: JSON.stringify({ error, ...extra }) });
+    const keys = Object.keys(input).sort().join();
+    if (keys !== 'bookId,chapterId,stage' || input.stage !== 'promise_check') return refuse(400, 'bad_input');
+    const list = chapters.filter((c) => c.kind === 'chapter');
+    const c = list.find((x) => x.id === input.chapterId);
+    if (input.bookId !== QB || !c) return refuse(404, 'not_found');
+    const n = list.indexOf(c) + 1;
+    while (mode('prHold') === n) await wait(30);
+    if (mode('prSlow')) await wait(mode('prSlow'));
+    const fails = mode('prFail') || {};
+    const code = fails[n];
+    if (code) delete fails[n];
+    if (code === 'network') return r.abort('connectionreset');
+    if (code && code !== 'saved') return refuse(code === 'rate_limited' ? 429 : code === 'monthly_limit' ? 402 : code === 'positioning_not_locked' ? 409 : code === 'run_in_progress' ? 409 : code === 'nothing_to_check' ? 409 : /too_/.test(code) ? 400 : 502, code, /too_/.test(code) ? { words: 12 } : {});
+    if (!store.pos.locked_at) return refuse(409, 'positioning_not_locked');
+    const secs = c.sections.filter((s) => s.version && s.version.content.trim());
+    if (!secs.length) return refuse(409, 'nothing_to_check');
+    const words = secs.reduce((a, s) => a + count(s.version.content), 0);
+    if (words < 50) return refuse(400, 'check_too_short', { words });
+    if (words > 6000) return refuse(400, 'check_too_long', { words });
+    const plan = store.plan[n] || {};
+    const verdict = plan.verdict || 'keeps';
+    const inputs_key = await page.evaluate(([ch, pos]) => kdpQcPromiseKey.ofChapter(ch, pos), [copy(c), copy(store.pos)]);
+    const row = {
+      chapter_id: c.id, book_id: QB, verdict, reason: plan.reason || 'The chapter serves the reader promise.', quote: verdict === 'drifts' ? plan.quote || '' : '',
+      section_id: verdict === 'drifts' ? plan.section_id || null : null, unsourced: plan.unsourced || [], words, versions: secs.map((s) => s.version.id), inputs_key, checked_at: now()
+    };
+    store.checks = store.checks.filter((x) => x.chapter_id !== c.id).concat(row);
+    if (code === 'saved') return r.abort('connectionreset');
+    const { book_id, ...reply } = row;
+    return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ stage: 'promise_check', ...reply }) });
   }
 
   await ctx.route('**/supabase-js@2.49.4/dist/umd/supabase.js', (r) => r.fulfill({ path: `${CACHE}/supabase-2.49.4.js`, contentType: 'application/javascript', headers: { 'access-control-allow-origin': '*' } }));

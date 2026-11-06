@@ -15,9 +15,9 @@ const test = async page => {
   ok((await QC.txt(page, '.qc-run .qc-note')) === 'Free. About 2 seconds. Runs groups 1 to 5 and 7.', 'free note');
   ok((await QC.txt(page, '[data-run]')) === 'Run checks', 'Run checks');
 
-  // Group 6 is drawn; its button is off until E14.6.
-  ok(await page.$eval('.qc-promise-wide button', (b) => b.disabled && b.textContent === 'Check the promise'), 'promise button is off');
-  ok((await QC.txt(page, '.qc-promise-wide .qc-note')) === 'Comes in the next part', 'promise: Comes in the next part');
+  // The promise card: on, with its cost on the button (design 52).
+  ok(/^Check the promise · about \$0\.\d\d$/.test(await QC.txt(page, '.qc-promise-wide button')), `promise button: ${await QC.txt(page, '.qc-promise-wide button')}`);
+  ok(await page.$eval('.qc-promise-wide button', (b) => !b.disabled), 'promise button is on');
 
   const side = await QC.all(page, '.qc-side .qc-fact');
   ok(side.length === 4 && side[0].startsWith('Never blocks.') && side[3].startsWith('Step 07 is done'), `Good to know: ${JSON.stringify(side)}`);

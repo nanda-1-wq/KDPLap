@@ -267,9 +267,14 @@ and for E14.3 `qc` (07 Quality Control and the shared shell, designs 51, 51b, 52
 (55 A to 53, the row sent, the first group open, Open in 06), t-states (55 B, C, E, qc_stale, the save
 and load errors, a removed section), t-ok (55 F, Undo, 23505, the limit, an issue back after a text
 change), t-marks (the sidebar and the rail, 01 to 09, 08 and 09 Coming next, the mark 2 s after a save),
-t-a11y (keyboard, focus rings, 44 px, 900 px with no sideways scroll). `t-shots` makes the compare
-images of plan section 8.5 in `docs/reviews/e14-3-stop3/` with the real fonts; it is not a check. The
-qc mock answers as 0028 does (the qc_stale guard, the unique key, the results shape).
+t-a11y (keyboard, focus rings, 44 px, 900 px with no sideways scroll), and for E14.6 t-promise (designs 54,
+55 D, group 6: the cost, the skipped list, the monthly room, Esc and the focus trap, progress and Stop, the
+chips and counts, Check again, Mark as OK, Open in 06, every error, a lost connection with a fresh read).
+`t-shots`, `t-shots-56` and `t-shots-e146` make the compare images of plan section 8.5 in
+`docs/reviews/e14-*-stop*/` with the real fonts; they are not checks, and they overwrite tracked images. The
+qc mock answers as 0028 does (the qc_stale guard, the unique key, the results shape) and as generate v26
+does for promise_check. `write t-ms-head` holds the 06 manuscript head at 900 px, and at 1440 px pixel for
+pixel with and without its fix.
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every

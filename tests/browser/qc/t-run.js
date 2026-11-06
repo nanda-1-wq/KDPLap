@@ -69,10 +69,10 @@ const test = async page => {
   ok(kept.join() === '7', `the choices stay: ${kept}`);
   await page.click('[data-group="1"]');
 
-  // Group 6 and the promise card: drawn, off.
+  // Group 6 and the promise card, before any check (t-promise.js has the rest).
   await page.click('[data-group="6"]');
-  ok((await QC.txt(page, '#qc-g6')) === 'Comes in the next part.', 'group 6: Comes in the next part.');
-  ok(await page.$eval('.qc-side .qc-side-card button', (b) => b.disabled), 'promise card button is off');
+  ok((await QC.txt(page, '#qc-g6')) === 'Not run yet. The promise check is optional.', 'group 6: not run yet');
+  ok(await page.$eval('.qc-side .qc-side-card button', (b) => !b.disabled), 'promise card button is on');
   ok(/Checks each of the 7 chapters against your locked promise\./.test(await QC.txt(page, '.qc-side .qc-side-card')), 'promise card counts chapters');
   ok((await QC.all(page, '.qc-side .is-soft .chip-label'))[0] === 'SOURCES NAMED IN THE TEXT', 'sources note');
   ok(/^Approximate\. Built from source names/.test(await QC.txt(page, '.qc-side .is-soft .qc-note')), 'sources note text');

@@ -102,6 +102,8 @@
   --app-qc-link-h: 36px;         /* the look of a row link; its hit area is --control-h */
   --app-qc-state-h: 266px;       /* 55 A and C */
   --app-qc-bar-w: 220px;
+  --app-qc-dialog-w: 438px;      /* 54 A */
+  --app-qc-num-w: 24px;          /* a chapter's number in 54 B and C */
   --app-qc-bar-h: 6px;
   --app-qc-card-gap: 18px;
   --app-qc-row-gap: 14px;
@@ -3499,7 +3501,7 @@ div.delete-text p { margin: 0; }
 /* A button that is off, with the word that says why. */
 .qc-off { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .qc-promise-wide .qc-off { flex-direction: column; align-items: flex-start; flex-shrink: 0; }
-.qc-side-card .qc-off { flex-direction: column; align-items: flex-start; }
+.qc-side-card .qc-off { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
 
 .qc-verdict {
   display: flex;
@@ -3519,17 +3521,21 @@ div.delete-text p { margin: 0; }
 
 .qc-box { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); border-radius: var(--radius-lg); }
 .qc-box strong { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-lg); font-weight: 600; }
+.qc-box strong svg { flex-shrink: 0; }
 .qc-sub { font-size: var(--text-md); line-height: 1.5; }
 .qc-self { align-self: flex-start; }
 .qc-box.is-warning { border: 1px solid var(--warning); background: var(--warning-bg); }
 .qc-box.is-warning strong { color: var(--warning); }
 .qc-box.is-success { border: 1px solid var(--success); background: var(--success-bg); }
 .qc-box.is-success strong { color: var(--success); }
+.qc-box.is-danger { border: 1px solid var(--danger); background: var(--danger-bg); }
+.qc-box.is-danger strong { color: var(--danger); }
 .qc-box.is-plain { min-height: var(--app-qc-state-h); align-items: center; justify-content: center; text-align: center; background: var(--surface-2); }
 .qc-box.is-plain .qc-sub { color: var(--graphite); }
 .qc-state-card { padding: var(--space-6); }
 .qc-bar { width: var(--app-qc-bar-w); max-width: 100%; height: var(--app-qc-bar-h); border-radius: var(--radius-pill); background: var(--mist); }
 .qc-bar i { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--ink); }
+.qc-bar.is-full { width: 100%; }
 
 .qc-g + .qc-g { border-top: 1px solid var(--mist); }
 .qc-gb {
@@ -3576,7 +3582,7 @@ div.delete-text p { margin: 0; }
   font-size: var(--text-sm);
   cursor: pointer;
 }
-.qc-lk { font-weight: 500; color: var(--ink); text-decoration: underline; text-underline-offset: var(--app-qc-underline); }
+.qc-lk { padding: 0; font-weight: 500; color: var(--ink); text-decoration: underline; text-underline-offset: var(--app-qc-underline); }
 .qc-lk.is-off { color: var(--muted); text-decoration: none; cursor: default; }
 .qc-lk2 { padding: 0 var(--app-qc-gap); color: var(--graphite); }
 .qc-lk2:hover { color: var(--ink); }
@@ -3621,6 +3627,42 @@ div.delete-text p { margin: 0; }
   background-color: var(--warning-bg);
   text-decoration: underline var(--app-qc-hair) var(--warning);
 }
+
+/* Promise check (designs 54, 55 D): the card keeps its place, the dialog is 54 A. */
+.qc-pr { gap: var(--app-qc-row-gap); }
+.qc-pr .qc-box { padding: var(--space-5); }
+.qc-pr-title { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+.qc-pr-title:focus { outline: none; }
+.qc-pr-rows { list-style: none; margin: 0; padding: 0; }
+.qc-pr-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--app-qc-gap) 0; border-top: 1px solid var(--mist); font-size: var(--text-md); }
+.qc-pr-rows.is-result .qc-pr-row:first-child { border-top: none; }
+.qc-pr-row:focus { outline: none; }
+.qc-pr-num { width: var(--app-qc-num-w); flex-shrink: 0; font-family: var(--font-label); font-size: var(--text-sm); color: var(--graphite); }
+.qc-pr-name { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.qc-pr-name.is-wait { color: var(--muted); }
+.qc-pr-why, .qc-pr-acts { flex-basis: 100%; margin: 0; padding-left: calc(var(--app-qc-num-w) + var(--space-3)); }
+.qc-pr-row .qc-row-err { padding-left: calc(var(--app-qc-num-w) + var(--space-3)); }
+.qc-pr-why { font-size: var(--text-sm); line-height: 1.5; color: var(--ink-2); overflow-wrap: anywhere; }
+.qc-pr-why .check-badge, .qc-tx .check-badge { white-space: normal; }
+.qc-pr-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--app-qc-row-gap); }
+.qc-pr-acts .qc-lk2 { padding: 0; }
+.qc-pr-banner { display: flex; align-items: center; gap: var(--app-qc-gap); padding: var(--space-3) var(--app-qc-row-gap); border: 1px solid var(--warning); border-radius: var(--radius-lg); background: var(--warning-bg); color: var(--warning); font-size: var(--text-md); font-weight: 700; line-height: 1.45; }
+.qc-pr-banner:focus { outline: none; }
+.qc-pr-banner svg { flex-shrink: 0; }
+.qc-pr-banner.is-ok { border-color: var(--success); background: var(--success-bg); color: var(--success); }
+.qc-btns { display: flex; flex-wrap: wrap; gap: var(--app-qc-gap); }
+.qc-pr-dialog { width: min(var(--app-qc-dialog-w), calc(100vw - var(--space-8))); }
+.qc-pr-dialog .dialog-inner { padding: var(--space-6); gap: var(--app-qc-row-gap); }
+.qc-pr-dialog h2 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
+.qc-pr-dialog .alert { margin: 0; }
+.qc-pr-dialog [data-pr-warn]:empty, .qc-pr-skips:empty { display: none; }
+.qc-pr-facts { margin: 0; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); border-radius: var(--radius-lg); background: var(--surface-2); font-size: var(--text-md); }
+.qc-pr-facts div { display: flex; justify-content: space-between; gap: var(--space-3); }
+.qc-pr-facts dd { margin: 0; font-weight: 700; text-align: right; }
+.qc-pr-skips { display: flex; flex-direction: column; gap: var(--space-2); }
+.qc-pr-skips .chip-label { margin: 0; }
+.qc-pr-skips ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }
+.qc-pr-skips li { display: flex; justify-content: space-between; gap: var(--space-3); }
 
 @media (max-width: 1200px) {
   .qc-wbar { flex-wrap: wrap; }
