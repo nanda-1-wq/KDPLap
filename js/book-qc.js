@@ -323,7 +323,7 @@
     if (v.ready) {
       const ok = v.marked ? ` ${plural(v.marked, 'issue is', 'issues are')} marked as OK.` : '';
       return `<div class="qc-box is-success" role="status" tabindex="-1" data-verdict>
-          <strong>Ready for Format</strong>
+          <strong>${CHECK(16)}Ready for Format</strong>
           <span class="qc-sub">No problems found in ${plural(r.sections, 'section', 'sections')}.${ok}</span>
           <div class="qc-off"><button type="button" class="btn btn-primary" disabled>Go to 08 Format</button><span class="version-tag">Coming next</span></div>
         </div>

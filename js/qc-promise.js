@@ -206,7 +206,7 @@
           <h2 class="qc-pr-title" tabindex="-1" data-pr-title>${esc(runTitle())}</h2>
           <div class="qc-bar is-full" role="progressbar" aria-valuenow="${runPct()}" aria-valuemin="0" aria-valuemax="100" aria-label="Promise check progress" data-pr-bar><i style="width:${runPct()}%"></i></div>
           <ul class="qc-pr-rows" aria-live="off" data-pr-rows>${runRows()}</ul>
-          <p class="qc-note">You can leave this page. Finished chapters are saved.</p>
+          <p class="qc-note">You can open other steps. Finished chapters are saved.</p>
           <button type="button" class="btn btn-secondary qc-self" data-pr-stop${job.stopping ? ' disabled' : ''}>${job.stopping ? 'Stopping…' : 'Stop'}</button>
         </section>`;
     }
@@ -244,7 +244,7 @@
       return `<section class="qc-card qc-side-card qc-pr" data-pr-card>
           <p class="chip-label">${LABEL}</p>
           <div class="qc-box ${t.warn ? 'is-warning' : 'is-danger'}" role="alert" data-pr-fail>
-            <strong>${t.warn ? WARN(16) : ''}${esc(t.title)}</strong>
+            <strong>${WARN(16)}${esc(t.title)}</strong>
             ${t.sub ? `<span class="qc-sub">${esc(t.sub)}</span>` : ''}
             <div class="qc-btns"><button type="button" class="btn btn-primary" data-pr-retry${job.fail.busy ? ' disabled' : ''}>${esc(t.button)}</button><button type="button" class="btn btn-secondary" data-pr-close${job.fail.busy ? ' disabled' : ''}>Close</button></div>
           </div>

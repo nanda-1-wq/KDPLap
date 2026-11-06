@@ -89,7 +89,7 @@ const test = async page => {
   ok(b.length === 7 && b[0] === '1 Start small Done' && b[1] === '2 Five minute reviews Checking…' && b[2] === '3 Spaced practice Waiting', `54 B rows: ${JSON.stringify(b.slice(0, 3))}`);
   ok(await page.$eval('[data-pr-rows] .qc-pr-row:nth-child(3) .qc-pr-name', (e) => e.classList.contains('is-wait')), 'a waiting chapter is gray');
   ok(await page.$eval('[role="progressbar"]', (e) => e.getAttribute('aria-valuenow') === '14' && e.getAttribute('aria-label') === 'Promise check progress'), 'progressbar');
-  ok((await QC.txt(page, '[data-pr-card] .qc-note')) === 'You can leave this page. Finished chapters are saved.', '54 B note');
+  ok((await QC.txt(page, '[data-pr-card] .qc-note')) === 'You can open other steps. Finished chapters are saved.', '54 B note (owner, STOP 6 Q4)');
   ok(posts() === 2, 'one chapter at a time');
   ok(await page.evaluate(() => document.activeElement.hasAttribute('data-pr-stop')), 'the focus is on Stop');
 
@@ -254,6 +254,7 @@ const test = async page => {
   ok((await QC.txt(page, '[data-pr-fail] .qc-sub')) === 'Chapters 1 to 4 are saved. This attempt was not counted in your usage.', '55 D words');
   ok((await QC.all(page, '[data-pr-fail] button')).join() === 'Try chapter 5 again,Close', '55 D buttons');
   ok(await page.$eval('[data-pr-fail]', (e) => e.getAttribute('role') === 'alert' && e.classList.contains('is-danger')), '55 D is an alert');
+  ok(await page.$eval('[data-pr-fail] strong', (e) => !!e.querySelector('svg[aria-hidden="true"]') && e.firstElementChild.tagName === 'svg'), '55 D: the warning icon sits before the title (owner, STOP 6 Q3)');
   ok(await page.evaluate(() => document.activeElement.hasAttribute('data-pr-retry')), 'the focus is on Try again');
   ok(posts() === 5, 'the run stops at the failure');
   await page.click('[data-pr-retry]');
@@ -314,6 +315,7 @@ const test = async page => {
   ok((await QC.txt(page, '[data-pr-fail] strong')) === 'We lost the connection during chapter 3.', '55 D network title');
   ok((await QC.txt(page, '[data-pr-fail] .qc-sub')) === 'Finished chapters are saved.', '55 D network words');
   ok((await QC.all(page, '[data-pr-fail] button')).join() === 'Try again,Close', '55 D network buttons');
+  ok(await page.$eval('[data-pr-fail] strong', (e) => !!e.querySelector('svg')), '55 D network: the warning icon too');
   ok(reads() === at + 1, `the failure reads qc_json again: ${reads() - at}`);
   await page.click('[data-pr-retry]');
   await finished();

@@ -32,6 +32,7 @@ const test = async page => {
   await QC.open7(page);
   await QC.run(page);
   ok((await QC.txt(page, '.qc-box.is-success strong')) === 'Ready for Format', '55 E title');
+  ok(await page.$eval('.qc-box.is-success strong', (e) => !!e.querySelector('svg[aria-hidden="true"]') && e.firstElementChild.tagName === 'svg'), '55 E: the success icon sits before the title (owner, STOP 6 Q3)');
   ok((await QC.txt(page, '.qc-box.is-success .qc-sub')) === 'No problems found in 30 sections.', `55 E text: ${await QC.txt(page, '.qc-box.is-success .qc-sub')}`);
   ok(await page.$eval('.qc-box.is-success button', (b) => b.disabled && b.textContent === 'Go to 08 Format'), 'Go to 08 Format is off (V9)');
   ok((await QC.txt(page, '.qc-box.is-success .version-tag')) === 'Coming next', 'Go to 08 Format: Coming next');
