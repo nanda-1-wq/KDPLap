@@ -1,7 +1,8 @@
 /* Shared fixtures and fakes for the generate tests (handler.*.test.ts, snapshot.test.ts). */
 import { assert } from "jsr:@std/assert@1";
 import { type DriftSave, makeHandler, type OutlineCheckSave, type RunBegin, type RunFinish, type RunSaved, type SavedTitleOption, type SectionCheckSave, type Store, type SuggestionSave, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, OutlineCheckContext, OutlineContext, OutlineDraft, OutlineRow, PenRow, PositioningContext, PositioningRow, ReviewContext, TitleContext, TitleIdea, TopicRow, WriteChapterRow, WriteContext, WriteTiming } from "./lib.ts";
+import type { PromiseCheckSave } from "./lib/types.ts";
+import type { BriefContext, Competitor, OutlineCheckContext, OutlineContext, OutlineDraft, OutlineRow, PenRow, PositioningContext, PositioningRow, PromiseContext, ReviewContext, TitleContext, TitleIdea, TopicRow, WriteChapterRow, WriteContext, WriteTiming } from "./lib.ts";
 export const ID = "3f1c2a9e-8b7d-4c6e-9a5b-1d2e3f4a5b6c";
 export const USER = "11111111-2222-4333-8444-555555555555";
 export const ORIGIN = "http://127.0.0.1:5500";
@@ -211,6 +212,22 @@ export const CHECK_REPLY = {
 };
 export const sectionCheckReply = (out: unknown = CHECK_REPLY) => () => Promise.resolve(anthropic("end_turn", out));
 
+/* ── promise_check (E14.5) ── */
+
+/** Section 4.1's version: the one writeCtx marks as written. */
+export const V0_ID = "70000000-0000-4000-8000-000000000000";
+export const CHAPTER_ID = cid(4);
+/** Chapter 4 "Upper Body": 4.1 and 4.2 saved (made-up text, CHECK_TEXT has a drift line and an injection line), 4.3 empty. */
+export const promiseCtx = (extra: Partial<PromiseContext> = {}): PromiseContext => {
+  const outline = writeCtx().outline;
+  outline[4].sections[1] = { ...outline[4].sections[1], current_version_id: V_ID, has_writing: true };
+  return { bookId: BOOK_ID, positioning: LOCKED, outline, versions: [{ id: V0_ID, content: PREV_TEXT }, { id: V_ID, content: CHECK_TEXT }], runs: [], ...extra };
+};
+export const pid = { stage: "promise_check", bookId: BOOK_ID, chapterId: CHAPTER_ID };
+export const PROMISE_QUOTE = "Chair yoga also helps you lose weight fast, so you can drop a dress size by summer.";
+export const PROMISE_OUT = { verdict: "drifts", reason: "Weight loss is not in the reader promise. Cut it or tie it to moving safely.", quote: PROMISE_QUOTE };
+export const promiseReply = (out: unknown = PROMISE_OUT) => () => Promise.resolve(anthropic("end_turn", out));
+
 /** One SSE event as Anthropic sends it. */
 export const aev = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 /** A whole Anthropic stream: message_start, the text in chunks, message_delta, message_stop. */
@@ -315,6 +332,9 @@ export type Setup = {
   suggestionSaveThrows?: boolean;
   // section_check (E10.4); the context comes from `write`
   sectionCheckSaveThrows?: boolean;
+  // promise_check (E14.5)
+  promise?: PromiseContext | null;
+  promiseSaveThrows?: boolean;
 };
 
 export function setup(s: Setup = {}) {
@@ -329,6 +349,7 @@ export function setup(s: Setup = {}) {
   const finishes: RunFinish[] = [];
   const suggestionSaves: SuggestionSave[] = [];
   const sectionCheckSaves: SectionCheckSave[] = [];
+  const promiseSaves: PromiseCheckSave[] = [];
   const writeReads: { bookId: string; sectionId: string; opts?: { soFar?: boolean } }[] = [];
   const runs: Promise<unknown>[] = [];
   let finishTries = 0;
@@ -409,6 +430,12 @@ export function setup(s: Setup = {}) {
       if (s.sectionCheckSaveThrows) return Promise.reject({ code: "23514" });
       return Promise.resolve({ checked_at: save.checkedAt.replace("Z", "+00:00").replace(".000", ""), inputs_key: save.inputsKey });
     },
+    getPromiseContext: (id, chapterId) => Promise.resolve(s.promise === undefined ? (id === BOOK_ID && chapterId === CHAPTER_ID ? promiseCtx() : null) : s.promise),
+    savePromiseCheck: (save) => {
+      promiseSaves.push(save);
+      if (s.promiseSaveThrows) return Promise.reject({ code: "P0001" });
+      return Promise.resolve({ checked_at: save.checkedAt.replace("Z", "+00:00").replace(".000", ""), inputs_key: save.inputsKey });
+    },
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),
     sumCountedTokensSince: () => Promise.resolve(s.monthTokens ?? 0),
     countCallsSince: () => Promise.resolve(s.recent ?? 0),
@@ -430,7 +457,7 @@ export function setup(s: Setup = {}) {
   });
   /** Waits for every run handed to waitUntil (the save happens there). */
   const settle = () => Promise.all(runs);
-  return { handle, logged, calls, saves, titleSaves, outlineSaves, checkSaves, begins, beats, finishes, runs, settle, suggestionSaves, sectionCheckSaves, writeReads };
+  return { handle, logged, calls, saves, titleSaves, outlineSaves, checkSaves, begins, beats, finishes, runs, settle, suggestionSaves, sectionCheckSaves, promiseSaves, writeReads };
 }
 
 export function anthropic(stop: string, out: unknown, status = 200) {

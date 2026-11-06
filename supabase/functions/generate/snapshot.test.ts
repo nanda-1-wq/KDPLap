@@ -9,7 +9,7 @@ import {
   LOCKED, ORIGIN, pen, ph, phReply, posCtx, posRow, post, PRODUCT, PRODUCT_OUT, reviewCtx, type Setup, setup, three, titleCtx, titleReply, anthropic,
   OUTLINE_OUT, oid, outlineCtx, outlineReply, checkReply, ocid, outlineCheckCtx, outlineRows, V_ID, wid, writeCtx,
   iid, IMPROVE_SEL, improveCtx, improveReply,
-  checkCtx, chkid, sectionCheckReply,
+  checkCtx, chkid, sectionCheckReply, pid, promiseCtx,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -296,4 +296,11 @@ Deno.test("snapshot: section_check request and replies", async (t) => {
     ["null base", { write: ctx }, () => post({ ...chkid, baseVersionId: null })],
   ];
   for (const [name, s, req] of cases) await assertSnapshot(t, await run(s, req()), { name: `handler section_check ${name}` });
+});
+
+/* ── promise_check (E14.5): the request. Its replies are in handler.promise_check.test.ts. ── */
+
+Deno.test("snapshot: promise_check request", async (t) => {
+  const job = L.stageDef("promise_check").check(L.parseInput(JSON.stringify(pid))!, promiseCtx()) as L.PromiseJob;
+  await assertSnapshot(t, L.buildRequest(job), { name: "buildRequest promise_check" });
 });

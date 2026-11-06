@@ -297,6 +297,30 @@ Deno.test("AI section check: the browser, the server and 0022 (owner, E10.4)", (
   assertEquals(types, [...L.CHECK_TYPES]);
 });
 
+Deno.test("Promise check: the browser, the server and 0028 (E14.5, plan 4.6)", () => {
+  const f = M("0028_quality_control.sql");
+  const text = read(f);
+  // The two verdicts, in the server's order.
+  assertEquals(text.match(/check \(verdict in \(([^)]*)\)\)/)[1].split(",").map((x) => x.trim().replace(/'/g, "")), [...L.PROMISE_VERDICTS]);
+  // Reason and quote 300 characters; 50 to 6,000 words; up to 12 versions (0016 caps a chapter at 12 sections); 16 hex.
+  assertEquals(one(f, String.raw`check \(char_length\(reason\) between 1 and (\d+)`), L.PROMISE.reasonChars);
+  assertEquals(one(f, String.raw`check \(quote = '' or \(char_length\(quote\) <= (\d+)`), L.PROMISE.quoteChars);
+  assertEquals(one(f, String.raw`check \(words between (\d+) and \d+\),\n\s+constraint book_checks_inputs_key`), L.PROMISE.minWords);
+  assertEquals(one(f, String.raw`check \(words between \d+ and (\d+)\),\n\s+constraint book_checks_inputs_key`), L.PROMISE.maxWords);
+  assertEquals(one(f, String.raw`book_checks_versions_check check \(cardinality\(versions\) between 1 and (\d+)`), L.OUTLINE_MAX.sections);
+  assertEquals(one(f, String.raw`text_items_ok\(unsourced, (\d+), 20\)`), L.MAX_UNSOURCED);
+  assertEquals(/book_checks_inputs_key_check check \(inputs_key ~ '\^\[0-9a-f\]\{16\}\$'\)/.test(text), true, "0028: inputs_key 16 hex");
+  // findQuote holds the section check's cap: it must not be shorter than ours.
+  assertEquals(L.CHECK.quoteChars >= L.PROMISE.quoteChars, true);
+  // The reply fits: a 300-character reason and quote, about 100 tokens each at 3 characters a token, + JSON, under max_tokens.
+  assertEquals(L.MAX_TOKENS.promise_check, 500);
+  assertEquals(Math.ceil((L.PROMISE.reasonChars + L.PROMISE.quoteChars) / 3) + 100 <= L.MAX_TOKENS.promise_check, true);
+  assertEquals([L.TIMEOUT_MS.promise_check, L.BODY_BYTES.promise_check], [60_000, 2048]);
+  // The browser: the same object, read from the file and from the loaded script.
+  assertEquals(jsConst("js/qc-promise-key.js", "LIMITS"), { ...L.PROMISE });
+  assertEquals(globalThis.kdpQcPromiseKey.LIMITS, { ...L.PROMISE });
+});
+
 Deno.test("Keep as is: 0024 kept findings match the AI check (PRODUCE G5, design 22d)", () => {
   const f = M("0024_kept_findings.sql");
   const text = read(f);

@@ -30,6 +30,8 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
   the reply, the source markers on the output, the notes (markers lost, new
   names, structure), the saved suggestion and its counted row, the refusals
   before any AI call (with the reserve), and Cancel (the server finishes).
+- `lib.promise_check.test.ts` and `handler.promise_check.test.ts` (E14.5, the promise check of
+  one chapter: input, the checks before the call in order, prompt, reply, save, usage).
 - `lib.section_check.test.ts` and `handler.section_check.test.ts` (E10.4, the
   AI check in the Checks tab, not streamed): the input (no text from the
   browser), the checks before the call (50 to 6,000 words, the saved version,
@@ -136,7 +138,8 @@ deno test --allow-read tests/qc-promise-key.test.js
   `tools/qc-glyphs.mjs` from the pinned fonts, sha384 checked). To compare it with the real
   fonts: `deno run --allow-read --allow-write --allow-net tools/qc-glyphs.mjs --check`.
 - `qc-promise-key.test.js`: `promiseKey` (`js/qc-promise-key.js`) against the fixed values in
-  `tests/fixtures/qc-promise-key.json`. E14.5 runs the same file against the server twin.
+  `tests/fixtures/qc-promise-key.json`, and the server twin (`lib/promise_check.ts`, E14.5) on the
+  same file. Also: both list the same versions (the 0019 blank rule).
 - `markdown-lite.test.js`: the step 06 text format (`js/markdown-lite.js`): the
   Markdown subset to HTML (everything escaped) and back from the editor's DOM
   (only an allowlist is read; pasted markup and scripts are dropped), the

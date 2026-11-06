@@ -22,6 +22,9 @@
    POST { stage: "section_check", bookId, sectionId, baseVersionId }
                                                 → { stage, findings, areas, words, version_id, checked_at, inputs_key }
                                                   (E10.4, not streamed; the server reads the saved version)
+   POST { stage: "promise_check", bookId, chapterId }
+                                                → { stage, chapter_id, verdict, reason, quote, section_id, unsourced, words, versions, inputs_key, checked_at }
+                                                  (E14.5, not streamed; the server reads the saved text)
    or { error: <code> }.
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secret: ANTHROPIC_API_KEY. SUPABASE_URL, SUPABASE_ANON_KEY and
@@ -32,16 +35,16 @@
    outline save (replace_outline, 0016). Only the
    ai_usage insert, the drift check save, the outline check save (0017),
    the section_write run (0020 section_run_begin, _beat, _finish), the
-   suggestion save (0021) and the section check save (0022) use the service role; they filter by, or write, the
-   caller's user id (the run RPCs and the 0021 and 0022 guards check the
-   section's owner and book themselves).
+   suggestion save (0021), the section check save (0022) and the promise check save (0028) use the service role; they filter by, or write, the
+   caller's user id (the run RPCs and the 0021, 0022 and 0028 guards check the
+   section's or chapter's owner and book themselves).
    section_write keeps its run alive with EdgeRuntime.waitUntil; on shutdown
    (beforeunload) every open run stops and saves its text as a partial version.
 ═══════════════════════════════════════════════════ */
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, OutlineContext, OutlineRow, PenRow, PositioningContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
+import type { BriefContext, Competitor, OutlineContext, OutlineRow, PenRow, PositioningContext, PromiseContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
 import { outlineHasWriting, RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
@@ -407,6 +410,54 @@ function openStore(authHeader: string): Store {
           section_id: s.sectionId, user_id: s.userId, book_id: s.bookId, version_id: s.versionId, findings: s.findings,
           areas: s.areas, words: s.words, inputs_key: s.inputsKey, checked_at: s.checkedAt,
         }, { onConflict: "section_id" })
+        .select("checked_at, inputs_key")
+        .single();
+      if (error) throw error;
+      return data as { checked_at: string; inputs_key: string };
+    },
+
+    // promise_check (E14.5), all through RLS as the caller: the positioning,
+    // the outline (0016 outline_json), the current versions of the chapter's
+    // sections and their runs. null = not the caller's book or a chapter that
+    // is not in it.
+    async getPromiseContext(bookId, chapterId) {
+      // The book and the outline in parallel (outline_json reads nothing for a book the caller cannot see).
+      const [data, { data: outline, error }] = await Promise.all([
+        readBook(bookId, `id, positioning ( one_sentence, reader_promise, approach, lacks, selling_points, focus_tags,
+          drift_flags, drift_checked_at, locked_at, updated_at )`),
+        asUser.rpc("outline_json", { p_book_id: bookId }),
+      ]);
+      if (!data) return null;
+      if (error) throw error;
+      const rows = (outline ?? []) as WriteChapterRow[];
+      const chapter = rows.find((c) => c.id === chapterId);
+      if (!chapter) return null;
+      const ids = chapter.sections.map((s) => s.current_version_id).filter((x): x is string => !!x);
+      const [versions, runs] = await Promise.all([
+        ids.length ? asUser.from("section_versions").select("id, content").in("id", ids) : Promise.resolve({ data: [], error: null }),
+        asUser.from("section_runs").select("state, heartbeat_at, started_at").in("section_id", chapter.sections.map((s) => s.id)),
+      ]);
+      for (const r of [versions, runs]) if (r.error) throw r.error;
+      return {
+        bookId,
+        positioning: one(data.positioning) as PromiseContext["positioning"],
+        outline: rows,
+        versions: (versions.data ?? []) as PromiseContext["versions"],
+        runs: (runs.data ?? []) as PromiseContext["runs"],
+      };
+    },
+
+    // Service role (0028 lets only this role write book_checks). The chapter
+    // and its versions were read through RLS as the caller first, and the 0028
+    // guard checks the owner, the book, the kind, the section and the versions.
+    // One row per chapter: a new check replaces the last one.
+    async savePromiseCheck(s) {
+      const { data, error } = await admin()
+        .from("book_checks")
+        .upsert({
+          chapter_id: s.chapterId, user_id: s.userId, book_id: s.bookId, verdict: s.verdict, reason: s.reason, quote: s.quote,
+          section_id: s.sectionId, unsourced: s.unsourced, versions: s.versions, words: s.words, inputs_key: s.inputsKey, checked_at: s.checkedAt,
+        }, { onConflict: "chapter_id" })
         .select("checked_at, inputs_key")
         .single();
       if (error) throw error;

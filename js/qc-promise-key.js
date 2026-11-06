@@ -8,6 +8,8 @@
    kdpQcPromiseKey.versionIds(chapter) → the version ids of its sections with
      text, in order. chapter is a chapter of export_json.
    kdpQcPromiseKey.ofChapter(chapter, positioning) → the key of a chapter today.
+   kdpQcPromiseKey.LIMITS → the server's PROMISE limits (lib/limits.ts, 0028),
+     read by tests/limits-parity.test.js. js/qc-promise.js (E14.6) uses them.
 
    A short fingerprint (a plain hash, not a security feature) of what the
    promise check reads. The generate function saves the same key in
@@ -17,6 +19,7 @@
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
+  const LIMITS = { minWords: 50, maxWords: 6000, reasonChars: 300, quoteChars: 300 };
   const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
   function promiseKey(p) {
@@ -35,6 +38,8 @@
     objective: chapter && chapter.objective,
     lockedAt: positioning && positioning.locked_at
   });
+
+  promiseKey.LIMITS = LIMITS;
 
   root.kdpQcPromiseKey = promiseKey;
 })(globalThis);

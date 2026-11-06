@@ -10,7 +10,7 @@ Deno.test("stage table: one entry per stage, nothing else", () => {
     for (const k of ["read", "check", "prompt", "interpret", "reply"] as const) assertEquals(typeof d[k], "function", `${s}.${k}`);
   }
   // Only the stages that save their own results have a save step.
-  assertEquals(L.STAGES.filter((s) => L.stageDef(s).save), ["drift_check", "title_ideas", "outline_ideas", "outline_check", "section_improve", "section_check"]);
+  assertEquals(L.STAGES.filter((s) => L.stageDef(s).save), ["drift_check", "title_ideas", "outline_ideas", "outline_check", "section_improve", "section_check", "promise_check"]);
   // E10.2: only section_write streams; it never goes through buildRequest or interpret.
   assertEquals(L.STAGES.filter((s) => L.stageDef(s).stream), ["section_write"]);
   assertThrows(() => L.buildRequest({ stage: "section_write" } as unknown as L.Job), Error, "generate: section_write streams, use writeRequest");
@@ -37,6 +37,18 @@ Deno.test("stage table: section_check (E10.4) is a normal JSON stage, not stream
   assertEquals(L.MAX_BODY_BYTES, 262_144);
 });
 
+Deno.test("stage table: promise_check (E14.5) is a normal JSON stage, not streamed", () => {
+  const d = L.stageDef("promise_check");
+  assertEquals(d.stream, undefined);
+  assertEquals(typeof d.save, "function");
+  assertEquals(d.interpretAlone, undefined);
+  assertEquals(L.MODEL_FOR_STAGE.promise_check, "claude-sonnet-5-5");
+  assertEquals([L.TIMEOUT_MS.promise_check, L.MAX_TOKENS.promise_check, L.BODY_BYTES.promise_check], [60_000, 500, 2048]);
+  assertEquals(L.PROMISE, { minWords: 50, maxWords: 6000, reasonChars: 300, quoteChars: 300 });
+  assertEquals([L.ERROR_STATUS.check_too_short, L.ERROR_STATUS.check_too_long, L.ERROR_STATUS.nothing_to_check, L.ERROR_STATUS.positioning_not_locked, L.ERROR_STATUS.run_in_progress], [422, 422, 422, 409, 409]);
+  assertEquals(L.MAX_BODY_BYTES, 262_144);
+});
+
 Deno.test("stage table: an unknown stage fails clearly", () => {
   for (const s of ["nope", "", "toString", "__proto__", "constructor"]) {
     assertThrows(() => L.stageDef(s), Error, `generate: unknown stage ${s}`);
@@ -49,7 +61,7 @@ Deno.test("stage table: an unknown stage fails clearly", () => {
 Deno.test("interpretResponse: the stages that need their job throw instead of using the Brief parser", async () => {
   // This reply is a valid Brief answer. Before B1 these three stages fell into the Brief parser.
   const brief = await anthropic("end_turn", { result: "ok", target_reader: "A", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
-  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_improve", "section_check"] as const) {
+  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_improve", "section_check", "promise_check"] as const) {
     assertThrows(() => L.interpretResponse(s, true, brief), Error, `generate: ${s} needs its job, use interpretJob`);
   }
   assertEquals(L.interpretResponse("brief_help", true, brief).code, null);

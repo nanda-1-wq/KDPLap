@@ -5,7 +5,7 @@
      check      pre-checks before any money is spent; the Job, or an error code
      prompt     [system, schema, user message]
      interpret  the provider reply as an Outcome
-     save       optional: drift_check, title_ideas, outline_ideas, outline_check, section_improve and section_check save their own results
+     save       optional: drift_check, title_ideas, outline_ideas, outline_check, section_improve, section_check and promise_check save their own results
      reply      the 200 body
    A stage with no entry throws "generate: unknown stage". */
 
@@ -25,8 +25,9 @@ import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type
 import { locateSection, mdWords, runIsFresh, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
 import type { WriteJob } from "./write_run.ts";
 import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove, selectionInText } from "./section_improve.ts";
-import { CHECK, IMPROVE, SECTION_MAX_CHARS } from "./limits.ts";
+import { CHECK, IMPROVE, PROMISE, SECTION_MAX_CHARS } from "./limits.ts";
 import { checkKeyOf, type CheckJob, checkKnown, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM, sectionRefs } from "./section_check.ts";
+import { chapterOf, interpretPromiseCheck, PROMISE_SCHEMA, PROMISE_SYSTEM, type PromiseContext, type PromiseJob, promiseKey, promiseKnown, promiseSections, promiseUserMessage } from "./promise_check.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -42,7 +43,8 @@ export type Job =
   | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string }
   | WriteJob
   | ImproveJob
-  | CheckJob;
+  | CheckJob
+  | PromiseJob;
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -434,6 +436,59 @@ const sectionCheck: StageDef<"section_check", WriteContext> = {
   }),
 };
 
+/**
+ * promise_check (E14.5): one chapter against the locked promise and its own
+ * objective. Checks before any money is spent, in this order: the chapter is
+ * in the outline and of kind "chapter" (not_found); the positioning is locked;
+ * a section has text (nothing_to_check); no fresh Generate run in the chapter
+ * (run_in_progress); 50 to 6,000 words, sections joined. Then the handler's
+ * limits, with the reserve from callReserve. Unsaved drafts do not block: QC
+ * checks saved text. The server reads the text itself and saves the result
+ * (service role); when that save fails the author gets nothing, so the call
+ * is not counted. A call the browser leaves still finishes, saves and counts.
+ */
+const promiseCheck: StageDef<"promise_check", PromiseContext> = {
+  read: (store, input) => store.getPromiseContext(input.bookId, input.chapterId),
+  check: (input, ctx) => {
+    const at = chapterOf(ctx.outline, input.chapterId);
+    if (!at) return { fail: "not_found" };
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    const sections = promiseSections(at.chapter, at.number, ctx.versions);
+    if (!sections.length) return { fail: "nothing_to_check" };
+    if (ctx.runs.some((r) => runIsFresh(r))) return { fail: "run_in_progress" };
+    const words = mdWords(sections.map((s) => s.text).join("\n\n"));
+    if (words < PROMISE.minWords) return { fail: "check_too_short", extra: { words } };
+    if (words > PROMISE.maxWords) return { fail: "check_too_long", extra: { words } };
+    const key = promiseKey({
+      versionIds: sections.map((s) => s.versionId), chapterTitle: at.chapter.title, objective: at.chapter.objective, lockedAt: ctx.positioning.locked_at,
+    });
+    return { stage: "promise_check", ctx, bookId: input.bookId, chapterId: input.chapterId, ...at, sections, words, key };
+  },
+  prompt: (job) => [PROMISE_SYSTEM, PROMISE_SCHEMA, promiseUserMessage(job)],
+  interpret: (job, httpOk, body) =>
+    interpretPromiseCheck(httpOk, body, job.sections, promiseKnown(job.ctx.positioning, job.chapter, job.sections), sectionRefs(job.ctx.outline)),
+  save: async (store, job, out, run) => {
+    let saved: { checked_at: string; inputs_key: string } | null = null;
+    try {
+      saved = await store.savePromiseCheck({
+        ...out.promise!, chapterId: job.chapterId, bookId: job.bookId, userId: run.userId,
+        versions: job.sections.map((s) => s.versionId), words: job.words, inputsKey: job.key, checkedAt: run.now.toISOString(),
+      });
+    } catch (err) {
+      console.error(`generate: promise check save failed: ${(err as { code?: string })?.code ?? "unknown"}`);
+      out = { ...out, counted: false, code: "server_error" };
+    }
+    return { out, saved };
+  },
+  reply: (job, out, saved) => {
+    const p = out.promise!;
+    return {
+      stage: "promise_check", chapter_id: job.chapterId, verdict: p.verdict, reason: p.reason, quote: p.quote, section_id: p.sectionId,
+      unsourced: p.unsourced, words: job.words, versions: job.sections.map((s) => s.versionId), ...(saved as object | null),
+    };
+  },
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -449,6 +504,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   section_write: sectionWrite,
   section_improve: sectionImprove,
   section_check: sectionCheck,
+  promise_check: promiseCheck,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -499,7 +555,7 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
  * sources) and review_insights. positioning_help, drift_check, title_ideas,
- * competitor_import, outline_ideas, outline_check, section_improve and section_check need their job's data: they throw (use interpretJob).
+ * competitor_import, outline_ideas, outline_check, section_improve, section_check and promise_check need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);

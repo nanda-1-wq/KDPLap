@@ -15,6 +15,7 @@ import type { WriteContext } from "./section_write.ts";
 import type { ImproveAction } from "./limits.ts";
 import type { ImproveNotes } from "./section_improve.ts";
 import type { CheckAreas, SectionFinding } from "./section_check.ts";
+import type { PromiseContext, PromiseResult } from "./promise_check.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -91,6 +92,18 @@ export interface Store {
    * section's owner, book and version). One row per section: an upsert.
    */
   saveSectionCheck(s: SectionCheckSave): Promise<{ checked_at: string; inputs_key: string }>;
+  /**
+   * promise_check (E14.5): the book's positioning, the outline (0016
+   * outline_json), the current versions of the chapter's sections and their
+   * runs, through RLS. null = not the caller's book or no such chapter in it.
+   */
+  getPromiseContext(bookId: string, chapterId: string): Promise<PromiseContext | null>;
+  /**
+   * promise_check: save the last promise check of a chapter (service role,
+   * 0028: only that role writes book_checks; its guard checks the chapter's
+   * owner, book, kind, section and versions). One row per chapter: an upsert.
+   */
+  savePromiseCheck(s: PromiseCheckSave): Promise<{ checked_at: string; inputs_key: string }>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;
@@ -109,6 +122,10 @@ export type SuggestionSave = {
 export type SectionCheckSave = {
   sectionId: string; bookId: string; userId: string; versionId: string; findings: SectionFinding[]; areas: CheckAreas;
   words: number; inputsKey: string; checkedAt: string;
+};
+
+export type PromiseCheckSave = PromiseResult & {
+  chapterId: string; bookId: string; userId: string; versions: string[]; words: number; inputsKey: string; checkedAt: string;
 };
 
 export type DriftSave = { bookId: string; userId: string; flags: DriftFlag[]; checkedAt: string; readUpdatedAt: string };

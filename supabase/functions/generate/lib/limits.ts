@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write", "section_improve", "section_check"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write", "section_improve", "section_check", "promise_check"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -26,17 +26,18 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   section_write: MODELS.sonnet,
   section_improve: MODELS.sonnet,
   section_check: MODELS.sonnet,
+  promise_check: MODELS.sonnet,
 };
 
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048, section_improve: 65_536, section_check: 2048 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048, section_improve: 65_536, section_check: 2048, promise_check: 2048 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000, section_check: 90_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 4600, section_improve: 4800, section_check: 1500 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000, section_check: 90_000, promise_check: 60_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 4600, section_improve: 4800, section_check: 1500, promise_check: 500 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -181,6 +182,19 @@ export const CHECK = {
   quoteChars: 300,
 } as const;
 
+// Promise check of one chapter (E14.5, stage promise_check, not streamed). The
+// chapter's saved text, its sections joined: 50 to 6,000 words (md_word_count
+// rule). A reason and a quote of at most 300 characters each. Same numbers as
+// 0028 and js/qc-promise-key.js LIMITS (tests/limits-parity.test.js).
+export const PROMISE_VERDICTS = ["keeps", "drifts"] as const;
+export type PromiseVerdict = (typeof PROMISE_VERDICTS)[number];
+export const PROMISE = {
+  minWords: 50,
+  maxWords: 6000,
+  reasonChars: 300,
+  quoteChars: 300,
+} as const;
+
 export const WRITE_TIMING = {
   beatMs: 1000,            // heartbeat, crash copy, stop check
   flushMs: 150,            // text to the browser in batches
@@ -269,6 +283,7 @@ export type GenerateInput =
   | { stage: "outline_check"; bookId: string }
   | { stage: "section_write"; bookId: string; sectionId: string; baseVersionId: string | null; more: boolean }
   | { stage: "section_check"; bookId: string; sectionId: string; baseVersionId: string }
+  | { stage: "promise_check"; bookId: string; chapterId: string }
   | {
     stage: "section_improve"; bookId: string; sectionId: string; baseVersionId: string | null; action: ImproveAction;
     selection: string; before: string; after: string; instruction: string | null;
@@ -297,6 +312,7 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *                    selection 1 to 15,000 characters, before and after 0 to 2,500,
  *                    instruction 1 to 300 after trim (sent trimmed)
  *   section_check:   { stage, bookId, sectionId, baseVersionId (uuid, never null) }   at most 2 KB
+ *   promise_check:   { stage, bookId, chapterId }   at most 2 KB
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -350,6 +366,14 @@ export function parseInput(raw: string): GenerateInput | null {
       if (typeof o[k] !== "string" || !UUID_RE.test(o[k] as string)) return null;
     }
     return { stage, bookId: (o.bookId as string).toLowerCase(), sectionId: (o.sectionId as string).toLowerCase(), baseVersionId: (o.baseVersionId as string).toLowerCase() };
+  }
+
+  if (stage === "promise_check") {
+    if (!sameKeys(o, ["stage", "bookId", "chapterId"])) return null;
+    for (const k of ["bookId", "chapterId"] as const) {
+      if (typeof o[k] !== "string" || !UUID_RE.test(o[k] as string)) return null;
+    }
+    return { stage, bookId: (o.bookId as string).toLowerCase(), chapterId: (o.chapterId as string).toLowerCase() };
   }
 
   if (stage === "section_improve") {

@@ -13,6 +13,7 @@ import { type Insights } from "./review_insights.ts";
 import { type TitleIdea } from "./title_ideas.ts";
 import { type ImproveResult } from "./section_improve.ts";
 import { type SectionCheckResult } from "./section_check.ts";
+import { type PromiseResult } from "./promise_check.ts";
 
 const TONES: Record<string, string> = {
   warm: "Warm", encouraging: "Encouraging", practical: "Practical",
@@ -81,6 +82,7 @@ export type Outcome = {
   findings?: OutlineFinding[];   // outline_check
   improve?: ImproveResult;       // section_improve (E10.3)
   check?: SectionCheckResult;    // section_check (E10.4)
+  promise?: PromiseResult;       // promise_check (E14.5)
 };
 
 

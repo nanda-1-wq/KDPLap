@@ -110,7 +110,9 @@ Deno.test("a failed usage log still returns the bio", quiet(async () => {
       // E10.3 (section_improve): not used by this test.
       saveSuggestion: () => Promise.resolve({ id: "", created_at: "" }),
       // E10.4 (section_check): not used by this test.
-      saveSectionCheck: () => Promise.resolve({ checked_at: "", inputs_key: "" }) }),
+      saveSectionCheck: () => Promise.resolve({ checked_at: "", inputs_key: "" }),
+      // E14.5 (promise_check): not used by this test.
+      getPromiseContext: () => Promise.resolve(null), savePromiseCheck: () => Promise.resolve({ checked_at: "", inputs_key: "" }) }),
     fetchFn: (() => Promise.resolve(anthropic("end_turn", { result: "ok", bio: "Hi there.", missing: "" }))) as typeof fetch,
     now: () => new Date(),
   });
