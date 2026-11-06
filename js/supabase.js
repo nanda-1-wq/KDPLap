@@ -42,7 +42,7 @@ function counted(error, count, msg) {
 
 /**
  * A POST to the generate function with a plain fetch (generateStream, improve,
- * sectionCheck): the user's JWT and the anon key, like functions.invoke sends.
+ * sectionCheck, promiseCheck): the user's JWT and the anon key, like functions.invoke sends.
  * onSent runs right after the request is handed to the network.
  * → { res }, or { fail: 'unauthorized' | 'aborted' | 'network' } ('aborted' only when signal aborted it).
  */
@@ -63,7 +63,7 @@ async function postGenerate(input, { signal, onSent } = {}) {
   }
 }
 
-/** A JSON reply of a stage that is not streamed (improve, sectionCheck): the data, or the error code with words. */
+/** A JSON reply of a stage that is not streamed (improve, sectionCheck, promiseCheck): the data, or the error code with words. */
 function generateReply(res, body, stage) {
   if (res.ok && body && typeof body === 'object' && body.stage === stage) return { data: body, error: null };
   if (body && typeof body.error === 'string') {
@@ -1163,6 +1163,21 @@ window.kdp = {
     let body = null;
     try { body = await sent.res.json(); } catch (err) { /* not JSON */ }
     return generateReply(sent.res, body, 'section_check');
+  },
+
+  /**
+   * The AI promise check of one chapter (E14.6, stage promise_check, not
+   * streamed). The server reads the saved text itself and saves the result
+   * (0028 book_checks). data: { stage, chapter_id, verdict, reason, quote,
+   * section_id, unsourced, words, versions, inputs_key, checked_at };
+   * error: { code, words } (words for check_too_short / check_too_long).
+   */
+  async promiseCheck({ bookId, chapterId }) {
+    const sent = await postGenerate({ stage: 'promise_check', bookId, chapterId });
+    if (sent.fail) return { data: null, error: { code: sent.fail } };
+    let body = null;
+    try { body = await sent.res.json(); } catch (err) { /* not JSON */ }
+    return generateReply(sent.res, body, 'promise_check');
   },
 
   /**

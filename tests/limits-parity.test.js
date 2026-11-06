@@ -16,6 +16,8 @@ import "../js/qc-promise-key.js";
 import "../js/qc-lists.js";
 import "../js/qc-glyphs.js";
 import "../js/qc-rules.js";
+import "../js/usage-rules.js";
+import { PROMISE_SYSTEM } from "../supabase/functions/generate/lib/promise_check.ts";
 
 const read = (p) => Deno.readTextFileSync(new URL(`../${p}`, import.meta.url));
 
@@ -409,4 +411,11 @@ Deno.test("07 Quality Control: the 08 defaults equal 0027, qc_inputs_key and js/
   assertEquals(d.parts.copyright, Q.DEFAULTS.copyright);
   assertEquals(globalThis.kdpQcGlyphs.STYLES, globalThis.kdpFormatRules.STYLES);
   assertEquals(sql.match(/qc_runs_style_check check \(style in \(([^)]*)\)\)/)[1].split(",").map((x) => x.trim().replace(/'/g, "")), globalThis.kdpFormatRules.STYLES);
+});
+
+Deno.test("the promise cost line: the prompt size the browser assumes follows the server's prompt", () => {
+  const { PROMISE_PROMPT_CHARS: chars } = globalThis.kdpUsage;
+  // The system prompt, plus the tags of the user message (about 400 characters).
+  assertEquals(chars >= PROMISE_SYSTEM.length, true);
+  assertEquals(chars <= PROMISE_SYSTEM.length + 600, true);
 });

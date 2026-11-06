@@ -119,3 +119,39 @@ Deno.test("chapterEstimate: this book's last Write calls first (Live check B, ro
   assertEquals(U.chapterEstimate(month, [300], null).input, 4_888);
   assertEquals(U.chapterEstimate({ limit: 1, tokens: 0, by_stage: [] }, [300], [0]).input, U.WRITE_INPUT_DEFAULT);
 });
+
+Deno.test("promiseEstimate: 3 characters a token on prompt + positioning + chapter, 250 output, Sonnet prices", () => {
+  const base = U.PROMISE_PROMPT_CHARS + 300;
+  const e = U.promiseEstimate(usage(0, []), [9000, 18000], 300);
+  const input = Math.ceil((base + 9000) / 3) + Math.ceil((base + 18000) / 3);
+  assertEquals([e.calls, e.input, e.output, e.tokens], [2, input, 500, input + 500]);
+  assertEquals(e.cost, (input * 2 + 500 * 10) / 1e6);
+  assertEquals([e.left, e.over, e.none, e.resets], [2_000_000, false, false, "November 1"]);
+  assertEquals(U.PROMISE_OUT, 250);
+  // Each chapter rounds up on its own, as the server's estimateTokens does per call.
+  const one = U.promiseEstimate(null, [1], 0);
+  assertEquals(one.input, Math.ceil((U.PROMISE_PROMPT_CHARS + 1) / 3));
+});
+
+Deno.test("promiseEstimate: the design's example of 7 chapters is about $0.08; one chapter is about $0.01", () => {
+  assertEquals(U.costText(U.promiseEstimate(null, Array(7).fill(10000), 600).cost), "About $0.08");
+  assertEquals(U.costText(U.promiseEstimate(null, [10000], 600).cost), "About $0.01");
+});
+
+Deno.test("promiseEstimate: the monthly room, near and at the limit, and no usage read", () => {
+  const near = U.promiseEstimate({ ...usage(1_999_900, []) }, [9000], 0);
+  assertEquals([near.left, near.over, near.none], [100, true, false]);
+  const at = U.promiseEstimate({ ...usage(2_000_000, []) }, [9000], 0);
+  assertEquals([at.left, at.over, at.none], [0, true, true]);
+  const unknown = U.promiseEstimate(null, [9000], 0);
+  assertEquals([unknown.left, unknown.over, unknown.none], [null, false, false]);
+  // Over the limit (a last call can pass it) leaves no room, not less than none.
+  assertEquals(U.promiseEstimate(usage(2_004_000, []), [1], 0).left, 0);
+});
+
+Deno.test("promiseEstimate: nothing to check costs nothing; bad numbers count as 0", () => {
+  const e = U.promiseEstimate(usage(0, []), [], 300);
+  assertEquals([e.calls, e.tokens, e.cost, e.over], [0, 0, 0, false]);
+  assertEquals(U.promiseEstimate(null, null).calls, 0);
+  assertEquals(U.promiseEstimate(null, [undefined], undefined).input, Math.ceil(U.PROMISE_PROMPT_CHARS / 3));
+});

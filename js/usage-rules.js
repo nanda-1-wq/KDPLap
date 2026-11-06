@@ -25,6 +25,13 @@
      calls (recent, after Live check B: the book's context grows), else this month's
      average Write call input, else WRITE_INPUT_DEFAULT; plus its word target ×
      OUT_PER_WORD output tokens.
+   kdpUsage.promiseEstimate(u, chapterChars, positioningChars) → the cost of a promise
+     check (plan 6.1, design 54 A): { calls, input, output, tokens, cost, left, over,
+     none, resets }. chapterChars: the characters of each chapter to check (title,
+     objective, section titles, text). Each call: the server's 3 characters a token on
+     the prompt, the positioning and the chapter, plus PROMISE_OUT output tokens. The
+     browser never holds the prompt, so PROMISE_PROMPT_CHARS stands for its size
+     (tests/limits-parity.test.js holds it to the server's).
    kdpUsage.tokensText(n) → "27,000" | "1.21M" (rounded, for the cost line)
 ═══════════════════════════════════════════════════ */
 
@@ -39,6 +46,10 @@
   const WRITE_MODEL = 'claude-sonnet-5-5';
   const WARN_AT = 0.8;
   const TOP = 5;
+  // The promise check: its system prompt and tags, the server's 3 characters a token, its output.
+  const PROMISE_PROMPT_CHARS = 2500;
+  const CHARS_PER_TOKEN = 3;
+  const PROMISE_OUT = 250;
 
   const STAGE_NAMES = {
     section_write: 'Write section', section_improve: 'Improve', section_check: 'AI check',
@@ -139,6 +150,23 @@
     };
   }
 
+  function promiseEstimate(u, chapterChars, positioningChars) {
+    const list = Array.isArray(chapterChars) ? chapterChars : [];
+    const base = PROMISE_PROMPT_CHARS + n(positioningChars);
+    const input = list.reduce((a, c) => a + Math.ceil((base + n(c)) / CHARS_PER_TOKEN), 0);
+    const output = list.length * PROMISE_OUT;
+    const p = PRICES[WRITE_MODEL];
+    const tokens = input + output;
+    const limit = n(u && u.limit), used = n(u && u.tokens);
+    const left = u ? Math.max(0, limit - used) : null;
+    return {
+      calls: list.length, input, output, tokens,
+      cost: (input * p.in + output * p.out) / 1e6,
+      left, over: left !== null && tokens > left, none: left !== null && limit > 0 && left === 0,
+      resets: resetsText(u && u.resets)
+    };
+  }
+
   /** Tokens for a short line: "27,000" (to the nearest 1,000) or "1.21M". */
   function tokensText(t) {
     const v = n(t);
@@ -178,5 +206,5 @@
     };
   }
 
-  root.kdpUsage = { PRICES, WARN_AT, STAGE_NAMES, WRITE_INPUT_DEFAULT, OUT_PER_WORD, summary, costText, call, nameOf, resetsText, whenText, chapterEstimate, tokensText };
+  root.kdpUsage = { PRICES, WARN_AT, STAGE_NAMES, WRITE_INPUT_DEFAULT, OUT_PER_WORD, PROMISE_PROMPT_CHARS, PROMISE_OUT, summary, costText, call, nameOf, resetsText, whenText, chapterEstimate, promiseEstimate, tokensText };
 })(globalThis);
