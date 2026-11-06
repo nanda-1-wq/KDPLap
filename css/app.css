@@ -2722,8 +2722,8 @@ div.delete-text p { margin: 0; }
   background: var(--surface-2);
   border-right: 1px solid var(--stone);
 }
-.wr-ms-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--space-2); }
-.wr-ms-count { font-family: var(--font-label); font-size: var(--text-sm); color: var(--graphite); }
+.wr-ms-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 var(--space-3); padding: 0 var(--space-2); }
+.wr-ms-count { font-family: var(--font-label); font-size: var(--text-sm); color: var(--graphite); white-space: nowrap; }
 .wr-ms-count strong { color: var(--ink); font-weight: 500; }
 .wr-bar { display: block; height: var(--app-wr-bar-h); margin: var(--space-2) var(--space-2) var(--space-4); border-radius: var(--radius-pill); background: var(--mist); overflow: hidden; }
 .wr-bar > span { display: block; height: 100%; background: var(--ink); border-radius: inherit; }
