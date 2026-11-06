@@ -216,6 +216,12 @@ Deno.test("section_number and preview: always flagged, with their spots; other w
   assertEquals(T.check(both.version.content, { chapters: 5 }).rows.find((x) => x.code === "mention").sents.length, 1);
 });
 
+Deno.test("leftover: one note at one spot is one row, two notes are two (E14.7 live)", () => {
+  assertEquals(hits(text("Rest [TODO: add a photo here.] well."), "leftover").map((x) => x.quote), ["[TODO: add a photo here.]"]);
+  assertEquals(hits(text("Rest [TODO: one] well. Sit TODO: two now."), "leftover").map((x) => x.quote), ["[TODO: one]", "TODO:"]);
+  assertEquals(hits(text("Rest TBD and [TODO] now."), "leftover").map((x) => x.quote).sort(), ["TBD", "[TODO]"]);
+});
+
 Deno.test("leftover: every listed form; small letters and plain words are fine", () => {
   for (const [md, match] of [["Rest now [TODO] well.", "[TODO]"], ["Rest. TODO: add a photo.", "TODO:"], ["The date is TBD for now.", "TBD"], ["Call XXX for help.", "XXX"],
     ["See [insert photo of a gate] here.", "[insert photo of a gate]"], ["Dear {{reader name}}, hello.", "{{reader name}}"], ["Tea helps [citation needed] a lot.", "[citation needed]"], ["Lorem ipsum dolor sit.", "Lorem ipsum"]]) {

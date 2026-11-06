@@ -586,8 +586,15 @@
         else if (h.kind === 'section') add(4, 'section_number', key, s, `"${said}": the book has no section numbers.`, h);
         else add(4, 'preview', key, s, 'Previews another part of the book. Cut it, or say what that part covers.', sentence);
       }
+      // "[TODO: x]" fits two patterns. One note at one spot is one row: the first and fuller pattern wins.
+      const spots = [];
       for (const re of L.LEFTOVERS) {
-        for (const m of r.md.matchAll(re)) add(4, 'leftover', `${s.id}|${hMatch(m[0])}`, s, `"${shown(m[0])}" is left in the text.`, { start: m.index, end: m.index + m[0].length });
+        for (const m of r.md.matchAll(re)) {
+          const spot = { start: m.index, end: m.index + m[0].length };
+          if (spots.some((x) => spot.start < x.end && spot.end > x.start)) continue;
+          spots.push(spot);
+          add(4, 'leftover', `${s.id}|${hMatch(m[0])}`, s, `"${shown(m[0])}" is left in the text.`, spot);
+        }
       }
     }
     yield { group: 4 };
