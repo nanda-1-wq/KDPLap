@@ -245,11 +245,28 @@ Deno.test("reply: numbers in the reason with no source are listed; the positioni
   assertEquals((await say(`Claims of ${many} have no source.`)).length, 10);                                   // 0028: at most 10
 });
 
-Deno.test("reply: promiseKnown holds the positioning, the objective and the text, and nothing else", () => {
+Deno.test("reply: a number only a title has is sourced; a number in no source is still listed (STOP 5, question 1)", async () => {
+  const titled = (chapter: string | null, section: string | null) => {
+    const ctx = promiseCtx();
+    const c = ctx.outline[4];
+    ctx.outline[4] = { ...c, title: chapter ?? c.title, sections: c.sections.map((s, i) => i === 1 ? { ...s, title: section ?? s.title } : s) };
+    return job(ctx);
+  };
+  const say = async (j: L.PromiseJob) => (await read({ ...PROMISE_OUT, reason: "The claim of 72% does not fit, and 83% has no source." }, j)).promise!.unsourced;
+  assertEquals(await say(job()), ["72", "83"]);                                           // no title has them
+  assertEquals(await say(titled("The 72% Myth", null)), ["83"]);                          // the chapter title
+  assertEquals(await say(titled(null, "Why 83% of people stop")), ["72"]);                // a section title
+  assertEquals(await say(titled("The 72% Myth", "Why 83% of people stop")), []);          // both
+});
+
+Deno.test("reply: promiseKnown holds the positioning, the objective, the text and the titles the prompt shows, and nothing else", () => {
   const j = job();
   const known = L.promiseKnown(j.ctx.positioning, j.chapter, j.sections);
-  for (const s of [LOCKED.one_sentence!, LOCKED.reader_promise!, LOCKED.approach!, "Large print", j.chapter.objective!, PREV_TEXT, CHECK_TEXT]) assertStringIncludes(known, s);
-  assert(!known.includes(j.chapter.title!), "the chapter title is not a source (plan 4.5)");
+  for (const s of [LOCKED.one_sentence!, LOCKED.reader_promise!, LOCKED.approach!, "Large print", j.chapter.objective!, j.chapter.title!, PREV_TEXT, CHECK_TEXT]) assertStringIncludes(known, s);
+  for (const s of j.sections) assertStringIncludes(known, s.title!);
+  const blank = j.chapter.sections[2].title!;                                             // no text, so not in the prompt
+  assert(!j.sections.some((s) => s.title === blank), blank);
+  assert(!known.includes(blank), "a section with no text is not a source");
 });
 
 Deno.test("reply: a refusal, max_tokens, an HTTP error, bad JSON or an unknown stop reason are not counted", async () => {

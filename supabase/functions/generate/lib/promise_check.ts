@@ -89,9 +89,14 @@ export function promiseKey(p: { versionIds?: string[]; chapterTitle?: string | n
   return keyHash([(p.versionIds ?? []).join("\u0002"), str(p.chapterTitle), str(p.objective), str(p.lockedAt)].join("\u0001"));
 }
 
-/** The sources for the number rule on the reason: the positioning, the objective and the chapter's text. */
+/** The sources for the number rule on the reason: the positioning, the objective, the chapter's text, and the chapter and section titles (owner, STOP 5). */
 export function promiseKnown(positioning: PositioningRow | null, chapter: WriteChapterRow, sections: PromiseSection[]): string {
-  return [...Object.values(positioningValues(positioning)).flat(), str(chapter.objective), ...sections.map((s) => s.text)].join("\n");
+  return [
+    ...Object.values(positioningValues(positioning)).flat(),
+    str(chapter.objective),
+    str(chapter.title),
+    ...sections.flatMap((s) => [str(s.title), s.text]),
+  ].join("\n");
 }
 
 /* ── Prompt ── */
