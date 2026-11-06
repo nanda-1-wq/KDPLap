@@ -117,7 +117,7 @@
         if (s.version && today.has(s.version.id) && !before.has(s.version.id)) changed.push(labels.get(s.id));
       }
     }
-    if (!changed.length) return `Your outline, Brief, Research or 08 settings changed after the last run on ${when}. These results may be wrong.`;
+    if (!changed.length) return `Your outline, Brief, Research, a section's status or 08 settings changed after the last run on ${when}. These results may be wrong.`;
     const rest = changed.length - 1;
     return `You changed ${changed[0]}${rest ? ` and ${plural(rest, 'more section', 'more sections')}` : ''} after the last run on ${when}. These results may be wrong.`;
   }

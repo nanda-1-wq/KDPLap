@@ -67,7 +67,7 @@ const test = async page => {
   /* B: only the inputs moved. */
   st.key = '0'.repeat(31) + '2';
   await QC.open7(page);
-  ok(/^Your outline, Brief, Research or 08 settings changed after the last run on /.test(await QC.txt(page, '.qc-box.is-warning .qc-sub')), `55 B inputs: ${await QC.txt(page, '.qc-box.is-warning .qc-sub')}`);
+  ok(/^Your outline, Brief, Research, a section's status or 08 settings changed after the last run on /.test(await QC.txt(page, '.qc-box.is-warning .qc-sub')), `55 B inputs: ${await QC.txt(page, '.qc-box.is-warning .qc-sub')}`);
 
   /* qc_stale: nothing saved, the writer sees why, and Run again works. */
   await QC.run(page).catch(() => {});
@@ -120,7 +120,7 @@ const test = async page => {
   await QC.open7(page);
   const row = await QC.all(page, '#qc-g1 .qc-it');
   ok(row.length === 1 && /^Removed section Draft, not Final\./.test(row[0]) && !/Open in 06/.test(row[0]), `removed: ${JSON.stringify(row)}`);
-  ok(/^Your outline, Brief, Research or 08 settings changed/.test(await QC.txt(page, '.qc-box.is-warning .qc-sub')), 'a removed section is an outline change');
+  ok(/^Your outline, Brief, Research, a section's status or 08 settings changed/.test(await QC.txt(page, '.qc-box.is-warning .qc-sub')), 'a removed section is an outline change');
   await page.click('#qc-g1 [data-ok]');
   for (let i = 0; i < 40 && !st.writes.some((w) => w.table === 'qc_dismissed'); i++) await page.waitForTimeout(25);
   ok(st.writes.find((w) => w.table === 'qc_dismissed').body.section_id === null, 'Mark as OK on a removed section sends no section');
