@@ -3,7 +3,8 @@
 // results shape, qc_dismissed is unique per (book, rule, issue_key) (23505).
 // Tests change globalThis.__store and globalThis.__modes.
 //   __modes: qcFail (n calls), qcSlow (ms), markFail, runFail ({ status, code, message }, n in runFailN),
-//   runSlow (ms), stale (n saves), okFail (n calls), okLimit, okSlow (ms), undoFail (n calls), versionSlow (ms)
+//   runSlow (ms), stale (n saves), okFail (n calls), okLimit, okSlow (ms), undoFail (n calls), versionSlow (ms),
+//   versionFail, draftFail (06 cannot save)
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const QB = 'c1c1c1c1-0000-4000-8000-000000000001';   // the book of design 52, 53
@@ -251,6 +252,7 @@ async function setupQc(page) {
     if (path === '/rest/v1/section_drafts' && method === 'POST') {
       const p = body();
       store.writes.push({ table: 'section_drafts', body: p });
+      if (mode('draftFail')) return json(r, 500, { message: 'mock: draft down' });
       store.drafts[p.section_id] = { content: p.content, base_version_id: p.base_version_id, saved_at: now() };
       return json(r, 201, [{ section_id: p.section_id, saved_at: now() }]);
     }
@@ -258,6 +260,7 @@ async function setupQc(page) {
       const p = body();
       store.writes.push({ table: 'rpc', fn: 'save_version', body: p });
       if (mode('versionSlow')) await wait(mode('versionSlow'));
+      if (mode('versionFail')) return json(r, 500, { message: 'mock: version down' });
       const s = store.sections().find((x) => x.id === p.p_section_id);
       const v = store.edit(s, p.p_content);
       delete store.drafts[s.id];
