@@ -8,7 +8,8 @@
    The engine runs in a module worker (engine-worker.js). Safari's worker
    has a small stack: from about 160 pages its PDF step overflows (worker
    spike, Nov 4). Owner rules for that case (Nov 4, option A):
-   1. After a worker crash, that worker is ended and a new one is started.
+   1. After a worker crash, that worker is ended and a new one is started,
+      only when a build needs it (Part 3: no idle worker after a fallback).
    2. The fallback is chosen by the error (a stack overflow in the PDF step),
       never by the browser name.
    3. The book is remembered for the session (sessionStorage): its next
@@ -20,13 +21,15 @@
    const engine = kdpFormatEngine.create({ onProgress, test })
      onProgress({ loaded, total })   bytes still to download for the style
      test                            test only: { overflowPdfFor: [bookId] }
-   engine.load(style)                → { ms, cdns }   engine and the style's fonts, ready
+   engine.load(style, bookId)        → { ms, cdns }   engine and the style's fonts, ready
+                                     (a book on the main thread loads there, no worker)
    engine.build({ bookId, style, model, settings, extras, onMainThread })
                                      → { pdf, pages, meta, diagnostics, ms, path, fellBack }
    engine.buildSource({ bookId, style, mainTyp, onMainThread })  (the same, from Typst source)
    engine.mode(bookId)               → 'worker' | 'main'
    engine.previewDelay(bookId)       → 600 | 1500 (ms)
    engine.stats                      → { workerStarts, crashes, fallbacks, mainBuilds }
+   engine.hasWorker()                → a worker is alive now
    engine.terminate()
    kdpFormatEngine.isOverflow(err)   → the fallback rule (2)
 ═══════════════════════════════════════════════════ */
@@ -119,15 +122,18 @@
       });
     }
 
-    /** Rule 1: end the worker and start a new one (it loads the current style again, from the cache). */
+    /**
+     * Rule 1: end the worker. The new one starts only when a build needs it
+     * (Part 3, owner): after a fallback the book builds on the main thread,
+     * and an idle worker would keep its 260 to 460 MB in Safari for nothing.
+     */
     function restartWorker() {
       stats.crashes++;
       const old = worker;
       worker = null;
+      ready = null;
       if (old) old.terminate();
       rejectAll(Object.assign(new Error('The print engine stopped.'), { kind: 'crash' }));
-      startWorker();
-      if (style) call({ type: 'load', style }).catch(() => {});
     }
 
     async function call(msg, transfer) {
@@ -140,8 +146,20 @@
       });
     }
 
-    async function load(st) {
+    /**
+     * The engine and the style's fonts, ready to build. A book remembered on
+     * the main thread (rule 3) loads there: no worker is started for it.
+     */
+    async function load(st, bookId) {
       style = st;
+      if (bookId && mainBooks.has(bookId)) {
+        const t0 = performance.now();
+        const loader = await mainLoader();
+        const total = loader.pending(st);
+        let loaded = 0;
+        await loader.compiler(st, (n) => { loaded += n; onProgress({ loaded: Math.max(0, loaded), total }); });
+        return { ms: performance.now() - t0, cdns: loader.cdns.slice() };
+      }
       const r = await call({ type: 'load', style: st });
       return { ms: r.ms, cdns: r.cdns };
     }
@@ -151,6 +169,9 @@
       if (!main) main = root.kdpTypstRun.Loader();
       return main;
     }
+
+    /** True while a worker is alive (the test for "no idle worker after a fallback"). */
+    const hasWorker = () => !!worker;
 
     async function buildMain(st, sources, onMainThread) {
       if (onMainThread) await onMainThread();
@@ -193,7 +214,7 @@
     const mode = (bookId) => (mainBooks.has(bookId) ? 'main' : 'worker');
 
     return {
-      load, build, buildSource, mode,
+      load, build, buildSource, mode, hasWorker,
       previewDelay: (bookId) => PREVIEW_DELAY[mode(bookId)],
       stats,
       terminate() {

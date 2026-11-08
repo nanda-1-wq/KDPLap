@@ -3,7 +3,8 @@
 // test-only flag (kdpFormatEngine.create({ test: { overflowPdfFor: [bookId] } }):
 // the worker throws Safari's stack overflow in its PDF step for that book).
 // Owner rules (Nov 4, option A), each checked:
-//   1. after the crash the worker is ended and a new one is started (it builds again)
+//   1. after the crash the worker is ended; a new one starts only when a build needs it
+//      (Part 3: no idle worker after a fallback; a main-thread book never starts one)
 //   2. the fallback comes from the error (overflow in the PDF step), not the browser:
 //      a Typst error and an overflow in another step do not fall back
 //   3. the book is remembered for the session (also after a reload); other books stay in the worker
@@ -49,6 +50,7 @@ try {
       mainThreadGapMs: Math.round(worst), checks: forced.checks.every((x) => x.pass) };
     out.events = events.slice();
     out.statsAfterFallback = { ...e.stats };
+    out.workerAfterFallback = e.hasWorker();
     out.mode = { forced: e.mode('book-forced'), ref: e.mode('book-ref') };
     out.delay = { forced: e.previewDelay('book-forced'), ref: e.previewDelay('book-ref') };
     out.session = JSON.parse(sessionStorage.getItem(kdpFormatEngine.SESSION_KEY) || '[]');
@@ -58,10 +60,12 @@ try {
     const again = await H.build(e, { ...spec, bookId: 'book-forced' }, { onMainThread });
     out.again = { path: again.path, fellBack: again.fellBack, sha: again.sha, events: events.slice() };
     out.statsAfterAgain = { ...e.stats };
+    out.workerAfterAgain = e.hasWorker();
 
     // Rule 1: the new worker builds the other book.
     const ref2 = await H.build(e, { ...spec, bookId: 'book-ref' });
     out.ref2 = { path: ref2.path, sha: ref2.sha };
+    out.statsAfterRef2 = { ...e.stats };
     kdpTypstRun.compile = compile;
 
     // Rule 2: a Typst error is not a crash and never falls back.
@@ -77,6 +81,13 @@ try {
       none: kdpFormatEngine.isOverflow(null)
     };
     e.terminate();
+
+    // A new engine (08 opened again) for the remembered book: load and build on the main thread, no worker.
+    const e2 = kdpFormatEngine.create();
+    await e2.load('classic', 'book-forced');
+    const third = await H.build(e2, { ...spec, bookId: 'book-forced' });
+    out.reopen = { path: third.path, sha: third.sha, workerStarts: e2.stats.workerStarts, hasWorker: e2.hasWorker() };
+    e2.terminate();
     return out;
   });
 
@@ -94,16 +105,19 @@ expect(R.ref.path === 'worker', 'reference build in the worker');
 expect(R.forced.path === 'main' && R.forced.fellBack === true, `forced book fell back to the main thread (${R.forced.path})`);
 expect(R.forced.sha === R.ref.sha && R.forced.pages === R.ref.pages, 'main-thread PDF is the same file as the worker PDF');
 expect(R.forced.checks, 'main-thread PDF passes the PDF checks');
-expect(R.statsAfterFallback.crashes === 1 && R.statsAfterFallback.workerStarts === 2 && R.statsAfterFallback.fallbacks === 1 && R.statsAfterFallback.mainBuilds === 1,
-  `rule 1: one crash, worker restarted (${JSON.stringify(R.statsAfterFallback)})`);
+expect(R.statsAfterFallback.crashes === 1 && R.statsAfterFallback.workerStarts === 1 && R.statsAfterFallback.fallbacks === 1 && R.statsAfterFallback.mainBuilds === 1,
+  `rule 1: one crash, worker ended, no new worker yet (${JSON.stringify(R.statsAfterFallback)})`);
+expect(R.workerAfterFallback === false, 'Part 3: no idle worker after the fallback');
 expect(JSON.stringify(R.events) === JSON.stringify(['updating-preview', 'frame', 'compile']), `rule 4: painted before the compile (${R.events})`);
 expect(R.mode.forced === 'main' && R.mode.ref === 'worker', 'rule 3: only that book is on the main thread');
 expect(R.delay.forced === 1500 && R.delay.ref === 600, `rule 4: preview delay 1500 / 600 (${JSON.stringify(R.delay)})`);
 expect(R.session.length === 1 && R.session[0] === 'book-forced', 'rule 3: remembered in sessionStorage');
 expect(R.again.path === 'main' && R.again.fellBack === false && R.again.sha === R.ref.sha, 'rule 3: the next build goes straight to the main thread');
-expect(R.statsAfterAgain.crashes === 1 && R.statsAfterAgain.workerStarts === 2 && R.statsAfterAgain.mainBuilds === 2, 'rule 3: no worker try the second time');
+expect(R.statsAfterAgain.crashes === 1 && R.statsAfterAgain.workerStarts === 1 && R.statsAfterAgain.mainBuilds === 2, 'rule 3: no worker try the second time');
+expect(R.workerAfterAgain === false, 'Part 3: still no worker after a main-thread build');
 expect(JSON.stringify(R.again.events) === JSON.stringify(['updating-preview', 'frame', 'compile']), 'rule 4: painted first on the second main-thread build too');
-expect(R.ref2.path === 'worker' && R.ref2.sha === R.ref.sha, 'rule 1: the new worker builds');
+expect(R.ref2.path === 'worker' && R.ref2.sha === R.ref.sha && R.statsAfterRef2.workerStarts === 2, 'rule 1: a new worker starts when a worker build needs it, and builds');
+expect(R.reopen.path === 'main' && R.reopen.sha === R.ref.sha && R.reopen.workerStarts === 0 && !R.reopen.hasWorker, `Part 3: a remembered book loads and builds with no worker (${JSON.stringify(R.reopen)})`);
 expect(R.typstError.kind === 'typst' && R.typstError.diagnostics > 0, 'a Typst error is reported as one');
 expect(R.statsAfterTypstError.crashes === 1 && R.statsAfterTypstError.fallbacks === 1 && R.modeBad === 'worker', 'rule 2: a Typst error does not restart or fall back');
 expect(R.isOverflow.pdfChrome && R.isOverflow.pdfFirefox && !R.isOverflow.compileStep && !R.isOverflow.otherPdfError && !R.isOverflow.none, `rule 2: isOverflow ${JSON.stringify(R.isOverflow)}`);
