@@ -17,7 +17,8 @@
 
 (async function () {
   const NAME_MAX = 60;
-  const TRIMS = ['5x8', '5.5x8.5', '6x9', '7x10', '8.5x11'];
+  // Group A (E13.1, owner Q4): the Print PDF trims. An old 7x10 or 8.5x11 shows as an extra choice.
+  const TRIMS = ['5x8', '5.25x8', '5.5x8.5', '6x9'];
   const { esc, ICON } = kdpUi;
   const fmt = (v) => Number(v || 0).toLocaleString('en-US');
   const trimText = (t) => `${t.replace('x', ' × ')} in`;
@@ -171,7 +172,10 @@
     penSelect.disabled = none;
     $('[data-pen-link]').textContent = none ? 'Add a pen name' : 'Manage pen names';
     $('[data-pen-label]').textContent = none ? 'Pen name · no pen names yet' : 'Pen name';
-    trimSelect.value = TRIMS.includes(settings.default_trim) ? settings.default_trim : '6x9';
+    // An old default outside group A (7x10, 8.5x11) stays as an extra choice until changed (E13.1, as the Brief).
+    const old = settings.default_trim && !TRIMS.includes(settings.default_trim) && /^[0-9]+(\.[0-9]+)?x[0-9]+(\.[0-9]+)?$/.test(settings.default_trim) ? settings.default_trim : null;
+    trimSelect.innerHTML = [...TRIMS, ...(old ? [old] : [])].map((t) => `<option value="${t}">${trimText(t)}</option>`).join('');
+    trimSelect.value = old || (TRIMS.includes(settings.default_trim) ? settings.default_trim : '6x9');
   }
 
   /* ── AI usage this month ───────────────── */

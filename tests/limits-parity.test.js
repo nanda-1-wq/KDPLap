@@ -371,11 +371,13 @@ Deno.test("Settings and Export (E11 STOP 3): the browser files match 0025, the B
   const quoted = (s) => [...s.matchAll(/'([^']+)'/g)].map((m) => m[1]);
   // The Settings Name field: 1 to 60 characters, as user_settings.display_name.
   assertEquals(jsConst("js/settings.js", "NAME_MAX"), one(f, String.raw`char_length\(display_name\) between 1 and (\d+)`));
-  // Default trim size: the Brief's five sizes, each one the 0001 trim rule accepts.
+  // Default trim size: the Brief's sizes, each one the 0001 trim rule accepts.
   const trims = (file) => quoted(read(file).match(/const TRIMS = \[([^\]]*)\]/)[1]);
   assertEquals(trims("js/settings.js"), trims(BRIEF));
   const rule = new RegExp(read(M("0001_v1_data_model.sql")).match(/default_trim\s+text not null default '6x9'\s+check \(default_trim ~ '([^']+)'\)/)[1]);
   for (const t of trims("js/settings.js")) assertEquals(rule.test(t), true, t);
+  // E13.1 (owner Q4): the Brief and Settings trims are group A, the Print PDF trims (js/format-rules.js).
+  assertEquals([...trims(BRIEF)].sort(), [...quoted(read("js/format-rules.js").match(/const TRIMS = \[([^\]]*)\]/)[1])].sort());
   // Export: a section "being written" uses Write's run freshness (0020); the AI edit sources are 0025's.
   assertEquals(jsConst("js/export-rules.js", "RUN_FRESH"), jsConst("js/book-write.js", "RUN_FRESH"));
   assertEquals(quoted(read("js/export-rules.js").match(/const AI_EDITS = \[([^\]]*)\]/)[1]), quoted(read(f).match(/h\.source in \(([^)]*)\)/)[1]));

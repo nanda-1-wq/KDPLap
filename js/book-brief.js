@@ -48,7 +48,8 @@
     ['hobby_craft', 'Hobby and craft guide'], ['reference', 'Reference guide'], ['memoir', 'Memoir or personal story'],
     ['other', 'Other']
   ];
-  const TRIMS = ['5x8', '5.5x8.5', '6x9', '7x10', '8.5x11'];
+  // Group A (E13.1, owner Q4): the Print PDF trims. An old 7x10 or 8.5x11 shows as an extra choice.
+  const TRIMS = ['5x8', '5.25x8', '5.5x8.5', '6x9'];
   // [key, chip text]. The words of each range live in js/word-budget.js (kdpWords.RANGES).
   const LENGTHS = [
     ['5-8k', '5K to 8K words'], ['8-12k', '8K to 12K'],
@@ -973,8 +974,16 @@
   }
 
   window.kdpBookSteps = window.kdpBookSteps || {};
+  /** 08 Format changed the trim (it writes book_briefs.trim_size): show it here too. */
+  function trimChanged(t) {
+    if (model) model.trim_size = t;
+    if (saved) saved.trim_size = t;
+    if (saver) saver.drop('trim_size');
+  }
+
   window.kdpBookSteps[1] = {
     init,
+    trimChanged,
     render,
     isDone,
     missing,

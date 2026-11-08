@@ -42,8 +42,10 @@ const test = async page => {
   ok(st.books[B2].brief.target_words === 15000 && st.books[B2].brief.length_range === null, 'mock row: target 15000, range null');
 
   // 4. Trim size changes the estimate.
-  await page.click('[data-chips="trim_size"] [data-value="8.5x11"]');
-  ok(/^About \d+ pages at 8\.5 × 11 in$/.test(await hint()) && (await hint()) !== 'About 60 pages at 8.5 × 11 in', `estimate at 8.5 × 11: "${await hint()}"`);
+  // E13.1: the Brief chips are group A (5x8, 5.25x8, 5.5x8.5, 6x9).
+  await page.click('[data-chips="trim_size"] [data-value="5x8"]');
+  ok(/^About \d+ pages at 5 × 8 in$/.test(await hint()) && (await hint()) !== 'About 60 pages at 5 × 8 in', `estimate at 5 × 8: "${await hint()}"`);
+  ok(JSON.stringify(await page.locator('[data-chips="trim_size"] .tone-chip').allInnerTexts()) === JSON.stringify(['5 × 8 in', '5.25 × 8 in', '5.5 × 8.5 in', '6 × 9 in']), 'trim chips: group A');
   await page.click('[data-chips="trim_size"] [data-value="6x9"]');
   await settle();
 

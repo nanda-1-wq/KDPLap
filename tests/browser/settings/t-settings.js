@@ -103,7 +103,7 @@ const test = async (page) => {
   await page.locator('#trimSelect').selectOption('5x8');
   await saved(n, '[data-trim-save]');
   ok('trim size saved (new books only)', S().settings.default_trim === '5x8' && (await text('#trimHelp')).includes("Change a book's size in its Brief."));
-  ok('the trim list: the Brief\'s five sizes', JSON.stringify(await page.locator('#trimSelect option').allInnerTexts()) === JSON.stringify(['5 × 8 in', '5.5 × 8.5 in', '6 × 9 in', '7 × 10 in', '8.5 × 11 in']));
+  ok('the trim list: the Brief\'s group A sizes (E13.1)', JSON.stringify(await page.locator('#trimSelect option').allInnerTexts()) === JSON.stringify(['5 × 8 in', '5.25 × 8 in', '5.5 × 8.5 in', '6 × 9 in']));
 
   /* ── Change password ── */
   await page.locator('[data-password]').click();
@@ -115,6 +115,15 @@ const test = async (page) => {
   await page.locator('[data-password]').click();
   await page.waitForFunction(() => /2 reset emails/.test(document.querySelector('[data-password-note]').textContent), null, { timeout: 4000 });
   ok('password: refused by the hourly limit', (await text('[data-password-note]')) === 'You can ask for 2 reset emails an hour. Try again later.');
+
+  /* ── E13.1: an old default outside group A stays as an extra choice ── */
+  globalThis.__modes = {};
+  await setupE11(page);
+  globalThis.__store.settings.default_trim = '8.5x11';
+  await page.goto(`${E11.base}/app/settings.html`, { waitUntil: 'domcontentloaded' });
+  await page.locator('#trimSelect option').nth(4).waitFor({ state: 'attached', timeout: 10000 });
+  ok('E13.1 old default 8.5 x 11: shown as a fifth choice, chosen', JSON.stringify(await page.locator('#trimSelect option').allInnerTexts()) === JSON.stringify(['5 × 8 in', '5.25 × 8 in', '5.5 × 8.5 in', '6 × 9 in', '8.5 × 11 in'])
+    && (await page.locator('#trimSelect').inputValue()) === '8.5x11');
 
   /* ── 7. No pen names ── */
   await open({ pensNone: true });
