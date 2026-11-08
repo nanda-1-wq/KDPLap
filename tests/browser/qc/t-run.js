@@ -59,8 +59,8 @@ const test = async page => {
   ok(await page.evaluate(() => document.activeElement.dataset.group === '7'), 'focus stays on the group');
   const kdp = await QC.all(page, '#qc-g7 .qc-it');
   ok(kdp.some((t) => /A web link in print text\. Paperback readers cannot click it\. Open in 06 Mark as OK$/.test(t)), `web link row: ${JSON.stringify(kdp)}`);
-  ok(kdp.some((t) => /^Whole book The topic is close to health, and the book has no disclaimer\. How to add one Coming next Mark as OK$/.test(t)), 'disclaimer row: How to add one, Coming next (V9)');
-  ok(!(await page.$('#qc-g7 a[data-how]')), 'How to add one is not a link yet');
+  ok(kdp.some((t) => /^Whole book The topic is close to health, and the book has no disclaimer\. How to add one Mark as OK$/.test(t)), 'disclaimer row: How to add one (E13.2)');
+  ok(await page.$eval('#qc-g7 a[data-go="8"][data-focus="copyright"]', (a) => a.textContent === 'How to add one' && /[?&]step=8$/.test(a.getAttribute('href'))), 'How to add one links to 08 at the Copyright row');
   ok(/^3\.4 /.test(kdp[0]) && /^Whole book/.test(kdp[1]), 'book-wide rows come after the sections (design 53)');
   await page.click('[data-group="1"]');
   await page.click('.qc-verdict [data-run]');

@@ -7,7 +7,7 @@
 # title (step 04), outline (step 05), write (step 06), delete (Delete book dialog),
 # settings (E11 Settings and the sidebar name), export (E11 Export dialog),
 # books (E11 Books badge and card menu), pen (E12 pen name voice field),
-# qc (E14.3 07 Quality Control, the shell and the 07 marks).
+# qc (E14.3 07 Quality Control, the shell and the 07 marks), format (E13.2 08 Format).
 # A suite's mock.js defines setup(page); each test file defines test(page).
 set -euo pipefail
 HERE=${0:A:h}

@@ -60,7 +60,8 @@ const test = async (page) => {
   ok('1 opens on the book: title, pen name', (await T('#expTitle')) === 'Export book' && (await T('[data-exp-sub]')) === 'Chair Yoga for Seniors Over 60 · Nora Hale');
   ok('1 focus on the chosen format', await page.evaluate(() => document.activeElement.matches('input[value="docx"]')));
   const d1 = await D();
-  ok('1 format: Word checked, Markdown, v2 formats off', await page.locator('input[value="docx"]').isChecked() && d1.includes('Markdown (.md)') && d1.includes('Print PDF, EPUB, Google Drive Coming in v2'));
+  ok('1 format: Word checked, Markdown, v2 formats off', await page.locator('input[value="docx"]').isChecked() && d1.includes('Markdown (.md)') && d1.includes('EPUB Comes next') && d1.includes('Google Drive Coming in v3'));
+  ok('1 E13.2: Print PDF is made in 08 (a link to step 8)', d1.includes('Print PDF Made in 08 Format') && /[?&]step=8$/.test(await page.locator('.exp-08').getAttribute('href')));
   ok('1 include: all 10, "10 Final."', (await T('#expInclude option:checked')) === 'All sections with text (10)' && (await T('#expIncludeHelp')) === '10 Final.');
   ok('1 parts: Intro and Conclusion shown, About off, Chapters always', d1.includes('Introduction 1 section') && d1.includes('Conclusion 1 section') && d1.includes("About the author Nora Hale's bio from Pen Names Off")
     && await page.locator('.exp-tick.is-locked input').isDisabled() && !(await page.locator('[data-exp-part="about"]').isChecked()));

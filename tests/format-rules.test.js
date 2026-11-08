@@ -142,3 +142,29 @@ Deno.test("fileName: {title-slug}-print-{trim}.pdf", () => {
   assertEquals(F.fileName("", "5x8"), "book-print-5x8.pdf");
   assertEquals(F.fileName("T", "7x10"), "t-print-6x9.pdf");
 });
+
+Deno.test("E13.2 MARGIN equals the template's margins (js/format/book.typ)", () => {
+  const typ = Deno.readTextFileSync(new URL("../js/format/book.typ", import.meta.url));
+  const m = /#let MARGIN = \(inside: ([0-9.]+)in, outside: ([0-9.]+)in/.exec(typ);
+  assertEquals([Number(m[1]), Number(m[2])], [F.MARGIN.inside, F.MARGIN.outside]);
+});
+
+Deno.test("E13.2 PART_ROWS: design 41 order, every switch is a 0027 part key", () => {
+  assertEquals(F.PART_ROWS.map((p) => p.key), ["title", "copyright", "contents", "front", "intro", "conclusion", "notes", "about", "also_by"]);
+  for (const p of F.PART_ROWS) if (!p.later) assert(F.PART_KEYS.includes(p.key), p.key);
+  assertEquals(F.PART_ROWS.filter((p) => p.always).map((p) => p.key), ["title", "copyright"]);
+  assertEquals(F.PART_ROWS.find((p) => p.key === "notes").later, "Comes in v2b");
+  assertEquals(F.PART_ROWS.find((p) => p.key === "front").later, "Write in 06 · v2b");
+});
+
+Deno.test("E13.2 trimText and marginNote", () => {
+  assertEquals(F.trimText("6x9"), "6 × 9 in");
+  assertEquals(F.trimText("5.25x8"), "5.25 × 8 in");
+  const fixed = "We use 0.75 in inside and 0.5 in outside, mirrored.";
+  assertEquals(F.marginNote(0), `KDP's minimum inside margin depends on the page count. ${fixed}`);
+  assertEquals(F.marginNote(48), `KDP minimum 0.375 in inside for 24 to 150 pages. ${fixed}`);
+  assertEquals(F.marginNote(12), `KDP minimum 0.375 in inside for 24 to 150 pages. ${fixed}`);
+  assertEquals(F.marginNote(160), `KDP minimum 0.5 in inside for 151 to 300 pages. ${fixed}`);
+  assertEquals(F.marginNote(720), `KDP minimum 0.875 in inside for 701 to 828 pages. ${fixed}`);
+  assertEquals(F.marginNote(900), `KDP prints up to 828 pages. ${fixed}`);
+});

@@ -53,7 +53,7 @@ const test = async page => {
   /* Live regions. */
   ok(await page.$eval('[data-book-content]', (e) => e.getAttribute('aria-live') === 'polite'), 'the step area is a polite live region');
   ok(await page.$eval('nav[aria-label="Book steps"]', (n) => !!n), 'the sidebar is labeled');
-  ok(await page.$eval('[data-next]', (b) => b.getAttribute('aria-describedby') === 'nextNote' && document.getElementById('nextNote').textContent === 'Coming next'), 'Next is described by Coming next');
+  ok(await page.$eval('[data-next]', (b) => b.getAttribute('aria-describedby') === 'nextNote' && !b.disabled), 'Next is on and described by its note (E13.2)');
 
   /* Functional colors keep an icon and a word. */
   ok(await page.$$eval('.qc-chip.is-warn, .qc-chip.is-ok', (cs) => cs.every((c) => c.querySelector('svg') && c.textContent.trim())), 'chips have an icon and a word');

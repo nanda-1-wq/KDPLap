@@ -20,14 +20,14 @@ const test = async page => {
   ok(heads.join() === 'PLAN,PRODUCE,PACKAGE,RELEASE', `groups: ${heads}`);
   ok((await QC.all(page, '.group-row .version-tag')).join() === 'Coming in v3', 'RELEASE: Coming in v3');
   const links = await page.$$eval('a[data-step]', (a) => a.map((x) => x.dataset.step));
-  ok(links.join() === '1,2,3,4,5,6,7', `links 01 to 07: ${links}`);
+  ok(links.join() === '1,2,3,4,5,6,7,8', `links 01 to 08 (E13.2): ${links}`);
   const coming = await QC.all(page, '[data-coming]');
-  ok(coming.join('|').replace(/ ,/g, ',') === '08 Format, Coming next|09 Cover, Coming next', `08 and 09: ${coming.join('|')}`);
-  ok(await page.$$eval('[data-coming]', (r) => r.every((x) => x.tagName === 'DIV' && x.getAttribute('aria-disabled') === 'true' && x.tabIndex === -1)), '08 and 09 are not links');
+  ok(coming.join('|').replace(/ ,/g, ',') === '09 Cover, Coming next', `09 only: ${coming.join('|')}`);
+  ok(await page.$$eval('[data-coming]', (r) => r.every((x) => x.tagName === 'DIV' && x.getAttribute('aria-disabled') === 'true' && x.tabIndex === -1)), '09 is not a link');
   ok(LOCK.test(await page.$eval('[data-coming="9"] .step-mark', (e) => e.innerHTML)), '09 shows the lock');
-  ok(!(await page.$eval('[data-coming="8"] .step-mark', (e) => e.innerHTML)), '08 shows the open circle');
-  await page.$eval('[data-coming="8"]', (d) => d.click());
-  ok(/step=7/.test(page.url()), 'a click on 08 does nothing');
+  ok(!(await page.$eval('[data-step="8"] .step-mark', (e) => e.innerHTML)), '08 not done: no check');
+  await page.$eval('[data-coming="9"]', (d) => d.click());
+  ok(/step=7/.test(page.url()), 'a click on 09 does nothing');
 
   /* Current and not run: the dot. No sideways scroll in the sidebar. */
   let r = await row(7);

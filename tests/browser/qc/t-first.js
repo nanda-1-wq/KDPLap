@@ -22,9 +22,9 @@ const test = async page => {
   const side = await QC.all(page, '.qc-side .qc-fact');
   ok(side.length === 4 && side[0].startsWith('Never blocks.') && side[3].startsWith('Step 07 is done'), `Good to know: ${JSON.stringify(side)}`);
 
-  // Header: Back, Export, Next (Coming next until 08 lands, V9). No reason line.
-  ok(await page.$eval('[data-next]', (b) => b.disabled), 'Next is off');
-  ok((await QC.txt(page, '[data-next-note]')) === 'Coming next', 'Next says Coming next');
+  // Header: Back, Export, Next (E13.2: Next opens 08). No reason line.
+  ok(await page.$eval('[data-next]', (b) => !b.disabled && b.getAttribute('aria-disabled') === null), 'Next is on (08 is built)');
+  ok(await page.$eval('[data-next-note]', (n) => n.hidden && !n.textContent), 'no note next to Next');
   ok(await page.$eval('[data-back]', (b) => !b.disabled), 'Back is on');
   ok(!(await page.$('a[data-step="7"] [data-step-missing]')), 'no "Not done yet" under 07');
 
@@ -34,9 +34,9 @@ const test = async page => {
   await page.waitForSelector('.qc-first', { timeout: 10000 });
   ok(/step=7/.test(page.url()), 'a reload keeps step 7');
 
-  // A step above 07 falls back to 01, as a bad step did before.
-  await page.goto(QC.url(8), { waitUntil: 'domcontentloaded' });
+  // A step above 08 falls back to 01, as a bad step did before (E13.2: 08 has a screen).
+  await page.goto(QC.url(9), { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('[data-step-title]').textContent === 'Brief', null, { timeout: 10000 });
-  ok(/step=1/.test(page.url()), 'step=8 has no screen yet: 01 opens');
+  ok(/step=1/.test(page.url()), 'step=9 has no screen yet: 01 opens');
   return log.join('\n');
 };

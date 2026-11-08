@@ -11,7 +11,7 @@ const test = async page => {
   ok((await QC.txt(page, '.qc-box.is-plain strong')) === 'Nothing to check yet', '55 C title');
   ok((await QC.txt(page, '.qc-box.is-plain .qc-sub')) === 'Quality Control checks sections that have text. Write at least one section in 06 Write.', '55 C text');
   ok(!(await page.$('[data-run]')), '55 C: nothing to run');
-  ok((await QC.txt(page, '[data-next-note]')) === 'Coming next', '55 C: the header is the same');
+  ok(await page.$eval('[data-next]', (b) => !b.disabled) && await page.$eval('[data-next-note]', (n) => n.hidden), '55 C: the header is the same (Next on, no note)');
   await page.click('[data-go="6"]');
   await page.waitForFunction(() => document.querySelector('[data-step-title]').textContent === 'Write', null, { timeout: 5000 });
   ok(true, 'Go to 06 Write opens 06');
@@ -34,8 +34,8 @@ const test = async page => {
   ok((await QC.txt(page, '.qc-box.is-success strong')) === 'Ready for Format', '55 E title');
   ok(await page.$eval('.qc-box.is-success strong', (e) => !!e.querySelector('svg[aria-hidden="true"]') && e.firstElementChild.tagName === 'svg'), '55 E: the success icon sits before the title (owner, STOP 6 Q3)');
   ok((await QC.txt(page, '.qc-box.is-success .qc-sub')) === 'No problems found in 30 sections.', `55 E text: ${await QC.txt(page, '.qc-box.is-success .qc-sub')}`);
-  ok(await page.$eval('.qc-box.is-success button', (b) => b.disabled && b.textContent === 'Go to 08 Format'), 'Go to 08 Format is off (V9)');
-  ok((await QC.txt(page, '.qc-box.is-success .version-tag')) === 'Coming next', 'Go to 08 Format: Coming next');
+  ok(await page.$eval('.qc-box.is-success a[data-go="8"]', (a) => a.textContent === 'Go to 08 Format' && a.classList.contains('btn-primary') && /[?&]step=8$/.test(a.getAttribute('href'))), 'Go to 08 Format is a live button (E13.2)');
+  ok(!(await page.$('.qc-box.is-success .version-tag')), 'no Coming next tag');
   ok((await QC.all(page, '.qc-main > .qc-note'))[0] === 'Promise check not run. It is optional.', 'the promise line is a suggestion');
   ok(await page.evaluate(() => document.activeElement.hasAttribute('data-verdict')), '55 E: focus on the verdict');
   const clear = await QC.all(page, '.qc-gb');
@@ -81,7 +81,7 @@ const test = async page => {
   await page.waitForSelector('.alert[role="alert"]', { timeout: 5000 });
   ok((await QC.txt(page, '.alert')) === 'Your book changed while the checks ran. Run again.', `qc_stale: ${await QC.txt(page, '.alert')}`);
   ok(st.runs.length === runs, 'qc_stale: nothing saved');
-  ok(await page.$eval('[data-next]', (b) => b.disabled), 'qc_stale: the shell is untouched');
+  ok(await page.$eval('[data-next]', (b) => !b.disabled), 'qc_stale: the shell is untouched (Next stays on, E13.2)');
   await QC.run(page);
   ok(!(await page.$('.alert')) && st.runs.length === runs + 1, 'qc_stale: Run again saves');
 
@@ -132,7 +132,7 @@ const test = async page => {
   await page.waitForSelector('.state-box[role="alert"]', { timeout: 10000 });
   ok((await QC.txt(page, '.state-box h2')) === "We couldn't load Quality Control", 'load error title');
   ok((await QC.txt(page, '.state-box p')) === 'Check your connection, then try again.', 'load error text');
-  ok(await page.$eval('[data-next]', (b) => b.disabled) && await QC.has(page, '[data-step="7"]'), 'load error: the shell stays');
+  ok(await page.$eval('[data-next]', (b) => !b.disabled) && await QC.has(page, '[data-step="7"]'), 'load error: the shell stays (Next stays on, E13.2)');
   await page.click('[data-reload]');
   await page.waitForSelector('.qc-box.is-warning, .qc-verdict, .qc-box.is-success', { timeout: 5000 });
   ok(true, 'Retry loads');

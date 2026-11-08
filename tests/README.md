@@ -326,7 +326,7 @@ and for E12 `pen` (t-label: the "Point of view in your books" field and its help
 and for E14.3 `qc` (07 Quality Control and the shared shell, designs 51, 51b, 52, 53, 55, 57): t-first (52), t-run
 (55 A to 53, the row sent, the first group open, Open in 06), t-states (55 B, C, E, qc_stale, the save
 and load errors, a removed section), t-ok (55 F, Undo, 23505, the limit, an issue back after a text
-change), t-marks (the sidebar and the rail, 01 to 09, 08 and 09 Coming next, the mark 2 s after a save),
+change), t-marks (the sidebar and the rail, 01 to 09, 08 a link and 09 Coming next since E13.2, the mark 2 s after a save),
 t-a11y (keyboard, focus rings, 44 px, 900 px with no sideways scroll), and for E14.6 t-promise (designs 54,
 55 D, group 6: the cost, the skipped list, the monthly room, Esc and the focus trap, progress and Stop, the
 chips and counts, Check again, Mark as OK, Open in 06, every error, a lost connection with a fresh read).
@@ -334,7 +334,16 @@ chips and counts, Check again, Mark as OK, Open in 06, every error, a lost conne
 `docs/reviews/e14-*-stop*/` with the real fonts; they are not checks, and they overwrite tracked images. The
 qc mock answers as 0028 does (the qc_stale guard, the unique key, the results shape) and as generate v26
 does for promise_check. `write t-ms-head` holds the 06 manuscript head at 900 px, and at 1440 px pixel for
-pixel with and without its fix.
+pixel with and without its fix. `qc t-to08` (E13.2): "How to add one" opens 08 with the Copyright row
+focused, "Go to 08 Format" (55 E) opens 08.
+For E13.2 `format` (08 Format, designs 41, 43, 51b; the qc-style mock answers as 0027 does: book_formats made on
+the first open, its update checks, format_json): t-screen (the settings column, every control saved, ISBN, header
+title, Title page and Copyright always on, Introduction and Conclusion only when the book has them, the bio note,
+Kindle state, load and save errors, keyboard, 32 px rows, 900 px), t-dialogs (Also by with the status from Books,
+the print order, Cancel and Escape; the trim warning with and without a Print PDF, Keep, a failed write, Change
+trim into the Brief; an old 7 × 10 trim), t-shell (header, the reason line, Next off with the "Coming next" tip,
+the rail, 09 Coming next, 07 Next to 08, Export files, the E11 row link). `format t-shots` makes the STOP compare
+images in `docs/reviews/e13-2-stop<n>/`; not a check, it overwrites tracked images.
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every

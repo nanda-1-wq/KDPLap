@@ -5,6 +5,7 @@
 //   __modes: qcFail (n calls), qcSlow (ms), markFail, runFail ({ status, code, message }, n in runFailN),
 //   runSlow (ms), stale (n saves), okFail (n calls), okLimit, okSlow (ms), undoFail (n calls), versionSlow (ms),
 //   versionFail, draftFail (06 cannot save)
+//   08 Format (E13.2): format_json and book_formats answer from store.format, so 07's links open 08.
 //   Promise check (generate v26, stage promise_check): store.checks holds book_checks. store.plan[n] sets chapter n's
 //   answer ({ verdict, reason, quote, section_id, unsourced }; default keeps). __modes.prFail { n: code } fails chapter n
 //   once; code 'network' drops the connection, 'saved' saves the check and then drops it. prSlow (ms), prHold (a chapter
@@ -284,6 +285,28 @@ async function setupQc(page) {
     // 02 Research: the counts its sidebar mark reads.
     if (path === '/rest/v1/competitors' && method === 'GET') return json(r, 200, store.research.competitors.map((c, i) => ({ id: uid('b', i + 1), asin: null, ...c })));
     if (path === '/rest/v1/research_sources' && method === 'GET') return json(r, 200, store.research.sources.map((c, i) => ({ id: uid('a', i + 1), ...c })));
+
+    // 08 Format (E13.2): what "Go to 08 Format" and "How to add one" open.
+    if (path === '/rest/v1/rpc/format_json') {
+      if (body().p_book_id !== QB) return json(r, 200, null);
+      const parts = { title: true, copyright: true, contents: true, intro: true, conclusion: true, about: false, also_by: false, ...((store.format && store.format.parts) || {}) };
+      return json(r, 200, {
+        book: { id: QB, title: store.book.title, subtitle: store.book.subtitle, pen_name_id: PA, pen_name: store.book.pen_name, trim: store.brief.trim_size },
+        settings: store.format ? { book_id: QB, ...copy(store.format), parts } : null,
+        also_by_valid: [], candidates: [], key: store.key, last_pdf: null, changed: false, now: now()
+      });
+    }
+    if (path === '/rest/v1/book_formats' && method === 'POST') {
+      store.writes.push({ table: 'book_formats', insert: body() });
+      if (store.format) return json(r, 409, { code: '23505', message: 'duplicate key value violates unique constraint "book_formats_pkey"', details: '' });
+      store.format = { style: 'classic' };
+      return json(r, 201, '');
+    }
+    if (path === '/rest/v1/book_formats' && method === 'PATCH') {
+      store.writes.push({ table: 'book_formats', body: body() });
+      store.format = { ...(store.format || {}), ...body() };
+      return json(r, 200, [{ book_id: QB, updated_at: now() }]);
+    }
 
     // The Export dialog.
     if (path === '/rest/v1/rpc/export_json') return json(r, 200, data());
