@@ -20,6 +20,12 @@
    kdpFormatRules.spine(pages, paper) → spine width in inches
    kdpFormatRules.modelOf(data, settings) → kdpExportRules.model, Final sections only
    kdpFormatRules.fileName(title, trim) → "chair-yoga-for-seniors-print-6x9.pdf"
+
+   E13.2 Part 2 (the 08 settings column, design 41):
+   kdpFormatRules.PART_ROWS       → the book parts in print order (always on, switches, v2b rows)
+   kdpFormatRules.MARGIN          → the template's margins (js/format/book.typ), fixed in v2a
+   kdpFormatRules.trimText(trim)  → "6 × 9 in"
+   kdpFormatRules.marginNote(pages) → the KDP minimum line under PAGE · PRINT (pages 0: not built yet)
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -32,6 +38,22 @@
   const HEADER_TITLE_MAX = 80;
   // KDP paperback spine, inches per page (no bleed).
   const SPINE_PER_PAGE = { white: 0.002252, cream: 0.0025 };
+  // The template's margins (js/format/book.typ, t1), fixed in v2a.
+  const MARGIN = { inside: 0.75, outside: 0.5 };
+  // Book parts in the fixed print order (design 41; 51b for Introduction and Conclusion).
+  // always: on, no switch. needs: shown only when the book has that chapter (owner, Nov 4).
+  // later: shown off, not a switch (Notes and references: owner Q3, Nov 8).
+  const PART_ROWS = [
+    { key: 'title', name: 'Title page', always: true },
+    { key: 'copyright', name: 'Copyright', always: true },
+    { key: 'contents', name: 'Contents' },
+    { key: 'front', name: 'Dedication, epigraph, foreword, preface', later: 'Write in 06 · v2b' },
+    { key: 'intro', name: 'Introduction', needs: 'intro' },
+    { key: 'conclusion', name: 'Conclusion', needs: 'conclusion' },
+    { key: 'notes', name: 'Notes and references, at the back', later: 'Comes in v2b' },
+    { key: 'about', name: 'About the author' },
+    { key: 'also_by', name: 'Also by' }
+  ];
 
   function defaults() {
     return {
@@ -123,6 +145,19 @@
     });
   }
 
+  /** "6 × 9 in" */
+  const trimText = (trim) => `${String(trim || '6x9').replace('x', ' × ')} in`;
+
+  /** The margins line under PAGE · PRINT (design 41). pages 0: the count is not known yet. */
+  function marginNote(pages) {
+    const n = Number(pages) || 0;
+    const fixed = `We use ${MARGIN.inside} in inside and ${MARGIN.outside} in outside, mirrored.`;
+    if (!n) return `KDP's minimum inside margin depends on the page count. ${fixed}`;
+    if (n > 828) return `KDP prints up to 828 pages. ${fixed}`;
+    const m = kdpMargin(n < 24 ? 24 : n);
+    return `KDP minimum ${m.inside} in inside for ${m.tier} pages. ${fixed}`;
+  }
+
   function fileName(title, trim) {
     const slug = String(title || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80).replace(/-+$/, '');
@@ -130,7 +165,7 @@
   }
 
   root.kdpFormatRules = {
-    STYLES, CHAPTER_LABELS, PAPERS, TRIMS, PART_KEYS, ALSO_BY_MAX, HEADER_TITLE_MAX, SPINE_PER_PAGE,
-    defaults, normalize, isGroupA, trimSize, isbnOk, isbnClean, kdpMargin, spine, modelOf, fileName
+    STYLES, CHAPTER_LABELS, PAPERS, TRIMS, PART_KEYS, PART_ROWS, ALSO_BY_MAX, HEADER_TITLE_MAX, SPINE_PER_PAGE, MARGIN,
+    defaults, normalize, isGroupA, trimSize, trimText, isbnOk, isbnClean, kdpMargin, spine, marginNote, modelOf, fileName
   };
 })(globalThis);

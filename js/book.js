@@ -38,13 +38,21 @@
    mark comes from qc_mark: read at load, on every step change, after a run
    (ctx.readQcMark) and 2 s after 06 saves (ctx.refresh, debounced; a draft
    passes { draft: true } and is left out: a draft is not in the run's key).
-   08 and 09 show "Coming next" and are not links until their screens land.
+   E13.2 (designs 41, 51b): 08 Format is js/book-format.js, a wide step (the
+   rail). On 08 the header button reads "Export files" and opens the 08
+   panel when the step has one (openExport); other steps keep the E11
+   dialog. 08 is the last step with a screen: Next is off with the
+   "Coming next" tip, and the note says what 08 still needs. 09 Cover shows
+   a lock and "Coming next" and is not a link until E15.
+   ctx.go(n, { focus }) opens a step and asks it to focus one control
+   (07 "How to add one" → 08 at the Copyright row).
 ═══════════════════════════════════════════════════ */
 
 (async function () {
   const TOTAL_STEPS = 11;
-  const LAST_STEP = 7;                  // the last step with a screen; 08 is next
-  const WIDE_STEPS = new Set([6]);      // these fold the sidebar to the rail (08 and 09 join them)
+  const LAST_STEP = 8;                  // the last step with a screen; 09 Cover is next (E15)
+  const WIDE_STEPS = new Set([6, 8]);   // these fold the sidebar to the rail (09 joins them)
+  const FORMAT_STEP = 8;
   const QC_STEP = 7;
   const MARK_DELAY = 2000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,9 +64,10 @@
     4: { group: 'Plan', name: 'Title', task: 'E8', text: 'Pick a title and subtitle that match the positioning.' },
     5: { group: 'Produce', name: 'Outline', task: 'E9', text: 'Plan the chapters and their word targets.' },
     6: { group: 'Produce', name: 'Write', task: 'E10', text: 'Write the book one section at a time, with AI help.' },
-    7: { group: 'Produce', name: 'Quality Control', task: 'E14', text: 'Check the whole book before you format it.' }
+    7: { group: 'Produce', name: 'Quality Control', task: 'E14', text: 'Check the whole book before you format it.' },
+    8: { group: 'Package', name: 'Format', task: 'E13', text: 'Choose the look of the pages and export the Print PDF.' }
   };
-  const COMING = { 8: 'Format', 9: 'Cover' };
+  const COMING = { 9: 'Cover' };
 
   const nav = document.querySelector('[data-book-nav]');
   const head = document.querySelector('[data-book-head]');
@@ -199,11 +208,10 @@
         <span class="step-mark" aria-hidden="true">${done ? CHECK : ''}</span><span class="step-num">${pad(QC_STEP)}</span>${name}</a>`;
   }
 
-  /** 08 and 09: not links until their screens land (approved difference V9). */
+  /** 09: a lock, not a link until its screen lands (approved difference V9, E13.2 F5). */
   function comingRow(n) {
-    const lock = n === 9;
-    return `<div class="step-link is-future${lock ? ' is-locked' : ''}" role="link" aria-disabled="true" title="${pad(n)} ${COMING[n]}, coming next" data-coming="${n}">
-        <span class="step-mark" aria-hidden="true">${lock ? LOCK_SM : ''}</span><span class="step-num">${pad(n)}</span>${COMING[n]}<span class="sr-only">, </span><span class="version-tag">Coming next</span></div>`;
+    return `<div class="step-link is-future is-locked" role="link" aria-disabled="true" title="${pad(n)} ${COMING[n]}, coming next" data-coming="${n}">
+        <span class="step-mark" aria-hidden="true">${LOCK_SM}</span><span class="step-num">${pad(n)}</span>${COMING[n]}<span class="sr-only">, </span><span class="version-tag">Coming next</span></div>`;
   }
 
   /** A wide step folds the sidebar to a rail (designs 22, 51b); the button opens it again. */
@@ -281,7 +289,7 @@
       </div>
       <div class="step-group">
         <div class="step-group-head"><span class="group-name">PACKAGE</span></div>
-        ${[8, 9].map(comingRow).join('')}
+        ${stepLink(FORMAT_STEP)}${comingRow(9)}
       </div>
       <div class="step-group">
         <div class="group-row"><span class="group-name">RELEASE</span><span class="version-tag">Coming in v3</span></div>
@@ -333,14 +341,28 @@
   function setGate() {
     const m = MODULES[step];
     const left = m && m.blockers ? m.blockers() : 0;
-    nextBtn.disabled = step === LAST_STEP || left > 0;
+    const last = step === LAST_STEP;
+    nextBtn.disabled = !last && left > 0;
+    // The last step: Next stays focusable with the "Coming next" tip (shell pattern), and does nothing.
+    nextBtn.classList.toggle('has-tip', last);
+    if (last) nextBtn.setAttribute('aria-disabled', 'true'); else nextBtn.removeAttribute('aria-disabled');
+    let tip = nextBtn.querySelector('.tip');
+    if (last && !tip) {
+      tip = document.createElement('span');
+      tip.className = 'tip';
+      tip.id = 'nextTip';
+      tip.setAttribute('role', 'tooltip');
+      tip.textContent = 'Coming next';
+      nextBtn.append(tip);
+    } else if (!last && tip) tip.remove();
     const need = m && m.missing ? m.missing() : '';
     let note = '';
     if (left) note = need || `${left} required field${left === 1 ? '' : 's'} left`;
     else if (need && !isDone(step)) note = `Not done yet: ${lowerFirst(need)}.`;
-    else if (step === LAST_STEP) note = 'Coming next';
+    else if (last) note = 'Coming next';
     nextNote.textContent = note;
     nextNote.hidden = !note;
+    nextBtn.setAttribute('aria-describedby', last ? 'nextNote nextTip' : 'nextNote');
   }
 
   const ctx = {
@@ -375,8 +397,11 @@
       if (was !== book.status && MODULES[step] && MODULES[step].statusChanged) MODULES[step].statusChanged();
     },
     reloadStatus: () => readStatus(),
-    /** Open another step, as a sidebar link does (Brief "Open 02 Research"). */
-    go: (n) => go(n)
+    /**
+     * Open another step, as a sidebar link does (Brief "Open 02 Research").
+     * opts.focus: a control the step focuses once it is drawn (step's focusOn).
+     */
+    go: (n, opts) => go(n, true, opts)
   };
 
   function renderStep(moveFocus) {
@@ -384,6 +409,8 @@
     stepLabel.textContent = `${s.group.toUpperCase()} · STEP ${step} OF ${TOTAL_STEPS}`;
     stepTitle.textContent = s.name;
     backBtn.disabled = step === 1;
+    const exportLabel = document.querySelector('[data-export-label]');
+    if (exportLabel) exportLabel.textContent = step === FORMAT_STEP ? 'Export files' : 'Export';
     renderNav();
     renderStrip();
     if (book.status === 'completed') readStatus();
@@ -455,7 +482,7 @@
     try { return (await m.confirmLeave()) === true; } catch (e) { return false; }
   }
 
-  async function go(n, moveFocus = true) {
+  async function go(n, moveFocus = true, opts) {
     if (n < 1 || n > LAST_STEP || n === step) return;
     if (!(await mayLeave())) return;
     // Write keeps the typed text as a draft; leaving makes it a version. Errors show on the save line.
@@ -463,6 +490,7 @@
     step = n;
     history.pushState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}`);
     renderStep(moveFocus);
+    if (opts && opts.focus && MODULES[n] && MODULES[n].focusOn) MODULES[n].focusOn(opts.focus);
   }
 
   backBtn.addEventListener('click', () => go(step - 1));
@@ -471,12 +499,15 @@
   // the dialog exports saved versions and says when a section has unsaved edits.
   const exportBtn = document.querySelector('[data-export]');
   if (exportBtn) exportBtn.addEventListener('click', () => {
-    if (!book || !window.kdpExport) return;
+    if (!book) return;
+    // 08 (design 42): "Export files" opens the 08 panel once the step has it.
+    if (MODULES[step] && MODULES[step].openExport) { MODULES[step].openExport(exportBtn); return; }
+    if (!window.kdpExport) return;
     if (MODULES[step] && MODULES[step].flush) MODULES[step].flush();
     kdpExport.open(bookId, { opener: exportBtn });
   });
   nextBtn.addEventListener('click', () => {
-    if (nextBtn.disabled) return;
+    if (nextBtn.disabled || nextBtn.getAttribute('aria-disabled') === 'true') return;
     const n = step + 1;
     // Edits keep saving in the background; an error shows in the sidebar with Retry.
     if (MODULES[step] && MODULES[step].flush) MODULES[step].flush();

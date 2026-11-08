@@ -137,7 +137,9 @@
     return `<fieldset class="choice-group exp-group"><legend class="chip-label choice-legend">FORMAT</legend>
       ${choice('docx', 'Word document (.docx)', 'Opens in Word, Google Docs and Pages. KDP accepts it for ebooks and paperbacks.', !md)}
       ${choice('md', 'Markdown (.md)', 'Plain text backup with headings.', md)}
-      <div class="choice exp-soon" aria-disabled="true"><span class="choice-body"><span class="choice-title">Print PDF, EPUB, Google Drive</span></span><span class="version-tag">Coming in v2</span></div>
+      <div class="choice exp-soon exp-elsewhere"><span class="choice-body"><span class="choice-title">Print PDF</span></span><a class="text-link exp-08" href="book.html?id=${encodeURIComponent(st.bookId)}&step=8">Made in 08 Format</a></div>
+      <div class="choice exp-soon" aria-disabled="true"><span class="choice-body"><span class="choice-title">EPUB</span></span><span class="version-tag">Comes next</span></div>
+      <div class="choice exp-soon" aria-disabled="true"><span class="choice-body"><span class="choice-title">Google Drive</span></span><span class="version-tag">Coming in v3</span></div>
     </fieldset>`;
   }
 

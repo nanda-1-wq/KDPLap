@@ -24,7 +24,8 @@
    rows have the shape of a run's items, and a ref of "d:" + the chapter id in
    place of the item's index. They are never saved in a run.
 
-   08 is not built: "Go to 08 Format" and "How to add one" show Coming next (V9).
+   E13.2: "Go to 08 Format" opens 08. "How to add one" opens 08 at the
+   Copyright row (the copyright page carries the disclaimer).
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -192,7 +193,7 @@
   /** The link of one row: Open in 06, Open in 05, How to add one, or nothing. */
   function rowLink(x, labels) {
     if (x.rule === 'chapter_review') return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=5" data-go="5">Open in 05</a>`;
-    if (x.rule === 'disclaimer') return '<span class="qc-lk is-off">How to add one</span><span class="version-tag">Coming next</span>';
+    if (x.rule === 'disclaimer') return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=8" data-go="8" data-focus="copyright">How to add one</a>`;
     if (!opensIn06(x, labels)) return '';
     return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(sectionToOpen(x))}" data-open="${esc(sectionToOpen(x))}">Open in 06</a>`;
   }
@@ -325,7 +326,7 @@
       return `<div class="qc-box is-success" role="status" tabindex="-1" data-verdict>
           <strong>${CHECK(16)}Ready for Format</strong>
           <span class="qc-sub">No problems found in ${plural(r.sections, 'section', 'sections')}.${ok}</span>
-          <div class="qc-off"><button type="button" class="btn btn-primary" disabled>Go to 08 Format</button><span class="version-tag">Coming next</span></div>
+          <div class="qc-off"><a class="btn btn-primary" href="?id=${encodeURIComponent(book.id)}&step=8" data-go="8">Go to 08 Format</a></div>
         </div>
         ${P.summary().current ? '' : '<p class="qc-note">Promise check not run. It is optional.</p>'}${noteLine}`;
     }
@@ -659,7 +660,7 @@
     if (t.dataset.ok !== undefined) { markOk(t.dataset.ok); return; }
     if (t.dataset.prOk) { markOk(refOfChapter(t.dataset.prOk), true); return; }
     if (t.dataset.undo) { undo(t.dataset.undo, !!t.closest('[data-pr-row]')); return; }
-    if (t.dataset.go && plainClick) { e.preventDefault(); ctx.go(Number(t.dataset.go)); return; }
+    if (t.dataset.go && plainClick) { e.preventDefault(); ctx.go(Number(t.dataset.go), t.dataset.focus ? { focus: t.dataset.focus } : undefined); return; }
     if (t.dataset.open && plainClick) {
       e.preventDefault();
       openIn06(t.closest('[data-item]').dataset.item);

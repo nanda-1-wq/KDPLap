@@ -1402,6 +1402,50 @@ window.kdp = {
     return { error };
   },
 
+  /* ── 08 Format (E13.2, migration 0027) ─────────── */
+
+  /**
+   * Everything 08 reads besides export_json (0027 format_json): book, settings
+   * (null before the first open), also_by_valid, candidates, key, last_pdf,
+   * changed, now. data is null when the book is not the user's.
+   */
+  async getFormat(bookId) {
+    const { data, error } = await window.sb.rpc('format_json', { p_book_id: bookId });
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: notFound('Book not found.') };
+    return { data, error: null };
+  },
+
+  /**
+   * The book's format row, made with the 0027 defaults on the first open of 08.
+   * Another tab may make it first (duplicate key 23505): that is fine. Returns
+   * format_json after the row exists.
+   */
+  async ensureFormat(bookId) {
+    const first = await this.getFormat(bookId);
+    if (first.error || first.data.settings) return first;
+    const ins = await window.sb.from('book_formats').insert({ book_id: bookId });
+    if (ins.error && ins.error.code !== '23505') return { data: null, error: ins.error };
+    return this.getFormat(bookId);
+  },
+
+  /** Writes 08 settings (style, parts, isbn, also_by …). The database checks every value (0027). 0 rows is an error. */
+  async saveFormat(bookId, fields) {
+    const { data, error } = await window.sb
+      .from('book_formats')
+      .update(fields)
+      .eq('book_id', bookId)
+      .select('book_id, updated_at');
+    return oneRow(data, error, 'Book not found.');
+  },
+
+  /** The Also by dialog's status line: [{ id, status }] of the user's books ('in_progress' or 'completed'). */
+  async listBookStatus(ids) {
+    if (!ids || !ids.length) return { data: [], error: null };
+    const { data, error } = await window.sb.from('books').select('id, status').in('id', ids);
+    return { data: error ? null : (data || []), error };
+  },
+
   /** The Books badge: [{ book_id, exported_at, changed }] (0025 export_badges). */
   async listExportBadges() {
     const { data, error } = await window.sb.rpc('export_badges');
