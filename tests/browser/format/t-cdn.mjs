@@ -1,6 +1,7 @@
 // node tests/browser/format/t-cdn.mjs   (from the repo root; real unpkg, Chrome)
 // 08 Format, E13.1 Part 2: where the engine's files come from when jsdelivr fails.
-//   1. jsdelivr down: every file from unpkg after one retry (about 1 s later)
+//   1. jsdelivr down: every file from unpkg after one retry (about 1 s later);
+//      E13.2: then a style change goes to unpkg first (no jsdelivr try, no wait)
 //   2. jsdelivr serves a wrong font file: its hash fails, it is never used,
 //      the file comes from unpkg with no retry wait
 //   3. both CDNs down: load fails with kind "download" (08 shows the engine error with Retry)
@@ -32,11 +33,31 @@ try {
     await c.page.route('https://cdn.jsdelivr.net/**', (route) => { jsd++; return route.abort('connectionrefused'); });
     await c.open();
     R.jsdelivrDown = { ...(await load(c.page)), jsdelivrTries: jsd };
+    // E13.2: the same page, a new engine: its new worker learns once more (1 file
+    // tries jsdelivr twice), then switch the style: 6 more fonts, unpkg first.
+    const before = jsd;
+    R.styleSwitch = await c.page.evaluate(async () => {
+      const e = kdpFormatEngine.create();
+      try {
+        await e.load('classic');
+        const t0 = performance.now();
+        const r = await e.load('modern');
+        return { ok: true, ms: Math.round(performance.now() - t0), cdns: r.cdns };
+      } catch (err) {
+        return { ok: false, kind: err.kind, message: err.message };
+      } finally { e.terminate(); }
+    });
+    R.styleSwitch.jsdelivrTries = jsd - before;
     await c.close();
   }
   expect(R.jsdelivrDown.ok && R.jsdelivrDown.cdns.length === 6 && R.jsdelivrDown.cdns.every((x) => x === 'unpkg') && R.jsdelivrDown.checks,
     `jsdelivr down: all from unpkg (${JSON.stringify(R.jsdelivrDown)})`);
   expect(R.jsdelivrDown.jsdelivrTries === 12, `jsdelivr tried twice per file (${R.jsdelivrDown.jsdelivrTries} of 12)`);
+  // The new worker's first parallel batch (engine + Classic, 6 files) still tries jsdelivr
+  // twice each: they start together. The 6 Modern fonts after it try it 0 times.
+  expect(R.styleSwitch.ok && R.styleSwitch.cdns.length === 12 && R.styleSwitch.cdns.every((x) => x === 'unpkg'),
+    `style switch after jsdelivr failed: all from unpkg (${JSON.stringify(R.styleSwitch)})`);
+  expect(R.styleSwitch.jsdelivrTries === 12, `style switch: jsdelivr tried only by the first batch (${R.styleSwitch.jsdelivrTries} of 12)`);
 
   log('a wrong file on jsdelivr');
   {
@@ -66,6 +87,6 @@ try {
 
 R.fails = fails;
 const file = save('cdn.json', R);
-log(fails.length ? `FAIL ${fails.length}` : 'PASS', file, `(jsdelivr down: ready and built in ${R.jsdelivrDown.ms} ms; both down: error after ${R.bothDown.ms} ms)`);
+log(fails.length ? `FAIL ${fails.length}` : 'PASS', file, `(jsdelivr down: ready and built in ${R.jsdelivrDown.ms} ms; then a style switch in ${R.styleSwitch.ms} ms; both down: error after ${R.bothDown.ms} ms)`);
 for (const f of fails) console.log('FAIL', f);
 process.exit(fails.length ? 1 : 0);

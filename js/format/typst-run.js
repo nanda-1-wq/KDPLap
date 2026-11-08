@@ -14,6 +14,10 @@
    as fetch(…, { integrity }), which gives no body until the end. Order:
    jsdelivr, jsdelivr again after 1 s, then unpkg. A hash mismatch skips the
    retry. A file that fails its hash is never used.
+   E13.2: once jsdelivr fails both tries of a file (no answer or an HTTP
+   error, not a wrong file), the next downloads here go to unpkg first and
+   jsdelivr second, with no wait. Still two servers for every file. Until a
+   reload; the worker and the main thread each learn it once.
    The engine module is imported from a blob URL of the checked bytes; the
    wasm and the fonts go to typst.ts as data, and loadFonts(…, { assets: false })
    stops its own font download. typst.ts fetches nothing by itself.
@@ -69,16 +73,25 @@
     return out;
   }
 
-  /** One pinned file: jsdelivr, jsdelivr again after 1 s, then unpkg. Never returns bytes that fail the hash. */
+  let jsdelivrDown = false;   // E13.2: jsdelivr failed both tries of one file, so unpkg goes first
+
+  /**
+   * One pinned file: jsdelivr, jsdelivr again after 1 s, then unpkg (after
+   * jsdelivr failed: unpkg, then jsdelivr, no wait). Never returns bytes that
+   * fail the hash.
+   */
   async function fetchChecked(file, { onBytes = () => {}, retryMs = 1000 } = {}) {
-    const [first, second] = FILES().urls(file);
-    const tries = [first, first, second];
+    const [jsd, unpkg] = FILES().urls(file);
+    const unpkgFirst = jsdelivrDown;
+    const tries = unpkgFirst ? [unpkg, jsd] : [jsd, jsd, unpkg];
     const errors = [];
     for (let i = 0; i < tries.length; i++) {
-      if (i === 1) {
+      if (!unpkgFirst && i === 1) {
         if (errors[0] && errors[0].hash) continue;   // a wrong file: straight to the other CDN
         await sleep(retryMs);
       }
+      // Both jsdelivr tries failed with no answer or an HTTP error: unpkg first from now on.
+      if (!unpkgFirst && i === 2 && errors.length === 2 && !errors.some((x) => x.hash)) jsdelivrDown = true;
       let got = 0;
       try {
         const bytes = await download(tries[i], (n) => { got += n; onBytes(n); });
@@ -87,7 +100,7 @@
           errors.push({ url: tries[i], hash: true });
           continue;
         }
-        return { bytes, url: tries[i], cdn: i < 2 ? 'jsdelivr' : 'unpkg', tries: i + 1 };
+        return { bytes, url: tries[i], cdn: tries[i] === jsd ? 'jsdelivr' : 'unpkg', tries: i + 1 };
       } catch (e) {
         onBytes(-got);
         errors.push({ url: tries[i], message: String(e && e.message) });
@@ -235,5 +248,5 @@
     return pdfjsPromise;
   }
 
-  root.kdpTypstRun = { sha384, fetchChecked, Loader, compile, loadPdfjs };
+  root.kdpTypstRun = { sha384, fetchChecked, Loader, compile, loadPdfjs, unpkgFirst: () => jsdelivrDown };
 })(globalThis);

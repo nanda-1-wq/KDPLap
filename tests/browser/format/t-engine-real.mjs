@@ -6,7 +6,8 @@
 //   3. next visits (same profile, Chrome restarted, 3 times): engine ready, style switch
 //   4. main thread during a worker build of the 164-page placeholder (longest timer gap)
 //   5. every pinned file on jsdelivr and on unpkg: same sha384 and size as files.js
-//   6. the 5-font test: missing characters of a test text per face (cmap)
+//   6. the 5-font test: missing characters of a test text per face (cmap);
+//      E13.2: per style, the 07 glyph table (js/qc-glyphs.js) equals the real cmaps
 //   7. each style on each group A trim: PDF checks (size, fonts embedded as
 //      FontFile2, only the style's families, no Type 3, page count), the 17
 //      layout checks, words per page and characters per line; words per page of
@@ -152,6 +153,14 @@ try {
   R.missing = {};
   for (const fam of ['eb-garamond', 'source-serif-4', 'source-sans-3', 'literata', 'lora']) {
     R.missing[fam] = await w.page.evaluate((f) => kdpFormatHarness.missing(f), fam);
+  }
+
+  log('07 glyph table = real fonts (E13.2)');
+  R.glyphParity = [];
+  for (const style of ['classic', 'modern', 'clean', 'warm']) {
+    const p = await w.page.evaluate((s) => kdpFormatHarness.glyphParity(s), style);
+    R.glyphParity.push(p);
+    expect(p.differ.length === 0, `${style}: 07 table and font cmaps differ at ${p.differ.slice(0, 10).join(', ')}`);
   }
 
   log('styles x trims');

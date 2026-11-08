@@ -13,6 +13,7 @@
    kdpFormatHarness.layout(spec, result)  → the 17 checks (layout-checks.js)
    kdpFormatHarness.sriBoth()             → every pinned file from jsdelivr and from unpkg, hashed
    kdpFormatHarness.missing(family)       → characters of TEST_TEXT each face of a family lacks
+   kdpFormatHarness.glyphParity(style)    → E13.2: the 07 table equals the real fonts' cmaps
    kdpFormatHarness.cases()               → the converter cases and 300 fuzz strings, printed and read back
    kdpFormatHarness.b64(bytes)
 ═══════════════════════════════════════════════════ */
@@ -87,6 +88,26 @@
       out[f.face] = { format: cmap.format, missing: [...H.TEST_TEXT].filter((ch) => ch !== ' ' && !cmap.has(ch.codePointAt(0))) };
     }
     return out;
+  };
+
+  /**
+   * E13.2: 07 and 08 agree on missing characters. For one style, every code
+   * point of the test text and of the ranges below: the 07 table
+   * (kdpQcGlyphs.has) equals "every face has it" read from the real font
+   * files with font-cmap. tools/qc-glyphs.mjs --check compares every code point.
+   */
+  const PARITY_RANGES = [[0x20, 0x24F], [0x2000, 0x21FF], [0x1F600, 0x1F64F]];
+  H.glyphParity = async (style) => {
+    const cmaps = [];
+    for (const f of root.kdpFormatFiles.styleFonts(style)) cmaps.push(root.kdpFontCmap.parse((await root.kdpTypstRun.fetchChecked(f)).bytes));
+    const cps = new Set([...H.TEST_TEXT].map((ch) => ch.codePointAt(0)));
+    for (const [a, b] of PARITY_RANGES) for (let cp = a; cp <= b; cp++) cps.add(cp);
+    const differ = [];
+    for (const cp of cps) {
+      const real = cmaps.every((m) => m.has(cp));
+      if (real !== root.kdpQcGlyphs.has(style, cp)) differ.push(`U+${cp.toString(16).toUpperCase().padStart(4, '0')}`);
+    }
+    return { style, faces: cmaps.length, checked: cps.size, differ };
   };
 
   /** E13.0 cases-page.js: one case per page, read back with pdf.js. */

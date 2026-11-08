@@ -16,7 +16,8 @@ const require = createRequire(import.meta.url);
 const PW = process.env.PLAYWRIGHT_CORE || '/opt/homebrew/lib/node_modules/@playwright/cli/node_modules/playwright-core';
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO = path.resolve(HERE, '../../..');
-export const OUT = path.join(HERE, 'out');
+// Results folder: FORMAT_OUT when set (E13.2: a scratch folder), else tests/browser/format/out (ignored by git).
+export const OUT = process.env.FORMAT_OUT ? path.resolve(process.env.FORMAT_OUT) : path.join(HERE, 'out');
 export const BASE = 'http://127.0.0.1:5500/';
 export const PAGE = `${BASE}tests/browser/format/engine.html`;
 export const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor((s.length - 1) / 2)] : null; };
