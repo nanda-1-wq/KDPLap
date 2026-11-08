@@ -63,6 +63,7 @@ Keep them working. Do not change them unless asked.
 - Fonts: IBM Plex Sans (UI), IBM Plex Mono (small labels), Source Serif 4 (editor text only).
 - Minimum 44 px for anything clickable. Visible focus ring: 2 px ink outline, 2 px offset.
   Accepted exception: the Write editor (4 px) and the Improve menu items (2 px) draw the ring inside, because the scrolling card clips an outside ring.
+  Accepted exception: the 08 Format setting rows are 32 px high, and the whole row (label and box) is the click area (design 51b, owner Q2, Nov 8). 32 px is above the WCAG 2.2 minimum of 24 px.
 - Every screen designs its states: empty, loading or generating, error with retry, locked, needs review.
 - Reference screens: `design/screens/*.html` (open in a browser) and `*.png`. Match them.
 - Logo files: `design/logo/`. Wordmark (design 40, 40b, 40c): "Niche" in navy + "Ink" in blue, with a
@@ -77,7 +78,8 @@ Keep them working. Do not change them unless asked.
 Books (dashboard) · New Book dialog · Delete dialog · Topic Lab · Topic detail · Add topic ·
 Pen Names · Pen name detail · Book wizard shell · 01 Brief · 02 Research · 03 Positioning ·
 04 Title · 05 Outline · 06 Write · Export dialog · Settings.
-Steps 07 to 11 show "Coming in v2 / v3" in the book sidebar.
+v2 screens built so far: 07 Quality Control (E14) and 08 Format with its Export files panel (E13.2).
+09 Cover shows "Coming next" until E15. Steps 10 and 11 show "Coming in v3".
 
 ## 9. Repository map
 | Path | Contents |
