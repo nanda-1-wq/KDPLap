@@ -350,7 +350,10 @@ with the bar moving, engine error and Try again, jsdelivr down, a failed rebuild
 group A, a trim change), and for Part 4 t-export (design 42: the panel, export, the PDF read back from the
 download, the row sent to 0027, the 08 mark, changed since the PDF, "Page count changed", export_stale, a failed
 record with Try again, a failed check, Cancel, Word to the E11 dialog, Escape, 900 px, a trim outside group A).
-`books t-badge` also checks the Books card Print PDF mark (design 50: "Print PDF", "Print PDF changed", a failed
+For D2 (owner, Nov 9, plan F13): `format t-full` (the spread fills the box, sharp, after a resize; the full
+screen view: modal, focus kept and given back, Previous / Next, arrow keys, Esc and Close, a rebuild while open,
+900 px) and `format t-trim` (the trim label under the drawing, inside its box, for every trim at 1440 and 900 px);
+`t-shots-d2` makes `docs/reviews/e13-2-d2/` (not a check). `books t-badge` also checks the Books card Print PDF mark (design 50: "Print PDF", "Print PDF changed", a failed
 pdf_marks read). `format t-shots` (STOP 2), `t-shots3` (STOP 3) and `t-shots4` (STOP 4; run `books t-badge` first)
 make the compare images in `docs/reviews/e13-2-stop<n>/`; they are not checks, they overwrite tracked images: never
 run them in a sweep.

@@ -15,7 +15,10 @@ const test = async page => {
   ok(cards.join('|') === 'Classic EB Garamond|Modern Source Serif 4|Clean Literata|Warm Lora', `style cards: ${cards.join('|')}`);
   ok(await page.$eval('.fmt-style.is-on input', (i) => i.value === 'classic' && i.checked), 'Classic is chosen by default');
   ok(await page.$$eval('.fmt-style img', (im) => im.map((i) => i.getAttribute('src')).join() === 'format/style-classic.png,format/style-modern.png,format/style-clean.png,format/style-warm.png'), 'each card shows its sample image');
-  ok(await page.$$eval('.fmt-style-font', (f) => f.every((x) => x.getBoundingClientRect().height < 20)), 'font names on one line');
+  // D2 (F13): the column is 360 px; a long font name may wrap, but stays inside its card.
+  ok(await page.$eval('.fmt-settings', (c) => Math.round(c.getBoundingClientRect().width)) === 360, 'settings column: 360 px (D2)');
+  ok(await page.$$eval('.fmt-style', (cards) => cards.every((c) => { const b = c.getBoundingClientRect(), f = c.querySelector('.fmt-style-font').getBoundingClientRect(); return c.scrollWidth <= c.clientWidth && f.left >= b.left && f.right <= b.right; })), 'font names stay inside their cards');
+  ok(await page.$eval('.fmt-settings', (c) => c.scrollWidth <= c.clientWidth && [...c.querySelectorAll('.fmt-row, .fmt-pair, .fmt-page-row, .fmt-isbn-line, .fmt-styles')].every((r) => r.scrollWidth <= r.clientWidth + 1)), 'no row is wider than the column (no sideways scroll)');
   ok((await FM.txt(page, '.fmt-group .fmt-hint')) === 'Changing style can change the page count.', 'style hint');
   ok((await page.$$eval('[data-fmt-select="chapter_label"] option', (o) => o.map((x) => x.textContent))).join() === 'Chapter 2,2,None', 'chapter label: Chapter 2, 2, None');
 
