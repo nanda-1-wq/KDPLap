@@ -3882,6 +3882,29 @@ label.fmt-row { cursor: pointer; }
 .fmt-pick .fmt-quiet:empty { display: none; }
 .fmt-dialog .dialog-foot { margin-top: 0; }
 
+/* The Export files panel (design 42) */
+.fmt-exp .dialog-inner { gap: 14px; }
+.fmt-exp .dialog-head h2 { font-size: var(--text-2xl); margin: 0 0 var(--space-1); }
+.fmt-exp .dialog-head p { font-size: var(--text-md); }
+.fmt-exp-rows { display: flex; flex-direction: column; gap: 14px; }
+.fmt-exp-row { display: flex; align-items: center; gap: 14px; padding: 14px var(--space-4); border: 1px solid var(--stone); border-radius: var(--radius-lg); }
+.fmt-exp-row .btn { flex-shrink: 0; }
+.fmt-exp-row.is-changed { border-color: var(--warning); background: var(--warning-bg); }
+.fmt-exp-row.is-error { border-color: var(--danger); background: var(--danger-bg); }
+.fmt-exp-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; font-size: var(--text-sm); color: var(--ink); }
+.fmt-exp-text > strong { font-size: var(--text-base); font-weight: 600; }
+.fmt-exp-row.is-error .fmt-exp-text > strong { color: var(--danger); }
+.fmt-exp-x { color: var(--danger); display: flex; }
+.fmt-exp-why { display: inline-flex; align-items: flex-start; gap: 6px; font-weight: 600; color: var(--warning); }
+.fmt-exp-why svg { flex-shrink: 0; margin-top: 3px; }
+.fmt-pill-ok { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-2); border-radius: var(--radius-pill); border: 1px solid var(--success); font-size: var(--text-xs); font-weight: 600; background: var(--success-bg); color: var(--success); }
+.fmt-exp .alert { color: var(--ink); border-color: var(--warning); }
+.fmt-exp .alert > svg, .fmt-exp .alert strong { color: var(--warning); }
+.fmt-exp .alert-text { margin: 0; }
+.fmt-exp .fmt-progress { width: 100%; background: var(--mist); }
+.fmt-exp .fmt-quiet { text-align: left; font-size: var(--text-sm); color: var(--graphite); display: inline-flex; align-items: center; gap: var(--space-2); }
+.fmt-exp > .dialog-inner > .fmt-hint { font-size: var(--text-sm); }
+
 /* As 07: "Export files" and the reason line share the head; the note goes under the buttons. */
 @media (max-width: 1200px) {
   .book-layout:has(.fmt-root) .book-head { height: auto; min-height: var(--app-book-head-h); padding-top: var(--space-1); padding-bottom: var(--space-1); grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -3897,4 +3920,5 @@ label.fmt-row { cursor: pointer; }
   .fmt-settings { overflow: visible; border-right: none; border-bottom: 1px solid var(--stone); }
   .fmt-preview { overflow: visible; }
   .fmt-wrap { min-height: var(--app-fmt-stage-min); }
+  .fmt-exp-row { flex-wrap: wrap; }
 }

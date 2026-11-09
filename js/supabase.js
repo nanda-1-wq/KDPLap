@@ -1439,6 +1439,26 @@ window.kdp = {
     return oneRow(data, error, 'Book not found.');
   },
 
+  /**
+   * Records a Print PDF (0027). The guard checks settingsKey against
+   * format_key today (P0001 export_stale), the versions against the Final
+   * list (export_pdf_versions), and takes the parts from the format row.
+   */
+  async recordPdfExport({ bookId, versionIds, pageCount, settingsKey, engine, parts }) {
+    const { data, error } = await window.sb
+      .from('book_exports')
+      .insert({ book_id: bookId, format: 'pdf', include: 'final', parts, versions: versionIds,
+        page_count: pageCount, settings_key: settingsKey, engine })
+      .select('id, created_at, page_count');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /** The 08 mark and the Books card: [{ book_id, exported_at, page_count, changed }] (0027 pdf_marks). One book, or all. */
+  async listPdfMarks(bookId) {
+    const { data, error } = await window.sb.rpc('pdf_marks', bookId ? { p_book_id: bookId } : {});
+    return { data: error ? null : (data || []), error };
+  },
+
   /** The Also by dialog's status line: [{ id, status }] of the user's books ('in_progress' or 'completed'). */
   async listBookStatus(ids) {
     if (!ids || !ids.length) return { data: [], error: null };

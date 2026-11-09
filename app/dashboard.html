@@ -72,6 +72,7 @@
 
     let books = [];
     let badges = new Map();   // book id → { exported_at, changed } (0025 export_badges; last DOCX export)
+    let pdfMarks = new Map(); // book id → { exported_at, page_count, changed } (0027 pdf_marks; last Print PDF, E13.2)
     let filter = 'all';
     let query = '';
 
@@ -163,7 +164,13 @@
       const exportBadge = !exp ? ''
         : exp.changed ? `<span class="badge badge-neutral">${INFO_ICON}Changed since export</span>`
           : `<span class="badge badge-success">${OK_ICON}DOCX exported</span>`;
-      const when = exp ? `Exported ${new Date(exp.exported_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : editedText(book.updated_at);
+      // E13.2 (design 50): the Print PDF mark next to the DOCX one; out of date it turns to "changed".
+      const pdf = pdfMarks.get(book.id);
+      const pdfBadge = !pdf ? ''
+        : pdf.changed ? `<span class="badge badge-warning">${WARN_ICON}Print PDF changed</span>`
+          : `<span class="badge badge-success">${OK_ICON}Print PDF</span>`;
+      const last = [exp && exp.exported_at, pdf && pdf.exported_at].filter(Boolean).sort().pop();
+      const when = last ? `Exported ${new Date(last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : editedText(book.updated_at);
       return `
         <article class="book-card is-link">
           ${coverHtml(book, penName)}
@@ -175,6 +182,7 @@
               ${book.topic_id ? '' : `<span class="badge badge-warning">${WARN_ICON}Unvalidated topic</span>`}
               ${review ? `<span class="badge badge-warning">${WARN_ICON}Needs review</span>` : ''}
               ${exportBadge}
+              ${pdfBadge}
             </div>
             <div class="grow"></div>
             <div class="bar" aria-hidden="true"><span style="width: ${pct}%"></span></div>
@@ -300,6 +308,14 @@
       } catch (e) { return new Map(); }
     }
 
+    /** The Print PDF marks (0027 pdf_marks). A failed read shows no marks and no error, as the badges. */
+    async function loadPdfMarks() {
+      try {
+        const res = await kdp.listPdfMarks();
+        return res.error ? new Map() : new Map((res.data || []).map((r) => [r.book_id, r]));
+      } catch (e) { return new Map(); }
+    }
+
     async function load() {
       subtitle.hidden = false;
       searchBox.hidden = false;
@@ -308,6 +324,7 @@
       const usagePromise = loadUsage().catch(() => null);
       const wordsPromise = loadWords().catch(() => null);
       const badgePromise = loadBadges();
+      const pdfPromise = loadPdfMarks();
       let result;
       try { result = await kdp.listBooks(); } catch (e) { result = { error: e }; }
       if (result.error) { renderError(); return; }
@@ -317,7 +334,7 @@
 
       const stats = { inProgress: books.filter((b) => b.status === 'in_progress').length, usage: undefined, words: undefined };
       renderList(stats);
-      [stats.usage, stats.words, badges] = await Promise.all([usagePromise, wordsPromise, badgePromise]);
+      [stats.usage, stats.words, badges, pdfMarks] = await Promise.all([usagePromise, wordsPromise, badgePromise, pdfPromise]);
       renderList(stats);
     }
 

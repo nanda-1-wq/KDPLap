@@ -12,7 +12,8 @@
    and spine chips, the margin note with the KDP minimum for the page count,
    the engine states (first visit with progress, error with Try again), the
    section states (nothing Final, a trim outside group A), the Ready box.
-   The Export files panel and the 08 marks come in Part 4.
+   Part 4: the Export files panel (design 42, js/format-export.js) and the
+   08 mark from 0027 pdf_marks (design 50), the same read as the Books card.
    - The engine downloads when 08 opens and only when there is something to
      print (a Final section, a group A trim). leave() ends it, so its memory
      goes back.
@@ -81,6 +82,8 @@
   let pv = null;                    // js/format/preview.js
   let build = { state: 'idle', pages: 0, info: null, error: null }; // idle | waiting | building | ready | error
   let buildTimer = null, building = false, again = false, buildSeq = 0;
+  let paused = false;               // the export panel builds: no preview build meanwhile
+  let idle = [];                    // resolved when the running preview build ends (the export waits for it)
 
   /* ── Values ──────────────────────────────── */
 
@@ -143,11 +146,13 @@
   /* ── Data ────────────────────────────────── */
 
   /** The 08 reason line on any step: is there a Print PDF, and did the book change since? */
+  /** The 08 mark (design 50): the last Print PDF and "changed" from 0027 pdf_marks, as the Books card. */
   async function readMarks() {
     let res;
-    try { res = await kdp.getFormat(book.id); } catch (e) { return; }
+    try { res = await kdp.listPdfMarks(book.id); } catch (e) { return; }
     if (res.error) return;   // no mark, no error (as the Books badge)
-    marks = marksFrom(res.data);
+    const row = (res.data || [])[0];
+    marks = row ? { exported_at: row.exported_at, page_count: row.page_count, changed: !!row.changed } : null;
     marksRead = true;
     ctx.refresh();
   }
@@ -224,6 +229,9 @@
     build = { state: 'idle', pages: 0, info: null, error: null };
     building = false;
     again = false;
+    paused = false;
+    idle.forEach((f) => f());
+    idle = [];
   }
 
   /** A change: dim the pages and build again after the delay (600 ms, or 1,500 on the main thread). */
@@ -237,7 +245,7 @@
 
   async function runBuild() {
     buildTimer = null;
-    if (building) { again = true; return; }
+    if (building || paused) { again = true; return; }
     if (!canPreview() || !engine) return;
     building = true;
     const seq = ++buildSeq;
@@ -256,6 +264,8 @@
       }
     } catch (e) { err = e; }
     building = false;
+    idle.forEach((f) => f());
+    idle = [];
     if (seq !== buildSeq) return;
     if (err) build = { ...build, state: 'error', error: err };
     else build = { state: 'ready', pages: r.pages, info: F().pageInfo(r.meta), path: r.path, ms: r.ms, error: null };
@@ -861,6 +871,35 @@
     retrySave: () => saver && saver.retry(),
     hasUnsaved: () => !!saver && saver.hasUnsaved(),
     saveState: () => (saver ? saver.state : 'idle'),
+    /** "Export files" in the header (design 42): the 08 panel, js/format-export.js. */
+    openExport(opener) {
+      window.kdpFormatExport.open({
+        bookId: book.id, opener,
+        engine: () => {
+          if (!engine) engine = kdpFormatEngine.create({ onProgress: () => {} });
+          return engine;
+        },
+        flush: () => (saver ? saver.flush() : Promise.resolve()),
+        hasUnsaved: () => !!saver && saver.hasUnsaved(),
+        trim: bookTrim,
+        /** One build at a time in the engine: wait for the preview's, hold the next. */
+        pause: () => {
+          paused = true;
+          if (buildTimer) { clearTimeout(buildTimer); buildTimer = null; again = true; }
+          return building ? new Promise((r) => idle.push(r)) : Promise.resolve();
+        },
+        resume: () => {
+          paused = false;
+          if (again) { again = false; scheduleBuild(true); }
+        },
+        onExported(row) {
+          marks = { exported_at: row.created_at, page_count: row.page_count, changed: false };
+          marksRead = true;
+          if (fmt) { fmt.last_pdf = { created_at: row.created_at, page_count: row.page_count }; fmt.changed = false; }
+          ctx.refresh();
+        }
+      });
+    },
     /** Tests: the open settings. */
     _debug: () => ({ settings, fmt, marks, engine, pv, build, eng, missing })
   };
