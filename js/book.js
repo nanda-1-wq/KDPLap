@@ -182,13 +182,16 @@
     const done = isDone(n);
     const lock = done && MODULES[n].doneMark === 'lock';
     const review = (n === 4 && book.title_needs_review) || !!(MODULES[n] && MODULES[n].needsReview && MODULES[n].needsReview(book));
-    const mark = lock ? LOCK : (done && n !== step ? CHECK : '');
+    // Rule D (E14.3, design 53): on its own screen a done step shows the check, as 07. 08 follows it
+    // (E13.2 Part 5); 01 to 06 keep the v1 look (E14.3 B).
+    const ownCheck = done && n === step && n === FORMAT_STEP;
+    const mark = lock ? LOCK : (done && (n !== step || ownCheck) ? CHECK : '');
     const state = lock ? ', locked' : (done ? ', done' : '');
     const need = missing(n);
     const name = need
       ? `<span class="step-name">${s.name}<span class="sr-only">, </span><span class="step-missing" data-step-missing>${esc(need)}</span></span>`
       : s.name;
-    return `<a class="step-link${done ? ' is-done' : ''}${lock ? ' is-locked' : ''}${need ? ' has-missing' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
+    return `<a class="step-link${done ? ' is-done' : ''}${ownCheck ? ' has-check' : ''}${lock ? ' is-locked' : ''}${need ? ' has-missing' : ''}" href="?id=${encodeURIComponent(bookId)}&step=${n}" data-step="${n}"${current}>
         <span class="step-mark" aria-hidden="true">${mark}</span><span class="step-num">${pad(n)}</span>${name}${state ? `<span class="sr-only">${state}</span>` : ''}${review ? `<span class="step-flag">${SAVE_WARN}Needs review</span>` : ''}</a>`;
   }
 

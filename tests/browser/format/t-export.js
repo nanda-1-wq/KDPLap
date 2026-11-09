@@ -61,6 +61,10 @@ const test = async page => {
   ok(await page.evaluate(() => document.activeElement.matches('[data-export]')), 'focus back on Export files');
   await page.waitForFunction(() => document.querySelector('[data-step="8"]').classList.contains('is-done'), null, { timeout: 3000 });
   ok((await FM.txt(page, '[data-next-note]')) === 'Coming next', '08 done: the note says Coming next');
+  // Rule D (E14.3): on 08 itself, a current Print PDF shows the check in the rail, not the dot.
+  const railMark = () => page.$eval('[data-step="8"]', (a) => ({ check: !!a.querySelector('.step-mark svg'), dot: getComputedStyle(a.querySelector('.step-mark'), '::before').display !== 'none' && getComputedStyle(a.querySelector('.step-mark'), '::before').content !== 'none', current: a.getAttribute('aria-current') }));
+  let rm = await railMark();
+  ok(await page.$eval('.book-layout', (e) => e.classList.contains('is-rail')) && rm.check && !rm.dot && rm.current === 'step', `rail on 08, current and done: the check, no dot (${JSON.stringify(rm)})`);
   await page.click('[data-step="7"]');
   await page.waitForFunction(() => document.querySelector('[data-step-title]').textContent === 'Quality Control', null, { timeout: 5000 });
   ok(await page.$eval('[data-step="8"]', (a) => a.classList.contains('is-done') && !!a.querySelector('.step-mark svg')), 'the sidebar shows the 08 check (from pdf_marks)');
@@ -71,6 +75,8 @@ const test = async page => {
   await FM.open(page);
   await pages();
   await page.waitForFunction(() => /changed since/.test(document.querySelector('[data-next-note]').textContent), null, { timeout: 5000 });
+  rm = await railMark();
+  ok(!rm.check && rm.dot, `rail on 08, changed: the dot again (${JSON.stringify(rm)})`);
   await openPanel();
   ok(await page.$eval(`${panel} .fmt-exp-row`, (x) => x.classList.contains('is-changed')) && (await rows())[0].includes('Changed since export.') && await page.$eval(`${panel} [data-pdf]`, (b) => b.classList.contains('btn-primary')), `changed: ${(await rows())[0]}`);
   ok(await page.$eval(`${panel} .fmt-exp-why svg`, () => true), 'changed: an icon and words');
@@ -130,7 +136,8 @@ const test = async page => {
   /* Escape closes the panel; 900 px fits. */
   await page.setViewportSize({ width: 900, height: 900 });
   await openPanel();
-  ok(await page.$eval(panel, (d) => d.getBoundingClientRect().right <= innerWidth && d.getBoundingClientRect().left >= 0) && await FM.noScroll(page), '900: the panel fits');
+  const fit900 = await page.evaluate((sel) => { const d = document.querySelector(sel).getBoundingClientRect(); const wide = [...document.querySelectorAll('body *')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1).slice(0, 5).map((e) => `${e.tagName}.${String(e.className).slice(0, 30)}:${Math.round(e.getBoundingClientRect().right)}`); return { l: d.left, r: d.right, iw: innerWidth, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, wide }; }, panel);
+  ok(fit900.r <= fit900.iw && fit900.l >= 0 && fit900.sw <= fit900.cw, `900: the panel fits (${JSON.stringify(fit900)})`);
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('.fmt-exp[open]'), null, { timeout: 3000 });
   ok(true, 'Escape closes');
