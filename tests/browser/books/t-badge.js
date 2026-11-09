@@ -74,5 +74,29 @@ const test = async (page) => {
   await open({ badgesFail: true }, [{ book_id: E11.B1, exported_at: t1, changed: false }]);
   ok('badge read failed: no badges and no error', (await page.locator('.book-card').count()) === 3 && !(await T(page.locator('.book-grid'))).includes('export')
     && (await page.locator('[role="alert"]').count()) === 0);
+
+  // E13.2 (design 50): the Print PDF mark next to the DOCX one. Fresh: "Print PDF" (success, check).
+  // Out of date: "Print PDF changed" (warning, icon and word). The meta line shows the newest export.
+  const t3 = '2026-11-08T09:00:00Z';
+  globalThis.__modes = {};
+  await setupE11(page);
+  S().badges = [{ book_id: E11.B1, exported_at: t1, changed: false }];
+  S().pdfMarks = [{ book_id: E11.B1, exported_at: t3, page_count: 48, changed: false }, { book_id: E11.B2, exported_at: t2, page_count: 40, changed: true }];
+  await page.goto(`${E11.base}/app/dashboard.html`, { waitUntil: 'domcontentloaded' });
+  await page.locator('.stat .bar').waitFor({ timeout: 10000 });
+  await page.waitForFunction((id) => document.querySelector(`[data-book-menu="${id}"]`).closest('.book-card').innerText.includes('Print PDF'), E11.B1, { timeout: 5000 });
+  const p1 = await T(card(E11.B1)), p2 = await T(card(E11.B2)), p3 = await T(card(E11.B3));
+  ok('E13.2 fresh Print PDF: "Print PDF", success, with a check, after the DOCX badge', /DOCX exported Print PDF/.test(p1) && (await card(E11.B1).locator('.badge-success svg').count()) === 2, p1);
+  ok('E13.2 the meta line shows the newest export (the PDF)', p1.includes(`Exported ${day(t3)}`), p1);
+  ok('E13.2 out of date: "Print PDF changed", warning with an icon', p2.includes('Print PDF changed') && (await card(E11.B2).locator('.badge-warning svg').count()) >= 1, p2);
+  ok('E13.2 no Print PDF: no mark', !p3.includes('Print PDF'), p3);
+  await page.locator('.book-grid').screenshot({ path: `${SHOTS}/books-pdf-marks-1440.png`, timeout: 10000 }).catch(() => out.push('shot timeout'));
+  // A failed pdf_marks read: no mark, no error, the DOCX badge stays.
+  globalThis.__modes = { pdfMarksFail: true };
+  await page.goto(`${E11.base}/app/dashboard.html`, { waitUntil: 'domcontentloaded' });
+  await page.locator('.stat .bar').waitFor({ timeout: 10000 });
+  await page.waitForTimeout(300);
+  ok('E13.2 pdf_marks failed: no Print PDF mark, no error, DOCX stays', !(await T(page.locator('.book-grid'))).includes('Print PDF') && (await T(card(E11.B1))).includes('DOCX exported')
+    && (await page.locator('[role="alert"]').count()) === 0);
   return out.join('\n');
 };

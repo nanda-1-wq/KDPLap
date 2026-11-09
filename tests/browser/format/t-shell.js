@@ -66,9 +66,12 @@ const test = async page => {
   ok(/step=8/.test(page.url()) && st.book.current_step === 8, '07 Next opens 08 and writes current_step 8');
   ok((await FM.txt(page, '[data-export]')) === 'Export files', 'back on 08: Export files');
 
-  /* Export files opens the E11 dialog until the 08 panel lands (Part 4). Its Print PDF row points to 08. */
+  /* Export files opens the 08 panel (Part 4, design 42); its Word row opens the E11 dialog, whose Print PDF row points to 08. */
   await page.waitForSelector('.fmt', { timeout: 5000 });
   await page.click('[data-export]');
+  await page.waitForSelector('.fmt-exp[open] [data-docx]', { timeout: 10000 });
+  ok((await FM.txt(page, '.fmt-exp[open] #fmtExpTitle')) === 'Export files', 'Export files opens the 08 panel');
+  await page.click('.fmt-exp[open] [data-docx]');
   await page.waitForSelector('.exp-dialog[open]', { timeout: 5000 });
   await page.waitForSelector('.exp-08', { timeout: 5000 });
   ok((await FM.txt(page, '.exp-elsewhere')) === 'Print PDF Made in 08 Format', 'E11 dialog: Print PDF, Made in 08 Format');

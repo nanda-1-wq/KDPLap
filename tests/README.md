@@ -347,8 +347,13 @@ served from `tests/browser/.cache/format/` after `cache-files.mjs` checks each s
 page buttons and arrow keys, the chips, the margin note = `marginNote(pages)`, a rebuild, paper with no rebuild,
 the Ready box and its 07 line, the engine ending on leave, warnings, Kindle, 900 px) and t-states (41c: first visit
 with the bar moving, engine error and Try again, jsdelivr down, a failed rebuild, nothing Final, a trim outside
-group A, a trim change). `format t-shots` (STOP 2) and `t-shots3` (STOP 3) make the compare images in
-`docs/reviews/e13-2-stop<n>/`; they are not checks, they overwrite tracked images: never run them in a sweep.
+group A, a trim change), and for Part 4 t-export (design 42: the panel, export, the PDF read back from the
+download, the row sent to 0027, the 08 mark, changed since the PDF, "Page count changed", export_stale, a failed
+record with Try again, a failed check, Cancel, Word to the E11 dialog, Escape, 900 px, a trim outside group A).
+`books t-badge` also checks the Books card Print PDF mark (design 50: "Print PDF", "Print PDF changed", a failed
+pdf_marks read). `format t-shots` (STOP 2), `t-shots3` (STOP 3) and `t-shots4` (STOP 4; run `books t-badge` first)
+make the compare images in `docs/reviews/e13-2-stop<n>/`; they are not checks, they overwrite tracked images: never
+run them in a sweep.
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every

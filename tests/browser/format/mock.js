@@ -4,7 +4,8 @@
 // Tests change globalThis.__store and globalThis.__modes.
 //   __modes: formatFail (n reads of format_json fail), formatSlow (ms), saveFail (n saves fail),
 //   saveSlow (ms), trimFail (the Brief trim write fails), statusFail (the Also by status read fails),
-//   exportFail (export_json fails), cdnSlowMs (the wasm waits), jsdelivrDown, cdnDown (the engine files)
+//   exportFail (export_json fails), marksFail (pdf_marks), recordFail (n records fail), recordSlow (ms), stale (n records
+//   refused as export_stale), cdnSlowMs (the wasm waits), jsdelivrDown, cdnDown (the engine files)
 // The print engine is real, from the checked cache (see the CDN route below).
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
@@ -168,6 +169,27 @@ async function setupFormat(page) {
       Object.assign(store.format, copy(p), { updated_at: now() });
       return json(r, 200, [{ book_id: FB, updated_at: store.format.updated_at }]);
     }
+    if (path === '/rest/v1/rpc/pdf_marks') {
+      if (mode('marksFail')) return json(r, 500, { message: 'mock: marks down' });
+      const p = body() || {};
+      if (!store.lastPdf || (p.p_book_id && p.p_book_id !== FB)) return json(r, 200, []);
+      return json(r, 200, [{ book_id: FB, exported_at: store.lastPdf.created_at, page_count: store.lastPdf.page_count, changed: !!store.changed }]);
+    }
+    if (path === '/rest/v1/book_exports' && method === 'POST') {
+      // 0027: a PDF row needs page_count (even), settings_key (= format_key today) and engine;
+      // include 'final'; versions = the Final list.
+      const p = body();
+      store.writes.push({ table: 'book_exports', body: p });
+      if (mode('recordSlow')) await wait(mode('recordSlow'));
+      if (mode('recordFail') > 0) { globalThis.__modes.recordFail--; return json(r, 500, { message: 'mock: record down' }); }
+      if (mode('stale') > 0) { globalThis.__modes.stale--; return fail(r, 400, 'P0001', 'export_stale'); }
+      if (p.format !== 'pdf' || p.include !== 'final' || !(p.page_count % 2 === 0 && p.page_count >= 2) || !p.engine || p.settings_key !== formatJson().key) return fail(r, 400, '23514', `mock: bad pdf row ${JSON.stringify(p).slice(0, 200)}`);
+      const finals = chapters.flatMap((c) => c.sections).filter((x) => x.status === 'final' && x.version && x.version.content.trim()).map((x) => x.version.id);
+      if (JSON.stringify(p.versions) !== JSON.stringify(finals)) return fail(r, 400, 'P0001', 'export_pdf_versions');
+      store.lastPdf = { created_at: now(), page_count: p.page_count };
+      store.changed = false;
+      return json(r, 201, [{ id: uid('e', ++seq), created_at: store.lastPdf.created_at, page_count: p.page_count }]);
+    }
     if (path === '/rest/v1/rpc/export_json') {
       if (mode('exportFail')) return json(r, 500, { message: 'mock: export read down' });
       return json(r, 200, data());
@@ -201,6 +223,12 @@ async function setupFormat(page) {
     user: { id: U, aud: 'authenticated', role: 'authenticated', email: 'adnan@example.com', user_metadata: { full_name: 'Adnan' }, app_metadata: {}, created_at: ago(30) }
   };
   await ctx.addInitScript((s) => { try { localStorage.setItem('sb-hmtxnbgfzwqawfulwwrg-auth-token', s); } catch (e) {} }, JSON.stringify(session));
+  // Every downloaded file stays in window.__blobs, so a test can read the PDF back.
+  await ctx.addInitScript(() => {
+    window.__blobs = [];
+    const make = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { if (b instanceof Blob && b.type === 'application/pdf') window.__blobs.push(b); return make(b); };
+  });
 }
 
 const setup = (page) => setupFormat(page);

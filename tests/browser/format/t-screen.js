@@ -130,7 +130,7 @@ const test = async page => {
   ok(await page.$eval('[data-fmt-mode="print"]', (b) => b.getAttribute('aria-pressed') === 'true') && !(await page.$eval('[data-fmt-state]', (b) => !b.hidden && /Kindle/.test(b.textContent))), 'Print again: the Kindle state is gone');
 
   /* Load error, then Retry. */
-  globalThis.__modes.formatFail = 2;   // init's read and the open's read
+  globalThis.__modes.formatFail = 1;   // the open's read (since Part 4 the 08 mark reads pdf_marks)
   await FM.open(page);
   ok((await FM.txt(page, '.fmt-root .state-box h2')) === "We couldn't load 08 Format" && await FM.has(page, '.fmt-root [role="alert"]'), 'load error: the message');
   await page.click('[data-fmt-retry-load]');

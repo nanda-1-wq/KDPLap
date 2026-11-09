@@ -97,6 +97,7 @@ async function setupE11(page) {
     words: { month_start: '2026-10-01T00:00:00+00:00', words: 6480 },
     lastCalls: null,
     badges: [],
+    pdfMarks: [],   // E13.2: 0027 pdf_marks rows (none by default)
     exportData: { [B1]: exportData('ready'), [B2]: exportData('warn'), [B3]: exportData('empty') },
     exports: [], writes: [], recovers: [], calls: []
   };
@@ -197,6 +198,10 @@ async function setupE11(page) {
       if (mode('callsFail')) return json(r, 500, { message: 'mock: calls down' });
       const u = mode('usage') || store.usage;
       return json(r, 200, u.by_stage.length ? store.lastCalls : []);
+    }
+    if (path === '/rest/v1/rpc/pdf_marks') {
+      if (mode('pdfMarksFail')) return json(r, 500, { message: 'mock: pdf marks down' });
+      return json(r, 200, store.pdfMarks);
     }
     if (path === '/rest/v1/rpc/export_badges') {
       if (mode('badgesFail')) return json(r, 500, { message: 'mock: badges down' });
