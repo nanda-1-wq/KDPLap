@@ -243,6 +243,8 @@
     const was = qcMark;
     qcMark = res.data;
     if (!was === !qcMark && (!was || was.current === qcMark.current)) return;
+    // E13.2: 08's Ready box ends with the 07 line.
+    if (MODULES[step] && MODULES[step].qcMarkChanged) MODULES[step].qcMarkChanged();
     const row = nav.querySelector(`[data-step="${QC_STEP}"]`);
     if (!row) return;
     const focused = document.activeElement === row;

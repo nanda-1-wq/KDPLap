@@ -26,6 +26,11 @@
    kdpFormatRules.MARGIN          → the template's margins (js/format/book.typ), fixed in v2a
    kdpFormatRules.trimText(trim)  → "6 × 9 in"
    kdpFormatRules.marginNote(pages) → the KDP minimum line under PAGE · PRINT (pages 0: not built yet)
+
+   E13.2 Part 3 (the preview and the Ready box, designs 41, 41c):
+   kdpFormatRules.pageInfo(meta)  → { pages, blanks, content } (blanks: added to make the count even)
+   kdpFormatRules.spineText(pages, paper) → "Spine 0.108 in · no spine text under 80 pages"
+   kdpFormatRules.ready({ model, missing, pages, dropped }) → { warnings, finals } (never blocks)
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -158,6 +163,66 @@
     return `KDP minimum ${m.inside} in inside for ${m.tier} pages. ${fixed}`;
   }
 
+  /** Page count chip: { pages, blanks, content }; blanks = pages added to make the count even. */
+  function pageInfo(meta) {
+    const pages = Number(meta && meta.lastPage) || 0;
+    const end = Number(meta && meta.contentEnd) || pages;
+    return { pages, blanks: Math.max(0, pages - end), content: Math.min(end, pages) };
+  }
+
+  /** "Spine 0.108 in · no spine text under 80 pages" (KDP: spine text needs 79 pages or more; we say 80, as design 41). */
+  function spineText(pages, paper) {
+    const w = spine(pages, paper).toFixed(3);
+    return pages < 80 ? `Spine ${w} in · no spine text under 80 pages` : `Spine ${w} in`;
+  }
+
+  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const EMOJI = /\p{Extended_Pictographic}/u;
+  /** "an emoji" or "“✓” (U+2713)" */
+  const charName = (m) => (EMOJI.test(m.char) ? 'an emoji' : `“${m.char}” (${m.code})`);
+
+  /**
+   * The Ready box (designs 41, 41c "Warnings · never block"), in this order:
+   * sections not Final (left out), Final with no text, needs review (section,
+   * then chapter), open Verify marks, unsaved edits, a section being written,
+   * missing characters, under 24 pages, over 700 pages (margin, owner Q8),
+   * over 828, Also by books dropped.
+   *   model     kdpFormatRules.modelOf(…)
+   *   missing   kdpFontCmap.missing(…) shape, or null (not checked yet)
+   *   pages     the preview's page count, or 0 (not built yet)
+   *   dropped   Also by books that are no longer valid (count)
+   * → { warnings: [{ key, text, sectionId? }], finals }
+   */
+  function ready({ model, missing = null, pages = 0, dropped = 0 }) {
+    const w = [];
+    const notFinal = model.notFinal.length + model.noText.filter((s) => s.status !== 'final').length;
+    const finalEmpty = model.noText.filter((s) => s.status === 'final').length;
+    if (notFinal) w.push({ key: 'not-final', text: `${count(notFinal, 'section is', 'sections are')} not Final. ${notFinal === 1 ? 'It is' : 'They are'} left out.` });
+    if (finalEmpty) w.push({ key: 'final-empty', text: `${count(finalEmpty, 'Final section has', 'Final sections have')} no text. ${finalEmpty === 1 ? 'It is' : 'They are'} left out.` });
+    // model.needsReview holds sections ({ id, label }) and chapters ({ chapter, label: "chapter 2" }).
+    const secReview = model.needsReview.filter((x) => !x.chapter);
+    const chReview = model.needsReview.filter((x) => x.chapter);
+    if (secReview.length) w.push({ key: 'review', text: `${count(secReview.length, 'section needs', 'sections need')} review.`, sectionId: secReview[0].id });
+    if (chReview.length) w.push({ key: 'review-chapter', text: chReview.length === 1 ? `${chReview[0].label[0].toUpperCase()}${chReview[0].label.slice(1)} needs review in 05 Outline.` : `${chReview.length} chapters need review in 05 Outline.` });
+    if (model.openMarks) w.push({ key: 'marks', text: `${count(model.openMarks, 'claim has', 'claims have')} no source yet (Verify). The marks are not printed.`, sectionId: model.marks.sections[0] && model.marks.sections[0].id });
+    if (model.unsaved.length) w.push({ key: 'unsaved', text: `${count(model.unsaved.length, 'section has', 'sections have')} unsaved edits in 06. The PDF uses the last saved version.`, sectionId: model.unsaved[0].id });
+    if (model.running.length) w.push({ key: 'running', text: `${count(model.running.length, 'section is', 'sections are')} being written now. The PDF uses the last saved version.`, sectionId: model.running[0].id });
+    if (missing && missing.length) {
+      const first = missing[0];
+      const where = first.where[0] || '';
+      const sec = model.sections.find((s) => s.label === where);
+      const text = missing.length === 1
+        ? `1 character is not in the font (${charName(first)}${where ? ` in ${where}` : ''}). It prints as a box.`
+        : `${missing.length} characters are not in the font (${missing.slice(0, 3).map(charName).join(', ')}${missing.length > 3 ? ' and more' : ''}${where ? `, first in ${where}` : ''}). They print as a box.`;
+      w.push({ key: 'chars', text, sectionId: sec ? sec.id : null });
+    }
+    if (pages && pages < 24) w.push({ key: 'short', text: `${pages} pages. KDP needs at least 24 pages for a paperback.` });
+    if (pages > 700 && pages <= 828) w.push({ key: 'margin', text: `Over 700 pages. KDP asks for ${kdpMargin(pages).inside} in inside. This book uses ${MARGIN.inside} in.` });
+    if (pages > 828) w.push({ key: 'long', text: `${pages} pages. KDP prints paperbacks up to 828 pages.` });
+    if (dropped) w.push({ key: 'also-by', text: `${count(dropped, 'Also by book was', 'Also by books were')} left out. ${dropped === 1 ? 'It no longer has' : 'They no longer have'} this pen name.` });
+    return { warnings: w, finals: model.sections.length };
+  }
+
   function fileName(title, trim) {
     const slug = String(title || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80).replace(/-+$/, '');
@@ -166,6 +231,7 @@
 
   root.kdpFormatRules = {
     STYLES, CHAPTER_LABELS, PAPERS, TRIMS, PART_KEYS, PART_ROWS, ALSO_BY_MAX, HEADER_TITLE_MAX, SPINE_PER_PAGE, MARGIN,
-    defaults, normalize, isGroupA, trimSize, trimText, isbnOk, isbnClean, kdpMargin, spine, marginNote, modelOf, fileName
+    defaults, normalize, isGroupA, trimSize, trimText, isbnOk, isbnClean, kdpMargin, spine, marginNote, modelOf, fileName,
+    pageInfo, spineText, ready
   };
 })(globalThis);

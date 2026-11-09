@@ -18,16 +18,27 @@ await import(new URL('typst-run.js', import.meta.url).href);
 const T = globalThis.kdpTypstRun;
 const loader = T.Loader();
 
+/**
+ * At most one progress message per 80 ms. E13.2: the first chunk always goes out
+ * (last starts at -Infinity; with 0, chunks in the worker's first 80 ms were never
+ * sent), and a chunk held back by the 80 ms rule goes out when the window ends, so
+ * the bar never waits for the next chunk (which may come seconds later).
+ */
 function progress(id, total) {
+  const WINDOW = 80;
   let loaded = 0;
-  let last = 0;
+  let last = -Infinity;
+  let timer = null;
+  const send = () => {
+    timer = null;
+    last = performance.now();
+    self.postMessage({ type: 'progress', id, loaded: Math.max(0, loaded), total });
+  };
   return (n) => {
     loaded += n;
     const t = performance.now();
-    if (t - last > 80 || loaded >= total) {
-      last = t;
-      self.postMessage({ type: 'progress', id, loaded: Math.max(0, loaded), total });
-    }
+    if (t - last > WINDOW || loaded >= total) { clearTimeout(timer); send(); }
+    else if (!timer) timer = setTimeout(send, WINDOW - (t - last));
   };
 }
 

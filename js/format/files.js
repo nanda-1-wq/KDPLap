@@ -17,6 +17,7 @@
    kdpFormatFiles.FONTS            → family key → [{ face, ...file }]
    kdpFormatFiles.STYLE_FAMILIES   → style → family keys (body first)
    kdpFormatFiles.PDFJS            → { js, worker } (the preview and the checks)
+   kdpFormatFiles.WIRE             → bytes on the wire: engine, and each style's fonts (the progress line)
    kdpFormatFiles.urls(file)       → the URLs to try, in order
    kdpFormatFiles.styleFonts(style) → the font files of a style
    kdpFormatFiles.ENGINE_ID        → book_exports.engine ("typst 0.14.2 · t1")
@@ -85,8 +86,12 @@
   const styleFonts = (style) => (STYLE_FAMILIES[style] || STYLE_FAMILIES.classic).flatMap((k) => FONTS[k]);
   const all = () => [ENGINE.js, ENGINE.wasm, ...Object.values(FONTS).flat(), PDFJS.js, PDFJS.worker];
 
+  // Bytes on the wire (jsdelivr, compressed), measured in Part 2 (Nov 4). The
+  // download counts decoded bytes; 08 shows the share of these as MB.
+  const WIRE = { engine: 24346 + 9117552, classic: 708145, modern: 326883 + 228045, clean: 372278, warm: 223917 };
+
   root.kdpFormatFiles = {
-    CDNS, ENGINE, FONTS, STYLE_FAMILIES, PDFJS, urls, styleFonts, all,
+    CDNS, ENGINE, FONTS, STYLE_FAMILIES, PDFJS, WIRE, urls, styleFonts, all,
     TYPST_VERSION: '0.14.2', TEMPLATE: 't1', ENGINE_ID: 'typst 0.14.2 · t1'
   };
 })(globalThis);
