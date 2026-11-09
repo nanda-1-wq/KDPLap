@@ -12,12 +12,16 @@
    it was drawn is skipped.
    A new PDF keeps the spread you were on (or the last one, if the book got
    shorter). The old pages stay on screen until the new ones are drawn.
+   E13.2 D2 (F13): the spread fills its box (the stage's width and height, no
+   inner margin) and is drawn at the screen's pixel density (at most 3), so it
+   stays sharp; a resize draws it again. refit() draws it again at once (the
+   stage moved, for example into the full screen view).
 
    const pv = kdpFormatPreview.create(stage, { onChange })
      stage     an element; the preview fills it (spread + page buttons)
      onChange({ spread, spreads, label }) after each move
    await pv.show(pdfBytes, { trim })   a new PDF (bytes are copied)
-   pv.go(+1 | -1) · pv.goTo(spread)
+   pv.go(+1 | -1) · pv.goTo(spread) · pv.refit()
    pv.label()                → "Pages 8 and 9 of 48"
    pv.drawn()                → page numbers that hold an image now (tests)
    pv.renders                → how many pages were drawn so far (tests)
@@ -25,7 +29,8 @@
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
-  const PAD = 24;       // CSS px around the spread inside the stage
+  const PAD = 0;        // E13.2 D2: the spread fills the stage (the box around it gives the margin)
+  const MAX_DPR = 3;    // sharp on every screen, with a cap on canvas memory
   const NAV_WAIT = 60;  // ms of calm after a page turn before drawing
 
   /** Spread k: [left, right] page numbers (null = no page). */
@@ -76,7 +81,7 @@
       const page = await doc.getPage(n);
       if (myGen !== gen || !wanted(n)) return null;   // paged on meanwhile: skip it
       const size = pageSize();
-      const dpr = Math.min(2, root.devicePixelRatio || 1);
+      const dpr = Math.min(MAX_DPR, root.devicePixelRatio || 1);
       const base = page.getViewport({ scale: 1 });
       const view = page.getViewport({ scale: (size.h / base.height) * dpr });
       const canvas = document.createElement('canvas');
@@ -171,6 +176,7 @@
       clearTimeout(navTimer);
       navTimer = setTimeout(render, NAV_WAIT);
     };
+    api.refit = () => { if (doc) { gen++; render(); } };
     api.label = () => label(spread, pages);
     api.state = () => ({ spread, spreads: spreadCount(pages), pages });
     api.drawn = () => [...cache.keys()].sort((a, b) => a - b);

@@ -12,6 +12,12 @@
    and spine chips, the margin note with the KDP minimum for the page count,
    the engine states (first visit with progress, error with Try again), the
    section states (nothing Final, a trim outside group A), the Ready box.
+   D2 (owner, Nov 9; plan F13): the settings column is 360 px; the spread
+   fills the preview box; "Full screen" shows the spread over the whole
+   window (a modal dialog: Previous / Next, arrow keys, Esc and Close, focus
+   kept inside and given back). The stage element itself moves into the
+   dialog and back, so there is still one PDF and one preview.
+   The trim drawing keeps the page's shape; its label is under it, never inside.
    Part 4: the Export files panel (design 42, js/format-export.js) and the
    08 mark from 0027 pdf_marks (design 50), the same read as the Books card.
    - The engine downloads when 08 opens and only when there is something to
@@ -60,6 +66,7 @@
     check: svg('<path d="M5 12l5 5 9-10"/>', 18, 2.4),
     prev: svg('<path d="M15 6l-6 6 6 6"/>'),
     next: svg('<path d="M9 6l6 6-6 6"/>'),
+    full: svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
     x: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 18, 2.2)
   };
 
@@ -83,6 +90,8 @@
   let build = { state: 'idle', pages: 0, info: null, error: null }; // idle | waiting | building | ready | error
   let buildTimer = null, building = false, again = false, buildSeq = 0;
   let paused = false;               // the export panel builds: no preview build meanwhile
+  let stageEl = null;               // the preview's stage (it moves into the full screen view and back)
+  let full = null;                  // the full screen dialog while open: { dlg, opener }
   let idle = [];                    // resolved when the running preview build ends (the export waits for it)
 
   /* ── Values ──────────────────────────────── */
@@ -222,6 +231,7 @@
     clearTimeout(buildTimer);
     buildTimer = null;
     buildSeq++;
+    closeFull(false);
     if (pv) { pv.destroy(); pv = null; }
     if (engine) { engine.terminate(); engine = null; }
     engineLoad = null;
@@ -259,7 +269,7 @@
       if (seq === buildSeq && root) {
         // The stage is shown (and sized) before the first pages are drawn.
         if (!build.pages) { build.pages = r.pages; build.info = F().pageInfo(r.meta); paintPreview(); }
-        if (!pv) pv = kdpFormatPreview.create(sel('[data-fmt-stage]'), { onChange: paintNav });
+        if (!pv) pv = kdpFormatPreview.create(stageEl, { onChange: paintNav });
         await pv.show(r.pdf, { trim: bookTrim() });
       }
     } catch (e) { err = e; }
@@ -319,7 +329,10 @@
               <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'print'}" data-fmt-mode="print">Print</button>
               <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'kindle'}" data-fmt-mode="kindle">Kindle</button>
             </div>
-            <div class="fmt-chips" data-fmt-chips></div>
+            <div class="fmt-bar-end">
+              <div class="fmt-chips" data-fmt-chips></div>
+              <button type="button" class="btn btn-secondary fmt-full-btn" data-fmt-full aria-haspopup="dialog" disabled>${IC.full}Full screen</button>
+            </div>
           </div>
           <div class="fmt-wrap" data-fmt-wrap>
             <div class="fmt-stage" data-fmt-stage></div>
@@ -334,7 +347,9 @@
           <div class="fmt-ready" data-fmt-ready></div>
         </section>
       </div>`;
+    closeFull(false);
     if (pv) { pv.destroy(); pv = null; }
+    stageEl = root.querySelector('[data-fmt-stage]');
     paintPreview();
     // A repaint (Retry, a new open) shows the last PDF again once the engine builds.
     if (build.pages && eng.state === 'ready') { build = { state: 'idle', pages: 0, info: null, error: null }; scheduleBuild(true); }
@@ -362,18 +377,23 @@
   }
 
   function paintNav(s) {
-    const nav = sel('[data-fmt-nav]');
-    if (!nav || !pv) return;
+    if (!pv) return;
     const st = s || pv.state();
-    sel('[data-fmt-label]').textContent = pv.label();
-    sel('[data-fmt-prev]').disabled = st.spread <= 0;
-    sel('[data-fmt-next]').disabled = st.spread >= st.spreads - 1;
+    // The page buttons below the box, and the same ones in the full screen view.
+    const scopes = [root, full && full.dlg].filter(Boolean);
+    for (const el of scopes) {
+      const label = el.querySelector('[data-fmt-label]');
+      if (!label) continue;
+      label.textContent = pv.label();
+      el.querySelector('[data-fmt-prev]').disabled = st.spread <= 0;
+      el.querySelector('[data-fmt-next]').disabled = st.spread >= st.spreads - 1;
+    }
   }
 
   /** The preview area (designs 41, 41b, 41c): a state, or the pages. */
   function paintPreview() {
     const box = sel('[data-fmt-state]');
-    const stage = sel('[data-fmt-stage]');
+    const stage = stageEl;
     if (!box || !stage) return;
     let html = '';
     let kind = '';                  // '' | 'quiet' | 'danger'
@@ -424,6 +444,9 @@
     if (!showPages) box.innerHTML = html;
     stage.hidden = !showPages;
     sel('[data-fmt-nav]').hidden = !showPages || !pv;
+    const fullBtn = sel('[data-fmt-full]');
+    if (fullBtn) fullBtn.disabled = !(showPages && pv && build.pages);
+    if (!showPages && full) closeFull(true);
     if (showPages && pv) paintNav();
     paintUpdating();
     paintChips();
@@ -549,7 +572,10 @@
             <label class="fmt-field">Paper
               <select class="fmt-select" data-fmt-select="paper"><option value="white"${st.paper === 'white' ? ' selected' : ''}>White</option><option value="cream"${st.paper === 'cream' ? ' selected' : ''}>Cream</option></select></label>
           </div>
-          <div class="fmt-trim-pic" role="img" aria-label="Trim drawing, ${esc(F().trimText(trim).replace(' × ', ' by ').replace(' in', ' inches'))}" style="--trim-ratio: ${trimRatio(trim)}">${esc(trim.replace('x', '×'))}</div>
+          <div class="fmt-trim-pic" role="img" aria-label="Trim drawing, ${esc(F().trimText(trim).replace(' × ', ' by ').replace(' in', ' inches'))}">
+            <span class="fmt-trim-page" style="--trim-ratio: ${trimRatio(trim)}" aria-hidden="true"></span>
+            <span class="fmt-trim-label" aria-hidden="true">${esc(trim.replace('x', '×'))}</span>
+          </div>
         </div>
         ${groupA() ? '' : `<p class="field-error fmt-trim-off" role="note">${ICON.warn(13)}<span>Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8 or 5 × 8 in. Pick one of these.</span></p>`}
         <label class="fmt-field">Header title, left pages
@@ -562,7 +588,7 @@
       </fieldset>`;
   }
 
-  /** The small trim drawing keeps the page's shape: width ÷ height. */
+  /** The small trim drawing keeps the page's shape: width ÷ height. Its label sits under it (D2 bug 4). */
   function trimRatio(trim) {
     const [w, h] = String(trim).split('x').map(Number);
     return w && h ? (w / h).toFixed(4) : '0.6667';
@@ -670,8 +696,66 @@
     if (t.closest('[data-fmt-alsoby]')) { openAlsoBy(t.closest('[data-fmt-alsoby]')); return; }
     const go = t.closest('[data-fmt-go]');
     if (go && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); ctx.go(Number(go.dataset.fmtGo)); return; }
+    const fb = t.closest('[data-fmt-full]');
+    if (fb) { openFull(fb); return; }
     const m = t.closest('[data-fmt-mode]');
     if (m) setMode(m.dataset.fmtMode);
+  }
+
+  /* ── Full screen (D2, plan F13) ───────────── */
+
+  /**
+   * The spread over the whole window. A modal dialog: the page behind is
+   * inert, so the focus stays inside; Esc and Close end it and the focus goes
+   * back to the button. The preview's own stage moves in (one PDF, one preview,
+   * still only the visible spread and the next one drawn) and moves back.
+   */
+  function openFull(opener) {
+    if (full || !pv || !stageEl) return;
+    const d = document.createElement('dialog');
+    d.className = 'fmt-full';
+    d.setAttribute('aria-labelledby', 'fmtFullTitle');
+    d.innerHTML = `
+      <div class="fmt-full-bar">
+        <h2 class="fmt-full-title" id="fmtFullTitle">Print preview</h2>
+        <button type="button" class="btn btn-secondary" data-full-close>${ICON.close}Close</button>
+      </div>
+      <div class="fmt-full-slot" data-full-slot></div>
+      <div class="fmt-nav fmt-full-nav">
+        <button type="button" class="fmt-nav-btn" data-fmt-prev aria-label="Previous pages">${IC.prev}</button>
+        <span class="fmt-nav-label" data-fmt-label aria-live="polite"></span>
+        <button type="button" class="fmt-nav-btn" data-fmt-next aria-label="Next pages">${IC.next}</button>
+      </div>`;
+    document.body.append(d);
+    full = { dlg: d, opener, home: stageEl.parentNode, next: stageEl.nextSibling };
+    d.querySelector('[data-full-slot]').append(stageEl);
+    d.addEventListener('cancel', (e) => { e.preventDefault(); closeFull(true); });
+    d.addEventListener('click', (e) => {
+      if (e.target.closest('[data-full-close]')) { closeFull(true); return; }
+      if (e.target.closest('[data-fmt-prev]')) { pv.go(-1); return; }
+      if (e.target.closest('[data-fmt-next]')) pv.go(1);
+    });
+    d.addEventListener('keydown', (e) => {
+      if (e.target.closest('input, select, textarea')) return;
+      if (e.key === 'ArrowLeft') { pv.go(-1); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { pv.go(1); e.preventDefault(); }
+    });
+    d.showModal();
+    d.querySelector('[data-full-close]').focus();
+    paintNav();
+    pv.refit();
+  }
+
+  /** Close the full screen view: the stage goes home, drawn again at its size. focus: give the focus back. */
+  function closeFull(focus) {
+    if (!full) return;
+    const f = full;
+    full = null;
+    if (f.home && f.home.isConnected) f.home.insertBefore(stageEl, f.next && f.next.parentNode === f.home ? f.next : null);
+    if (f.dlg.open) f.dlg.close();
+    f.dlg.remove();
+    if (pv && stageEl && stageEl.isConnected) { pv.refit(); paintNav(); }
+    if (focus && f.opener && f.opener.isConnected) f.opener.focus();
   }
 
   /** Arrow keys turn the pages while the focus is in the preview (not in a field). */
@@ -828,6 +912,7 @@
   /** Leaving 08: end the engine (its memory goes back) and the preview. Edits keep saving. */
   function leave() {
     openToken++;
+    closeFull(false);
     stopEngine();
     root = null;
     pendingFocus = null;
@@ -901,6 +986,6 @@
       });
     },
     /** Tests: the open settings. */
-    _debug: () => ({ settings, fmt, marks, engine, pv, build, eng, missing })
+    _debug: () => ({ settings, fmt, marks, engine, pv, build, eng, missing, full: !!full })
   };
 })();
