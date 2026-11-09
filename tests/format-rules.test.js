@@ -168,3 +168,60 @@ Deno.test("E13.2 trimText and marginNote", () => {
   assertEquals(F.marginNote(720), `KDP minimum 0.875 in inside for 701 to 828 pages. ${fixed}`);
   assertEquals(F.marginNote(900), `KDP prints up to 828 pages. ${fixed}`);
 });
+
+const v3 = (id, content, extra = {}) => ({ id, version_no: 1, content, ...extra });
+const book3 = (sections) => ({ book: { id: "b", title: "T", pen_name: "P", bio: "", trim: "6x9" }, known: {}, now: "2026-11-04T12:00:00Z",
+  chapters: [{ id: "c", kind: "chapter", position: 1, title: "C", sections }] });
+
+Deno.test("E13.2 pageInfo and spineText (design 41 chips)", () => {
+  assertEquals(F.pageInfo({ lastPage: 48, contentEnd: 47 }), { pages: 48, blanks: 1, content: 47 });
+  assertEquals(F.pageInfo({ lastPage: 48, contentEnd: 48 }), { pages: 48, blanks: 0, content: 48 });
+  assertEquals(F.pageInfo(null), { pages: 0, blanks: 0, content: 0 });
+  assertEquals(F.spineText(48, "white"), "Spine 0.108 in · no spine text under 80 pages");
+  assertEquals(F.spineText(80, "cream"), "Spine 0.200 in");
+});
+
+Deno.test("E13.2 ready: all Final, nothing missing → no warnings (no ISBN note, no v2a note)", () => {
+  const m = F.modelOf(book3([{ id: "a", position: 1, title: "", status: "final", version: v3("va", "Plain words here.") }]), {});
+  const r = F.ready({ model: m, missing: [], pages: 48 });
+  assertEquals(r, { warnings: [], finals: 1 });
+});
+
+Deno.test("E13.2 ready: every warning, in order, with the section to open in 06", () => {
+  const run = { started_at: "2026-11-04T11:59:50Z", heartbeat_at: "2026-11-04T11:59:58Z" };
+  const d = book3([
+    { id: "a", position: 1, title: "", status: "draft", version: v3("va", "x") },
+    { id: "b", position: 2, title: "", status: "draft", version: null },
+    { id: "e", position: 3, title: "", status: "final", version: null },
+    { id: "r", position: 4, title: "", status: "final", needs_review: true, version: v3("vr", "x") },
+    { id: "m", position: 5, title: "", status: "final", version: v3("vm", "A claim. [Verify: no source]") },
+    { id: "u", position: 6, title: "", status: "final", unsaved: true, version: v3("vu", "x") },
+    { id: "w", position: 7, title: "Seven", status: "final", run, version: v3("vw", "x") }]);
+  const m = F.modelOf(d, {});
+  const missing = [{ char: "😀", code: "U+1F600", faces: ["Lora"], where: ["1.7 Seven"] }];
+  const r = F.ready({ model: m, missing, pages: 20, dropped: 2 });
+  assertEquals(r.warnings.map((w) => w.key), ["not-final", "final-empty", "review", "marks", "unsaved", "running", "chars", "short", "also-by"]);
+  const t = Object.fromEntries(r.warnings.map((w) => [w.key, w]));
+  // 41c "WARNINGS · NEVER BLOCK" wording.
+  assertEquals(t["not-final"].text, "2 sections are not Final. They are left out.");
+  assertEquals(t["final-empty"].text, "1 Final section has no text. It is left out.");
+  assertEquals([t.review.text, t.review.sectionId], ["1 section needs review.", "r"]);
+  assertEquals([t.marks.text, t.marks.sectionId], ["1 claim has no source yet (Verify). The marks are not printed.", "m"]);
+  assertEquals([t.unsaved.sectionId, t.running.sectionId], ["u", "w"]);
+  assertEquals([t.chars.text, t.chars.sectionId], ["1 character is not in the font (an emoji in 1.7 Seven). It prints as a box.", "w"]);
+  assertEquals(t.short.text, "20 pages. KDP needs at least 24 pages for a paperback.");
+  assertEquals(t["also-by"].text, "2 Also by books were left out. They no longer have this pen name.");
+});
+
+Deno.test("E13.2 ready: page limits (owner Q8: a warning only), several characters, a chapter, not checked yet", () => {
+  const d = book3([{ id: "a", position: 1, title: "", status: "final", version: v3("va", "x") }]);
+  d.chapters[0].needs_review = true;
+  const m = F.modelOf(d, {});
+  assertEquals(F.ready({ model: m, missing: [], pages: 702 }).warnings.map((w) => w.text),
+    ["Chapter 1 needs review in 05 Outline.", "Over 700 pages. KDP asks for 0.875 in inside. This book uses 0.75 in."]);
+  assertEquals(F.ready({ model: m, missing: [], pages: 830 }).warnings.map((w) => w.key), ["review-chapter", "long"]);
+  const many = [{ char: "✓", code: "U+2713", where: ["1.1"] }, { char: "😀", code: "U+1F600", where: [] }, { char: "→", code: "U+2192", where: [] }, { char: "⅞", code: "U+215E", where: [] }];
+  assertEquals(F.ready({ model: m, missing: many, pages: 48 }).warnings.find((w) => w.key === "chars").text,
+    "4 characters are not in the font (“✓” (U+2713), an emoji, “→” (U+2192) and more, first in 1.1). They print as a box.");
+  assertEquals(F.ready({ model: m, missing: null, pages: 0 }).warnings.map((w) => w.key), ["review-chapter"]);
+});

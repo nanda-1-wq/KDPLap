@@ -342,8 +342,13 @@ title, Title page and Copyright always on, Introduction and Conclusion only when
 Kindle state, load and save errors, keyboard, 32 px rows, 900 px), t-dialogs (Also by with the status from Books,
 the print order, Cancel and Escape; the trim warning with and without a Print PDF, Keep, a failed write, Change
 trim into the Brief; an old 7 × 10 trim), t-shell (header, the reason line, Next off with the "Coming next" tip,
-the rail, 09 Coming next, 07 Next to 08, Export files, the E11 row link). `format t-shots` makes the STOP compare
-images in `docs/reviews/e13-2-stop<n>/`; not a check, it overwrites tracked images.
+the rail, 09 Coming next, 07 Next to 08, Export files, the E11 row link), and for Part 3 (the real print engine,
+served from `tests/browser/.cache/format/` after `cache-files.mjs` checks each sha384) t-preview (the spread,
+page buttons and arrow keys, the chips, the margin note = `marginNote(pages)`, a rebuild, paper with no rebuild,
+the Ready box and its 07 line, the engine ending on leave, warnings, Kindle, 900 px) and t-states (41c: first visit
+with the bar moving, engine error and Try again, jsdelivr down, a failed rebuild, nothing Final, a trim outside
+group A, a trim change). `format t-shots` (STOP 2) and `t-shots3` (STOP 3) make the compare images in
+`docs/reviews/e13-2-stop<n>/`; they are not checks, they overwrite tracked images: never run them in a sweep.
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every

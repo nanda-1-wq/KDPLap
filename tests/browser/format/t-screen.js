@@ -127,7 +127,7 @@ const test = async page => {
   await page.click('[data-fmt-mode="kindle"]');
   ok(await page.$eval('[data-fmt-mode="kindle"]', (b) => b.getAttribute('aria-pressed') === 'true') && (await FM.txt(page, '.fmt-state strong')) === 'Kindle preview comes with the EPUB.', 'Kindle: Kindle preview comes with the EPUB.');
   await page.click('[data-fmt-mode="print"]');
-  ok(await page.$eval('[data-fmt-mode="print"]', (b) => b.getAttribute('aria-pressed') === 'true') && !(await FM.has(page, '.fmt-state')), 'Print again');
+  ok(await page.$eval('[data-fmt-mode="print"]', (b) => b.getAttribute('aria-pressed') === 'true') && !(await page.$eval('[data-fmt-state]', (b) => !b.hidden && /Kindle/.test(b.textContent))), 'Print again: the Kindle state is gone');
 
   /* Load error, then Retry. */
   globalThis.__modes.formatFail = 2;   // init's read and the open's read

@@ -4,7 +4,8 @@
 // Tests change globalThis.__store and globalThis.__modes.
 //   __modes: formatFail (n reads of format_json fail), formatSlow (ms), saveFail (n saves fail),
 //   saveSlow (ms), trimFail (the Brief trim write fails), statusFail (the Also by status read fails),
-//   exportFail (export_json fails)
+//   exportFail (export_json fails), cdnSlowMs (the wasm waits), jsdelivrDown, cdnDown (the engine files)
+// The print engine is real, from the checked cache (see the CDN route below).
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const FB = 'f1f1f1f1-0000-4000-8000-000000000001';   // the book of design 41
@@ -23,7 +24,7 @@ async function setupFormat(page) {
   const words = (n) => Array.from({ length: n }, (_, i) => ['study', 'small', 'daily', 'habit', 'focus', 'review', 'quiet', 'notes'][i % 8]).join(' ');
   const version = (content) => ({ id: uid('7', ++seq), version_no: 1, content, partial: false, word_count: content.split(/\s+/).length, source: 'manual', label: null, created_at: ago(1) });
   const sec = (position, title, extra = {}) => ({ id: uid('5', ++seq), position, title, status: 'final', needs_review: false, ai: 'draft', unsaved: false, run: null, word_target: 300,
-    version: version(`${words(60)}.\n\n${words(60)}.`), ...extra });
+    version: version(Array.from({ length: 5 }, () => `${words(120)}.`).join('\n\n')), ...extra });   // about 600 words: the book is about 48 pages, as the real one
   const chap = (position, kind, title, sections) => ({ id: uid('c', ++seq), position, kind, title, objective: kind === 'chapter' ? 'Reader can do this.' : null, needs_review: false, sections });
   const chapters = [
     chap(0, 'intro', 'Introduction', [sec(1, '')]),
@@ -48,7 +49,7 @@ async function setupFormat(page) {
       { id: B3, title: 'Sleep Better Tonight', subtitle: 'A plan', status: 'in_progress' }
     ],
     qcRun: null,                     // { checked_at, current } for qc_mark
-    writes: [], calls: [], inserts: 0, formatReads: 0,
+    writes: [], calls: [], inserts: 0, formatReads: 0, cdn: [],
     sections: () => chapters.flatMap((c) => c.sections)
   };
 
@@ -176,6 +177,21 @@ async function setupFormat(page) {
     if (path.startsWith('/rest/v1/')) return json(r, 200, one ? null : []);
     return json(r, 404, { message: 'mock: unknown' });
   }
+
+  // The print engine is real (E13.2 Part 3): its pinned files come from tests/browser/.cache/format
+  // (run.sh checks each sha384), for jsdelivr and unpkg alike.
+  const TYPES = { js: 'text/javascript', mjs: 'text/javascript', wasm: 'application/wasm', ttf: 'font/ttf' };
+  const engineFile = /^https:\/\/(cdn\.jsdelivr\.net\/npm|unpkg\.com)\/((?:@myriaddreamin|@expo-google-fonts)\/[^/]+|pdfjs-dist@[^/]+)\/(.+)$/;
+  await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com)\//, async (r) => {
+    const m = r.request().url().match(engineFile);
+    if (!m) return r.fallback();
+    const cdn = m[1].startsWith('unpkg') ? 'unpkg' : 'jsdelivr';
+    store.cdn.push({ cdn, file: `${m[2]}/${m[3]}` });
+    if (mode('cdnDown') || (cdn === 'jsdelivr' && mode('jsdelivrDown'))) return r.abort();
+    if (mode('cdnSlowMs') && /\.wasm$/.test(m[3])) await wait(mode('cdnSlowMs'));
+    const ext = (m[3].match(/\.([a-z0-9]+)$/) || [])[1];
+    return r.fulfill({ path: `${CACHE}/format/${m[2]}/${m[3]}`, contentType: TYPES[ext] || 'application/octet-stream', headers: { 'access-control-allow-origin': '*' } });
+  });
 
   await ctx.route('**/supabase-js@2.49.4/dist/umd/supabase.js', (r) => r.fulfill({ path: `${CACHE}/supabase-2.49.4.js`, contentType: 'application/javascript', headers: { 'access-control-allow-origin': '*' } }));
   if (!globalThis.__withFonts) await ctx.route('**/fonts.googleapis.com/**', (r) => r.abort());

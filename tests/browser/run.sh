@@ -44,6 +44,11 @@ WANT=$(grep -o "DOCX_SRI = 'sha384-[^']*'" "$ROOT/js/export-dialog.js" | grep -o
 GOT="sha384-$(openssl dgst -sha384 -binary "$DX" | base64)"
 [[ $GOT == "$WANT" ]] || { rm -f "$DX"; echo "run.sh: docx hash mismatch"; exit 1; }
 
+# E13.2: the format suite serves the print engine's pinned files from the cache (each checked against its sha384).
+if [[ $SUITE == format ]]; then
+  node "$HERE/format/cache-files.mjs" >/dev/null || { echo "run.sh: format engine cache failed"; exit 1; }
+fi
+
 # Old file versions some tests load to prove a fixed bug (from git, never edited).
 [[ -s $CACHE/old-book-positioning.js ]] || git -C "$ROOT" show 32f9dfa:js/book-positioning.js > "$CACHE/old-book-positioning.js"
 [[ -s $CACHE/old-book-brief.js ]] || git -C "$ROOT" show 32f9dfa:js/book-brief.js > "$CACHE/old-book-brief.js"

@@ -159,7 +159,10 @@ const test = async page => {
   await until(() => !!document.querySelector('[data-chap="done"]'));
   const w22 = st.count('Clear a space as wide as your arms. Move rugs and cords out of the way.');
   await until((w) => ((document.querySelector('[data-chap="done"]') || {}).innerText || '').replace(/\s+/g, ' ').includes(`1 section, ${w} words.`), w22).catch(() => {});
-  ok((await card()) === `GENERATE CHAPTER · DONE Chapter 2 is written 2.2 Clearing a safe space at home ${w22} words 1 section, ${w22} words. Each is a new version with the status Draft. Next, read each one and run its AI check. Close`, `done: ${await card()}`);
+  // E13.1: wait for the laid-out text (a read right as the card appears can miss the spaces between its grid cells).
+  const doneText = `GENERATE CHAPTER · DONE Chapter 2 is written 2.2 Clearing a safe space at home ${w22} words 1 section, ${w22} words. Each is a new version with the status Draft. Next, read each one and run its AI check. Close`;
+  await until((t) => ((document.querySelector('[data-chap="done"]') || {}).innerText || '').replace(/\s+/g, ' ').trim() === t, doneText, 3000).catch(() => {});
+  ok((await card()) === doneText, `done: ${await card()}`);
   ok(await g(() => document.activeElement && document.activeElement.matches('[data-chap-close]')), 'focus on Close');
   ok(await shots('done') === false, 'done: no sideways scroll at 900 px');
   await page.click('[data-chap-close]');
