@@ -324,25 +324,27 @@
       <div class="fmt">
         <section class="fmt-settings" aria-label="Format settings">${settingsHtml()}</section>
         <section class="fmt-preview" aria-label="Preview">
-          <div class="fmt-bar">
-            <div class="fmt-seg" role="group" aria-label="Preview mode">
-              <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'print'}" data-fmt-mode="print">Print</button>
-              <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'kindle'}" data-fmt-mode="kindle">Kindle</button>
+          <div class="fmt-view">
+            <div class="fmt-bar">
+              <div class="fmt-seg" role="group" aria-label="Preview mode">
+                <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'print'}" data-fmt-mode="print">Print</button>
+                <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'kindle'}" data-fmt-mode="kindle">Kindle</button>
+              </div>
+              <div class="fmt-bar-end">
+                <div class="fmt-chips" data-fmt-chips></div>
+                <button type="button" class="btn btn-secondary fmt-full-btn" data-fmt-full aria-haspopup="dialog" disabled>${IC.full}Full screen</button>
+              </div>
             </div>
-            <div class="fmt-bar-end">
-              <div class="fmt-chips" data-fmt-chips></div>
-              <button type="button" class="btn btn-secondary fmt-full-btn" data-fmt-full aria-haspopup="dialog" disabled>${IC.full}Full screen</button>
+            <div class="fmt-wrap" data-fmt-wrap>
+              <div class="fmt-stage" data-fmt-stage></div>
+              <div class="fmt-nav" data-fmt-nav hidden>
+                <button type="button" class="fmt-nav-btn" data-fmt-prev aria-label="Previous pages">${IC.prev}</button>
+                <span class="fmt-nav-label" data-fmt-label aria-live="polite"></span>
+                <button type="button" class="fmt-nav-btn" data-fmt-next aria-label="Next pages">${IC.next}</button>
+              </div>
+              <div class="fmt-state" data-fmt-state hidden></div>
+              <span class="fmt-updating" data-fmt-updating role="status" hidden>Updating preview</span>
             </div>
-          </div>
-          <div class="fmt-wrap" data-fmt-wrap>
-            <div class="fmt-stage" data-fmt-stage></div>
-            <div class="fmt-nav" data-fmt-nav hidden>
-              <button type="button" class="fmt-nav-btn" data-fmt-prev aria-label="Previous pages">${IC.prev}</button>
-              <span class="fmt-nav-label" data-fmt-label aria-live="polite"></span>
-              <button type="button" class="fmt-nav-btn" data-fmt-next aria-label="Next pages">${IC.next}</button>
-            </div>
-            <div class="fmt-state" data-fmt-state hidden></div>
-            <span class="fmt-updating" data-fmt-updating role="status" hidden>Updating preview</span>
           </div>
           <div class="fmt-ready" data-fmt-ready></div>
         </section>

@@ -3805,6 +3805,9 @@ label.fmt-row { cursor: pointer; }
 
 /* Preview column */
 .fmt-preview { min-width: 0; min-height: 0; overflow-y: auto; padding: var(--app-fmt-pad) var(--space-8); display: flex; flex-direction: column; gap: 14px; }
+/* D3 (owner, Nov 9; plan F13): the bar and the gray area take the whole visible height of the column,
+   so the spread is as big as the window allows; the Ready box sits under it and the column scrolls to it. */
+.fmt-view { flex: 0 0 100%; min-height: 0; margin-bottom: var(--app-fmt-pad); display: flex; flex-direction: column; gap: 14px; }   /* the margin keeps the Ready box fully below the screen */
 .fmt-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
 .fmt-bar-end { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
 .fmt-full-btn { gap: var(--space-2); }
@@ -3938,6 +3941,7 @@ label.fmt-row { cursor: pointer; }
   .fmt { grid-template-columns: minmax(0, 1fr); height: auto; }
   .fmt-settings { overflow: visible; border-right: none; border-bottom: 1px solid var(--stone); }
   .fmt-preview { overflow: visible; }
+  .fmt-view { flex: none; min-height: calc(100vh - 2 * var(--app-fmt-pad)); }   /* D3: scrolled to the bar, the gray area fills the rest of the screen */
   .fmt-wrap { min-height: var(--app-fmt-stage-min); }
   .fmt-exp-row { flex-wrap: wrap; }
 }
