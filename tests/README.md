@@ -353,7 +353,7 @@ record with Try again, a failed check, Cancel, Word to the E11 dialog, Escape, 9
 For D2 (owner, Nov 9, plan F13): `format t-full` (the spread fills the box, sharp, after a resize; the full
 screen view: modal, focus kept and given back, Previous / Next, arrow keys, Esc and Close, a rebuild while open,
 900 px) and `format t-trim` (the trim label under the drawing, inside its box, for every trim at 1440 and 900 px);
-`t-shots-d2` makes `docs/reviews/e13-2-d2/` (not a check). For D3: `format t-tall` (the gray area takes the whole height under the preview bar at 1440 × 900, 1440 × 1100 and 900 px; the Ready box below the screen, reached by scrolling; the head unchanged); `t-shots-d3` makes `docs/reviews/e13-2-d3/` (not a check). `books t-badge` also checks the Books card Print PDF mark (design 50: "Print PDF", "Print PDF changed", a failed
+`t-shots-d2` makes `docs/reviews/e13-2-d2/` (not a check). For D3: `format t-tall` (the gray area takes the whole height under the preview bar at 1440 × 900, 1440 × 1100 and 900 px; the Ready box below the screen, reached by scrolling; the head unchanged); `format t-tocheck` (owner, Nov 10: the warning chip in the preview bar, shown with warnings or a failed rebuild, hidden when green, click and Enter scroll to the Ready box and focus it, 44 px, 900 px); `t-shots-d3` makes `docs/reviews/e13-2-d3/` (not a check). `books t-badge` also checks the Books card Print PDF mark (design 50: "Print PDF", "Print PDF changed", a failed
 pdf_marks read). `format t-shots` (STOP 2), `t-shots3` (STOP 3) and `t-shots4` (STOP 4; run `books t-badge` first)
 make the compare images in `docs/reviews/e13-2-stop<n>/`; they are not checks, they overwrite tracked images: never
 run them in a sweep.

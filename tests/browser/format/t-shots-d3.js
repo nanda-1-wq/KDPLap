@@ -1,5 +1,5 @@
 // D3 (owner, Nov 9; plan F13) images: 41 at 1440 × 900 next to the design, the gray area taking the whole height
-// under the preview bar; the same screen scrolled to the Ready box; 900 px, the whole page.
+// under the preview bar; the same screen scrolled to the Ready box; 900 px, the whole page; the pointer chip (Nov 10).
 // Files go to docs/reviews/e13-2-d3/. Mock data, the real engine from the cache. Not a check: never in a sweep.
 globalThis.__withFonts = true;
 const test = async page => {
@@ -57,6 +57,20 @@ const test = async page => {
   await page.$eval('.fmt-preview', (p) => window.scrollTo(0, p.getBoundingClientRect().top + window.scrollY));
   await page.waitForTimeout(700);
   await shot('41-format-900-preview', OUT, false);
+
+  /* The pointer chip (owner, Nov 10): warnings in the Ready box, the chip in the preview bar; after a click. */
+  await size(1440, 900);
+  st.chapters[1].sections[1].status = 'draft';
+  st.chapters[2].sections[0].needs_review = true;
+  await FM.open(page);
+  await pages();
+  await page.waitForSelector('[data-fmt-tocheck]:not([hidden])', { timeout: 10000 });
+  await shot('41-tocheck-1440', OUT, false);
+  await page.click('[data-fmt-tocheck]');
+  await page.waitForTimeout(900);
+  await shot('41-tocheck-1440-after', OUT, false);
+  st.chapters[1].sections[1].status = 'final';
+  st.chapters[2].sections[0].needs_review = false;
 
   for (const a of todo) await compare(...a);
   ok(true, `images in ${OUT.replace(/^.*KDPLap\//, '')}`);
