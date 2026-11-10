@@ -67,6 +67,7 @@
     prev: svg('<path d="M15 6l-6 6 6 6"/>'),
     next: svg('<path d="M9 6l6 6-6 6"/>'),
     full: svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+    down: svg('<path d="M12 5v14M6 13l6 6 6-6"/>', 16),
     x: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 18, 2.2)
   };
 
@@ -331,6 +332,7 @@
                 <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'kindle'}" data-fmt-mode="kindle">Kindle</button>
               </div>
               <div class="fmt-bar-end">
+                <button type="button" class="fmt-tocheck" data-fmt-tocheck aria-controls="fmtReady" hidden></button>
                 <div class="fmt-chips" data-fmt-chips></div>
                 <button type="button" class="btn btn-secondary fmt-full-btn" data-fmt-full aria-haspopup="dialog" disabled>${IC.full}Full screen</button>
               </div>
@@ -346,7 +348,7 @@
               <span class="fmt-updating" data-fmt-updating role="status" hidden>Updating preview</span>
             </div>
           </div>
-          <div class="fmt-ready" data-fmt-ready></div>
+          <div class="fmt-ready" id="fmtReady" tabindex="-1" data-fmt-ready></div>
         </section>
       </div>`;
     closeFull(false);
@@ -466,14 +468,26 @@
   }
 
   /** The Ready box (designs 41, 41c). Never blocks. */
+  /** The pointer chip in the preview bar (owner, Nov 10): the Ready box is below the screen (D3), so warnings or a
+   *  failed rebuild show a chip there that scrolls to the box and moves the focus to it. None when the box is green. */
+  function paintToCheck(text) {
+    const chip = sel('[data-fmt-tocheck]');
+    if (!chip) return;
+    chip.hidden = !text;
+    chip.innerHTML = text ? `${ICON.warn(16)}<span>${esc(text)}</span>${IC.down}` : '';
+  }
+
   function paintReady() {
     const el = sel('[data-fmt-ready]');
     if (!el || !model) return;
+    paintToCheck('');
     if (!hasFinal() || !groupA()) { el.innerHTML = ''; return; }   // no Print PDF: the preview area says why
     const rebuildError = build.state === 'error' && build.pages
       ? `<div class="alert alert-error fmt-alert" role="alert">${IC.x}<div><p class="alert-text">The preview could not be updated. It shows your last good pages.</p>
           <button type="button" class="link-btn" data-fmt-retry-build>Try again</button></div></div>` : '';
     const r = F().ready({ model, missing, pages: build.pages, dropped: droppedAlsoBy() });
+    const things = r.warnings.length + (rebuildError ? 1 : 0);
+    if (things) paintToCheck(r.warnings.length ? `${things === 1 ? '1 thing' : `${things} things`} to check` : 'Preview not updated');
     if (r.warnings.length) {
       const first = r.warnings.find((w) => w.sectionId);
       const link = first ? `<a href="${sectionHref(first.sectionId)}" class="fmt-ready-link">Show in 06 Write</a>` : '';
@@ -692,6 +706,12 @@
     const t = e.target;
     if (t.closest('[data-fmt-retry-load]')) { loadData(); return; }
     if (t.closest('[data-fmt-retry-engine]')) { eng.state = 'idle'; startEngine(); return; }
+    if (t.closest('[data-fmt-tocheck]')) {
+      const box = sel('[data-fmt-ready]');
+      box.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      box.focus({ preventScroll: true });
+      return;
+    }
     if (t.closest('[data-fmt-retry-build]')) { build.state = build.pages ? 'waiting' : 'building'; scheduleBuild(true); paintPreview(); return; }
     if (t.closest('[data-fmt-prev]')) { if (pv) pv.go(-1); return; }
     if (t.closest('[data-fmt-next]')) { if (pv) pv.go(1); return; }

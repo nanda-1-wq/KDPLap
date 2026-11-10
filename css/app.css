@@ -3811,6 +3811,16 @@ label.fmt-row { cursor: pointer; }
 .fmt-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
 .fmt-bar-end { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
 .fmt-full-btn { gap: var(--space-2); }
+/* The pointer to the Ready box (owner, Nov 10): warnings or a failed rebuild, in the warning look, icon and words */
+.fmt-tocheck {
+  min-height: var(--control-h); display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3);
+  border: 1px solid var(--warning); border-radius: var(--radius-pill); background: var(--warning-bg); color: var(--warning);
+  font-family: inherit; font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+}
+.fmt-tocheck[hidden] { display: none; }
+.fmt-tocheck:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.fmt-ready { scroll-margin-block: var(--space-6); }   /* the chip scrolls to it with room for the focus ring */
+.fmt-ready:focus { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: var(--radius-lg); }
 
 /* Full screen (D2, plan F13): the spread over the whole window, the page behind inert */
 .fmt-full {
