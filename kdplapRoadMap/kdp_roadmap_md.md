@@ -80,14 +80,25 @@ Status: ✅ done (E1 to E12, both review gates)
   - the server "AI failed, not counted" path: only mock and server tests cover it, not a live run;
   - the estimate: input about 12% low, output about 60% high. Watch it on the real book.
 
+## E13.2 · 08 Format · ✅ done (Nov 10)
+- [x] Migration 0027 live since Nov 3; no generate change
+- [x] 08 Format screen (designs 41 to 43, 50, 51b) with the Print PDF and the Export files panel; owner design changes D2 and D3 (plan F13)
+- [x] Owner's real book: Classic, 6 × 9 in, 54 pages, spine 0.122 in; KDP Print Previewer passed the interior (`docs/reviews/e13-2-live/results.md`)
+- Plan: `docs/reviews/2026-11-08-e13-2-plan.md`; report: `docs/reviews/2026-11-09-e13-2-stop5.md`
+- Open items:
+  - the cold first visit can be slow on jsdelivr (55 to 142 s seen); self-hosting the engine was measured as the fallback (median 4.8 s vs 9.9 s, STOP 4);
+  - private windows download the engine again on every visit;
+  - EPUB and the Kindle preview come in E13.3;
+  - Notes and references come in v2b.
+
 ## Next
-08 Format: rebuild the 08 screen from design 41 on `claude/e13-1-format`. Then 09 Cover (E15).
+09 Cover (E15). Then EPUB and the Kindle preview (E13.3).
 
 ## v2 · KDP-ready files
 Scope: owner decisions, v2 step A (Oct 31).
 
 **v2a · publish path**
-1. 08 Format + Print PDF + EPUB (4 styles, book parts on/off, paper type)
+1. 08 Format + Print PDF + EPUB (4 styles, book parts on/off, paper type). Print PDF ✅ done Nov 10 (E13.2); EPUB in E13.3
 2. 09 Cover (4 templates + upload + blurb; print wrap PDF + Kindle JPG)
 3. Owner publishes the real book "Micro Study Habits for Busy Adult Learners"
 
