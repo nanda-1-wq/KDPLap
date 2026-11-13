@@ -1,10 +1,10 @@
 // generate lib tests: the number rule (E12 step 2, M1). One table of phrases
 // runs through every stage's own path: the Write and Improve markers
-// (markUnsourced), Brief help, Positioning, Title, Outline, the outline check
-// and the AI section check. Every path gives the same answer.
+// (markUnsourced), Brief help, Positioning, Title, Outline, the outline check,
+// the AI section check and the cover blurb (E15). Every path gives the same answer.
 import { assertEquals } from "jsr:@std/assert@1";
 import * as L from "./lib.ts";
-import { anthropic, OUTLINE_OUT, outlineCheckCtx, outlineCtx, titleCtx } from "./test_fakes.ts";
+import { anthropic, coverCtx, OUTLINE_OUT, outlineCheckCtx, outlineCtx, titleCtx } from "./test_fakes.ts";
 
 const body = (out: unknown) => anthropic("end_turn", out).json();
 
@@ -60,6 +60,18 @@ Deno.test("number rule: Outline, the outline check and the AI section check give
     assertEquals(oc.findings![0].unsourced, want, `outline check: ${phrase}`);
     const sc = L.interpretSectionCheck(true, await body({ findings: [{ type: "objective", message: phrase, quote: "" }] }), "Some text.", true, "");
     assertEquals(sc.check!.findings[0].unsourced ?? [], want, `section check: ${phrase}`);
+  }
+});
+
+Deno.test("number rule: the cover blurb (E15) gives the same answer, in the blurb and in the headline", async () => {
+  // A book with no number in its title, subtitle or positioning.
+  const ctx = coverCtx({ book: { title: "Calm Seated Yoga", subtitle: "Gentle Routines at Home" }, positioning: null });
+  const known = L.coverBlurbKnown(ctx);
+  for (const [phrase, want] of TABLE) {
+    const b = L.interpretCoverBlurb(true, await body({ headline: "Move with ease", blurb: phrase }), known);
+    assertEquals(b.coverBlurb!.unsourced, want, `cover blurb: ${phrase}`);
+    const h = L.interpretCoverBlurb(true, await body({ headline: phrase, blurb: "Sit tall and breathe." }), known);
+    assertEquals(h.coverBlurb!.unsourced, want, `cover headline: ${phrase}`);
   }
 });
 

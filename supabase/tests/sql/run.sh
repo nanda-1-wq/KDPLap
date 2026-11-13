@@ -10,7 +10,9 @@ HERE=${0:A:h}
 files=("$@"); (( $# )) || files=("$HERE"/t*.sql(N:t) "$HERE"/rls_*.sql(N:t))
 pass=0; fail=0
 for f in $files; do
-  "$HERE/reset.sh" || exit 1
+  # *_nofn.sql: a database without the default function grants (E15 F8, reset.sh).
+  if [[ ${f:t} == *_nofn.sql ]]; then KDP_PG_NO_FN_DEFAULTS=1 "$HERE/reset.sh" || exit 1
+  else KDP_PG_NO_FN_DEFAULTS= "$HERE/reset.sh" || exit 1; fi
   out=$("$PGBIN/psql" -h 127.0.0.1 -p "$PORT" -U postgres -d kdp -v ON_ERROR_STOP=1 -q -X -At -f "$HERE/${f:t}" 2>&1)
   rc=$?
   p=$(print -r -- "$out" | grep -c '^PASS ')

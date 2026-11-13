@@ -32,6 +32,14 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
   before any AI call (with the reserve), and Cancel (the server finishes).
 - `lib.promise_check.test.ts` and `handler.promise_check.test.ts` (E14.5, the promise check of
   one chapter: input, the checks before the call in order, prompt, reply, save, usage).
+- `lib.cover_blurb.test.ts` and `handler.cover_blurb.test.ts` (E15 Part 5, the back cover
+  headline and blurb of 09, not streamed): the input (stage and bookId only, 2 KB), the checks
+  before the call in order (positioning locked, a 04 title), the prompt (data tags, escaping,
+  nothing from the Brief or Research), the number rule (the locked Positioning, the 04 title and
+  subtitle are sources, owner Nov 12; the pen name is not), reading the reply (plain text,
+  paragraphs, the headline at 12 words and 80 characters, a blurb 0029 cannot save is not
+  counted), the refusals before any AI call (with the reserve), and leaving mid-call (counted).
+  The server saves nothing.
 - `lib.section_check.test.ts` and `handler.section_check.test.ts` (E10.4, the
   AI check in the Checks tab, not streamed): the input (no text from the
   browser), the checks before the call (50 to 6,000 words, the saved version,
@@ -283,8 +291,18 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0025` export and settings (display_name, book_exports with its guard and the newest 20 per book and format, export_json, export_badges and its "changed" rule, usage_month),
 `t0026` book complete and words this month (completed_at, complete_book and each refusal, the books guard, the reopen on its own for each event, D1: a new version on a Final section keeps the book completed, words_month rule 1 with the UTC month edge),
 `t0027` format and Print PDF (E13.1: book_formats shape, defaults, the guard with Also by, the touch, Final-only pdf_version_ids, what changes format_key and what does not, PDF export rows and their guard, pdf_marks, format_json, grants),
+`t0029` cover (E15: the shapes and their grants, the four cover tables, the guards, the rights clock, blurb versions, what moves each key, the export guard with every refusal and the size for every group A trim × paper × 24, 54, 80, 400 pages, cover_marks, cover_json, the "covers" bucket and its storage policies),
+`t0029_f8_nofn` (E15 F8: the signed-in cover path on 0029's own grants; run.sh builds it without the default function grants, see below),
 `t_export_include` (E11: the fixture cases from `tests/fixtures/export-include.json`, recorded with the dialog's own list, read as not changed by export_badges; E13.1: the "final" cases give the same list from pdf_version_ids; run from the repo root),
-`rls_cross_user` (user B against user A's rows in every table).
+`rls_cross_user` (user B against user A's rows in every table; E15: the cover tables, functions and A's file in the "covers" bucket).
+
+E15: `stub.sql` also copies the parts of Supabase Storage 0029 uses
+(`storage.buckets`, `storage.objects` with RLS on, `storage.foldername`,
+`filename`, `extension`, as they are live; not the live
+`protect_objects_delete` trigger). A file named `*_nofn.sql` runs on a
+database without the default `EXECUTE` on new functions
+(`KDP_PG_NO_FN_DEFAULTS=1` in `reset.sh`), so it sees only the grants a
+migration writes itself.
 
 ## Browser (mocked, playwright-cli)
 

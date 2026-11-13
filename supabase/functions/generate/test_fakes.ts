@@ -2,7 +2,7 @@
 import { assert } from "jsr:@std/assert@1";
 import { type DriftSave, makeHandler, type OutlineCheckSave, type RunBegin, type RunFinish, type RunSaved, type SavedTitleOption, type SectionCheckSave, type Store, type SuggestionSave, type UsageRow } from "./handler.ts";
 import type { PromiseCheckSave } from "./lib/types.ts";
-import type { BriefContext, Competitor, OutlineCheckContext, OutlineContext, OutlineDraft, OutlineRow, PenRow, PositioningContext, PositioningRow, PromiseContext, ReviewContext, TitleContext, TitleIdea, TopicRow, WriteChapterRow, WriteContext, WriteTiming } from "./lib.ts";
+import type { BriefContext, Competitor, CoverBlurbContext, OutlineCheckContext, OutlineContext, OutlineDraft, OutlineRow, PenRow, PositioningContext, PositioningRow, PromiseContext, ReviewContext, TitleContext, TitleIdea, TopicRow, WriteChapterRow, WriteContext, WriteTiming } from "./lib.ts";
 export const ID = "3f1c2a9e-8b7d-4c6e-9a5b-1d2e3f4a5b6c";
 export const USER = "11111111-2222-4333-8444-555555555555";
 export const ORIGIN = "http://127.0.0.1:5500";
@@ -228,6 +228,14 @@ export const PROMISE_QUOTE = "Chair yoga also helps you lose weight fast, so you
 export const PROMISE_OUT = { verdict: "drifts", reason: "Weight loss is not in the reader promise. Cut it or tie it to moving safely.", quote: PROMISE_QUOTE };
 export const promiseReply = (out: unknown = PROMISE_OUT) => () => Promise.resolve(anthropic("end_turn", out));
 
+/* ── cover_blurb (E15 Part 5) ── */
+
+/** The book of the chair yoga fixtures with its locked positioning (made-up text). */
+export const coverCtx = (extra: Partial<CoverBlurbContext> = {}): CoverBlurbContext => ({
+  bookId: BOOK_ID, book: { title: "Chair Yoga for Seniors Over 60", subtitle: "Gentle 15-Minute Routines" }, penName: "Nora Hale", positioning: LOCKED, ...extra,
+});
+export const cbid = { stage: "cover_blurb", bookId: BOOK_ID };
+
 /** One SSE event as Anthropic sends it. */
 export const aev = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 /** A whole Anthropic stream: message_start, the text in chunks, message_delta, message_stop. */
@@ -335,6 +343,8 @@ export type Setup = {
   // promise_check (E14.5)
   promise?: PromiseContext | null;
   promiseSaveThrows?: boolean;
+  // cover_blurb (E15 Part 5)
+  coverBlurb?: CoverBlurbContext | null;
 };
 
 export function setup(s: Setup = {}) {
@@ -436,6 +446,7 @@ export function setup(s: Setup = {}) {
       if (s.promiseSaveThrows) return Promise.reject({ code: "P0001" });
       return Promise.resolve({ checked_at: save.checkedAt.replace("Z", "+00:00").replace(".000", ""), inputs_key: save.inputsKey });
     },
+    getCoverBlurbContext: (id) => Promise.resolve(s.coverBlurb === undefined ? (id === BOOK_ID ? coverCtx() : null) : s.coverBlurb),
     getMonthlyLimit: () => Promise.resolve(s.limit === undefined ? 2_000_000 : s.limit),
     sumCountedTokensSince: () => Promise.resolve(s.monthTokens ?? 0),
     countCallsSince: () => Promise.resolve(s.recent ?? 0),

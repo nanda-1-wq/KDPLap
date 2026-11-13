@@ -74,6 +74,24 @@ insert into public.book_checks (chapter_id, user_id, book_id, verdict, reason, q
   ('a4000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001',
    'drifts', 'A new audience.', 'Writing A', 'a5000000-0000-4000-8000-000000000001',
    array['a6000000-0000-4000-8000-000000000001']::uuid[], 100, '0123456789abcdef', now());
+-- 0029: A's cover row, a ticked picture, a blurb, both exports (36 pages, white, 6 x 9), and A's file in the bucket.
+insert into public.cover_images (id, user_id, book_id, kind, path, width, height, bytes, rights_at) values
+  ('ac000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'front',
+   '00000000-0000-4000-8000-00000000000a/a3000000-0000-4000-8000-000000000001/ac000000-0000-4000-8000-000000000001.jpg', 1838, 2775, 900000, now());
+insert into public.book_covers (book_id, user_id, mode, front_image_id) values
+  ('a3000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 'template_image', 'ac000000-0000-4000-8000-000000000001');
+insert into public.book_covers (book_id, user_id) values ('b3000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000b');
+insert into public.cover_blurbs (user_id, book_id, body, source) values
+  ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'Blurb A.', 'manual');
+insert into public.cover_exports (user_id, book_id, kind, settings_key, engine, width_in, height_in, spine_in) values
+  ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'print',
+   public.cover_key('a3000000-0000-4000-8000-000000000001', 'print'), 'typst 0.14.2 · c1', 12.3311, 9.25, 0.0811);
+insert into public.cover_exports (user_id, book_id, kind, settings_key, engine, width_px, height_px) values
+  ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'kindle',
+   public.cover_key('a3000000-0000-4000-8000-000000000001', 'kindle'), 'typst 0.14.2 · c1', 1600, 2560);
+insert into storage.objects (bucket_id, name, owner) values
+  ('covers', '00000000-0000-4000-8000-00000000000a/a3000000-0000-4000-8000-000000000001/ac000000-0000-4000-8000-000000000001.jpg',
+   '00000000-0000-4000-8000-00000000000a');
 
 -- The tables under test: every table in public.
 create temp table rls_tables as
@@ -94,7 +112,9 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('26 public tables (0028: qc_runs, qc_dismissed, book_checks)', (select count(*) from rls_tables) = 26, (select count(*) from rls_tables)::text);
+select pg_temp.chk('30 public tables (0029: cover_images, book_covers, cover_blurbs, cover_exports)', (select count(*) from rls_tables) = 30, (select count(*) from rls_tables)::text);
+select pg_temp.chk('A''s two cover exports recorded', (select count(*) from public.cover_exports) = 2);
+select pg_temp.chk('A''s file is in the bucket', (select count(*) from storage.objects where bucket_id = 'covers') = 1);
 select pg_temp.chk('A''s Print PDF row recorded', (select count(*) from public.book_exports where format = 'pdf') = 1);
 select pg_temp.chk('RLS on for every public table', not exists (
   select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
@@ -112,11 +132,12 @@ select pg_temp.chk(t || ': B reads 0 of A''s rows',
 -- section_suggestions (0021) no delete (their update goes through RLS: 0
 -- rows), kept_findings (0024) no update, book_exports (0025) no update
 -- and no delete, book_formats (0027) no delete, qc_runs and book_checks
--- (0028) no update and no delete, and qc_dismissed (0028) no update: refused,
--- not 0 rows.
-select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports', 'qc_runs', 'qc_dismissed', 'book_checks') then '42501%' else 'OK 0' end)
+-- (0028) no update and no delete, qc_dismissed (0028) no update, and
+-- book_covers (0029) no delete, cover_blurbs and cover_exports (0029) no
+-- update and no delete: refused, not 0 rows.
+select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports', 'qc_runs', 'qc_dismissed', 'book_checks', 'cover_blurbs', 'cover_exports') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats', 'qc_runs', 'book_checks') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats', 'qc_runs', 'book_checks', 'book_covers', 'cover_blurbs', 'cover_exports') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -184,6 +205,31 @@ select pg_temp.expect('qc_inputs_key: A''s book reads as null', $q$select 1 wher
 select pg_temp.expect('qc_versions: none of A''s versions', $q$select 1 where public.qc_versions('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
 select pg_temp.expect('qc_mark: no row for A''s book', $q$select 1 from public.qc_mark('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
 select pg_temp.expect('user_settings: B''s settings with A''s pen name refused', $q$insert into public.user_settings (default_pen_name_id) values ('a1000000-0000-4000-8000-000000000001')$q$, '42501%');
+-- 0029: 09 Cover.
+select pg_temp.expect('book_covers: B cannot add a cover row to A''s book', $q$insert into public.book_covers (book_id) values ('a3000000-0000-4000-8000-000000000002')$q$, '42501%');
+select pg_temp.expect('book_covers: B cannot change A''s cover', $q$update public.book_covers set main_color = '#000000' where book_id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('book_covers: B cannot move B''s row to A''s book', $q$update public.book_covers set book_id = 'a3000000-0000-4000-8000-000000000002' where book_id = 'b3000000-0000-4000-8000-000000000001'$q$, 'P0001 cover_fixed%');
+select pg_temp.expect('book_covers: B cannot use A''s picture on B''s cover', $q$update public.book_covers set front_image_id = 'ac000000-0000-4000-8000-000000000001' where book_id = 'b3000000-0000-4000-8000-000000000001'$q$, 'P0001 cover_image_not_allowed%');
+select pg_temp.expect('cover_images: B cannot add a picture to A''s book', $q$insert into public.cover_images (id, book_id, kind, path, width, height, bytes) values ('bc000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000001', 'front', '00000000-0000-4000-8000-00000000000b/a3000000-0000-4000-8000-000000000001/bc000000-0000-4000-8000-000000000001.jpg', 1838, 2775, 1)$q$, '42501%');
+-- (The guard runs before the policy's check: B's own book with A's user id stops at "cover_owner".)
+select pg_temp.expect('cover_images: B cannot add a picture with A''s user id', $q$insert into public.cover_images (id, user_id, book_id, kind, path, width, height, bytes) values ('bc000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-00000000000a', 'b3000000-0000-4000-8000-000000000001', 'front', '00000000-0000-4000-8000-00000000000a/b3000000-0000-4000-8000-000000000001/bc000000-0000-4000-8000-000000000002.jpg', 1838, 2775, 1)$q$, 'P0001 cover_owner%');
+select pg_temp.expect('cover_images: B cannot untick A''s rights', $q$update public.cover_images set rights_at = null where id = 'ac000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('cover_blurbs: B cannot add a blurb to A''s book', $q$insert into public.cover_blurbs (book_id, body, source) values ('a3000000-0000-4000-8000-000000000001', 'x', 'manual')$q$, '42501%');
+select pg_temp.expect('cover_exports: B cannot record a cover of A''s book', $q$insert into public.cover_exports (book_id, kind, settings_key, engine, width_px, height_px) values ('a3000000-0000-4000-8000-000000000001', 'kindle', '0123456789abcdef0123456789abcdef', 'e', 1600, 2560)$q$, '42501%');
+select pg_temp.expect('cover_json: A''s book reads as null', $q$select 1 where public.cover_json('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('cover_book_key: A''s book reads as null', $q$select 1 where public.cover_book_key('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('cover_key: A''s book reads as null', $q$select 1 where public.cover_key('a3000000-0000-4000-8000-000000000001', 'print') is null$q$, 'OK 1');
+select pg_temp.expect('cover_pdf: no row for A''s book', $q$select 1 from public.cover_pdf('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
+select pg_temp.expect('cover_marks: none of A''s books', $q$select 1 from public.cover_marks() where book_id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('cover_marks(A''s book): no row', $q$select 1 from public.cover_marks('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
+-- 0029 storage: the "covers" bucket.
+select pg_temp.expect('storage: B reads none of A''s files', $q$select 1 from storage.objects where bucket_id = 'covers'$q$, 'OK 0');
+select pg_temp.expect('storage: B cannot delete A''s file', $q$delete from storage.objects where bucket_id = 'covers'$q$, 'OK 0');
+select pg_temp.expect('storage: B cannot rename A''s file', $q$update storage.objects set name = 'x' where bucket_id = 'covers'$q$, 'OK 0');
+select pg_temp.expect('storage: B cannot upload to A''s folder', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000a/a3000000-0000-4000-8000-000000000001/bc000000-0000-4000-8000-000000000003.jpg')$q$, '42501%');
+select pg_temp.expect('storage: B cannot upload under A''s book in B''s folder', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000b/a3000000-0000-4000-8000-000000000001/bc000000-0000-4000-8000-000000000003.jpg')$q$, '42501%');
+select pg_temp.expect('storage control: B uploads to B''s own folder and book', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000b/b3000000-0000-4000-8000-000000000001/bc000000-0000-4000-8000-000000000003.jpg')$q$, 'OK 1');
+select pg_temp.expect('storage control: B reads only B''s file', $q$select 1 from storage.objects where bucket_id = 'covers'$q$, 'OK 1');
 
 -- ── As user B: moving own rows to A is refused ──
 select pg_temp.expect('books: B gives a book to A refused', $q$update public.books set user_id = '00000000-0000-4000-8000-00000000000a' where id = 'b3000000-0000-4000-8000-000000000001'$q$, '42501%');
@@ -200,7 +246,14 @@ set role anon;
 select pg_temp.chk(t || ': anon reads 0 rows',
          coalesce((xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', t), false, true, '')))[1]::text, 'denied') in ('0', 'denied'))
   from rls_tables order by t;
+select pg_temp.expect('storage: anon reads no file', $q$select 1 from storage.objects$q$, 'OK 0');
+select pg_temp.expect('storage: anon cannot upload', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000a/a3000000-0000-4000-8000-000000000001/bc000000-0000-4000-8000-000000000004.jpg')$q$, '42501%');
+select pg_temp.expect('storage: anon cannot delete', $q$delete from storage.objects$q$, 'OK 0');
+select pg_temp.expect('cover_json: anon refused', $q$select public.cover_json('a3000000-0000-4000-8000-000000000001')$q$, '42501%');
 
 -- ── A's rows are unchanged ──
 reset role;
 select pg_temp.chk('A''s rows are unchanged in every table', pg_temp.a_digest() = :'before_d');
+select pg_temp.chk('A''s file is still in the bucket, unchanged', (select count(*) from storage.objects where bucket_id = 'covers' and name like '00000000-0000-4000-8000-00000000000a/%'
+  and name = '00000000-0000-4000-8000-00000000000a/a3000000-0000-4000-8000-000000000001/ac000000-0000-4000-8000-000000000001.jpg') = 1);
+select pg_temp.chk('A''s rights tick is still set', (select rights_at is not null from public.cover_images where id = 'ac000000-0000-4000-8000-000000000001'));

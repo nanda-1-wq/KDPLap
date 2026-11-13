@@ -49,6 +49,15 @@ Deno.test("stage table: promise_check (E14.5) is a normal JSON stage, not stream
   assertEquals(L.MAX_BODY_BYTES, 262_144);
 });
 
+Deno.test("stage table: cover_blurb (E15 Part 5) is a normal JSON stage, not streamed, and saves nothing", () => {
+  const d = L.stageDef("cover_blurb");
+  assertEquals([d.stream, d.save, d.interpretAlone], [undefined, undefined, undefined]);
+  assertEquals(L.MODEL_FOR_STAGE.cover_blurb, "claude-sonnet-5-5");
+  assertEquals([L.TIMEOUT_MS.cover_blurb, L.MAX_TOKENS.cover_blurb, L.BODY_BYTES.cover_blurb], [60_000, 800, 2048]);
+  assertEquals([L.ERROR_STATUS.positioning_not_locked, L.ERROR_STATUS.not_enough_facts], [409, 422]);
+  assertEquals(L.MAX_BODY_BYTES, 262_144);
+});
+
 Deno.test("stage table: an unknown stage fails clearly", () => {
   for (const s of ["nope", "", "toString", "__proto__", "constructor"]) {
     assertThrows(() => L.stageDef(s), Error, `generate: unknown stage ${s}`);
@@ -61,7 +70,7 @@ Deno.test("stage table: an unknown stage fails clearly", () => {
 Deno.test("interpretResponse: the stages that need their job throw instead of using the Brief parser", async () => {
   // This reply is a valid Brief answer. Before B1 these three stages fell into the Brief parser.
   const brief = await anthropic("end_turn", { result: "ok", target_reader: "A", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
-  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_improve", "section_check", "promise_check"] as const) {
+  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_improve", "section_check", "promise_check", "cover_blurb"] as const) {
     assertThrows(() => L.interpretResponse(s, true, brief), Error, `generate: ${s} needs its job, use interpretJob`);
   }
   assertEquals(L.interpretResponse("brief_help", true, brief).code, null);

@@ -10,6 +10,7 @@ import {
   OUTLINE_OUT, oid, outlineCtx, outlineReply, checkReply, ocid, outlineCheckCtx, outlineRows, V_ID, wid, writeCtx,
   iid, IMPROVE_SEL, improveCtx, improveReply,
   checkCtx, chkid, sectionCheckReply, pid, promiseCtx,
+  cbid, coverCtx,
 } from "./test_fakes.ts";
 
 /* ── buildRequest: the full provider request for every stage ── */
@@ -303,4 +304,25 @@ Deno.test("snapshot: section_check request and replies", async (t) => {
 Deno.test("snapshot: promise_check request", async (t) => {
   const job = L.stageDef("promise_check").check(L.parseInput(JSON.stringify(pid))!, promiseCtx()) as L.PromiseJob;
   await assertSnapshot(t, L.buildRequest(job), { name: "buildRequest promise_check" });
+});
+
+/* ── cover_blurb (E15 Part 5): the request and every reply and error shape ── */
+
+Deno.test("snapshot: cover_blurb request and replies", async (t) => {
+  const job = L.stageDef("cover_blurb").check(L.parseInput(JSON.stringify(cbid))!, coverCtx()) as L.CoverBlurbJob;
+  await assertSnapshot(t, L.buildRequest(job), { name: "buildRequest cover_blurb" });
+  const out = { headline: "Move with ease, one chair at a time", blurb: "You want to move without pain.\n\nAbout 72% of readers feel better. Pull up a chair and start today." };
+  const cases: [string, Setup, () => Request][] = [
+    ["success", { provider: reply("end_turn", out) }, () => post(cbid)],
+    ["blank headline", { provider: reply("end_turn", { ...out, headline: " " }) }, () => post(cbid)],
+    ["empty blurb", { provider: reply("end_turn", { ...out, blurb: "" }) }, () => post(cbid)],
+    ["max_tokens", { provider: reply("max_tokens", '{"headline":"Mo') }, () => post(cbid)],
+    ["refusal", { provider: reply("refusal", "") }, () => post(cbid)],
+    ["timeout", { provider: timeout }, () => post(cbid)],
+    ["not locked", { coverBlurb: coverCtx({ positioning: { ...LOCKED, locked_at: null } }) }, () => post(cbid)],
+    ["no title", { coverBlurb: coverCtx({ book: { title: null, subtitle: null } }) }, () => post(cbid)],
+    ["not visible", { coverBlurb: null }, () => post(cbid)],
+    ["extra key", {}, () => post({ ...cbid, blurb: "Mine." })],
+  ];
+  for (const [name, s, req] of cases) await assertSnapshot(t, await run(s, req()), { name: `handler cover_blurb ${name}` });
 });

@@ -14,6 +14,7 @@ import { type TitleIdea } from "./title_ideas.ts";
 import { type ImproveResult } from "./section_improve.ts";
 import { type SectionCheckResult } from "./section_check.ts";
 import { type PromiseResult } from "./promise_check.ts";
+import { type CoverBlurbResult } from "./cover_blurb.ts";
 
 const TONES: Record<string, string> = {
   warm: "Warm", encouraging: "Encouraging", practical: "Practical",
@@ -83,6 +84,7 @@ export type Outcome = {
   improve?: ImproveResult;       // section_improve (E10.3)
   check?: SectionCheckResult;    // section_check (E10.4)
   promise?: PromiseResult;       // promise_check (E14.5)
+  coverBlurb?: CoverBlurbResult; // cover_blurb (E15 Part 5)
 };
 
 

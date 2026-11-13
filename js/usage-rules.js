@@ -56,14 +56,14 @@
     outline_ideas: 'Outline ideas', outline_check: 'Outline check', title_ideas: 'Title ideas',
     positioning_help: 'Positioning help', drift_check: 'Drift check', brief_help: 'Brief help',
     review_insights: 'Review insights', amazon_import: 'Amazon import', competitor_import: 'Competitor import',
-    bio: 'Pen name bio', promise_check: 'Promise check'
+    bio: 'Pen name bio', promise_check: 'Promise check', cover_blurb: 'Cover blurb'
   };
   // The short words in the "Other (…)" row.
   const SHORT = {
     section_write: 'writing', section_improve: 'Improve', section_check: 'checks', outline_ideas: 'outline',
     outline_check: 'outline check', title_ideas: 'titles', positioning_help: 'positioning', drift_check: 'drift',
     brief_help: 'Brief', review_insights: 'reviews', amazon_import: 'Amazon import', competitor_import: 'competitors',
-    bio: 'bio', promise_check: 'promise'
+    bio: 'bio', promise_check: 'promise', cover_blurb: 'blurb'
   };
   // Calls with no book: where they ran. Any other stage with no book had its book deleted.
   const NO_BOOK = { bio: 'Pen Names', amazon_import: 'Topic Lab' };

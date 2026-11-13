@@ -16,6 +16,7 @@ import type { ImproveAction } from "./limits.ts";
 import type { ImproveNotes } from "./section_improve.ts";
 import type { CheckAreas, SectionFinding } from "./section_check.ts";
 import type { PromiseContext, PromiseResult } from "./promise_check.ts";
+import type { CoverBlurbContext } from "./cover_blurb.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -104,6 +105,12 @@ export interface Store {
    * owner, book, kind, section and versions). One row per chapter: an upsert.
    */
   savePromiseCheck(s: PromiseCheckSave): Promise<{ checked_at: string; inputs_key: string }>;
+  /**
+   * cover_blurb (E15 Part 5): the book's title and subtitle, its pen name and
+   * the positioning, through RLS. Nothing from the Brief or Research (C8).
+   * null = not the caller's book. The stage saves nothing.
+   */
+  getCoverBlurbContext(bookId: string): Promise<CoverBlurbContext | null>;
   getMonthlyLimit(): Promise<number | null>;          // null = no settings row yet
   sumCountedTokensSince(userId: string, iso: string): Promise<number>;
   countCallsSince(userId: string, iso: string): Promise<number>;

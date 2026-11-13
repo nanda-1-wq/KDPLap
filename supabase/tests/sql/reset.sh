@@ -30,6 +30,12 @@ export PGOPTIONS="-c client_min_messages=warning"
 PSQL=("$PGBIN/psql" -h 127.0.0.1 -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -q -X)
 "${PSQL[@]}" -d postgres -c "drop database if exists kdp with (force)" -c "create database kdp" >/dev/null
 "${PSQL[@]}" -d kdp -f "$HERE/stub.sql" >/dev/null
+# E15 F8: KDP_PG_NO_FN_DEFAULTS=1 builds the database without Supabase's default
+# EXECUTE on new functions for the API roles, so a test sees only the grants a
+# migration writes itself (run.sh sets it for *_nofn.sql files).
+if [[ ${KDP_PG_NO_FN_DEFAULTS:-} == 1 ]]; then
+  "${PSQL[@]}" -d kdp -c "alter default privileges in schema public revoke execute on functions from anon, authenticated, service_role" >/dev/null
+fi
 for f in "$ROOT"/supabase/migrations/*.sql; do
   "${PSQL[@]}" -d kdp -f "$f" >/dev/null || { echo "reset.sh: failed on ${f:t}"; exit 1; }
 done

@@ -6,10 +6,11 @@
      prompt     [system, schema, user message]
      interpret  the provider reply as an Outcome
      save       optional: drift_check, title_ideas, outline_ideas, outline_check, section_improve, section_check and promise_check save their own results
+                (cover_blurb saves nothing: the browser saves the version when the writer accepts)
      reply      the 200 body
    A stage with no entry throws "generate: unknown stage". */
 
-import { type Outcome, wordCount } from "./common.ts";
+import { type Outcome, str, wordCount } from "./common.ts";
 import { type ErrorCode, type GenerateInput, MIN_REVIEWED_BOOKS, MODEL_FOR_STAGE, MAX_TOKENS, type PositioningField, type Stage } from "./limits.ts";
 import { BIO_SCHEMA, BIO_SYSTEM, bioUserMessage, hasAnyFact, interpretBio, type PenRow } from "./bio.ts";
 import { IMPORT_SCHEMA, IMPORT_SYSTEM, importUserMessage, interpretImport, type TopicRow } from "./amazon_import.ts";
@@ -28,6 +29,7 @@ import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type
 import { CHECK, IMPROVE, PROMISE, SECTION_MAX_CHARS } from "./limits.ts";
 import { checkKeyOf, type CheckJob, checkKnown, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM, sectionRefs } from "./section_check.ts";
 import { chapterOf, interpretPromiseCheck, PROMISE_SCHEMA, PROMISE_SYSTEM, type PromiseContext, type PromiseJob, promiseKey, promiseKnown, promiseSections, promiseUserMessage } from "./promise_check.ts";
+import { COVER_BLURB_SCHEMA, COVER_BLURB_SYSTEM, type CoverBlurbContext, type CoverBlurbJob, coverBlurbKnown, coverBlurbUserMessage, interpretCoverBlurb } from "./cover_blurb.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -44,7 +46,8 @@ export type Job =
   | WriteJob
   | ImproveJob
   | CheckJob
-  | PromiseJob;
+  | PromiseJob
+  | CoverBlurbJob;
 
 /** A pre-check that stops the call: the error code and any extra reply fields. */
 export type StageFail = { fail: ErrorCode; extra?: Record<string, unknown> };
@@ -489,6 +492,30 @@ const promiseCheck: StageDef<"promise_check", PromiseContext> = {
   },
 };
 
+/**
+ * cover_blurb (E15 Part 5, plan section 7): the back cover headline and blurb.
+ * Checks before any money is spent, in this order: the book is the caller's
+ * (not_found, from the read); the positioning is locked; the book has a title
+ * (not_enough_facts, missing "title"). Then the handler's monthly and
+ * per-minute limits. The server saves nothing: the browser saves the blurb as
+ * a version and the headline on Accept. A call the browser leaves still
+ * finishes and counts (the tokens are spent).
+ */
+const coverBlurb: StageDef<"cover_blurb", CoverBlurbContext> = {
+  read: (store, input) => store.getCoverBlurbContext(input.bookId),
+  check: (input, ctx) => {
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    if (!str(ctx.book.title)) return { fail: "not_enough_facts", extra: { missing: "title" } };
+    return { stage: "cover_blurb", ctx, bookId: input.bookId };
+  },
+  prompt: (job) => [COVER_BLURB_SYSTEM, COVER_BLURB_SCHEMA, coverBlurbUserMessage(job.ctx)],
+  interpret: (job, httpOk, body) => interpretCoverBlurb(httpOk, body, coverBlurbKnown(job.ctx)),
+  reply: (_job, out) => {
+    const c = out.coverBlurb!;
+    return { stage: "cover_blurb", headline: c.headline, blurb: c.blurb, words: c.words, unsourced: c.unsourced };
+  },
+};
+
 // deno-lint-ignore no-explicit-any
 export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   bio,
@@ -505,6 +532,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   section_improve: sectionImprove,
   section_check: sectionCheck,
   promise_check: promiseCheck,
+  cover_blurb: coverBlurb,
 };
 
 // deno-lint-ignore no-explicit-any
@@ -555,7 +583,7 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
  * sources) and review_insights. positioning_help, drift_check, title_ideas,
- * competitor_import, outline_ideas, outline_check, section_improve, section_check and promise_check need their job's data: they throw (use interpretJob).
+ * competitor_import, outline_ideas, outline_check, section_improve, section_check, promise_check and cover_blurb need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);
