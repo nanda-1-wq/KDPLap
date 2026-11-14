@@ -22,6 +22,7 @@
    kdpCover.textlayout.height(l)     → px (a curved line: line + sag, as the design's curve box)
    kdpCover.textlayout.curve(l)      → { list: [{ ch, x, top, w, rot }], height }   (design curveChars)
    kdpCover.textlayout.metricsOf(font, weight) → { cap, asc, desc } in em
+   kdpCover.textlayout.setMetricsSource(fn) → E16 Part 2: fn(font, weight) from the font catalog (kdpCover.fonts.install)
    kdpCover.textlayout.inkBand(l)    → { top, bottom } px from the box top: cap top to baseline (caps on), else ascender to descender
    kdpCover.textlayout.spineSize(roomPx, m) → pt: capitals fill the room, 7 to 14 pt, half-point steps (owner Q-9)
    ═══════════════════════════════════════════════════ */
@@ -113,7 +114,10 @@
     return lines(l).length * lineH(l);
   }
 
-  const metricsOf = (font) => METRICS[font] || FALLBACK;
+  // E16 Part 2: the font catalog gives every family's metrics (js/cover/fonts.js install()).
+  let metricsSource = null;
+  const setMetricsSource = (fn) => { metricsSource = typeof fn === 'function' ? fn : null; };
+  const metricsOf = (font, weight) => (metricsSource && metricsSource(font, weight)) || METRICS[font] || FALLBACK;
 
   /**
    * The ink band from the box top (CSS line box: half-leading, then the
@@ -139,5 +143,5 @@
     return Math.max(MIN_PT, Math.min(SPINE_MAX_PT, fit));
   }
 
-  C.textlayout = { PT, LINE, MIN_PT, SPINE_MAX_PT, METRICS, FALLBACK, stubMeasure, setMeasure, measure, lines, height, curve, metricsOf, inkBand, spineSize, lineH, runW };
+  C.textlayout = { PT, LINE, MIN_PT, SPINE_MAX_PT, METRICS, FALLBACK, stubMeasure, setMeasure, setMetricsSource, measure, lines, height, curve, metricsOf, inkBand, spineSize, lineH, runW };
 })(globalThis);

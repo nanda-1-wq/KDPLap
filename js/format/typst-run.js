@@ -28,6 +28,7 @@
    kdpTypstRun.fetchChecked(file, opts)   → { bytes, url, cdn, tries }
    kdpTypstRun.Loader()                   → { engine(onBytes), compiler(style, onBytes) }
    kdpTypstRun.compile(cc, sources, opts) → { pdf, meta, diagnostics, ms }
+     opts.files (E15): binary files for Typst, path → Uint8Array (mapShadow)
      throws an Error with .kind ('typst': the template or the text did not
      compile; 'run': the engine threw) and .phase ('compile', 'query', 'pdf').
    kdpTypstRun.loadPdfjs()                → pdf.js (main thread only)
@@ -152,7 +153,8 @@
     }
 
     async function compiler(style, onBytes = () => {}) {
-      if (current && current.style === style) return current.cc;
+      const key = FILES().styleKey(style);   // E16: a cover font set compares by its key
+      if (current && current.key === key) return current.cc;
       const [eng, faces] = await Promise.all([
         engine(onBytes),
         Promise.all(FILES().styleFonts(style).map((f) => font(f, onBytes)))
@@ -161,7 +163,7 @@
       // getModule is read only the first time: the wasm is instantiated once per module.
       await cc.init({ getModule: () => eng.wasm, beforeBuild: [eng.mod.loadFonts(faces, { assets: false })] });
       eng.wasm = null;
-      current = { style, cc };
+      current = { style, key, cc };
       return cc;
     }
 
@@ -185,12 +187,29 @@
   };
 
   /**
+   * Binary files of the last build, per compiler (E15): the next build
+   * removes the ones it does not send again, so a picture never lingers.
+   */
+  const shadowed = new WeakMap();
+
+  /**
    * Compile /main.typ with the given sources, read the markers, export the PDF.
+   * opts.files (E15, 09 Cover): binary files, path → Uint8Array (for example
+   * '/img/front.jpg'), given to Typst with mapShadow. Without opts.files the
+   * build is exactly as before (08).
    * opts.testOverflowPdf: test only (tests/browser/format), throws Safari's
    * stack overflow in the PDF step, as the real one (spike, Nov 4).
    */
   async function compile(cc, sources, opts = {}) {
     for (const [path, text] of Object.entries(sources)) cc.addSource(path, text);
+    const files = opts.files || null;
+    const before = shadowed.get(cc);
+    if (files || before) {
+      const now = new Set(files ? Object.keys(files) : []);
+      for (const p of before || []) if (!now.has(p)) cc.unmapShadow(p);
+      for (const [p, bytes] of Object.entries(files || {})) cc.mapShadow(p, bytes);
+      shadowed.set(cc, now);
+    }
     let phase = 'compile';
     try {
       return await cc.runWithWorld({ mainFilePath: '/main.typ' }, async (w) => {
@@ -212,7 +231,9 @@
           starts: (await q('<part-start>')).map((v) => v.page),
           ends: await q('<part-end>'),
           headings: (await q('<headings>'))[0],
-          typstVersion: (await q('<typst-version>'))[0]
+          typstVersion: (await q('<typst-version>'))[0],
+          // E15 (09 Cover, js/format/cover.typ): one marker per text drawn. Empty for a book.
+          cover: await q('<cover-fit>')
         };
         const t2 = now();
         phase = 'pdf';

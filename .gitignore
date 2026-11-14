@@ -29,3 +29,4 @@ proof/
 
 # Real-engine test results (tests/browser/format/*.mjs): numbers only, made on every run
 tests/browser/format/out/
+tests/browser/cover/out/

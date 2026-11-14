@@ -25,7 +25,11 @@
                                      (a book on the main thread loads there, no worker)
    engine.build({ bookId, style, model, settings, extras, onMainThread })
                                      → { pdf, pages, meta, diagnostics, ms, path, fellBack }
-   engine.buildSource({ bookId, style, mainTyp, onMainThread })  (the same, from Typst source)
+   engine.buildSource({ bookId, style, mainTyp, onMainThread, files, kind })  (the same, from Typst source;
+                                     files, E15: binary files for Typst, path → Uint8Array;
+                                     kind, E15: 'book' (default: book.typ, droplet.typ) or 'cover' (js/cover/cover.typ);
+                                     style, E16: an 08 style name or a cover font set { key, files };
+                                     a cover's fit markers come back in meta.cover)
    engine.mode(bookId)               → 'worker' | 'main'
    engine.previewDelay(bookId)       → 600 | 1500 (ms)
    engine.stats                      → { workerStarts, crashes, fallbacks, mainBuilds }
@@ -64,18 +68,23 @@
   });
 
   /* ── Our own Typst files (same origin, no CDN) ── */
-  let templates = null;
-  function templateSources() {
-    if (!templates) {
+  // kind 'book' (08): book.typ and droplet.typ. kind 'cover' (09): cover.typ only.
+  // E16: the cover template lives in js/cover/ (fetched from there, given to Typst as /cover.typ).
+  const TEMPLATE_FILES = { book: ['book.typ', 'droplet.typ'], cover: ['../cover/cover.typ'] };
+  const typstName = (name) => `/${name.split('/').pop()}`;
+  const templates = {};
+  function templateSources(kind = 'book') {
+    const k = TEMPLATE_FILES[kind] ? kind : 'book';
+    if (!templates[k]) {
       const get = (name) => fetch(new URL(name, BASE)).then((r) => {
         if (!r.ok) throw Object.assign(new Error(`${name}: HTTP ${r.status}`), { kind: 'download' });
         return r.text();
       });
-      templates = Promise.all([get('book.typ'), get('droplet.typ')])
-        .then(([book, droplet]) => ({ '/book.typ': book, '/droplet.typ': droplet }));
-      templates.catch(() => { templates = null; });
+      templates[k] = Promise.all(TEMPLATE_FILES[k].map(get))
+        .then((texts) => Object.fromEntries(TEMPLATE_FILES[k].map((name, i) => [typstName(name), texts[i]])));
+      templates[k].catch(() => { templates[k] = null; });
     }
-    return templates;
+    return templates[k];
   }
 
   function create({ onProgress = () => {}, test = null } = {}) {
@@ -173,7 +182,7 @@
     /** True while a worker is alive (the test for "no idle worker after a fallback"). */
     const hasWorker = () => !!worker;
 
-    async function buildMain(st, sources, onMainThread) {
+    async function buildMain(st, sources, onMainThread, files) {
       if (onMainThread) await onMainThread();
       await painted();
       stats.mainBuilds++;
@@ -181,20 +190,27 @@
       const total = loader.pending(st);
       let loaded = 0;
       const cc = await loader.compiler(st, (n) => { loaded += n; onProgress({ loaded: Math.max(0, loaded), total }); });
-      return root.kdpTypstRun.compile(cc, sources, {});
+      return root.kdpTypstRun.compile(cc, sources, files ? { files } : {});
     }
 
     const shape = (r, path, fellBack) => ({
       pdf: r.pdf, pages: r.meta.lastPage, meta: r.meta, diagnostics: r.diagnostics, ms: r.ms, path, fellBack
     });
 
-    async function buildSource({ bookId, style: st, mainTyp, onMainThread }) {
+    /**
+     * files (E15, 09 Cover): binary files for Typst, path → Uint8Array. They
+     * are copied to the worker (never transferred), so the main-thread
+     * fallback still has them.
+     */
+    async function buildSource({ bookId, style: st, mainTyp, onMainThread, files = null, kind = 'book' }) {
       style = st;
-      const sources = { ...(await templateSources()), '/main.typ': mainTyp };
-      if (mainBooks.has(bookId)) return shape(await buildMain(st, sources, onMainThread), 'main', false);
+      const sources = { ...(await templateSources(kind)), '/main.typ': mainTyp };
+      if (mainBooks.has(bookId)) return shape(await buildMain(st, sources, onMainThread, files), 'main', false);
       const overflowPdf = !!(test && Array.isArray(test.overflowPdfFor) && test.overflowPdfFor.includes(bookId));
       try {
-        const r = await call({ type: 'build', style: st, sources, test: overflowPdf ? { overflowPdf: true } : null });
+        const msg = { type: 'build', style: st, sources, test: overflowPdf ? { overflowPdf: true } : null };
+        if (files) msg.files = files;
+        const r = await call(msg);
         return shape(r, 'worker', false);
       } catch (e) {
         // A Typst error is the book or the template, not a crash: the worker is fine.
@@ -202,7 +218,7 @@
         if (!isOverflow(e)) throw e;
         stats.fallbacks++;
         remember(bookId);
-        return shape(await buildMain(st, sources, onMainThread), 'main', true);
+        return shape(await buildMain(st, sources, onMainThread, files), 'main', true);
       }
     }
 

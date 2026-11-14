@@ -1,0 +1,208 @@
+{
+ "date": "2026-11-14T11:03:40.090Z",
+ "limit": 300,
+ "maxBytes": 2097152,
+ "kept": 300,
+ "files": 692,
+ "bytes": 120772648,
+ "groups": {
+  "Sans": 162,
+  "Mono": 14,
+  "Display": 37,
+  "Serif": 60,
+  "Script": 27
+ },
+ "licences": {
+  "OFL-1.1": 293,
+  "Apache-2.0": 7
+ },
+ "capNotes": [
+  "Zeyada 400: OS/2 0.5879 vs H 0.6387",
+  "Assistant 400: OS/2 0.75 vs H 0.657",
+  "Assistant 600: OS/2 0.75 vs H 0.655",
+  "Assistant 700: OS/2 0.75 vs H 0.652",
+  "Caveat 400: OS/2 0.61 vs H 0.701",
+  "Caveat 600: OS/2 0.61 vs H 0.716",
+  "Caveat 700: OS/2 0.61 vs H 0.723",
+  "Noto Sans Telugu 400: OS/2 0.62 vs H 0.714",
+  "Noto Sans Telugu 600: OS/2 0.62 vs H 0.714",
+  "Noto Sans Telugu 700: OS/2 0.62 vs H 0.714",
+  "Great Vibes 400: OS/2 0.75 vs H 0.807",
+  "Indie Flower 400: OS/2 0.5732 vs H 0.6758",
+  "Noto Sans Devanagari 400: OS/2 0.622 vs H 0.714",
+  "Noto Sans Devanagari 600: OS/2 0.622 vs H 0.714",
+  "Noto Sans Devanagari 700: OS/2 0.622 vs H 0.714",
+  "Noto Naskh Arabic 400: OS/2 0 vs H 0.714",
+  "Noto Naskh Arabic 600: OS/2 0 vs H 0.714",
+  "Noto Naskh Arabic 700: OS/2 0 vs H 0.714",
+  "Delius 400: OS/2 0.195 vs H 0.76",
+  "Special Elite 400: OS/2 0.3481 vs H 0.6895",
+  "Nanum Gothic Coding 400: OS/2 0.699 vs H 0.639",
+  "Nanum Gothic Coding 700: OS/2 0.704 vs H 0.644",
+  "Courgette 400: OS/2 0.147 vs H 0.7593",
+  "Noto Sans Bengali 400: OS/2 0.622 vs H 0.714",
+  "Noto Sans Bengali 600: OS/2 0.622 vs H 0.714",
+  "Noto Sans Bengali 700: OS/2 0.622 vs H 0.714",
+  "Vazirmatn 400: OS/2 0.7998 vs H 0.7109",
+  "Vazirmatn 600: OS/2 0.7998 vs H 0.7109",
+  "Vazirmatn 700: OS/2 0.7998 vs H 0.7109",
+  "Neuton 400: OS/2 0 vs H 0.6074",
+  "Neuton 700: OS/2 0 vs H 0.6074",
+  "Chelsea Market 400: OS/2 0.7773 vs H 0.7354",
+  "Cinzel Decorative 400: OS/2 0.7 vs H 0.831",
+  "Cinzel Decorative 700: OS/2 0.7 vs H 0.853",
+  "Tangerine 400: OS/2 0.644 vs H 0.681",
+  "Tangerine 700: OS/2 0.644 vs H 0.681",
+  "Architects Daughter 400: OS/2 0.6592 vs H 0.7139",
+  "Gloria Hallelujah 400: OS/2 0.8828 vs H 0.7344"
+ ],
+ "collisions": [],
+ "excludedForCollisions": {
+  "Roboto Condensed": "Roboto",
+  "Archivo Black": "Archivo",
+  "Archivo Narrow": "Archivo"
+ },
+ "lastPopularity": 369,
+ "dropped": [
+  {
+   "family": "Roboto Condensed",
+   "popularity": 14,
+   "why": "Typst cannot tell it from Roboto (same family name, weight and width in the files)"
+  },
+  {
+   "family": "Noto Sans JP",
+   "popularity": 10,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Google Sans",
+   "popularity": 4,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Ubuntu",
+   "popularity": 34,
+   "why": "licence UFL"
+  },
+  {
+   "family": "Archivo Black",
+   "popularity": 43,
+   "why": "Typst cannot tell it from Archivo (same family name, weight and width in the files)"
+  },
+  {
+   "family": "Noto Sans KR",
+   "popularity": 37,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Noto Sans TC",
+   "popularity": 48,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Noto Color Emoji",
+   "popularity": 81,
+   "why": "no latin"
+  },
+  {
+   "family": "Noto Sans SC",
+   "popularity": 77,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Noto Serif JP",
+   "popularity": 88,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "M PLUS Rounded 1c",
+   "popularity": 126,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Zen Kaku Gothic New",
+   "popularity": 158,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Archivo Narrow",
+   "popularity": 180,
+   "why": "Typst cannot tell it from Archivo (same family name, weight and width in the files)"
+  },
+  {
+   "family": "Noto Serif TC",
+   "popularity": 202,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Zen Maru Gothic",
+   "popularity": 199,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Noto Serif SC",
+   "popularity": 205,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Noto Serif KR",
+   "popularity": 200,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Nanum Myeongjo",
+   "popularity": 201,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "LINE Seed JP",
+   "popularity": 231,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Shippori Mincho",
+   "popularity": 237,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Gothic A1",
+   "popularity": 260,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "BIZ UDPGothic",
+   "popularity": 272,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Zen Old Mincho",
+   "popularity": 306,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Sawarabi Mincho",
+   "popularity": 309,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Dela Gothic One",
+   "popularity": 340,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Noto Sans HK",
+   "popularity": 349,
+   "why": "file over 2097152 bytes"
+  },
+  {
+   "family": "Ubuntu Condensed",
+   "popularity": 358,
+   "why": "licence UFL"
+  },
+  {
+   "family": "Kosugi Maru",
+   "popularity": 374,
+   "why": "file over 2097152 bytes"
+  }
+ ]
+}

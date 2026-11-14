@@ -6,7 +6,7 @@
    main thread is never blocked more than about 14 ms). Messages:
      in  { type: 'load', id, style }
      out { type: 'progress', id, loaded, total } … { type: 'loaded', id, ms, cdns }
-     in  { type: 'build', id, style, sources, test }
+     in  { type: 'build', id, style, sources, files, test }   (files, E15: path → Uint8Array, copied)
      out { type: 'built', id, pdf (transferred), meta, diagnostics, ms }
      out { type: 'failed', id, kind, phase, name, message, diagnostics }
    'ready' is posted once the scripts are in; engine.js waits for it.
@@ -60,7 +60,7 @@ self.onmessage = async (ev) => {
       self.postMessage({ type: 'loaded', id: m.id, ms: performance.now() - t0, cdns: loader.cdns });
     } else if (m.type === 'build') {
       const cc = await loader.compiler(m.style, progress(m.id, loader.pending(m.style)));
-      const r = await T.compile(cc, m.sources, { testOverflowPdf: !!(m.test && m.test.overflowPdf) });
+      const r = await T.compile(cc, m.sources, { files: m.files || null, testOverflowPdf: !!(m.test && m.test.overflowPdf) });
       self.postMessage({ type: 'built', id: m.id, ...r }, [r.pdf.buffer]);
     }
   } catch (e) {

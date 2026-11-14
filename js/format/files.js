@@ -20,6 +20,10 @@
    kdpFormatFiles.WIRE             → bytes on the wire: engine, and each style's fonts (the progress line)
    kdpFormatFiles.urls(file)       → the URLs to try, in order
    kdpFormatFiles.styleFonts(style) → the font files of a style
+   kdpFormatFiles.styleKey(style)  → the compiler key of a style
+     E16 (09 Cover): a style may also be a font set { key, files: [file] }
+     (js/cover/fonts.js makes it from js/cover/font-catalog.js). Those files
+     are never in all(): 08's cache and CDN checks stay as they are.
    kdpFormatFiles.ENGINE_ID        → book_exports.engine ("typst 0.14.2 · t1")
 ═══════════════════════════════════════════════════ */
 
@@ -83,7 +87,9 @@
   };
 
   const urls = (file) => CDNS.map((c) => `${c}${file.pkg}/${file.path}`);
-  const styleFonts = (style) => (STYLE_FAMILIES[style] || STYLE_FAMILIES.classic).flatMap((k) => FONTS[k]);
+  const isSet = (style) => !!style && typeof style === 'object' && typeof style.key === 'string' && Array.isArray(style.files);
+  const styleFonts = (style) => (isSet(style) ? style.files : (STYLE_FAMILIES[style] || STYLE_FAMILIES.classic).flatMap((k) => FONTS[k]));
+  const styleKey = (style) => (isSet(style) ? `set:${style.key}` : String(style));
   const all = () => [ENGINE.js, ENGINE.wasm, ...Object.values(FONTS).flat(), PDFJS.js, PDFJS.worker];
 
   // Bytes on the wire (jsdelivr, compressed), measured in Part 2 (Nov 4). The
@@ -91,7 +97,7 @@
   const WIRE = { engine: 24346 + 9117552, classic: 708145, modern: 326883 + 228045, clean: 372278, warm: 223917 };
 
   root.kdpFormatFiles = {
-    CDNS, ENGINE, FONTS, STYLE_FAMILIES, PDFJS, WIRE, urls, styleFonts, all,
+    CDNS, ENGINE, FONTS, STYLE_FAMILIES, PDFJS, WIRE, urls, styleFonts, styleKey, all,
     TYPST_VERSION: '0.14.2', TEMPLATE: 't1', ENGINE_ID: 'typst 0.14.2 · t1'
   };
 })(globalThis);

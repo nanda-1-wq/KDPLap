@@ -98,7 +98,7 @@ export async function safari() {
   await call('POST', `/session/${sid}/timeouts`, { script: 900000, pageLoad: 120000 });
   return {
     version: s.capabilities.browserVersion,
-    open: () => call('POST', `/session/${sid}/url`, { url: PAGE }),
+    open: (url = PAGE) => call('POST', `/session/${sid}/url`, { url }),   // E16: the cover tests pass their own page
     /** Run an async function body in the page; it must end by calling done(value). */
     run: (body, args = []) => call('POST', `/session/${sid}/execute/async`, { script: `const done = arguments[arguments.length - 1]; (async (...a) => { ${body} })(...arguments).then(done, (e) => done({ error: String(e && e.message) }));`, args }),
     async close() { await call('DELETE', `/session/${sid}`); if (driver) process.kill(-driver.pid); }

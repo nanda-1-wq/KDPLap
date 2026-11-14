@@ -249,6 +249,30 @@ deno run --allow-read --allow-write tools/cover-golden.mjs # re-freeze, only if 
   has exactly the 3 missing Must fix items. Spine text by cap height (owner
   Q-9) on every trim, paper and page count to 828.
 
+## 09 Cover engine (E16 Part 2)
+
+```sh
+deno test --allow-read tests/cover-flatten.test.js tests/cover-typst.test.js tests/cover-fonts.test.js tests/cover-zip.test.js tests/cover-image-prep.test.js
+node tools/cover-fonts.mjs                       # re-make js/cover/font-catalog.js + the notices list (network; files cached in tests/browser/.cache/cover-fonts)
+node tools/cover-fonts-sprite.mjs                # re-make img/cover-fonts.png from the catalog (headless Chrome)
+node tools/check-cover-fonts.mjs --check         # every pinned font: size + sha384; design fonts also on unpkg (--all-cdns: every file on both)
+COVER_OUT=<scratch> node tests/browser/cover/t-engine-real.mjs [--quick]   # Chrome: 13 layouts x 6 trims x 2 papers, images, QA sheets, 288 with real metrics, every catalog face
+COVER_OUT=<scratch> node tests/browser/cover/t-safari-real.mjs              # real Safari: canvas limit, print + Kindle, round trip, design faces, 288
+node tests/browser/cover/qa-files.mjs <folder outside git> [--no-safari]   # the KDP Print Previewer files + README.md
+```
+
+- Pure (Deno, `tests/lib/cover-engine-load.js`): the flatten plan (what stays
+  vector, the 300 DPI patch boxes, growth that keeps text whole), the Typst
+  writer (template c2 in `js/cover/cover.typ`: one color space, places from
+  `textlayout`, the faces Typst selects by), the font catalog and the weight
+  snap (no fake bold), zip + CRC-32, the E15 picture helpers.
+- Real engine: `tests/browser/cover/engine.html` + `harness.js` (synthetic
+  pictures, `tests/fixtures/cover-qa.js` covers). Chrome serves the CDN files
+  from `tests/browser/.cache` (checked against their sha384 in the page);
+  Safari loads the real CDNs. Each Print PDF runs the export's own checks
+  (coverChecks, glyphs, widths within 0.5%, chosen faces only, no font warning).
+- QA files and results go to a scratch or private folder, never into git.
+
 ## Print engine (E13.1 and E13.2, real CDN, Node + playwright-core)
 
 ```sh
