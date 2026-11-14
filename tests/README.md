@@ -224,6 +224,31 @@ deno test --allow-read tests/format-rules.test.js
   rules (`js/format-rules.js`); styles, labels, papers, every default, the
   header and Also by limits and the ISBN rule are read from 0027 and must match.
 
+## 09 Cover model (E16 Part 1, Deno)
+
+```sh
+deno test --allow-read tests/cover-*.test.js
+deno run --allow-read tools/cover-golden.mjs --check       # the fixture still equals the design
+deno run --allow-read --allow-write tools/cover-golden.mjs # re-freeze, only if design 58 changes (review the diff)
+```
+
+- The pure 09 code in `js/cover/` (geo, textlayout, shapes, names, model,
+  remap, history, palettes, kindle, checks, layouts), loaded in browser order
+  by `tests/lib/cover-load.js` (with `js/format-rules.js` for the spine).
+- The oracle is the design itself: `tools/cover-golden.mjs` runs the
+  `<script>` class of `design/screens/58-09-cover-new.html` headless
+  (`tests/lib/design-cover.js`) and freezes its answers in
+  `tests/fixtures/cover-golden.json`. It never reads `js/cover`.
+  `cover-golden.test.js` checks the file still equals a fresh run.
+- Port proof: with the design's own text-height estimate, every layer number
+  and check message equals the design (48 sizes, 288 layouts, 24 Blank, 144
+  remaps, 106 shape paths, 72 palette swaps, 22 check scenarios, curves,
+  distortion, align, distribute, arrange, adds, My layouts, undo).
+- Built: with `kdpCover.textlayout` (a stub measure of 0.55 em a character,
+  not real font metrics) the 288 layouts have no check problem and each Blank
+  has exactly the 3 missing Must fix items. Spine text by cap height (owner
+  Q-9) on every trim, paper and page count to 828.
+
 ## Print engine (E13.1 and E13.2, real CDN, Node + playwright-core)
 
 ```sh
