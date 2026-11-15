@@ -18,6 +18,7 @@ import "../js/qc-glyphs.js";
 import "../js/qc-rules.js";
 import "../js/usage-rules.js";
 import { PROMISE_SYSTEM } from "../supabase/functions/generate/lib/promise_check.ts";
+import { K as COVER } from "./lib/cover-load.js";
 
 const read = (p) => Deno.readTextFileSync(new URL(`../${p}`, import.meta.url));
 
@@ -420,4 +421,73 @@ Deno.test("the promise cost line: the prompt size the browser assumes follows th
   // The system prompt, plus the tags of the user message (about 400 characters).
   assertEquals(chars >= PROMISE_SYSTEM.length, true);
   assertEquals(chars <= PROMISE_SYSTEM.length + 600, true);
+});
+
+// ── 09 Cover (E16 Part 3): the browser's cover model and 0030 ──
+const M30 = M("0030_cover_layers.sql"), T30 = "supabase/tests/sql/t0030.sql";
+const sqlList = (txt) => txt.split(",").map((x) => x.trim().replace(/^'|'$/g, ""));
+
+Deno.test("09 Cover caps: kdpCover.model.CAPS equal 0030 (layers, bytes, text, picture px)", () => {
+  const C = COVER.model.CAPS;
+  assertEquals(one(M30, String.raw`jsonb_array_length\(p\) <= (\d+)`), C.layers);
+  assertEquals(one(M30, String.raw`octet_length\(p::text\) <= (\d+)`), C.bytes);
+  assertEquals(one(M30, String.raw`char_length\(coalesce\(e ->> 'text', ''\)\) > (\d+)`), C.text);
+  assertEquals(one(M30, String.raw`width between 1 and (\d+) and height between 1 and (\d+)`), [C.natPx, C.natPx]);
+  // the size note lists at most one moved id per layer
+  assertEquals(one(M30, String.raw`jsonb_array_length\(last_remap -> 'moved'\) <= (\d+)`), C.layers);
+});
+
+Deno.test("09 Cover sizes: kdpCover.geo trims, papers and pages equal cover_trim_ok and cover_fmt_ok", () => {
+  const sql = read(M30);
+  assertEquals([...sqlList(sql.match(/coalesce\(p in \(([^)]*)\), false\)/)[1])].sort(), [...COVER.geo.TRIMS].sort());
+  assertEquals(sqlList(sql.match(/p ->> 'paper' in \(([^)]*)\)/)[1]), COVER.geo.PAPERS);
+  assertEquals(one(M30, String.raw`\(p ->> 'pages'\)::numeric between 1 and (\d+)`), COVER.geo.PAGES_MAX);
+  // 08 keeps group A; 09 draws all six (E13.2b brings the two wide trims to 01 and 08)
+  for (const t of globalThis.kdpFormatRules.TRIMS) assertEquals(COVER.geo.TRIMS.includes(t), true, t);
+});
+
+Deno.test("09 Cover layouts: kdpCover.layouts.KEYS and the my: rule equal 0030 (design and history)", () => {
+  const sql = read(M30);
+  const lists = [...sql.matchAll(/layout in \(([^)]*)\)/g)].map((m) => sqlList(m[1]));
+  assertEquals(lists.length, 2);
+  for (const l of lists) assertEquals(l, COVER.layouts.KEYS);
+  const res = [...sql.matchAll(/layout ~ '([^']+)'/g)].map((m) => m[1]);
+  assertEquals(res.length, 2);
+  const js = read("js/cover/model.js").match(/\/(\^my:[^/]*)\/\.test\(k\)/)[1];
+  for (const r of res) assertEquals(r, js);
+});
+
+Deno.test("09 Cover spine and color: 08's SPINE_PER_PAGE and the hex rule equal the SQL", () => {
+  const m = read(M30).match(/v_k := case when v_paper = 'cream' then ([\d.]+) else ([\d.]+) end/);
+  assertEquals(Number(m[1]), globalThis.kdpFormatRules.SPINE_PER_PAGE.cream);
+  assertEquals(Number(m[2]), globalThis.kdpFormatRules.SPINE_PER_PAGE.white);
+  const sqlHex = read(M("0029_cover.sql")).match(/p ~ '(\^#\[0-9A-F\]\{6\}\$)'/)[1];
+  assertEquals(sqlHex, read("js/cover/model.js").match(/const HEX = \/([^/]+)\/;/)[1]);
+});
+
+Deno.test("09 Cover image px: kdpCover.geo.px300 equals every size pinned in t0030.sql (D16, rounded up)", () => {
+  const cases = [...read(T30).matchAll(/pg_temp\.img_case\('([^']+)', '(\w+)', (\d+), (\d+), (\d+)\)/g)];
+  assertEquals(cases.length, 14);
+  for (const [, trim, paper, pages, w, h] of cases) {
+    const px = COVER.geo.px300(COVER.geo.geo({ trim, pages: Number(pages), paper }));
+    assertEquals([px.w, px.h], [Number(w), Number(h)], `${trim} ${paper} ${pages}`);
+  }
+});
+
+Deno.test("09 Cover byte measure: kdpCover.model.pgBytes equals Postgres for the t0030.sql fixture", () => {
+  const m = read(T30).match(/octet_length\(\$pgb\$([\s\S]*?)\$pgb\$::jsonb::text\) = (\d+)/);
+  const v = JSON.parse(m[1]);
+  assertEquals(COVER.model.pgBytes(v), Number(m[2]));
+  // the fixture is what the browser sends (JSON.stringify), so the measure is about real payloads
+  assertEquals(JSON.stringify(v), m[1]);
+  assertEquals(COVER.model.fits({ layers: v }).bytes, Number(m[2]));
+});
+
+Deno.test("09 Cover files: the upload store size, the bucket and cover_assets agree; thumbnails match 0029", () => {
+  const store = one("js/cover/image-prep.js", String.raw`storeBytes: (\d+)`);
+  assertEquals(one(M30, String.raw`bytes between 1 and (\d+)`), store);
+  assertEquals(one(M("0029_cover.sql"), String.raw`values \('covers', 'covers', false, (\d+)`), store);
+  const t29 = read(M("0029_cover.sql")).match(/char_length\(thumb\) <= (\d+) and thumb like '([^']+)'/);
+  const t30 = read(M30).match(/char_length\(thumb\) <= (\d+) and thumb like '([^']+)'/);
+  assertEquals([t30[1], t30[2]], [t29[1], t29[2]]);
 });

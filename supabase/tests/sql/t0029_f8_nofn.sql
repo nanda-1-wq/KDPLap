@@ -2,10 +2,10 @@
 -- 0029 writes itself, never on Supabase's default privileges. run.sh builds
 -- this file's database without the default EXECUTE on new functions for
 -- anon, authenticated and service_role (reset.sh, KDP_PG_NO_FN_DEFAULTS=1).
--- As A: add and change a cover row (the check constraints call the shape
--- helpers), add a picture and tick it, add a blurb, read cover_json,
--- cover_book_key, cover_key, cover_pdf and cover_marks, export both files.
--- As anon: every 0029 function is refused.
+-- After 0030 (E16 Part 3) the 0029 objects left are the blurbs, cover_pdf
+-- and the shape helpers; t0030_f8_nofn.sql covers the 0030 path.
+-- As A: add a blurb, read cover_pdf, run the kept shape helpers.
+-- As anon: every kept 0029 function is refused.
 -- Run: supabase/tests/sql/run.sh t0029_f8_nofn.sql
 \ir helpers.sql
 
@@ -40,36 +40,16 @@ insert into public.book_exports (user_id, book_id, format, include, parts, versi
 
 -- ── As A, with only 0029's explicit grants ──
 :ASA
-select pg_temp.expect('F8 A adds a cover row (checks: cover_hex_ok, cover_recent_ok)', $q$insert into public.book_covers (book_id) values ('b0000000-0000-4000-8000-000000000001')$q$, 'OK 1');
-select pg_temp.expect('F8 A changes colors and recent colors', $q$update public.book_covers set main_color = '#2F4A3A', title_color = '#F2C14E', recent_colors = array['#2F4A3A', '#F2C14E'] where book_id = 'b0000000-0000-4000-8000-000000000001'$q$, 'OK 1');
-select pg_temp.expect('F8 A sets title breaks (the guard calls cover_words)', $q$update public.book_covers set title_breaks = E'Chair Yoga\nfor Seniors' where book_id = 'b0000000-0000-4000-8000-000000000001'$q$, 'OK 1');
-select pg_temp.expect('F8 a bad color is still refused by the check', $q$update public.book_covers set main_color = 'red' where book_id = 'b0000000-0000-4000-8000-000000000001'$q$, '23514%');
-select pg_temp.expect('F8 A adds a picture', $q$insert into public.cover_images (id, book_id, kind, path, width, height, bytes)
-  values ('10000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'front',
-          '00000000-0000-4000-8000-00000000000a/b0000000-0000-4000-8000-000000000001/10000000-0000-4000-8000-000000000001.jpg', 1838, 2775, 900000)$q$, 'OK 1');
-select pg_temp.expect('F8 A ticks the rights', $q$update public.cover_images set rights_at = now() where id = '10000000-0000-4000-8000-000000000001'$q$, 'OK 1');
 select pg_temp.expect('F8 A adds a blurb', $q$insert into public.cover_blurbs (book_id, body, source) values ('b0000000-0000-4000-8000-000000000001', 'A blurb.', 'manual')$q$, 'OK 1');
-select pg_temp.expect('F8 cover_json reads', $q$select 1 where public.cover_json('b0000000-0000-4000-8000-000000000001') -> 'book' ->> 'paper' = 'white'$q$, 'OK 1');
-select pg_temp.expect('F8 cover_book_key reads', $q$select 1 where public.cover_book_key('b0000000-0000-4000-8000-000000000001') ~ '^[0-9a-f]{32}$'$q$, 'OK 1');
-select pg_temp.expect('F8 cover_key reads', $q$select 1 where public.cover_key('b0000000-0000-4000-8000-000000000001', 'print') ~ '^[0-9a-f]{32}$'$q$, 'OK 1');
+select pg_temp.expect('F8 A reads the blurb', $q$select 1 from public.cover_blurbs where body = 'A blurb.'$q$, 'OK 1');
 select pg_temp.expect('F8 cover_pdf reads (54 pages, current)', $q$select 1 from public.cover_pdf('b0000000-0000-4000-8000-000000000001') where page_count = 54 and current$q$, 'OK 1');
-select pg_temp.expect('F8 shape helpers run for A', $q$select 1 where public.cover_trim_ok('6x9') and public.cover_paper(null) = 'white' and public.cover_hex_ok('#FFFFFF') and public.cover_words(' a ') = 'a' and public.cover_recent_ok('{}')$q$, 'OK 1');
-select pg_temp.expect('F8 A exports the print cover', $q$insert into public.cover_exports (book_id, kind, settings_key, engine, width_in, height_in, spine_in)
-  values ('b0000000-0000-4000-8000-000000000001', 'print', public.cover_key('b0000000-0000-4000-8000-000000000001', 'print'), 'typst 0.14.2 · c1', 12.3716, 9.25, 0.1216)$q$, 'OK 1');
-select pg_temp.expect('F8 A exports the Kindle JPG', $q$insert into public.cover_exports (book_id, kind, settings_key, engine, width_px, height_px)
-  values ('b0000000-0000-4000-8000-000000000001', 'kindle', public.cover_key('b0000000-0000-4000-8000-000000000001', 'kindle'), 'typst 0.14.2 · c1', 1600, 2560)$q$, 'OK 1');
-select pg_temp.expect('F8 cover_marks: both current', $q$select 1 from public.cover_marks() where pdf_current and print_changed = false and kindle_changed = false$q$, 'OK 1');
+select pg_temp.expect('F8 kept shape helpers run for A', $q$select 1 where public.cover_paper(null) = 'white' and public.cover_hex_ok('#FFFFFF') and public.cover_words(' a ') = 'a' and public.cover_recent_ok('{}')$q$, 'OK 1');
 
--- ── As anon: every 0029 function refused ──
+-- ── As anon: every kept 0029 function refused ──
 :ANON
 select pg_temp.expect('anon: cover_hex_ok', $q$select public.cover_hex_ok('#FFFFFF')$q$, '42501%');
 select pg_temp.expect('anon: cover_recent_ok', $q$select public.cover_recent_ok('{}'::text[])$q$, '42501%');
 select pg_temp.expect('anon: cover_words', $q$select public.cover_words('a')$q$, '42501%');
-select pg_temp.expect('anon: cover_trim_ok', $q$select public.cover_trim_ok('6x9')$q$, '42501%');
 select pg_temp.expect('anon: cover_paper', $q$select public.cover_paper('white')$q$, '42501%');
 select pg_temp.expect('anon: cover_pdf', $q$select * from public.cover_pdf('b0000000-0000-4000-8000-000000000001')$q$, '42501%');
-select pg_temp.expect('anon: cover_book_key', $q$select public.cover_book_key('b0000000-0000-4000-8000-000000000001')$q$, '42501%');
-select pg_temp.expect('anon: cover_key', $q$select public.cover_key('b0000000-0000-4000-8000-000000000001', 'print')$q$, '42501%');
-select pg_temp.expect('anon: cover_marks', $q$select * from public.cover_marks()$q$, '42501%');
-select pg_temp.expect('anon: cover_json', $q$select public.cover_json('b0000000-0000-4000-8000-000000000001')$q$, '42501%');
 :OWNER

@@ -249,6 +249,20 @@ deno run --allow-read --allow-write tools/cover-golden.mjs # re-freeze, only if 
   has exactly the 3 missing Must fix items. Spine text by cap height (owner
   Q-9) on every trim, paper and page count to 828.
 
+## 09 Cover data (E16 Part 3)
+
+```sh
+deno test --allow-read tests/cover-data.test.js tests/limits-parity.test.js
+supabase/tests/sql/run.sh t0030.sql t0030_f8_nofn.sql t0029.sql rls_cross_user.sql
+```
+`cover-data.test.js` drives the 09 calls in `js/supabase.js` against a recording stand-in for
+supabase-js: every table, column and function they name exists in 0030 (or 0029 for
+cover_exports); the rev autosave and its `conflict` marker, the first-open insert, the
+row-then-file delete, the per-kind export fields and the My layout upsert. The 09 checks in
+`limits-parity.test.js` read 0030 and t0030: the caps, trims, papers, pages, layout keys,
+spine per page, hex rule, the image px (14 sizes pinned in t0030) and the byte measure
+(`kdpCover.model.pgBytes` equals Postgres's `octet_length(layers::text)` for the t0030 fixture).
+
 ## 09 Cover engine (E16 Part 2)
 
 ```sh
@@ -340,10 +354,12 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0025` export and settings (display_name, book_exports with its guard and the newest 20 per book and format, export_json, export_badges and its "changed" rule, usage_month),
 `t0026` book complete and words this month (completed_at, complete_book and each refusal, the books guard, the reopen on its own for each event, D1: a new version on a Final section keeps the book completed, words_month rule 1 with the UTC month edge),
 `t0027` format and Print PDF (E13.1: book_formats shape, defaults, the guard with Also by, the touch, Final-only pdf_version_ids, what changes format_key and what does not, PDF export rows and their guard, pdf_marks, format_json, grants),
-`t0029` cover (E15: the shapes and their grants, the four cover tables, the guards, the rights clock, blurb versions, what moves each key, the export guard with every refusal and the size for every group A trim × paper × 24, 54, 80, 400 pages, cover_marks, cover_json, the "covers" bucket and its storage policies),
-`t0029_f8_nofn` (E15 F8: the signed-in cover path on 0029's own grants; run.sh builds it without the default function grants, see below),
+`t0029` cover (E15; after 0030 only what 0029 still owns: the kept shapes and their grants, cover_blurbs with the 20 kept versions, cover_pdf, the cover_exports privileges),
+`t0029_f8_nofn` (E15 F8: the blurb and cover_pdf path on 0029's own grants; run.sh builds it without the default function grants, see below),
+`t0030` cover layers (E16 Part 3: the 6 trims, cover_fmt_ok, the layer caps with the exact 524,288-byte boundary and the pgBytes fixture, the grants, what 0030 dropped and kept, cover_designs with rev and the stale autosave, cover_design_history with 20 kept, cover_assets (upload, pdf, pixabay, unsplash; rights clock, path, hotlink, credit), cover_my_layouts (one per book, the export's upsert, the 100 cap, set null), what moves cover_key, the export guard with every refusal, the print size for 6 trims × 2 papers × 24, 54, 400 pages, the image px pinned from kdpCover.geo.px300, picture rights, cover_marks, cover_json, the bucket's JPEG + PNG and the assets path rule, a book delete),
+`t0030_f8_nofn` (E16 F8: the signed-in editor path on 0030's own grants),
 `t_export_include` (E11: the fixture cases from `tests/fixtures/export-include.json`, recorded with the dialog's own list, read as not changed by export_badges; E13.1: the "final" cases give the same list from pdf_version_ids; run from the repo root),
-`rls_cross_user` (user B against user A's rows in every table; E15: the cover tables, functions and A's file in the "covers" bucket).
+`rls_cross_user` (user B against user A's rows in every table; E15 and E16: the cover tables (32 tables after 0030), functions, the rev autosave, the move and give cases, and A's file in the "covers" bucket).
 
 E15: `stub.sql` also copies the parts of Supabase Storage 0029 uses
 (`storage.buckets`, `storage.objects` with RLS on, `storage.foldername`,

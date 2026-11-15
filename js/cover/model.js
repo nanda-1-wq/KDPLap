@@ -24,6 +24,7 @@
    kdpCover.model.sizeStep(size, dir)          → the text bar's − and + (6 to 160 pt)
    kdpCover.model.normalizeLayer(l) / normalize(cover) → defaults filled, unknown fields dropped, ranges clamped
    kdpCover.model.fits(cover)                  → { ok, reason } against the caps (200 layers, 512 KB, 2,000 characters)
+   kdpCover.model.pgBytes(v)                   → the bytes of v in Postgres jsonb text form (the measure 0030 caps)
    ═══════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -274,12 +275,45 @@
     return { fmt: C.geo.normalizeFmt(c.fmt), bg: hex(c.bg, '#FFFFFF'), layers, layout };
   }
 
-  /** The caps the database also checks (0030): 200 layers, 512 KB of layers, 2,000 characters a text. */
+  // ---------- the byte measure 0030 caps ----------
+  // 0030 caps octet_length(layers::text): Postgres writes jsonb with ", " and ": "
+  // between items and numbers without an exponent (1e-7 → 0.0000001), so the
+  // compact JSON.stringify size would let through covers the database refuses.
+  // pgBytes counts the bytes of that text form for what JSON.stringify sends
+  // (limits-parity test: the same number as Postgres for a fixture in t0030.sql).
+  const UTF8 = new TextEncoder();
+  const u8 = (s) => UTF8.encode(s).length;
+  function pgNum(n) {
+    const s = JSON.stringify(n);
+    const m = /^(-?)(\d+)(?:\.(\d+))?e([+-]\d+)$/.exec(s);
+    if (!m) return s;
+    const sign = m[1], int = m[2], frac = m[3] || '', exp = Number(m[4]);
+    const digits = int + frac, point = int.length + exp;
+    if (point <= 0) return sign + '0.' + '0'.repeat(-point) + digits;
+    if (point >= digits.length) return sign + digits + '0'.repeat(point - digits.length);
+    return sign + digits.slice(0, point) + '.' + digits.slice(point);
+  }
+  const skip = (x) => x === undefined || typeof x === 'function' || typeof x === 'symbol';
+  function pgBytes(v) {
+    if (v === null) return 4;
+    if (typeof v === 'boolean') return v ? 4 : 5;
+    if (typeof v === 'number') return Number.isFinite(v) ? pgNum(v).length : 4;   // JSON sends NaN as null
+    if (typeof v === 'string') return u8(JSON.stringify(v));
+    if (Array.isArray(v)) return 2 + Math.max(0, v.length - 1) * 2 + v.reduce((s, x) => s + (skip(x) ? 4 : pgBytes(x)), 0);
+    if (typeof v === 'object') {
+      if (typeof v.toJSON === 'function') return pgBytes(v.toJSON());
+      const ks = Object.keys(v).filter((k) => !skip(v[k]));
+      return 2 + Math.max(0, ks.length - 1) * 2 + ks.reduce((s, k) => s + u8(JSON.stringify(k)) + 2 + pgBytes(v[k]), 0);
+    }
+    return 4;
+  }
+
+  /** The caps the database also checks (0030): 200 layers, 512 KB of layers::text (pgBytes), 2,000 characters a text. */
   function fits(cover) {
     const layers = (cover && cover.layers) || [];
     if (layers.length > CAPS.layers) return { ok: false, reason: 'layers' };
     if (layers.some((l) => l.type === 'text' && String(l.text).length > CAPS.text)) return { ok: false, reason: 'text' };
-    const bytes = new TextEncoder().encode(JSON.stringify(layers)).length;
+    const bytes = pgBytes(layers);
     if (bytes > CAPS.bytes) return { ok: false, reason: 'bytes', bytes };
     return { ok: true, bytes };
   }
@@ -291,6 +325,6 @@
     PT, FONTS, PRESETS, FX_DEF, FX_STYLES, SRC, CAPS, RANGE, TEXT_PRESETS, BOOK_STYLE,
     common, freshDist, textLayer, shapeLayer, imageLayer, placeText, newText, newBookText, newImage,
     coverFit, clampPic, dpi, bbox, overlaps, arrange, dup, align, distribute, nudge, remove, selectAll, sizeStep,
-    normalizeLayer, normalize, fits, nextId
+    normalizeLayer, normalize, fits, pgBytes, nextId
   };
 })(globalThis);

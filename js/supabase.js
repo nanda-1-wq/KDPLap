@@ -23,6 +23,12 @@ const TOPIC_SOURCES = 'winning_source, winning_set_at, dead_source, dead_set_at,
 const POSITIONING_COLS = 'one_sentence, reader_promise, approach, lacks, selling_points, focus_tags, drift_flags, drift_checked_at, locked_at, updated_at';
 const TITLE_OPTION_COLS = 'id, title, subtitle, reason, keywords, unsourced, shortlisted, created_at';
 
+// 09 Cover (migration 0030). The design fields an autosave may write, and the columns each read returns.
+const COVER_DESIGN_FIELDS = ['layers', 'bg', 'fmt', 'layout', 'last_remap'];
+const COVER_ASSET_COLS = 'id, source, mime, path, remote, width, height, bytes, transparent, rights_at, credit, origin_book_id, created_at';
+const COVER_HISTORY_COLS = 'id, reason, fmt, bg, layout, created_at';
+const MY_LAYOUT_COLS = 'id, name, from_book_id, from_title, fmt, bg, layers, thumb, exported_at';
+
 // "0 rows = not found": an update or select that must hit one row, and a
 // delete with count: 'exact'. Both put notFound: true on the error.
 const notFound = (msg) => Object.assign(new Error(msg), { notFound: true });
@@ -1470,6 +1476,174 @@ window.kdp = {
   async listExportBadges() {
     const { data, error } = await window.sb.rpc('export_badges');
     return { data: error ? null : (data || []), error };
+  },
+
+  /* ── 09 Cover (E16, migration 0030) ────────────── */
+
+  /**
+   * Everything 09 reads (0030 cover_json): book, fmt (today's size), pdf,
+   * design (null before the first open), the assets the design uses, blurb,
+   * my_layouts (without layers), key, last (print, image, kindle), now.
+   * data is null when the book is not the user's.
+   */
+  async getCover(bookId) {
+    const { data, error } = await window.sb.rpc('cover_json', { p_book_id: bookId });
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: notFound('Book not found.') };
+    return { data, error: null };
+  },
+
+  /**
+   * The book's design row, made on the first open of 09 with the layers the
+   * editor starts from (fmt: today's size). Another tab may make it first
+   * (duplicate key 23505): that is fine. Returns cover_json after the row exists.
+   */
+  async ensureCoverDesign(bookId, { fmt, layers = [], bg = '#FFFFFF', layout = null } = {}) {
+    const first = await this.getCover(bookId);
+    if (first.error || first.data.design) return first;
+    const ins = await window.sb.from('cover_designs').insert({ book_id: bookId, fmt, layers, bg, layout });
+    if (ins.error && ins.error.code !== '23505') return { data: null, error: ins.error };
+    return this.getCover(bookId);
+  },
+
+  /**
+   * Autosave (plan R11): writes the design only while it is still at `rev`
+   * (the database then sets rev + 1). → { data: { rev, updated_at } }.
+   * 0 rows: another tab saved first (or the book is gone), so error.conflict
+   * is true and the caller reads cover_json again. fields: any of layers, bg,
+   * fmt, layout, last_remap; anything else is left out.
+   */
+  async saveCoverDesign(bookId, rev, fields) {
+    const row = {};
+    for (const k of COVER_DESIGN_FIELDS) if (fields && Object.prototype.hasOwnProperty.call(fields, k)) row[k] = fields[k];
+    if (!Object.keys(row).length) return { data: null, error: new Error('Nothing to save.') };
+    const { data, error } = await window.sb
+      .from('cover_designs')
+      .update(row)
+      .eq('book_id', bookId)
+      .eq('rev', rev)
+      .select('rev, updated_at');
+    if (error) return { data: null, error };
+    if (!data.length) return { data: null, error: Object.assign(new Error('The cover changed in another tab.'), { conflict: true }) };
+    return { data: data[0], error: null };
+  },
+
+  /** A full snapshot of the design (0030 cover_design_history; 20 kept per book). reason: visit, layout, remap or export. */
+  async addCoverSnapshot(bookId, reason, { layers, bg, fmt, layout = null }) {
+    const { data, error } = await window.sb
+      .from('cover_design_history')
+      .insert({ book_id: bookId, reason, layers, bg, fmt, layout })
+      .select('id, created_at');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /** The book's snapshots, newest first, without their layers. */
+  async listCoverHistory(bookId) {
+    const { data, error } = await window.sb
+      .from('cover_design_history')
+      .select(COVER_HISTORY_COLS)
+      .eq('book_id', bookId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+    return { data: error ? null : (data || []), error };
+  },
+
+  /** One snapshot with its layers. 0 rows is an error. */
+  async getCoverSnapshot(id) {
+    const { data, error } = await window.sb
+      .from('cover_design_history')
+      .select(`${COVER_HISTORY_COLS}, layers`)
+      .eq('id', id);
+    return oneRow(data, error, 'Snapshot not found.');
+  },
+
+  /** Uploads: every picture of the user (0030 cover_assets, per user), newest first. */
+  async listCoverAssets() {
+    const { data, error } = await window.sb
+      .from('cover_assets')
+      .select(COVER_ASSET_COLS)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+    return { data: error ? null : (data || []), error };
+  },
+
+  /**
+   * Adds a picture row after its file is in the bucket (upload, pdf, pixabay),
+   * or a linked Unsplash picture (no file). rightsTicked: the writer ticked
+   * "I have the rights" (the database takes the time from its own clock).
+   */
+  async addCoverAsset({ id, source, mime, path = null, remote = null, width, height, bytes = null,
+    transparent = false, rightsTicked = false, credit = null, originBookId = null }) {
+    const row = { source, mime, path, remote, width, height, bytes, transparent, credit, origin_book_id: originBookId,
+      rights_at: rightsTicked ? new Date().toISOString() : null };
+    if (id) row.id = id;
+    const { data, error } = await window.sb.from('cover_assets').insert(row).select(COVER_ASSET_COLS);
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /**
+   * Removes a picture: the row first, then its file through the Storage API.
+   * A file that could not be removed is left (unseen, the row is gone) and
+   * named in fileLeft. 0 rows is an error.
+   */
+  async deleteCoverAsset(id) {
+    const { data, error } = await window.sb.from('cover_assets').delete().eq('id', id).select('path');
+    if (error) return { error, fileLeft: null };
+    if (!data.length) return { error: notFound('Picture not found.'), fileLeft: null };
+    const path = data[0].path;
+    if (!path) return { error: null, fileLeft: null };
+    const rm = await window.sb.storage.from('covers').remove([path]);
+    return { error: null, fileLeft: rm.error ? path : null };
+  },
+
+  /** One My layout with its layers, to apply it (cover_json lists them without layers). 0 rows is an error. */
+  async getMyLayout(id) {
+    const { data, error } = await window.sb.from('cover_my_layouts').select(MY_LAYOUT_COLS).eq('id', id);
+    return oneRow(data, error, 'Layout not found.');
+  },
+
+  /**
+   * Saves the book's My layout on export (Q-3b: one per book, replaced).
+   * The database refuses a 101st with "my_layouts_full"; a replace never counts.
+   */
+  async saveMyLayout({ bookId, name, fromTitle = null, fmt, bg, layers, thumb = null }) {
+    const { data, error } = await window.sb
+      .from('cover_my_layouts')
+      .upsert({ from_book_id: bookId, name, from_title: fromTitle, fmt, bg, layers, thumb }, { onConflict: 'user_id,from_book_id' })
+      .select('id, exported_at');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /** The × on a My layout. 0 rows is an error. */
+  async removeMyLayout(id) {
+    const { error, count } = await window.sb.from('cover_my_layouts').delete({ count: 'exact' }).eq('id', id);
+    return counted(error, count, 'Layout not found.');
+  },
+
+  /**
+   * Records one exported cover file (0030 cover_exports). kind: print (inches),
+   * image (300 DPI px) or kindle (1600 × 2560). The guard checks the key
+   * (cover_stale), the size (cover_size, cover_resized), the rights
+   * (cover_rights) and the Print PDF (cover_pdf_missing), and sets the rest.
+   */
+  async recordCoverExport({ bookId, kind, settingsKey, engine, widthIn, heightIn, spineIn, widthPx, heightPx, thumb }) {
+    const row = { book_id: bookId, kind, settings_key: settingsKey, engine };
+    if (kind === 'print') Object.assign(row, { width_in: widthIn, height_in: heightIn, spine_in: spineIn, thumb: thumb || null });
+    else Object.assign(row, { width_px: widthPx, height_px: heightPx });
+    const { data, error } = await window.sb.from('cover_exports').insert(row).select('id, created_at, page_count');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /** The 09 mark and the Books card: [{ book_id, pdf_current, print_at, print_changed, image_at, image_changed, kindle_at, kindle_changed, thumb }]. One book, or all. */
+  async listCoverMarks(bookId) {
+    const { data, error } = await window.sb.rpc('cover_marks', bookId ? { p_book_id: bookId } : {});
+    return { data: error ? null : (data || []), error };
+  },
+
+  /** Today's cover key (0030 cover_key), read again right before an export records its files. Null without a design. */
+  async getCoverKey(bookId) {
+    const { data, error } = await window.sb.rpc('cover_key', { p_book_id: bookId });
+    return { data: error ? null : data, error };
   },
 
   /**
