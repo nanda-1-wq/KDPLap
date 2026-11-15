@@ -55,12 +55,12 @@ const test = async page => {
   ok((await FM.txt(page, `${panel} [data-sub]`)) === `Micro Study Habits for Busy Adult Learners · ${rec.page_count} pages · 6 × 9 in · white paper`, 'the sub line has the page count');
   ok(!(await FM.has(page, `${panel} .alert`)), 'a first PDF: no page count warning');
 
-  /* Close: focus back on Export files; the 08 mark (50): the check in the rail, Coming next. */
+  /* Close: focus back on Export files; the 08 mark (50): the check in the rail; no note (E16: Next opens 09). */
   await page.click(`${panel} [data-close]`);
   await page.waitForFunction(() => !document.querySelector('.fmt-exp[open]'), null, { timeout: 3000 });
   ok(await page.evaluate(() => document.activeElement.matches('[data-export]')), 'focus back on Export files');
   await page.waitForFunction(() => document.querySelector('[data-step="8"]').classList.contains('is-done'), null, { timeout: 3000 });
-  ok((await FM.txt(page, '[data-next-note]')) === 'Coming next', '08 done: the note says Coming next');
+  ok(await page.$eval('[data-next-note]', (n) => n.hidden && !n.textContent), '08 done: no note (E16 Part 4: 08 is not the last step, Next opens 09)');
   // Rule D (E14.3): on 08 itself, a current Print PDF shows the check in the rail, not the dot.
   const railMark = () => page.$eval('[data-step="8"]', (a) => ({ check: !!a.querySelector('.step-mark svg'), dot: getComputedStyle(a.querySelector('.step-mark'), '::before').display !== 'none' && getComputedStyle(a.querySelector('.step-mark'), '::before').content !== 'none', current: a.getAttribute('aria-current') }));
   let rm = await railMark();

@@ -20,14 +20,10 @@ const test = async page => {
   ok(heads.join() === 'PLAN,PRODUCE,PACKAGE,RELEASE', `groups: ${heads}`);
   ok((await QC.all(page, '.group-row .version-tag')).join() === 'Coming in v3', 'RELEASE: Coming in v3');
   const links = await page.$$eval('a[data-step]', (a) => a.map((x) => x.dataset.step));
-  ok(links.join() === '1,2,3,4,5,6,7,8', `links 01 to 08 (E13.2): ${links}`);
-  const coming = await QC.all(page, '[data-coming]');
-  ok(coming.join('|').replace(/ ,/g, ',') === '09 Cover, Coming next', `09 only: ${coming.join('|')}`);
-  ok(await page.$$eval('[data-coming]', (r) => r.every((x) => x.tagName === 'DIV' && x.getAttribute('aria-disabled') === 'true' && x.tabIndex === -1)), '09 is not a link');
-  ok(LOCK.test(await page.$eval('[data-coming="9"] .step-mark', (e) => e.innerHTML)), '09 shows the lock');
+  ok(links.join() === '1,2,3,4,5,6,7,8,9', `links 01 to 09 (E16 Part 4): ${links}`);
+  ok(!(await page.$('[data-coming]')), 'no "Coming next" row (E16 Part 4: 09 has a screen)');
+  ok(await page.$eval('[data-step="9"]', (a) => a.tagName === 'A' && !a.querySelector('.step-mark').innerHTML), '09 Cover is a link, not done (no mark)');
   ok(!(await page.$eval('[data-step="8"] .step-mark', (e) => e.innerHTML)), '08 not done: no check');
-  await page.$eval('[data-coming="9"]', (d) => d.click());
-  ok(/step=7/.test(page.url()), 'a click on 09 does nothing');
 
   /* Current and not run: the dot. No sideways scroll in the sidebar. */
   let r = await row(7);
@@ -64,7 +60,7 @@ const test = async page => {
   ok(await page.$eval('.saved-line', (e) => e.getBoundingClientRect().bottom > e.parentElement.closest('.book-nav').getBoundingClientRect().bottom - 80), 'the save check stays at the rail bottom');
   r = await row(7);
   ok(r.label === '07 Quality Control, done' && r.title === '07 Quality Control, done' && r.check && !r.dotShown, `rail 07 done: ${JSON.stringify(r)}`);
-  ok(LOCK.test(await page.$eval('[data-coming="9"] .step-mark', (e) => e.innerHTML)), 'rail 09: the lock');
+  ok(await page.$eval('[data-step="9"]', (a) => !a.querySelector('.step-mark').innerHTML && !a.classList.contains('is-done')), 'rail 09: not done, no lock (E16 Part 4)');
 
   /* 2 s after 06 saves a version: out of date. A draft alone reads nothing. */
   await page.waitForSelector('[data-editor]', { timeout: 5000 });

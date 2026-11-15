@@ -7,7 +7,8 @@
 # title (step 04), outline (step 05), write (step 06), delete (Delete book dialog),
 # settings (E11 Settings and the sidebar name), export (E11 Export dialog),
 # books (E11 Books badge and card menu), pen (E12 pen name voice field),
-# qc (E14.3 07 Quality Control, the shell and the 07 marks), format (E13.2 08 Format).
+# qc (E14.3 07 Quality Control, the shell and the 07 marks), format (E13.2 08 Format),
+# cover (E16 09 Cover editor, from Part 4; its fixture-*.js files go before its mock).
 # A suite's mock.js defines setup(page); each test file defines test(page).
 set -euo pipefail
 HERE=${0:A:h}
@@ -58,6 +59,9 @@ MOCK=""; [[ -f $HERE/$SUITE/mock.js ]] && MOCK=$(cat "$HERE/$SUITE/mock.js")
 SHARED=$(print -r -- "$MOCK" | sed -n '1s#^// shared: \([a-z0-9-]*\)$#\1#p')
 [[ -n $SHARED ]] && MOCK="$(cat "$HERE/shared/$SHARED.js")
 $MOCK"
+# E16: a suite's fixtures (fixture-*.js) go before its mock.
+for F in $HERE/$SUITE/fixture-*.js(N); do MOCK="$(cat "$F")
+$MOCK"; done
 CODE="async page => { const CACHE = '$CACHE'; const SHOTS = '$SHOTS';
 $MOCK
 $(cat "$HERE/$SUITE/$FILE")

@@ -30,7 +30,8 @@
        view: { scale (device px per board px), x0, y0 (board px at the canvas top left),
                images(layer) → CanvasImageSource | null, upTo (index in the printable layers, inclusive),
                effectOnly (a text layer id: its effect without the letters), bg (default true),
-               ids (only these layers; default all printable) }
+               ids (only these layers; default all printable),
+               screen (E16 Part 4: the editor view, which also draws excluded layers) }
    kdpCover.render.canvas(w, h)               → an OffscreenCanvas (or a page canvas)
    kdpCover.render.region(cover, box, view)   → a canvas of the grid box (300 DPI px) with everything up to view.upTo
    kdpCover.render.tiles(cover, scale, size, cb) → paints the cover tile by tile: cb(canvas, x, y) in device px
@@ -480,7 +481,8 @@
     ctx.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     if (v.bg !== false) { ctx.fillStyle = cover.bg; ctx.fillRect(-1, -1, g.W + 2, g.H + 2); }
-    const layers = C.flatten.printable(cover.layers);
+    // The editor's screen (Part 4) also draws layers left out of the files ("Not exported"); never hidden ones.
+    const layers = v.screen ? (cover.layers || []).filter((l) => !l.hidden) : C.flatten.printable(cover.layers);
     const upTo = v.upTo == null ? layers.length - 1 : v.upTo;
     for (let i = 0; i <= upTo && i < layers.length; i++) {
       const l = layers[i];

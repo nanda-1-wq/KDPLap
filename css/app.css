@@ -3461,6 +3461,10 @@ div.delete-text p { margin: 0; }
 .exp-file-name { font-size: var(--text-base); font-weight: 500; overflow-wrap: anywhere; }
 .exp-textbtn { min-height: var(--control-h); margin: 0; padding: 0 var(--space-2); }
 
+/* E16 STOP 4 (owner, F3; design 58): 10 and 11 show in the rail only, below 09. */
+.step-link.rail-only { display: none; }
+.book-layout.is-rail .step-link.rail-only { display: flex; }
+
 /* ── Step 07 marks (designs 51, 51b, 57) ── */
 
 /* 07 and 08 open on their screen and done: the check, not the dot (design 53, rule D; 08 since E13.2). */

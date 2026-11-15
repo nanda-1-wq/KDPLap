@@ -34,9 +34,9 @@ const test = async page => {
   await page.waitForSelector('.qc-first', { timeout: 10000 });
   ok(/step=7/.test(page.url()), 'a reload keeps step 7');
 
-  // A step above 08 falls back to 01, as a bad step did before (E13.2: 08 has a screen).
-  await page.goto(QC.url(9), { waitUntil: 'domcontentloaded' });
+  // A step above 09 falls back to 01, as a bad step did before (E16 Part 4: 09 has a screen).
+  await page.goto(QC.url(10), { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('[data-step-title]').textContent === 'Brief', null, { timeout: 10000 });
-  ok(/step=1/.test(page.url()), 'step=9 has no screen yet: 01 opens');
+  ok(/step=1/.test(page.url()), 'step=10 has no screen (v3): 01 opens');
   return log.join('\n');
 };

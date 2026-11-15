@@ -287,6 +287,29 @@ node tests/browser/cover/qa-files.mjs <folder outside git> [--no-safari]   # the
   (coverChecks, glyphs, widths within 0.5%, chosen faces only, no font warning).
 - QA files and results go to a scratch or private folder, never into git.
 
+## 09 Cover editor, mocked (E16 Part 4)
+
+```sh
+tests/browser/run.sh cover t-shell.js    # 09 in the shell: header, Next, rail, first open, the inert parts, status bar, 1024
+tests/browser/run.sh cover t-locked.js   # design 73 Locked, Loading, a failed read and failed fonts with Retry
+tests/browser/run.sh cover t-canvas.js   # template layer, guides, zoom and pan, select, move + snap, width, rotate, shape handles, pixels
+tests/browser/run.sh cover t-text.js     # Text panel presets, From your book, typing in place, the text bar, Arrange, duplicate, lock, delete, nudge
+tests/browser/run.sh cover t-fonts.js    # the font list: 300, the design 20 first, groups, search, sprite rows, load on pick, real weights, fonts down
+tests/browser/run.sh cover t-color.js    # the picker: presets, Recent, hex, the square drag, hue, eyedropper, background color
+tests/browser/run.sh cover t-undo.js     # 50 steps, the 500 ms window, keys, background, add and delete
+tests/browser/run.sh cover t-save.js     # rev, one save per burst, the visit snapshot, Save failed + Retry, another tab (R11), leaving
+tests/browser/run.sh cover t-a11y.js     # Step D: 44 px click areas, focus ring, 12 px text, no blue; Tab front first, Enter, handle keys
+tests/browser/run.sh cover t-shots4.js   # STOP 4 compare shots → docs/reviews/e16-stop4/ (never in a sweep)
+```
+
+- `tests/browser/cover/mock.js` answers as 0030: `cover_json`, the design insert (rev 1, 23505 on a
+  second one), the autosave update "where rev = $rev" (0 rows when the rev moved, rev + 1, the layer
+  caps), the history insert. Modes: coverFail, coverSlow, saveFail, saveSlow, otherTab, histFail, fontsDown.
+- `fixture-design-book.js` (run.sh puts a suite's `fixture-*.js` before its mock) is the design's book;
+  `FIX.band(page)` builds the Band cover with the warm blurb from `js/cover/layouts.js` itself.
+- Fonts come from `tests/browser/.cache/cover-fonts` (the Part 2 cache). The run-code sandbox has no
+  TextEncoder. `CV.quiet(page)` before leaving a page keeps a "Leave site?" dialog from blocking the session.
+
 ## Print engine (E13.1 and E13.2, real CDN, Node + playwright-core)
 
 ```sh

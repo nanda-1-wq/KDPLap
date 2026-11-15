@@ -1,0 +1,307 @@
+/* ═══════════════════════════════════════════════════
+   NicheInk · 09 Cover editor (E16, designs 58 to 74b)
+   /css/cover.css   (app/book.html; js/cover/editor.js, view.js, text.js, picker.js)
+
+   Tokens only. The canvas-only colors are the --cv-* tokens below, defined
+   once here: selection blue, guide green, fold blue, snap magenta, KDP pink
+   and yellow (accepted exceptions, design D audit point 6, plan §3). The
+   functional borders of the bars and chips (danger, warning, success lines)
+   and the picker's black and white gradient stops are --cv-* tokens too.
+   ═══════════════════════════════════════════════════ */
+:root {
+  --cv-sel: #2E6AE6;            /* selection outline and handles (canvas only) */
+  --cv-fold: #2E6AE6;           /* spine fold lines and the spine label (canvas only) */
+  --cv-guide: #1E9E57;          /* live-area guide lines (canvas only) */
+  --cv-snap: #D6249F;           /* the front-center snap line (canvas only) */
+  --cv-kdp-pink: #F2B8B5;       /* KDP template: bleed */
+  --cv-kdp-yellow: #FFF35C;     /* KDP template: barcode area */
+  --cv-danger-line: #F5C2BC;    /* border of a danger bar, chip or button */
+  --cv-danger-ink: #7A1A12;     /* text on --danger-bg */
+  --cv-warning-line: #F0D8A8;
+  --cv-success-line: #BFE3CC;
+  --cv-white: #FFFFFF;          /* picker gradient stop, dot ring, the paper under the template */
+  --cv-black: #000000;          /* picker gradient stop */
+  --cv-black-0: rgba(0, 0, 0, 0);
+  --cv-dot-ring: rgba(0, 0, 0, 0.5);
+  --cv-edit-tint: rgba(46, 106, 230, 0.06);   /* the text box while typing in place */
+  --cv-shadow-pop: 0 8px 24px rgba(28, 28, 26, 0.18);
+  --cv-shadow-paper: 0 1px 4px rgba(28, 28, 26, 0.25);
+  --cv-tools-w: 80px;
+  --cv-panel-w: 240px;
+  --cv-bar-h: 52px;
+  --cv-foot-h: 34px;
+  --cv-btn: 36px;               /* the look of a bar button; the click area is 44 px (::after) */
+}
+
+/* No page scroll on 09: the workspace fills the screen (as 08). */
+/* Export cover is drawn as designed and inert until its dialog lands (Part 10): aria-disabled, title "Comes in Part 10". */
+.book-layout:has(.cv-root) .book-head [data-export][aria-disabled="true"] { cursor: default; border-color: var(--stone); color: var(--ink); }
+/* As 08: under 1200 px the reason line goes under the buttons (the full narrow layout is Part 9). */
+@media (max-width: 1200px) {
+  .book-layout:has(.cv-root) .book-head { height: auto; min-height: var(--app-book-head-h); padding-top: var(--space-1); padding-bottom: var(--space-1); grid-template-columns: auto minmax(0, 1fr) auto; }
+  .book-layout:has(.cv-root) .book-head-next { display: grid; grid-template-columns: auto auto; gap: 0 var(--space-3); justify-items: end; }
+  .book-layout:has(.cv-root) .next-note { order: 1; grid-column: 1 / -1; }
+}
+.book-content.has-step:has(.cv-root) { padding: 0; align-items: stretch; min-height: 0; overflow: hidden; }
+.book-layout:has(.cv-root) { height: 100vh; overflow: hidden; }
+.book-layout:has(.cv-root) .book-main { height: 100vh; min-height: 0; }
+
+.cv-root {
+  flex-grow: 1; min-width: 0; min-height: 0; display: flex; position: relative;
+  background: var(--paper); font-family: var(--font-ui); font-size: var(--text-sm); color: var(--ink);
+}
+.cv-root.cv-full { align-items: stretch; }
+.cv-root .center-state { flex-grow: 1; padding: var(--space-8); }
+
+/* Step D: every button keeps its look and gets a 44 × 44 px click area; the focus ring is 2 px ink, 2 px off. */
+/* Zero specificity: the classes below (and the app's .btn) win over this base. */
+:where(.cv-root) :where(button:not(.btn)) { position: relative; font: inherit; color: var(--ink); cursor: pointer; }
+.cv-root button::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--control-h)); height: max(100%, var(--control-h)); transform: translate(-50%, -50%); }
+.cv-root button[aria-disabled="true"] { cursor: default; }
+.cv-root :is(a, button, select, input, textarea, [tabindex]):focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cv-root select, .cv-root input[type="checkbox"] { min-height: 20px; }
+.cv-root input[type="checkbox"], .cv-root input[type="range"] { accent-color: var(--ink); }
+.cv-mono { font-family: var(--font-label); }
+.cv-grow { flex-grow: 1; }
+.cv-sep { width: 1px; height: 24px; background: var(--stone); margin: 0 6px; flex-shrink: 0; }
+
+/* ── Tool rail and panel (design 58) ── */
+.cv-tools {
+  width: var(--cv-tools-w); flex-shrink: 0; box-sizing: border-box; background: var(--surface); border-right: 1px solid var(--stone);
+  padding: var(--space-3) 6px; display: flex; flex-direction: column; gap: var(--space-1);
+}
+.cv-tool {
+  height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1);
+  border: 0; border-radius: var(--radius-md); background: transparent; font-size: var(--text-xs); color: var(--ink-2); text-align: center; line-height: 1.15;
+}
+.cv-tool.is-on { background: var(--ink); color: var(--surface); }
+.cv-panel {
+  width: var(--cv-panel-w); flex-shrink: 0; box-sizing: border-box; background: var(--surface-2); border-right: 1px solid var(--stone);
+  padding: var(--space-5); display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+}
+.cv-cap { font-family: var(--font-label); font-size: var(--text-xs); letter-spacing: 0.08em; color: var(--graphite); }
+.cv-preset { box-sizing: border-box; padding: 10px 14px; border: 1px solid var(--stone); border-radius: var(--radius-lg); background: var(--surface); text-align: left; color: var(--ink); }
+.cv-preset-h { min-height: 64px; font-family: var(--font-read); font-size: 24px; font-weight: 700; }
+.cv-preset-s { min-height: var(--cv-bar-h); font-size: 17px; font-weight: 600; }
+.cv-preset-b { min-height: var(--control-h); font-size: var(--text-md); }
+.cv-help { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }
+.cv-help-sm { font-size: var(--text-xs); }
+.cv-rule { height: 1px; background: var(--stone); flex-shrink: 0; }
+.cv-bookrows { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-md); }
+.cv-bookrow { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.cv-sbtn { min-height: var(--cv-btn); padding: 0 var(--space-3); border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-sm); color: var(--ink); }
+.cv-sbtn[aria-disabled="true"]:not([data-inert]) { color: var(--muted); }
+.cv-on { font-size: var(--text-sm); color: var(--success); }
+
+/* ── Main column ── */
+.cv-main { flex-grow: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.cv-viewbar, .cv-textbar {
+  min-height: var(--cv-bar-h); flex-shrink: 0; box-sizing: border-box; padding: var(--space-2) var(--space-4); flex-wrap: wrap;
+  border-bottom: 1px solid var(--stone); display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); position: relative;
+}
+.cv-viewbar { background: var(--surface); z-index: 7; }
+.cv-textbar { background: var(--surface-2); z-index: 5; }
+.cv-textbar[hidden] { display: none; }
+
+.cv-ib { width: var(--cv-btn); height: var(--cv-btn); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-xs); font-weight: 600; }
+.cv-ib.is-on { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+.cv-ib-plain { border: 0; background: transparent; }
+.cv-ib-plain[aria-disabled="true"] { color: var(--stone-2); }
+.cv-ib-edit { border-color: var(--ink); }
+.cv-ib-del { border-color: var(--cv-danger-line); color: var(--danger); }
+.cv-zb { width: 32px; height: 32px; padding: 0; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); flex-shrink: 0; }
+.cv-zoom { min-width: var(--control-h); text-align: center; font-size: var(--text-xs); }
+.cv-fit { height: 32px; padding: 0 10px; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-sm); flex-shrink: 0; }
+.cv-tplbtn { height: var(--cv-btn); padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: var(--radius-md); background: var(--paper); font-size: var(--text-sm); white-space: nowrap; }
+/* The 44 px click area sits behind the box and the words (z-index -1 in the label's own stacking context). */
+.cv-vcheck::after, .cv-check::after { content: ""; position: absolute; z-index: -1; left: 0; right: 0; top: 50%; height: var(--control-h); transform: translateY(-50%); }
+.cv-vcheck { position: relative; z-index: 0; height: var(--cv-btn); padding: 0 var(--space-2); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }
+.cv-bgbtn { height: var(--cv-btn); padding: 0 10px; display: inline-flex; align-items: center; gap: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; font-size: var(--text-sm); white-space: nowrap; }
+.cv-bgbtn.is-open { border-color: var(--ink); background: var(--paper); }
+.cv-swatch { width: 18px; height: 18px; flex-shrink: 0; border-radius: var(--space-1); background: var(--sw); box-shadow: inset 0 0 0 1px var(--stone-2); }
+.cv-tb { height: var(--cv-btn); padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-sm); white-space: nowrap; flex-shrink: 0; }
+.cv-tb.is-open { border-color: var(--ink); background: var(--paper); }
+.cv-tb-pv { padding: 0 var(--space-3); font-weight: 500; }
+.cv-chip-chk { height: var(--cv-btn); padding: 0 var(--space-3); display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-md); border: 1px solid; font-size: var(--text-sm); font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+.cv-chip-chk.is-bad { border-color: var(--cv-danger-line); background: var(--danger-bg); color: var(--danger); }
+.cv-chip-chk.is-warn { border-color: var(--cv-warning-line); background: var(--warning-bg); color: var(--warning); }
+.cv-chip-chk.is-ok { border-color: var(--cv-success-line); background: var(--success-bg); color: var(--success); }
+
+.cv-fontbtn { width: 170px; height: var(--cv-btn); box-sizing: border-box; padding: 0 10px; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); text-align: left; font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.cv-fontbtn.is-open { border-color: var(--ink); }
+/* The weight select keeps the 36 px look of design 59 and a 44 px click area: the select itself is 44 px high
+   and clear; the box is drawn by its wrapper. */
+.cv-selwrap { position: relative; height: var(--cv-btn); display: inline-flex; align-items: center; flex-shrink: 0; }
+.cv-selwrap::before { content: ""; position: absolute; inset: 0; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); pointer-events: none; }
+.cv-select { position: relative; height: var(--control-h); margin: -4px 0; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; font: inherit; font-size: var(--text-sm); color: var(--ink); }
+.cv-size { display: inline-flex; align-items: center; gap: 2px; }
+.cv-size-b { width: 32px; height: var(--cv-btn); padding: 0; border: 1px solid var(--stone); background: var(--surface); }
+.cv-size-l { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.cv-size-r { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.cv-size-v { min-width: 56px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-top: 1px solid var(--stone); border-bottom: 1px solid var(--stone); background: var(--surface); font-family: var(--font-label); font-size: var(--text-xs); }
+.cv-checker { width: 16px; height: 16px; border-radius: 3px; background: repeating-conic-gradient(var(--stone-2) 0% 25%, var(--surface) 0% 50%) 0 0 / 8px 8px; }
+.cv-status { font-size: var(--text-xs); color: var(--graphite); white-space: nowrap; }
+.cv-status.is-error { color: var(--danger); white-space: normal; }
+
+/* ── Popovers ── */
+.cv-pop {
+  position: absolute; top: calc(100% - 2px); box-sizing: border-box; padding: 14px var(--space-4); background: var(--surface);
+  border: 1px solid var(--stone); border-radius: var(--radius-xl); box-shadow: var(--cv-shadow-pop);
+  display: flex; flex-direction: column; gap: 10px; z-index: 6; text-align: left; cursor: default;
+}
+.cv-pop[hidden] { display: none; }
+.cv-pop-fonts { left: 110px; width: 320px; max-height: 520px; padding: 14px; }
+.cv-pop-color { left: 380px; width: 300px; padding: var(--space-4); gap: var(--space-3); }
+.cv-pop-op { right: 230px; width: 280px; }
+.cv-pop-arr { right: 120px; width: 220px; }
+.cv-pop-bg { left: 560px; width: 300px; }
+.cv-pop-head { display: flex; align-items: center; justify-content: space-between; }
+.cv-pop-head h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.cv-pop-head .cv-h2-lg { font-size: 17px; }
+.cv-x { width: var(--cv-btn); height: var(--cv-btn); padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; display: inline-flex; align-items: center; justify-content: center; }
+.cv-x-lg { color: var(--ink-2); }
+.cv-sv {
+  position: relative; width: 100%; height: 150px; flex-shrink: 0; border-radius: var(--radius-md); cursor: crosshair; touch-action: none;
+  background: linear-gradient(to top, var(--cv-black), var(--cv-black-0)), linear-gradient(to right, var(--cv-white), hsl(var(--hue), 100%, 50%));
+}
+.cv-sv-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--cv-white); box-shadow: 0 0 0 1px var(--cv-dot-ring); pointer-events: none; }
+.cv-field { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-xs); color: var(--graphite); }
+.cv-field input[type="range"] { width: 100%; height: 24px; margin: 0; }
+.cv-hexrow { display: flex; gap: var(--space-2); align-items: center; }
+.cv-hexrow .cv-field { flex-grow: 1; }
+.cv-hex { height: var(--cv-btn); box-sizing: border-box; padding: 0 10px; border: 1px solid var(--stone); border-radius: var(--radius-md); font-family: var(--font-label); font-size: var(--text-sm); color: var(--ink); }
+.cv-hex[aria-invalid="true"] { border-color: var(--danger); }
+.cv-drop { width: 40px; height: 40px; margin-top: 18px; padding: 0; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.cv-drop[aria-disabled="true"] { color: var(--muted); }
+.cv-readout { display: flex; justify-content: space-between; font-family: var(--font-label); font-size: var(--text-xs); color: var(--ink-2); }
+.cv-note { margin: 0; font-size: var(--text-xs); line-height: 1.4; color: var(--muted); }
+.cv-note-2 { line-height: 1.45; color: var(--graphite); }
+.cv-sws { display: flex; flex-wrap: wrap; gap: 6px; }
+.cv-sw { width: 28px; height: 28px; padding: 0; box-sizing: border-box; border-radius: var(--radius-sm); background: var(--sw); border: 1px solid var(--stone); }
+.cv-sw.is-on { border: 2px solid var(--cv-sel); }
+.cv-recent { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--graphite); }
+.cv-input { height: 40px; box-sizing: border-box; padding: 0 var(--space-3); border: 1px solid var(--stone); border-radius: var(--radius-md); font: inherit; font-size: var(--text-md); color: var(--ink); }
+.cv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cv-chip { height: 32px; padding: 0 10px; border: 1px solid var(--stone); border-radius: var(--radius-2xl); background: var(--surface); font-size: var(--text-xs); }
+.cv-chip.is-on { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+.cv-fontlist { overflow-y: auto; max-height: 340px; display: flex; flex-direction: column; }
+.cv-font { min-height: var(--control-h); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 10px; border: 0; border-radius: var(--radius-md); background: transparent; text-align: left; }
+.cv-root .cv-font::after { width: 100%; }
+.cv-font.is-on, .cv-font:hover { background: var(--mist); }
+.cv-font-name { display: block; width: 200px; height: 28px; flex-shrink: 1; min-width: 0; background: url("../img/cover-fonts.png") 0 calc(var(--row) * -28px) / 300px auto no-repeat; }
+.cv-font-cat { font-family: var(--font-label); font-size: var(--text-xs); color: var(--muted); flex-shrink: 0; }
+.cv-mi { height: 40px; border: 0; border-radius: var(--radius-md); background: transparent; text-align: left; padding: 0 10px; font-size: var(--text-md); }
+.cv-root .cv-mi::after { width: 100%; }
+.cv-mi:hover { background: var(--paper); }
+.cv-range { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-sm); }
+.cv-range-row { display: flex; justify-content: space-between; }
+.cv-range input[type="range"] { width: 100%; height: 28px; margin: 0; }
+.cv-check { position: relative; z-index: 0; min-height: 40px; display: flex; align-items: center; gap: 10px; font-size: var(--text-md); cursor: pointer; }
+.cv-check input { width: 20px; height: 20px; margin: 0; }
+.cv-pop-p { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }
+.cv-pop-p-sm { font-size: var(--text-xs); line-height: 1.45; }
+
+/* ── Save failed bar (design 73c) ── */
+.cv-alert {
+  flex-shrink: 0; box-sizing: border-box; padding: 10px var(--space-4); background: var(--danger-bg); border-bottom: 1px solid var(--cv-danger-line);
+  display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); line-height: 1.45; color: var(--cv-danger-ink); position: relative; z-index: 4;
+}
+.cv-alert[hidden] { display: none; }
+.cv-alert svg { flex-shrink: 0; }
+.cv-alert-t { flex: 1; }
+.cv-alert-btn { height: 34px; padding: 0 14px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--surface); font-size: var(--text-sm); font-weight: 600; flex-shrink: 0; }
+
+/* ── Workspace ── */
+.cv-wswrap { flex-grow: 1; min-height: 0; position: relative; }
+.cv-ws { position: absolute; inset: 0; overflow: hidden; background: var(--mist); cursor: grab; touch-action: none; }
+.cv-ws.is-panning { cursor: grabbing; }
+.cv-board { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.cv-paper { position: absolute; inset: 0; box-shadow: var(--cv-shadow-paper); }
+.cv-tpl { position: absolute; inset: 0; pointer-events: none; color: var(--ink); }
+.cv-tpl > div { position: absolute; }
+.cv-tpl[hidden] { display: none; }
+.cv-tpl-bleed { background: var(--cv-kdp-pink); }
+.cv-tpl-live { background: var(--cv-white); }
+.cv-tpl-trim { box-sizing: border-box; border: 1px solid var(--ink); }
+.cv-tpl-fold { top: 0; width: 0; border-left: 1px dashed var(--cv-fold); }
+/* The 5 template notes stay 10 to 11 px: they are drawing on the cover, not UI text (plan §3 Step D). */
+.cv-tpl-notes { left: 30px; top: 30px; display: flex; flex-direction: column; gap: var(--space-3); font-size: 10px; line-height: 1.35; }
+.cv-tpl-notes strong { font-size: 11px; }
+.cv-tpl-barcode { width: 140px; height: 84px; box-sizing: border-box; background: var(--cv-kdp-yellow); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; line-height: 1.35; }
+.cv-tpl-label { font-size: 9px; line-height: 1.3; color: var(--graphite); }
+.cv-tpl-right { width: 50px; text-align: right; }
+.cv-tpl-info { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; font-size: 13px; line-height: 1.35; }
+.cv-tpl-info .cv-tpl-big { font-size: 15px; }
+.cv-tpl-spine { transform: rotate(90deg); transform-origin: 0 0; font-size: 6px; letter-spacing: 0.06em; color: var(--cv-fold); white-space: nowrap; }
+.cv-canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+.cv-front { pointer-events: none; }
+
+/* The overlay is in board px under scale(z): sizes are divided by --z so they look the same at every zoom. */
+.cv-hit {
+  position: absolute; box-sizing: border-box; margin: 0; padding: 0; border: 0; background: transparent;
+  transform-origin: 50% 50%; pointer-events: auto; cursor: move; touch-action: none;
+}
+.cv-root .cv-hit::after, .cv-root .cv-h-deco::after { content: none; }
+.cv-hit.is-locked { cursor: default; }
+.cv-root .cv-hit:focus-visible { outline: calc(2px / var(--z)) solid var(--ink); outline-offset: calc(2px / var(--z)); }
+.cv-sel { position: absolute; box-sizing: border-box; pointer-events: none; transform-origin: 50% 50%; outline: calc(1.5px / var(--z)) solid var(--cv-sel); outline-offset: calc(3px / var(--z)); }
+.cv-sel.is-locked { outline-color: var(--muted); }
+.cv-h {
+  position: absolute; width: calc(10px / var(--z)); height: calc(10px / var(--z)); margin: calc(-5px / var(--z)) 0 0 calc(-5px / var(--z));
+  box-sizing: border-box; padding: 0; background: var(--cv-white); border: calc(1.5px / var(--z)) solid var(--cv-sel); border-radius: 50%;
+  pointer-events: auto; touch-action: none;
+}
+.cv-root .cv-h::after { width: calc(var(--control-h) / var(--z)); height: calc(var(--control-h) / var(--z)); }
+.cv-root .cv-h:focus-visible { outline: calc(2px / var(--z)) solid var(--ink); outline-offset: calc(2px / var(--z)); }
+.cv-h-deco { border-radius: calc(2px / var(--z)); pointer-events: none; }
+.cv-h-width { width: calc(10px / var(--z)); height: calc(22px / var(--z)); margin: calc(-11px / var(--z)) 0 0 calc(-2px / var(--z)); border-radius: calc(5px / var(--z)); cursor: ew-resize; }
+.cv-h-rot { left: 50%; top: calc(-30px / var(--z)); width: calc(14px / var(--z)); height: calc(14px / var(--z)); margin: calc(-7px / var(--z)) 0 0 calc(-7px / var(--z)); cursor: grab; }
+.cv-h[data-c="nw"], .cv-h[data-c="se"] { cursor: nwse-resize; }
+.cv-h[data-c="ne"], .cv-h[data-c="sw"] { cursor: nesw-resize; }
+.cv-h-box[data-c="n"], .cv-h-box[data-c="s"] { cursor: ns-resize; }
+.cv-h-box[data-c="e"], .cv-h-box[data-c="w"] { cursor: ew-resize; }
+.cv-rotline { position: absolute; left: 50%; top: calc(-30px / var(--z)); width: 0; height: calc(30px / var(--z)); border-left: calc(1.5px / var(--z)) solid var(--cv-sel); }
+.cv-tag { position: absolute; left: 0; top: calc(-24px / var(--z)); padding: calc(2px / var(--z)) calc(6px / var(--z)); border-radius: calc(4px / var(--z)); background: var(--muted); color: var(--surface); font-size: calc(12px / var(--z)); white-space: nowrap; }
+.cv-edit {
+  position: absolute; display: block; box-sizing: border-box; margin: 0; padding: 0; border: 0; outline: none; background: var(--cv-edit-tint);
+  resize: none; overflow: hidden; line-height: 1.15; white-space: pre-wrap; overflow-wrap: break-word; min-height: 1.2em;
+  transform-origin: 50% 50%; pointer-events: auto; cursor: text;
+}
+.cv-root .cv-edit:focus-visible { outline: none; }
+.cv-guides { position: absolute; inset: 0; pointer-events: none; }
+.cv-guides[hidden] { display: none; }
+.cv-gl { position: absolute; }
+.cv-gl-v { top: 0; width: 0; height: 100%; border-left: 1px dashed; }
+.cv-gl-h { left: 0; height: 0; width: 100%; border-top: 1px dashed; }
+.cv-gl.is-live { border-color: var(--cv-guide); }
+.cv-gl.is-fold { border-color: var(--cv-fold); }
+.cv-snapline { position: absolute; top: 0; height: 100%; width: 0; border-left: 1px solid var(--cv-snap); pointer-events: none; }
+.cv-snapline[hidden] { display: none; }
+.cv-pop.cv-tplpop { left: var(--space-3); top: var(--space-3); width: 320px; padding: 18px var(--space-5); gap: 14px; z-index: 4; }
+
+/* ── Status bar ── */
+.cv-foot {
+  height: var(--cv-foot-h); flex-shrink: 0; box-sizing: border-box; padding: 0 var(--space-4); background: var(--surface); border-top: 1px solid var(--stone);
+  display: flex; align-items: center; gap: 18px; font-family: var(--font-label); font-size: var(--text-xs); color: var(--graphite); white-space: nowrap;
+}
+.cv-specs { display: inline-flex; gap: 18px; min-width: 0; overflow: hidden; }
+.cv-savetext.is-saved { color: var(--success); }
+.cv-savetext.is-saving { color: var(--graphite); }
+.cv-savetext.is-failed { color: var(--danger); font-weight: 600; }
+.cv-foot-retry { height: 24px; padding: 0 var(--space-2); border: 1px solid var(--cv-danger-line); border-radius: var(--radius-sm); background: var(--surface); color: var(--danger); font-family: var(--font-ui); font-size: var(--text-xs); font-weight: 600; }
+
+/* ── Loading and Locked (designs 58 state, 73) ── */
+.cv-loading { flex-grow: 1; display: flex; flex-direction: column; background: var(--paper); }
+.cv-loading-bar { height: var(--cv-bar-h); background: var(--surface); border-bottom: 1px solid var(--stone); }
+.cv-loading-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); text-align: center; padding: var(--space-6); }
+.cv-loading-sheet { width: min(520px, 100%); height: 300px; border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--mist) 0%, var(--paper) 50%, var(--mist) 100%); }
+.cv-loading-t { font-size: var(--text-base); font-weight: 600; }
+.cv-loading-s { font-size: var(--text-sm); color: var(--graphite); }
+.cv-locked { flex-grow: 1; display: flex; align-items: center; justify-content: center; background: var(--paper); padding: var(--space-6); }
+.cv-locked-card { width: 520px; max-width: calc(100% - 2 * var(--space-8)); box-sizing: content-box;   /* design 73: 520 px inside the 32 px padding */ padding: var(--space-8); background: var(--surface); border: 1px solid var(--stone); border-radius: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+.cv-locked-icon { width: var(--control-h); height: var(--control-h); border-radius: 50%; background: var(--paper); display: flex; align-items: center; justify-content: center; }
+.cv-locked-card h2 { margin: 0; font-size: var(--text-2xl); font-weight: 600; }
+.cv-locked-p { margin: 0; font-size: var(--text-base); line-height: 1.55; color: var(--ink-2); }
+.cv-locked-s { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }
+.cv-locked-btn { margin-top: 6px; height: var(--control-h); padding: 0 18px; display: inline-flex; align-items: center; border-radius: var(--radius-md); background: var(--ink); color: var(--surface); text-decoration: none; font-size: var(--text-base); font-weight: 500; }
+.cv-locked-btn:hover { background: var(--ink-hover); color: var(--surface); }

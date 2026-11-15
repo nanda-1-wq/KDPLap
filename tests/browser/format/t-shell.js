@@ -11,37 +11,34 @@ const test = async page => {
   ok((await FM.txt(page, '[data-step-label]')) === 'PACKAGE · STEP 8 OF 11' && (await FM.txt(page, '[data-step-title]')) === 'Format', 'PACKAGE · STEP 8 OF 11, Format');
   ok((await FM.txt(page, '[data-export]')) === 'Export files', 'header: Export files');
   ok((await note()) === 'Not done yet: export the Print PDF.', 'no Print PDF: the reason line');
-  const nx = await page.$eval('[data-next]', (b) => ({ dis: b.disabled, aria: b.getAttribute('aria-disabled'), tip: (b.querySelector('.tip') || {}).textContent, by: b.getAttribute('aria-describedby') }));
-  ok(!nx.dis && nx.aria === 'true' && nx.tip === 'Coming next' && nx.by === 'nextNote nextTip', `Next: focusable, off, "Coming next" tip (${JSON.stringify(nx)})`);
-  await page.focus('[data-next]');
-  ok(await page.$eval('[data-next] .tip', (t) => getComputedStyle(t).opacity === '1'), 'the tip shows on keyboard focus');
-  await page.click('[data-next]', { force: true });   // aria-disabled: Playwright would wait
-  await page.waitForTimeout(200);
-  ok(/step=8/.test(page.url()) && st.book.current_step === 8, 'Next does nothing');
+  // E16 Part 4: 08 is not the last step any more: Next is on and opens 09 (the 09 suite checks 09 itself).
+  const nx = await page.$eval('[data-next]', (b) => ({ dis: b.disabled, aria: b.getAttribute('aria-disabled'), tip: !!b.querySelector('.tip'), by: b.getAttribute('aria-describedby') }));
+  ok(!nx.dis && nx.aria === null && !nx.tip && nx.by === 'nextNote', `Next: on, no "Coming next" tip (${JSON.stringify(nx)})`);
 
   /* Rail (51b): 01 to 09, 08 current with the dot, 09 the lock, not a link. */
   ok(await page.$eval('.book-layout', (e) => e.classList.contains('is-rail')), '08 folds to the rail');
-  const rail = await page.$$eval('.book-nav [data-step], .book-nav [data-coming]', (a) => a.map((x) => x.querySelector('.step-num').textContent));
-  ok(rail.join() === '01,02,03,04,05,06,07,08,09', `rail 01 to 09: ${rail}`);
+  const rail = await page.$$eval('.book-nav [data-step]', (a) => a.map((x) => x.querySelector('.step-num').textContent));
+  ok(rail.join() === '01,02,03,04,05,06,07,08,09', `rail 01 to 09, all links (E16 Part 4): ${rail}`);
   ok(await page.$eval('[data-step="8"]', (a) => a.tagName === 'A' && a.getAttribute('aria-current') === 'step'), '08 is a link, the current step');
-  ok(await page.$eval('[data-coming="9"]', (d) => d.tagName === 'DIV' && d.getAttribute('aria-disabled') === 'true') && LOCK.test(await page.$eval('[data-coming="9"] .step-mark', (e) => e.innerHTML)), '09: the lock, not a link');
-  ok(!(await page.$('[data-coming="8"]')), 'no Coming next row for 08');
+  const s9 = await page.$eval('[data-step="9"]', (a) => [a.tagName, a.querySelector('.step-mark').innerHTML]);
+  ok(s9[0] === 'A' && !LOCK.test(s9[1]), '09: a link, no lock (E16 Part 4)');
+  ok(!(await page.$('[data-coming]')), 'no Coming next row');
   const dims = await page.$eval('[data-step="8"]', (a) => { const b = a.getBoundingClientRect(); return [Math.round(b.width), Math.round(b.height)]; });
   ok(dims.join() === '52,52', `rail 08: 52 × 52 (${dims})`);
 
-  /* The full sidebar: 08 Format with its reason, 09 Coming next, RELEASE Coming in v3. */
+  /* The full sidebar: 08 Format with its reason, 09 Cover, RELEASE Coming in v3. */
   await page.click('[data-rail-toggle]');
   ok((await FM.txt(page, '[data-step="8"]')).replace(/ ,/g, ',') === '08 Format, Export the Print PDF', `sidebar 08: ${await FM.txt(page, '[data-step="8"]')}`);
-  ok((await FM.txt(page, '[data-coming="9"]')).replace(/ ,/g, ',') === '09 Cover, Coming next', '09 Cover, Coming next');
+  ok((await FM.txt(page, '[data-step="9"]')).startsWith('09 Cover'), `09 Cover (${await FM.txt(page, '[data-step="9"]')})`);
   ok((await FM.all(page, '.group-row .version-tag')).join() === 'Coming in v3', 'RELEASE: Coming in v3');
   await page.click('[data-rail-toggle]');
 
-  /* A Print PDF that is current: done (check), the note says Coming next. Changed: the reason again. */
+  /* A Print PDF that is current: done (check), no note (E16: Next opens 09). Changed: the reason again. */
   st.lastPdf = { created_at: new Date().toISOString(), page_count: 48 };
   st.changed = false;
   await FM.open(page);
-  for (let i = 0; i < 80 && (await note()) !== 'Coming next'; i++) await page.waitForTimeout(50);
-  ok((await note()) === 'Coming next', `a current Print PDF: Coming next (${await note()})`);
+  for (let i = 0; i < 80 && (await note()) !== ''; i++) await page.waitForTimeout(50);
+  ok((await note()) === '' && await page.$eval('[data-next-note]', (n) => n.hidden), `a current Print PDF: no note (${await note()})`);
   await page.click('[data-step="7"]');
   await page.waitForFunction(() => document.querySelector('[data-step-title]').textContent === 'Quality Control', null, { timeout: 5000 });
   ok(await page.$eval('[data-step="8"]', (a) => a.classList.contains('is-done') && !!a.querySelector('.step-mark svg')), '08 done: the check');

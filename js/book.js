@@ -41,17 +41,21 @@
    E13.2 (designs 41, 51b): 08 Format is js/book-format.js, a wide step (the
    rail). On 08 the header button reads "Export files" and opens the 08
    panel when the step has one (openExport); other steps keep the E11
-   dialog. 08 is the last step with a screen: Next is off with the
-   "Coming next" tip, and the note says what 08 still needs. 09 Cover shows
-   a lock and "Coming next" and is not a link until E15.
+   dialog. The note says what 08 still needs; Next opens 09 (E16).
    ctx.go(n, { focus }) opens a step and asks it to focus one control
    (07 "How to add one" → 08 at the Copyright row).
+   E16 Part 4 (designs 58, 73): 09 Cover is js/cover/editor.js, a wide step
+   (the rail) and the last step with a screen. A step may set its own Next:
+   nextOff() (09: off until a current export, Part 10), nextTitle, and
+   nextNote() (09: "Fix 3 problems before export."). exportLabel names the
+   header button; exportInert = N draws it inert ("Comes in Part N").
+   STOP 4 (owner, F3): the rail adds 10 (open) and 11 (locked), not links.
 ═══════════════════════════════════════════════════ */
 
 (async function () {
   const TOTAL_STEPS = 11;
-  const LAST_STEP = 8;                  // the last step with a screen; 09 Cover is next (E15)
-  const WIDE_STEPS = new Set([6, 8]);   // these fold the sidebar to the rail (09 joins them)
+  const LAST_STEP = 9;                  // the last step with a screen (E16: 09 Cover); 10 and 11 are v3
+  const WIDE_STEPS = new Set([6, 8, 9]);   // these fold the sidebar to the rail
   const FORMAT_STEP = 8;
   const QC_STEP = 7;
   const MARK_DELAY = 2000;
@@ -65,9 +69,9 @@
     5: { group: 'Produce', name: 'Outline', task: 'E9', text: 'Plan the chapters and their word targets.' },
     6: { group: 'Produce', name: 'Write', task: 'E10', text: 'Write the book one section at a time, with AI help.' },
     7: { group: 'Produce', name: 'Quality Control', task: 'E14', text: 'Check the whole book before you format it.' },
-    8: { group: 'Package', name: 'Format', task: 'E13', text: 'Choose the look of the pages and export the Print PDF.' }
+    8: { group: 'Package', name: 'Format', task: 'E13', text: 'Choose the look of the pages and export the Print PDF.' },
+    9: { group: 'Package', name: 'Cover', task: 'E16', text: 'Design the cover and export the cover files.' }
   };
-  const COMING = { 9: 'Cover' };
 
   const nav = document.querySelector('[data-book-nav]');
   const head = document.querySelector('[data-book-head]');
@@ -211,10 +215,14 @@
         <span class="step-mark" aria-hidden="true">${done ? CHECK : ''}</span><span class="step-num">${pad(QC_STEP)}</span>${name}</a>`;
   }
 
-  /** 09: a lock, not a link until its screen lands (approved difference V9, E13.2 F5). */
-  function comingRow(n) {
-    return `<div class="step-link is-future is-locked" role="link" aria-disabled="true" title="${pad(n)} ${COMING[n]}, coming next" data-coming="${n}">
-        <span class="step-mark" aria-hidden="true">${LOCK_SM}</span><span class="step-num">${pad(n)}</span>${COMING[n]}<span class="sr-only">, </span><span class="version-tag">Coming next</span></div>`;
+  /**
+   * E16 STOP 4 (owner, F3; design 58): the rail also shows 10 Metadata (open) and 11 Publish (locked).
+   * They are v3 steps: not links, and only in the rail (the full sidebar keeps "RELEASE · Coming in v3").
+   */
+  function futureRow(n, name, locked) {
+    const label = `${pad(n)} ${name}, coming in v3`;
+    return `<div class="step-link is-future rail-only${locked ? ' is-locked' : ''}" role="img" aria-label="${label}" title="${label}" data-future="${n}">
+        <span class="step-mark" aria-hidden="true">${locked ? LOCK_SM : ''}</span><span class="step-num">${pad(n)}</span></div>`;
   }
 
   /** A wide step folds the sidebar to a rail (designs 22, 51b); the button opens it again. */
@@ -294,10 +302,11 @@
       </div>
       <div class="step-group">
         <div class="step-group-head"><span class="group-name">PACKAGE</span></div>
-        ${stepLink(FORMAT_STEP)}${comingRow(9)}
+        ${stepLink(FORMAT_STEP)}${stepLink(9)}
       </div>
       <div class="step-group">
         <div class="group-row"><span class="group-name">RELEASE</span><span class="version-tag">Coming in v3</span></div>
+        ${futureRow(10, 'Metadata', false)}${futureRow(11, 'Publish', true)}
       </div>
       <div class="sidebar-spacer"></div>
       <div class="saved-line" data-saved-line aria-live="polite"></div>`;
@@ -346,8 +355,11 @@
   function setGate() {
     const m = MODULES[step];
     const left = m && m.blockers ? m.blockers() : 0;
-    const last = step === LAST_STEP;
-    nextBtn.disabled = !last && left > 0;
+    // E16: a step with its own Next (09) decides on and off itself, with no "Coming next" tip.
+    const own = !!(m && m.nextOff);
+    const last = step === LAST_STEP && !own;
+    nextBtn.disabled = own ? !!m.nextOff() : (!last && left > 0);
+    if (m && m.nextTitle) nextBtn.title = m.nextTitle; else nextBtn.removeAttribute('title');
     // The last step: Next stays focusable with the "Coming next" tip (shell pattern), and does nothing.
     nextBtn.classList.toggle('has-tip', last);
     if (last) nextBtn.setAttribute('aria-disabled', 'true'); else nextBtn.removeAttribute('aria-disabled');
@@ -362,7 +374,8 @@
     } else if (!last && tip) tip.remove();
     const need = m && m.missing ? m.missing() : '';
     let note = '';
-    if (left) note = need || `${left} required field${left === 1 ? '' : 's'} left`;
+    if (m && m.nextNote) note = m.nextNote();
+    else if (left) note = need || `${left} required field${left === 1 ? '' : 's'} left`;
     else if (need && !isDone(step)) note = `Not done yet: ${lowerFirst(need)}.`;
     else if (last) note = 'Coming next';
     nextNote.textContent = note;
@@ -415,7 +428,14 @@
     stepTitle.textContent = s.name;
     backBtn.disabled = step === 1;
     const exportLabel = document.querySelector('[data-export-label]');
-    if (exportLabel) exportLabel.textContent = step === FORMAT_STEP ? 'Export files' : 'Export';
+    const mod = MODULES[step];
+    if (exportLabel) exportLabel.textContent = mod && mod.exportLabel ? mod.exportLabel : step === FORMAT_STEP ? 'Export files' : 'Export';
+    // E16 Part 4: 09's Export cover is drawn inert until its dialog lands (Part 10).
+    const exportBtnEl = document.querySelector('[data-export]');
+    if (exportBtnEl) {
+      if (mod && mod.exportInert) { exportBtnEl.setAttribute('aria-disabled', 'true'); exportBtnEl.title = `Comes in Part ${mod.exportInert}`; }
+      else { exportBtnEl.removeAttribute('aria-disabled'); exportBtnEl.removeAttribute('title'); }
+    }
     renderNav();
     renderStrip();
     if (book.status === 'completed') readStatus();
@@ -505,6 +525,7 @@
   const exportBtn = document.querySelector('[data-export]');
   if (exportBtn) exportBtn.addEventListener('click', () => {
     if (!book) return;
+    if (exportBtn.getAttribute('aria-disabled') === 'true') return;
     // 08 (design 42): "Export files" opens the 08 panel once the step has it.
     if (MODULES[step] && MODULES[step].openExport) { MODULES[step].openExport(exportBtn); return; }
     if (!window.kdpExport) return;

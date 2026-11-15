@@ -16,7 +16,8 @@ const exists = (p) => { try { Deno.statSync(new URL(p, ROOT)); return true; } ca
 const AUTH = ["login.html", "signup.html", "forgot-password.html", "reset-password.html"];
 const PAGES = ["index.html", ...AUTH, "landing/index.html",
   ...list("app/", ".html").filter((p) => p !== "app/editor.html"), ...list("app/generators/", ".html")];
-const SCRIPTS = list("js/", ".js");
+// E16 Part 4: the 09 Cover editor (js/cover/) is served on the book page too.
+const SCRIPTS = [...list("js/", ".js"), ...list("js/cover/", ".js")];
 const STYLES = [...list("css/", ".css"), "landing/landing.css", "design/design-tokens.css"];
 const SERVED = [...PAGES, ...SCRIPTS, ...STYLES];
 
@@ -30,7 +31,7 @@ const LEGAL_LANDING = "Kindle Direct Publishing (KDP) is a trademark of Amazon. 
 Deno.test("the scan covers every served page, script and style", () => {
   assertEquals(PAGES.length, 15);
   assert(SCRIPTS.length >= 40 && SCRIPTS.includes("js/shell.js"), String(SCRIPTS.length));
-  assertEquals(STYLES.length, 4);
+  assertEquals(STYLES.length, 5);   // E16 Part 4: css/cover.css
 });
 
 Deno.test("no \"KDP Lab\" where a user sees it", () => {
