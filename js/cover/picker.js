@@ -11,7 +11,7 @@
    kdpCover.picker.normHex(text)      → "#RRGGBB" or null (accepts "abc", "#abc", "aabbcc")
    kdpCover.picker.remember(recent, hex) → the last 5, newest first
    kdpCover.picker.html(p, o)         → the popover's inner HTML
-        p = { hue, sat, val, hexDraft, recent }, o = { title, cur, note }
+        p = { hue, sat, val, hexDraft, recent }, o = { title, cur, note, embed (no title or close: inside another popover) }
    kdpCover.picker.bind(el, p, api)   → wires the square, hue, hex, eyedropper, presets
         api.set(hex, keep)  (keep: a deliberate pick, kept in Recent)
         api.hsv(hue, sat, val) (the square or the hue moved)
@@ -37,28 +37,30 @@
   const X = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   const DROP = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4l6 6-2 2-6-6z"/><path d="M13 7L5 15v4h4l8-8"/></svg>';
 
-  function swatch(hex, cur) {
-    return `<button type="button" class="cv-sw${cur === hex ? ' is-on' : ''}" data-hex="${hex}" aria-label="${hex}" aria-pressed="${cur === hex}" style="--sw:${hex}"></button>`;
+  // data-k (Part 5): a picker drawn again gives focus back to the swatch, the hex field or the slider in use.
+  function swatch(hex, cur, k) {
+    return `<button type="button" class="cv-sw${cur === hex ? ' is-on' : ''}" data-k="${k}-${hex}" data-hex="${hex}" aria-label="${hex}" aria-pressed="${cur === hex}" style="--sw:${hex}"></button>`;
   }
 
   function html(p, o) {
     const cur = o.cur;
     const [r, g, b] = hexToRgb(cur);
     const k = cmyk(cur);
+    // o.embed (Part 5): the picker inside another popover (effects, fill, border): no title, no close.
     return `
-      <div class="cv-pop-head"><h2>${esc(o.title)}</h2><button type="button" class="cv-x" data-pk-close aria-label="Close">${X}</button></div>
-      <div class="cv-sv" role="slider" tabindex="0" aria-label="Saturation and brightness" aria-valuetext="${cur}" data-pk-sv style="--hue:${p.hue}">
+      ${o.embed ? '' : `<div class="cv-pop-head"><h2>${esc(o.title)}</h2><button type="button" class="cv-x" data-pk-close aria-label="Close">${X}</button></div>`}
+      <div class="cv-sv" role="slider" tabindex="0" aria-label="Saturation and brightness" aria-valuetext="${cur}" data-k="pk-sv" data-pk-sv style="--hue:${p.hue}">
         <span class="cv-sv-dot" style="left:${(p.sat * 100).toFixed(2)}%;top:${((1 - p.val) * 100).toFixed(2)}%"></span>
       </div>
-      <label class="cv-field">Hue<input type="range" min="0" max="360" value="${p.hue}" data-pk-hue></label>
+      <label class="cv-field">Hue<input type="range" min="0" max="360" value="${p.hue}" data-k="pk-hue" data-pk-hue></label>
       <div class="cv-hexrow">
-        <label class="cv-field">Hex<input type="text" class="cv-hex" value="${esc(p.hexDraft)}" spellcheck="false" autocomplete="off" data-pk-hex></label>
-        <button type="button" class="cv-drop" data-pk-drop aria-label="Pick a color from the screen"${root.EyeDropper ? '' : ' aria-disabled="true" title="Your browser cannot pick a color from the screen"'}>${DROP}</button>
+        <label class="cv-field">Hex<input type="text" class="cv-hex" value="${esc(p.hexDraft)}" spellcheck="false" autocomplete="off" data-k="pk-hex" data-pk-hex></label>
+        <button type="button" class="cv-drop" data-k="pk-drop" data-pk-drop aria-label="Pick a color from the screen"${root.EyeDropper ? '' : ' aria-disabled="true" title="Your browser cannot pick a color from the screen"'}>${DROP}</button>
       </div>
       <div class="cv-readout"><span>RGB ${r}, ${g}, ${b}</span><span>CMYK ${k.join(' ')}</span></div>
       <p class="cv-note">CMYK is shown for reference. Your files stay sRGB, the color space KDP accepted.</p>
-      <div class="cv-sws">${PRESETS.map((h) => swatch(h, cur)).join('')}</div>
-      ${p.recent && p.recent.length ? `<div class="cv-recent">Recent${p.recent.map((h) => swatch(h, cur)).join('')}</div>` : ''}
+      <div class="cv-sws">${PRESETS.map((h) => swatch(h, cur, 'pk')).join('')}</div>
+      ${p.recent && p.recent.length ? `<div class="cv-recent">Recent${p.recent.map((h) => swatch(h, cur, 'pkr')).join('')}</div>` : ''}
       ${o.note ? `<p class="cv-note cv-note-2">${esc(o.note)}</p>` : ''}`;
   }
 
@@ -96,7 +98,7 @@
       }).catch(() => {});
     });
     el.querySelectorAll('[data-hex]').forEach((b) => b.addEventListener('click', () => api.set(b.dataset.hex, true)));
-    el.querySelector('[data-pk-close]').addEventListener('click', () => api.close());
+    const x = el.querySelector('[data-pk-close]'); if (x) x.addEventListener('click', () => api.close());
   }
 
   /** In place, while the square or the hue slider is dragged: the dot, the hue, the hex, the read-out, the swatch marks. */

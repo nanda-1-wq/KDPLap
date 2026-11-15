@@ -17,6 +17,7 @@
     if (l.label) return l.label;
     if (l.type === 'text') { const t = String(l.text).replace(/\s+/g, ' ').trim(); return t.length > 26 ? t.slice(0, 26) + '…' : t || 'Text'; }
     if (l.type === 'image') return l.name || 'Picture';
+    if (l.kind === 'icon') return C.shapes.iconLabel(l.icon);
     const sh = C.shapes.LIST.find((x) => x[0] === l.kind); return sh ? sh[1] : 'Shape';
   }
 

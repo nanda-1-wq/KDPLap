@@ -272,6 +272,8 @@ node tools/cover-fonts-sprite.mjs                # re-make img/cover-fonts.png f
 node tools/check-cover-fonts.mjs --check         # every pinned font: size + sha384; design fonts also on unpkg (--all-cdns: every file on both)
 COVER_OUT=<scratch> node tests/browser/cover/t-engine-real.mjs [--quick]   # Chrome: 13 layouts x 6 trims x 2 papers, images, QA sheets, 288 with real metrics, every catalog face
 COVER_OUT=<scratch> node tests/browser/cover/t-safari-real.mjs              # real Safari: canvas limit, print + Kindle, round trip, design faces, 288
+COVER_OUT=<scratch> node tests/browser/cover/t-icons-real.mjs               # Chrome (Part 5): every icon ours vs the browser's SVG, 96 px and stretched; the icons sheet as a Print PDF
+node tools/cover-icons.mjs [--check]             # js/cover/icon-set.js from the pinned Tabler tarball (sha512); --check: the file equals a fresh build
 node tests/browser/cover/qa-files.mjs <folder outside git> [--no-safari]   # the KDP Print Previewer files + README.md
 ```
 
@@ -300,6 +302,13 @@ tests/browser/run.sh cover t-undo.js     # 50 steps, the 500 ms window, keys, ba
 tests/browser/run.sh cover t-save.js     # rev, one save per burst, the visit snapshot, Save failed + Retry, another tab (R11), leaving
 tests/browser/run.sh cover t-a11y.js     # Step D: 44 px click areas, focus ring, 12 px text, no blue; Tab front first, Enter, handle keys
 tests/browser/run.sh cover t-shots4.js   # STOP 4 compare shots → docs/reviews/e16-stop4/ (never in a sweep)
+# Part 5
+tests/browser/run.sh cover t-effects.js  # design 61: 9 styles and their controls, effect color, curve, distortion basic and free (the green corners), Cancel, OK, undo
+tests/browser/run.sh cover t-shapes.js   # design 64: 27 tiles, the shape bar, Change shape + settings, Fill solid / gradient / none, Border, More, size, saved
+tests/browser/run.sh cover t-icons.js    # the Tabler icons: loaded on first open, failed load + Retry, grid, search, no brands, add, recolor, reload without the set
+tests/browser/run.sh cover t-multi.js    # design 65: Shift / Cmd-click, box select, Cmd+A, align ×6 to 5 targets, space, duplicate, lock, delete, drag all, keys
+tests/browser/run.sh cover t-layers.js   # design 66: rows front first, select, eye, lock, ⋮ menu, rename, drag and keyboard reorder, Background row
+tests/browser/run.sh cover t-shots5.js   # STOP 5 compare shots (61, 64, 65, 66) and the icons grid → docs/reviews/e16-stop5/ (never in a sweep)
 ```
 
 - `tests/browser/cover/mock.js` answers as 0030: `cover_json`, the design insert (rev 1, 23505 on a

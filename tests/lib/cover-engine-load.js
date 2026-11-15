@@ -6,6 +6,7 @@ import "../../js/cover/fonts.js";
 import "../../js/cover/flatten.js";
 import "../../js/cover/typst.js";
 import "../../js/cover/zip.js";
+import "../../js/cover/icon-set.js";
 import "../../js/cover/image-prep.js";
 import "../fixtures/cover-qa.js";
 

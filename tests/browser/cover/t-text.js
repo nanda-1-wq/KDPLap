@@ -59,6 +59,13 @@ const test = async page => {
   t = await CV.layer(page, 'title');
   ok(t.text === FIX.title + ' Now', `typing changes the layer (${t.text})`);
   ok(await page.evaluate(() => document.activeElement && document.activeElement.matches('[data-edit]')), 'the box keeps focus while typing');
+  // STOP 5: a pan or a window resize while typing draws the overlay again; the text box is kept, typing goes on.
+  await page.mouse.move(900, 700); await page.mouse.wheel(0, 20); await page.waitForTimeout(150);
+  await page.setViewportSize({ width: 1400, height: 880 }); await page.waitForTimeout(250);
+  await page.keyboard.type('!');
+  ok((await CV.layer(page, 'title')).text === FIX.title + ' Now!' && await page.evaluate(() => document.activeElement && document.activeElement.matches('[data-edit]')), 'a pan and a resize while typing: still typing in the same box');
+  await page.keyboard.press('Backspace');
+  await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(150);
   await page.keyboard.press('Escape');
   ok(!(await page.$('[data-edit]')) && (await CV.state(page)).editing === null, 'Esc ends typing');
   ok(await page.evaluate(() => document.activeElement && document.activeElement.matches('[data-hit]')), 'focus back on the layer box');
@@ -73,7 +80,7 @@ const test = async page => {
   await page.mouse.click(x, y);
   const bar = await CV.txt(page, '[data-textbar]');
   ok(/Source Serif 4 ▾/.test(bar) && /34 pt/.test(bar) && /#FFFFFF/.test(bar) && /Effects/.test(bar) && /100%/.test(bar) && /Arrange ▾/.test(bar), `text bar: ${bar.slice(0, 120)}`);
-  ok(await page.$eval('[data-k="fx"]', (b) => b.getAttribute('aria-disabled') === 'true' && b.title === 'Comes in Part 5'), 'Effects: inert, Comes in Part 5');
+  ok(await page.$eval('[data-k="fx"]', (b) => !b.hasAttribute('aria-disabled') && b.getAttribute('aria-expanded') === 'false'), 'Effects: live (Part 5), closed');
   ok(await page.$eval('[data-k="ac"]', (b) => b.getAttribute('aria-pressed') === 'true'), 'Align center pressed');
   await page.click('[data-k="size-up"]');
   ok((await CV.layer(page, 'title')).size === 36, 'size + from 34: 36 (2 pt steps from 24)');

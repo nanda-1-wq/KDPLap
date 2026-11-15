@@ -237,12 +237,15 @@
       return normCommon(l, o);
     }
     if (l.type === 'shape') {
-      const o = { id: l.id, type: 'shape', kind: oneOf(l.kind, C.shapes.KINDS, 'rect'), h: Math.max(1, fin(l.h, 100)),
+      // An icon (Part 5) keeps its name and Tabler's path strings; bad path data drops the layer (never drawn as a rectangle).
+      if (l.kind === 'icon' && !(typeof l.icon === 'string' && /^[a-z0-9-]{1,64}$/.test(l.icon) && C.shapes.iconPathsOk(l.paths))) return null;
+      const o = { id: l.id, type: 'shape', kind: oneOf(l.kind, C.shapes.KINDS.concat(['icon']), 'rect'), h: Math.max(1, fin(l.h, 100)),
         fillMode: oneOf(l.fillMode, ['solid', 'grad', 'none'], 'solid'), fill: hex(l.fill, '#1F3A5F'), fill2: hex(l.fill2, '#E07A5F'),
         gAngle: numIn(l.gAngle, RANGE.gAngle, 90), sw: numIn(l.sw, RANGE.sw, 0), scolor: hex(l.scolor, '#1C1C1A'), dash: oneOf(l.dash, ['solid', 'dash', 'dot'], 'solid'),
         radius: numIn(l.radius, RANGE.radius, 0), points: Math.round(numIn(l.points, RANGE.points, 5)), depth: numIn(l.depth, RANGE.depth, 45),
         head: numIn(l.head, RANGE.head, 40), thick: numIn(l.thick, RANGE.thick, 18), flipH: bool(l.flipH, false), flipV: bool(l.flipV, false) };
       o.name = str(l.name, 40, o.kind);
+      if (o.kind === 'icon') { o.icon = l.icon; o.paths = l.paths.slice(); }
       return normCommon(l, o);
     }
     if (l.type === 'image') {

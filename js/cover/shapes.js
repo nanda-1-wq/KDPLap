@@ -18,6 +18,18 @@
    kdpCover.shapes.parse(d)        → absolute segments [{ op, pts }]
    kdpCover.shapes.toCurves(d)     → subpaths of move / line / cubic / quad / close (no arcs)
    kdpCover.shapes.typstCurve(d, o) → 'curve.move((…pt, …pt)), …' for Typst's curve()
+
+   Icons (E16 Part 5, plan §8): a shape layer with kind 'icon' keeps its icon's
+   name (`icon`) and Tabler's own path strings (`paths`, 24 × 24 units, from
+   js/cover/icon-set.js), so a saved cover, a snapshot or a My layout redraws
+   without the icon set. Each path is filled on its own with the non-zero rule,
+   as the SVG draws it (not even-odd, not joined into one path).
+   kdpCover.shapes.ICON_CAPS            → { paths, chars, total }
+   kdpCover.shapes.iconPathsOk(paths)    → true when the strings are safe path data within the caps
+   kdpCover.shapes.iconPaths(l)          → the paths in the layer's own px (w × h), arcs turned into cubics,
+                                           so a stretched icon stays exact (an arc cannot stretch)
+   kdpCover.shapes.iconDefaults(row, g)  → a new icon layer's fields (120 × 120 px, centered on the front)
+   kdpCover.shapes.iconLabel(name)       → "laurel-wreath-1" → "Laurel wreath 1"
    ═══════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -91,6 +103,7 @@
         const el = (ax, ay) => 'M' + f(w / 2 - ax) + ' ' + f(h / 2) + ' A' + f(ax) + ' ' + f(ay) + ' 0 1 0 ' + f(w / 2 + ax) + ' ' + f(h / 2) + ' A' + f(ax) + ' ' + f(ay) + ' 0 1 0 ' + f(w / 2 - ax) + ' ' + f(h / 2) + ' Z';
         return el(rx, ry) + ' ' + el(ix, iy);
       }
+      case 'icon': return iconPaths(l).join(' ');
       default: return '';
     }
   }
@@ -214,5 +227,48 @@
     }).join(', ');
   }
 
-  C.shapes = { LIST, KINDS, path, defaults, swapKind, parse, arcToCubics, toCurves, typstCurve };
+  // ---- icons (E16 Part 5) ----
+  const ICON_CAPS = { paths: 16, chars: 4000, total: 6000 };
+  const PATH_CHARS = /^[MmLlHhVvCcSsQqTtAaZz0-9.,\s+\-eE]*$/;
+  function iconPathsOk(paths) {
+    if (!Array.isArray(paths) || !paths.length || paths.length > ICON_CAPS.paths) return false;
+    let total = 0;
+    for (const d of paths) {
+      if (typeof d !== 'string' || !d.trim() || d.length > ICON_CAPS.chars || !PATH_CHARS.test(d)) return false;
+      total += d.length;
+      try { if (!parse(d).length) return false; } catch (e) { return false; }
+    }
+    return total <= ICON_CAPS.total;
+  }
+  const iconCache = new Map();
+  function iconPaths(l) {
+    if (!iconPathsOk(l.paths)) return [];
+    const key = l.w + ' ' + l.h + ' ' + l.paths.join('|');
+    const hit = iconCache.get(key); if (hit) return hit;
+    const sx = l.w / 24, sy = l.h / 24, f = (n) => { const v = +n.toFixed(3); return Object.is(v, -0) ? 0 : v; };
+    const P = (p) => f(p[0] * sx) + ' ' + f(p[1] * sy);
+    const out = l.paths.map((d) => toCurves(d).map((s) => {
+      if (s.op === 'M') return 'M' + P(s.pts[0]);
+      if (s.op === 'L') return 'L' + P(s.pts[0]);
+      if (s.op === 'C') return 'C' + s.pts.map(P).join(' ');
+      if (s.op === 'Q') return 'Q' + s.pts.map(P).join(' ');
+      return 'Z';
+    }).join(' '));
+    if (iconCache.size > 400) iconCache.clear();
+    iconCache.set(key, out);
+    return out;
+  }
+  function iconLabel(name) {
+    const s = String(name || '').replace(/-/g, ' ').trim();
+    return s ? s[0].toUpperCase() + s.slice(1) : 'Icon';
+  }
+  /** A new icon: 120 px square, centered on the front, the design's shape fill (solid navy, no border). */
+  function iconDefaults(row, g) {
+    const w = 120, h = 120;
+    return { type: 'shape', kind: 'icon', icon: row[0], paths: row[3].slice(), x: g.frontCX - w / 2, y: g.H / 2 - h / 2, w, h,
+      fillMode: 'solid', fill: '#1F3A5F', fill2: '#E07A5F', gAngle: 90, sw: 0, scolor: '#1C1C1A', dash: 'solid', radius: 0,
+      points: 5, depth: 45, head: 40, thick: 18, flipH: false, flipV: false, name: row[0] };
+  }
+
+  C.shapes = { LIST, KINDS, path, defaults, swapKind, parse, arcToCubics, toCurves, typstCurve, ICON_CAPS, iconPathsOk, iconPaths, iconDefaults, iconLabel };
 })(globalThis);

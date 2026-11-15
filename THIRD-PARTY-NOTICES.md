@@ -4,7 +4,8 @@ NicheInk uses the software and fonts below. This file lists each one, its
 license and where it comes from. Added in E13.1 (08 Format, the print engine).
 It closes E13.0 proof risk 8 (the engine's wasm ships with no license file).
 
-None of these files are in this repository except droplet (vendored, below).
+None of these files are in this repository except droplet (vendored, below)
+and the Tabler icon paths (copied into `js/cover/icon-set.js`, below).
 The others load from jsdelivr or unpkg at pinned versions, each checked
 against its sha384 hash (`js/format/files.js`).
 
@@ -165,6 +166,42 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+```
+
+## Cover icons (09 Cover, E16 Part 5)
+
+### Tabler Icons 3.49.0 (`@tabler/icons`), the filled style
+- License: MIT. Source: https://github.com/tabler/tabler-icons (npm `@tabler/icons@3.49.0`,
+  tarball sha512 `l+GnSkFETx0U26icxv1VUFnxxiTqXfCcVRiRAnyMwibupM2S2L/hSaZ9gmSgz01rkrsH/93NvLsxykqdanc6lw==`).
+- Used as recolorable icons on book covers (plan §8, owner Q-4). MIT allows commercial use,
+  including on books that are sold; no credit is needed on the cover.
+- `tools/cover-icons.mjs` copies the path strings of 1,019 filled icons, unchanged, into
+  `js/cover/icon-set.js` (`--check` rebuilds it from the tarball and compares). The 35 icons
+  in Tabler's "Brand" category (company logos, which are trademarks) are left out.
+  Nothing loads from a CDN at run time.
+
+```
+MIT License
+
+Copyright (c) 2020-2026 Paweł Kuna
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 <!-- cover-fonts:start (written by tools/cover-fonts.mjs) -->

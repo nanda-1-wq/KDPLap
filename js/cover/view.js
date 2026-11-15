@@ -21,11 +21,20 @@
    Every drag is captured on the workspace element, so the overlay can be
    drawn again while it runs.
 
+   Part 5: several layers selected (E.multi) show a dashed outline each and
+   one box around them, with no handles; Shift- or Cmd-click adds or takes
+   away a layer; a drag on a member moves them all (the design's gmove); a
+   drag on the bare cover draws a box and selects what it touches (the
+   design's marquee; on the gray it still pans). A text with free
+   distortion shows 4 green corners (the design's quad handles): drag them,
+   or focus one and use the arrow keys (1 px, Shift 10 px).
+
    const v = kdpCover.view.create(E)   E: the editor (js/cover/editor.js)
    v.el            the workspace element
    v.paint()       the canvas again (after any layer change)
    v.sync()        the overlay, the template, the guides and the canvas
    v.fit() / v.center() / v.zoomAt(f)
+   kdpCover.view.quadOf(l, h)  → the 4 corners of a distorted text in its own box (the design's quadOf)
    ═══════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -79,6 +88,15 @@
       .concat([{ kind: 'width', c: 'e', x: 1, y: 0.5 }]);
   }
 
+  /** The design's quadOf: TL, TR, BR, BL in the layer's own px (basic: top and bottom spread; free: the 4 offsets). */
+  function quadOf(l, h) {
+    const w = l.w, D = l.dist;
+    if (D.mode === 'basic') { const t = D.top / 100 * w / 2, b = D.bottom / 100 * w / 2; return [[-t, 0], [w + t, 0], [w + b, h], [-b, h]]; }
+    const q = D.q;
+    return [[q[0][0], q[0][1]], [w + q[1][0], q[1][1]], [w + q[2][0], h + q[2][1]], [q[3][0], h + q[3][1]]];
+  }
+  const QUAD = ['top left', 'top right', 'bottom right', 'bottom left'];
+
   function create(E) {
     const ws = document.createElement('div');
     ws.className = 'cv-ws';
@@ -89,11 +107,12 @@
       <div class="cv-board cv-front" data-front></div>
       <div class="cv-guides" data-guides aria-hidden="true"></div>
       <div class="cv-snapline" data-snapline aria-hidden="true" hidden></div>
+      <div class="cv-marquee" data-marquee aria-hidden="true" hidden></div>
       <div class="cv-pop cv-tplpop" role="dialog" aria-label="KDP template layer" data-tplpop hidden></div>`;
     const back = ws.querySelector('[data-back]'), front = ws.querySelector('[data-front]');
     const paper = ws.querySelector('[data-paper]'), tpl = ws.querySelector('[data-tpl]');
     const canvas = ws.querySelector('[data-canvas]'), guides = ws.querySelector('[data-guides]');
-    const snapEl = ws.querySelector('[data-snapline]'), tplPop = ws.querySelector('[data-tplpop]');
+    const snapEl = ws.querySelector('[data-snapline]'), tplPop = ws.querySelector('[data-tplpop]'), mqEl = ws.querySelector('[data-marquee]');
     let tplKey = '', drag = null, pressed = null;
 
     const g = () => C.geo.geo(E.cover.fmt);
@@ -148,7 +167,8 @@
     }
 
     function overlay() {
-      const L = E.cover.layers, n = L.length, S = sel();
+      const L = E.cover.layers, n = L.length, S = E.multi.length ? null : sel();
+      const M = E.multi;
       let out = '';
       // Front first in the DOM, so Tab goes from the front-most layer back (z-index keeps the hits right).
       for (let i = n - 1; i >= 0; i--) {
@@ -156,9 +176,13 @@
         if (l.hidden) continue;
         const name = E.layerName(l);
         const kind = l.type === 'text' ? 'Text' : l.type === 'image' ? 'Picture' : 'Shape';
-        const on = S && S.id === l.id;
-        out += `<button type="button" class="cv-hit${on ? ' is-sel' : ''}${l.lock ? ' is-locked' : ''}" data-hit="${esc(l.id)}" style="${layerBox(l)};z-index:${i + 1}"
+        const on = (S && S.id === l.id) || M.includes(l.id);
+        out += `<button type="button" class="cv-hit${on ? ' is-sel' : ''}${M.includes(l.id) ? ' is-multi' : ''}${l.lock ? ' is-locked' : ''}" data-hit="${esc(l.id)}" style="${layerBox(l)};z-index:${i + 1}"
           aria-label="${esc(`${kind}: ${name}${l.lock ? ', locked' : ''}`)}" aria-pressed="${on ? 'true' : 'false'}"></button>`;
+      }
+      if (M.length > 1) {
+        const B = C.geo.region(g(), 'sel', L.filter((l) => M.includes(l.id) && !l.hidden).map((l) => C.model.bbox(l, E.textH)));
+        if (B && Number.isFinite(B.x)) out += `<div class="cv-group" aria-hidden="true" style="left:${B.x}px;top:${B.y}px;width:${B.w}px;height:${B.h}px;z-index:${n + 5}"></div>`;
       }
       if (S && !S.hidden) {
         const hs = S.lock || E.editing === S.id ? [] : handleList(S);
@@ -170,19 +194,30 @@
             : `<button type="button" class="cv-h cv-h-${hd.kind}" data-handle="${hd.kind}" data-c="${hd.c}" style="left:${hd.x * 100}%;top:${hd.y * 100}%"
                 aria-label="${esc(`${LABEL[hd.kind]}${hd.kind === 'width' ? '' : `, ${CORNER[hd.c]}`}. Arrow keys work too.`)}"></button>`).join('')}
           ${!S.lock && E.editing !== S.id ? '<button type="button" class="cv-h cv-h-rot" data-handle="rot" data-c="rot" aria-label="Drag to rotate. Arrow keys work too."></button>' : ''}
+          ${S.type === 'text' && S.dist && S.dist.on && S.dist.mode === 'free' && !S.lock && E.editing !== S.id
+            ? quadOf(S, E.textH(S)).map((p, i) => `<button type="button" class="cv-h cv-h-quad" data-handle="quad" data-c="${i}" style="left:${p[0]}px;top:${p[1]}px"
+                aria-label="Drag this corner to distort the text, ${QUAD[i]}. Arrow keys work too."></button>`).join('') : ''}
         </div>`;
       }
-      if (E.editing != null) {
-        const l = L.find((x) => x.id === E.editing);
-        if (l) out += `<textarea class="cv-edit" data-edit aria-label="Edit text" spellcheck="true" style="${editStyle(l)};z-index:${n + 6}">${esc(l.text)}</textarea>`;
-      }
+      // While typing in place, the text box itself is kept: drawing the overlay again (a pan, a zoom, a window
+      // resize) must not replace it, or its blur would end the typing and drop the next letters.
+      const el = E.editing != null ? L.find((x) => x.id === E.editing) : null;
+      const old = front.querySelector('[data-edit]');
+      const kept = el && old && old.dataset.edit === String(el.id) ? old : null;
+      if (el && !kept) out += `<textarea class="cv-edit" data-edit="${esc(el.id)}" aria-label="Edit text" spellcheck="true" style="${editStyle(el)};z-index:${n + 6}">${esc(el.text)}</textarea>`;
       // Drawing again must not drop the keyboard: the focused layer box or handle is focused again.
       const a = document.activeElement;
       const keep = a && front.contains(a) ? (a.dataset.hit != null ? `[data-hit="${CSS.escape(a.dataset.hit)}"]` : a.dataset.handle ? `[data-handle="${a.dataset.handle}"][data-c="${a.dataset.c}"]` : null) : null;
-      front.innerHTML = out;
-      if (keep) { const n = front.querySelector(keep); if (n) n.focus({ preventScroll: true }); }
+      if (kept) {
+        for (const ch of [...front.children]) if (ch !== kept) ch.remove();
+        kept.insertAdjacentHTML('beforebegin', out);
+        const h = kept.style.height;
+        kept.style.cssText = `${editStyle(el)};z-index:${n + 6}`;
+        kept.style.height = h;
+      } else front.innerHTML = out;
+      if (keep) { const k = front.querySelector(keep); if (k) k.focus({ preventScroll: true }); }
       const ta = front.querySelector('[data-edit]');
-      if (ta) bindEdit(ta);
+      if (ta && !kept) bindEdit(ta);
     }
 
     function editStyle(l) {
@@ -240,7 +275,8 @@
       overlay();
       syncTplPop();
       const S = sel(), G = g();
-      canvas.setAttribute('aria-label', `Cover, full wrap ${(G.W / 70).toFixed(3)} × ${(G.H / 70).toFixed(2)} in. ${S ? `Selected: ${E.layerName(S)}.` : 'Nothing selected.'} Tab moves through the layers, front first.`);
+      const what = E.multi.length > 1 ? `Selected: ${E.multi.length} layers.` : S ? `Selected: ${E.layerName(S)}.` : 'Nothing selected.';
+      canvas.setAttribute('aria-label', `Cover, full wrap ${(G.W / 70).toFixed(3)} × ${(G.H / 70).toFixed(2)} in. ${what} Tab moves through the layers, front first.`);
       paint();
     }
 
@@ -297,35 +333,42 @@
       const hit = e.target.closest('[data-hit]');
       // Capture first: selecting draws the overlay again, and a pressed element that leaves the page ends the pointer.
       if (hd || hit) { try { ws.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is gone */ } }
-      E.closeMenus();
+      // A free-distortion corner belongs to the open Text effects popover: pressing it keeps the popover open.
+      if (!(hd && hd.dataset.handle === 'quad')) E.closeMenus();
       if (hd) { pressed = null; startAct(e, hd.dataset.handle, sel(), hd.dataset.c, hd); return; }
       if (hit) {
         const l = E.cover.layers.find((x) => String(x.id) === hit.dataset.hit);
         if (!l) return;
         pressed = l.id;
         if (E.editing != null && E.editing !== l.id) E.stopEdit(false);
-        if (E.sel !== l.id) E.select(l.id);
+        // Shift- or Cmd-click: add or take away (the design's down with shiftKey or metaKey).
+        if (e.shiftKey || e.metaKey || e.ctrlKey) { pressed = null; E.toggleSel(l.id); return; }
+        if (E.multi.includes(l.id)) {
+          const start = {};
+          E.cover.layers.forEach((q) => { if (E.multi.includes(q.id)) start[q.id] = { x: q.x, y: q.y }; });
+          startAct(e, 'gmove', l, null, null, start);
+          return;
+        }
+        if (E.sel !== l.id || E.multi.length) E.select(l.id);
         if (l.lock) return;
         startAct(e, 'move', l);
         return;
       }
       pressed = null;
-      // The gray area or the bare cover: deselect; on the gray, drag to pan (box select comes in Part 5).
+      // The gray area or the bare cover: deselect; on the cover, drag a box to select; on the gray, drag to pan.
       if (E.editing != null) E.stopEdit(false);
-      if (E.sel != null) E.select(null);
+      if (E.sel != null || E.multi.length) E.selectIds([]);
       const [mx, my] = local(e), { z, px, py } = E.view, G = g();
       const bx = (mx - px) / z, by = (my - py) / z;
-      if (!(bx >= 0 && by >= 0 && bx <= G.W && by <= G.H)) {
-        drag = { x: e.clientX, y: e.clientY, px, py };
-        ws.setPointerCapture(e.pointerId);
-        ws.classList.add('is-panning');
-      }
+      if (bx >= 0 && by >= 0 && bx <= G.W && by <= G.H) drag = { mq: true, x0: bx, y0: by, x1: bx, y1: by };
+      else { drag = { x: e.clientX, y: e.clientY, px, py }; ws.classList.add('is-panning'); }
+      ws.setPointerCapture(e.pointerId);
     });
 
-    function startAct(e, kind, l, corner, hd) {
+    function startAct(e, kind, l, corner, hd, start) {
       if (!l) return;
       // No preventDefault: it would stop the dblclick that starts typing (the boxes are buttons: nothing to select).
-      const a = { kind, id: l.id, x: e.clientX, y: e.clientY, L0: Object.assign({}, l, { h: l.type === 'text' ? E.textH(l) : l.h }), corner, pushed: false, moved: false };
+      const a = { kind, id: l.id, x: e.clientX, y: e.clientY, L0: Object.assign({}, l, { h: l.type === 'text' ? E.textH(l) : l.h }), corner, pushed: false, moved: false, start };
       if (kind === 'rot') {
         const r = (hd.closest('[data-selbox]') || hd).getBoundingClientRect();
         a.cx = r.left + r.width / 2; a.cy = r.top + r.height / 2;
@@ -335,14 +378,36 @@
     }
 
     ws.addEventListener('pointermove', (e) => {
+      if (drag && drag.mq) {
+        const [mx, my] = local(e), { z, px, py } = E.view;
+        drag.x1 = (mx - px) / z; drag.y1 = (my - py) / z;
+        const x0 = Math.min(drag.x0, drag.x1), y0 = Math.min(drag.y0, drag.y1);
+        mqEl.hidden = false;
+        Object.assign(mqEl.style, { left: (px + x0 * z) + 'px', top: (py + y0 * z) + 'px', width: Math.abs(drag.x1 - drag.x0) * z + 'px', height: Math.abs(drag.y1 - drag.y0) * z + 'px' });
+        return;
+      }
       if (drag) { E.view.px = drag.px + e.clientX - drag.x; E.view.py = drag.py + e.clientY - drag.y; E.viewChanged(); return; }
       const a = E.act; if (!a) return;
       if (!a.moved && Math.abs(e.clientX - a.x) + Math.abs(e.clientY - a.y) < 2) return;
       a.moved = true;
+      if (a.kind === 'gmove') {
+        const z = E.view.z, dx = (e.clientX - a.x) / z, dy = (e.clientY - a.y) / z;
+        E.commitLayers(E.cover.layers.map((q) => (a.start[q.id] && !q.lock ? Object.assign({}, q, { x: a.start[q.id].x + dx, y: a.start[q.id].y + dy }) : q)), a);
+        overlay();
+        return;
+      }
       const p = actPatch(a, e.clientX, e.clientY, e);
-      if (p) { E.patchLayer(a.id, p.patch, a); snapLine(p.snap); syncSelBox(); }
+      if (p) { E.patchLayer(a.id, p.patch, a); snapLine(p.snap); if (a.kind === 'quad') overlay(); else syncSelBox(); }
     });
     const end = () => {
+      if (drag && drag.mq) {
+        const d = drag; drag = null; mqEl.hidden = true;
+        const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
+        if (x1 - x0 < 2 && y1 - y0 < 2) return;   // a click on the bare cover: nothing selected
+        const ids = E.cover.layers.filter((l) => { if (l.hidden) return false; const b = C.model.bbox(l, E.textH); return b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0; }).map((l) => l.id);
+        if (ids.length) E.selectIds(ids);
+        return;
+      }
       if (drag) { drag = null; ws.classList.remove('is-panning'); }
       if (E.act) {
         const a = E.act; E.act = null; snapLine(false);
@@ -386,6 +451,11 @@
         }
         return { patch: { x, y, w, h } };
       }
+      if (a.kind === 'quad') {
+        const i = Number(a.corner), q = L0.dist.q.map((p) => p.slice());
+        q[i] = [L0.dist.q[i][0] + lx, L0.dist.q[i][1] + ly];
+        return { patch: { dist: Object.assign({}, L0.dist, { q }) } };
+      }
       if (a.kind === 'rot') {
         let deg = Math.atan2(cy - a.cy, cx - a.cx) * 180 / Math.PI + 90;
         deg = ((deg + 540) % 360) - 180;
@@ -402,6 +472,7 @@
       if (!hit || e.detail !== 0) return;   // Enter or Space on a layer box (a mouse click selected it on pointerdown)
       const l = E.cover.layers.find((x) => String(x.id) === hit.dataset.hit);
       if (!l) return;
+      if (e.shiftKey) { E.toggleSel(l.id); const n = front.querySelector(`[data-hit="${CSS.escape(String(l.id))}"]`); if (n) n.focus({ preventScroll: true }); return; }
       if (E.sel === l.id && l.type === 'text' && !l.lock) E.startEdit(l.id);
       else E.select(l.id, { keepFocus: true });
     });
@@ -421,6 +492,13 @@
       const S = sel(); if (!S || S.lock) return;
       const kind = hd.dataset.handle, c = hd.dataset.c, n = d * (e.shiftKey ? 10 : 1);
       let patch = null;
+      if (kind === 'quad') {
+        const i = Number(c), q = S.dist.q.map((p) => p.slice()), k = e.shiftKey ? 10 : 1;
+        if (e.key === 'ArrowLeft') q[i][0] -= k; if (e.key === 'ArrowRight') q[i][0] += k;
+        if (e.key === 'ArrowUp') q[i][1] -= k; if (e.key === 'ArrowDown') q[i][1] += k;
+        E.patchLayer(S.id, { dist: Object.assign({}, S.dist, { q }) }, null, { bars: false }); E.keyEdited(hd);
+        return;
+      }
       if (kind === 'rot') { let deg = (S.rot || 0) + d * (e.shiftKey ? 15 : 1); deg = ((deg + 540) % 360) - 180; patch = { rot: deg }; }
       else if (kind === 'width') patch = { w: Math.max(60, S.w + n) };
       else if (kind === 'scale' || (kind === 'box' && c.length === 2)) { const w = Math.max(kind === 'box' ? 10 : 30, S.w + n), f = w / S.w; patch = { w, h: S.h * f }; if (kind === 'scale') Object.assign(patch, { px: S.px * f, py: S.py * f, pw: S.pw * f, ph: S.ph * f }); }
@@ -433,5 +511,5 @@
     return { el: ws, paint, sync, syncSelBox, fit, center, zoomAt, canvas, tplPop, templateHtml };
   }
 
-  C.view = { create, templateHtml };
+  C.view = { create, templateHtml, quadOf };
 })(globalThis);

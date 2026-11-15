@@ -18,7 +18,7 @@
    - distortion: the layer is drawn flat, then warped onto its 4 corners with
      a mesh (the design's matrix3d), 24 × 24 cells;
    - shapes: the design's shapePath() as a Path2D, even-odd fill, gradient,
-     border with dash and dot;
+     border with dash and dot; icons (Part 5): each path on its own, non-zero;
    - pictures: crop, flip, our own pixel filters (brightness, contrast,
      saturation, blur, black and white, sepia; Safari's ctx.filter is not
      reliable, R6), darken, mask (rounded, circle, arch), border;
@@ -257,7 +257,9 @@
     if (l.rot) ctx.rotate(l.rot * Math.PI / 180);
     if (l.flipH || l.flipV) ctx.scale(l.flipH ? -1 : 1, l.flipV ? -1 : 1);
     ctx.translate(-l.w / 2, -l.h / 2);
-    const p = new root.Path2D(C.shapes.path(l));
+    // An icon (Part 5): each of its paths filled and stroked on its own, non-zero, as the SVG draws it.
+    const icon = l.kind === 'icon';
+    const ps = icon ? C.shapes.iconPaths(l).map((d) => new root.Path2D(d)) : [new root.Path2D(C.shapes.path(l))];
     if (l.kind !== 'line' && l.fillMode !== 'none') {
       if (l.fillMode === 'grad') {
         // The design's SVG gradient: from (gx1, gy1) to (gx2, gy2), shares of the box.
@@ -266,13 +268,13 @@
         gr.addColorStop(0, l.fill); gr.addColorStop(1, l.fill2);
         ctx.fillStyle = gr;
       } else ctx.fillStyle = l.fill;
-      ctx.fill(p, 'evenodd');
+      for (const p of ps) ctx.fill(p, icon ? 'nonzero' : 'evenodd');
     }
     if (l.sw > 0) {
       const lw = l.sw * PT;
       ctx.lineWidth = lw; ctx.strokeStyle = l.scolor; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.setLineDash(l.dash === 'dash' ? [lw * 3, lw * 2] : l.dash === 'dot' ? [0, lw * 2] : []);
-      ctx.stroke(p);
+      for (const p of ps) ctx.stroke(p);
     }
     ctx.restore();
   }

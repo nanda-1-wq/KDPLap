@@ -13,7 +13,7 @@
      drawn from img/cover-fonts.png (row n = catalog row n, 28 px), so the
      list loads no fonts; a font loads when it is picked.
    - Weight: only the weights the family has a file for (plan D5).
-   - Effects is drawn and inert ("Comes in Part 5").
+   - Effects (Part 5): the Text effects popover of design 61 (js/cover/effects.js).
 
    kdpCover.text.panelHtml(E) / barHtml(E) / bindPanel(el, E) / bindBar(el, E)
    kdpCover.text.fontRows(q, cat)   → [{ family, group, row }] for the list
@@ -111,7 +111,7 @@
       ${btn('ac', l.align === 'center', 'Align center', I.center, ' data-act="align" data-v="center"')}
       ${btn('ar', l.align === 'right', 'Align right', I.right, ' data-act="align" data-v="right"')}
       ${btn('caps', !!l.caps, 'Capitals', 'AA', ' data-act="caps"')}
-      <button type="button" class="cv-tb" data-k="fx" aria-expanded="false"${inert(5)}>${I.fx}Effects</button>
+      <button type="button" class="cv-tb${m === 'effects' ? ' is-open' : ''}" data-k="fx" data-act="effects" aria-expanded="${m === 'effects'}"${l.fx.style !== 'none' || l.curve || l.dist.on ? ' data-fx-on' : ''}>${I.fx}Effects</button>
       <span class="cv-grow"></span>
       <button type="button" class="cv-tb${m === 'opacity' ? ' is-open' : ''}" data-k="op" data-act="opacity" aria-expanded="${m === 'opacity'}" aria-label="Opacity ${l.op}%"><span class="cv-checker" aria-hidden="true"></span>${l.op}%</button>
       <button type="button" class="cv-tb${m === 'arrange' ? ' is-open' : ''}" data-k="arr" data-act="arrange" aria-expanded="${m === 'arrange'}">Arrange ▾</button>
@@ -119,6 +119,7 @@
       ${btn('lock', !!l.lock, l.lock ? 'Unlock' : 'Lock', I.lock, ' data-act="lock"')}
       <button type="button" class="cv-ib cv-ib-del" data-k="del" data-act="del" aria-label="Delete">${I.del}</button>
       ${m === 'fonts' ? fontsHtml(E, l) : ''}
+      ${m === 'effects' ? C.effects.html(E, l) : ''}
       ${m === 'color' ? `<div class="cv-pop cv-pop-color" role="dialog" aria-label="Text color" data-picker>${C.picker.html(E.pk, { title: 'Text color', cur: l.color })}</div>` : ''}
       ${m === 'opacity' ? `<div class="cv-pop cv-pop-op" role="dialog" aria-label="Opacity">
           <label class="cv-range"><span class="cv-range-row"><strong>Opacity</strong><span class="cv-mono">${l.op}%</span></span>
@@ -153,7 +154,7 @@
       const l = E.selLayer(); if (!l) return;
       const a = b.dataset.act;
       if (a === 'edit') E.startEdit(l.id);
-      else if (a === 'fonts' || a === 'color' || a === 'opacity' || a === 'arrange') E.toggleMenu(a);
+      else if (a === 'fonts' || a === 'color' || a === 'opacity' || a === 'arrange' || a === 'effects') E.toggleMenu(a);
       else if (a === 'size-down' || a === 'size-up') E.patchLayer(l.id, { size: C.model.sizeStep(l.size, a === 'size-up' ? 1 : -1) });
       else if (a === 'align') E.patchLayer(l.id, { align: b.dataset.v });
       else if (a === 'caps') E.patchLayer(l.id, { caps: !l.caps, ls: !l.caps ? 0.12 : 0 });

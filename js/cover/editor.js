@@ -13,11 +13,19 @@
    (50 steps), autosave with rev and the visit snapshot, Save failed
    (design 73c), the Step D rules and keyboard reach.
 
+   Part 5 (designs 61, 64, 65, 66) adds: text effects (js/cover/effects.js),
+   the Shapes panel with the Tabler icons and the shape bar
+   (shapes-ui.js), several layers selected (multi.js; E.multi beside E.sel,
+   as the design's selectIds), the Layers panel and its ⋮ menu
+   (layers-panel.js), and the free distortion corners on the cover (view.js).
+   The one color picker now serves the text color, the effect color, the
+   fill and gradient ends, the border and the background (E.pk.target).
+
    Drawn and inert (aria-disabled, title "Comes in Part N"): the Layouts,
-   Book data, Images, Shapes and Layers tools (8, 8, 6, 5, 5), Write blurb
-   and Author line (8), Effects (5), the Checks chip's drawer and Preview
-   final (9), Export cover (10). The chip label and the header reason are
-   live (kdpCover.checks), only the drawer is not built.
+   Book data and Images tools (8, 8, 6), Write blurb and Author line (8),
+   the Checks chip's drawer and Preview final (9), Export cover (10). The
+   chip label and the header reason are live (kdpCover.checks), only the
+   drawer is not built.
 
    Size: the design is drawn and saved at the size it is laid out for
    (cover_designs.fmt). When the book's size changed in 08, the remap and
@@ -48,7 +56,12 @@
     eye: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     lock20: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
   };
-  const TOOLS = [['layouts', 'Layouts', 8], ['book', 'Book data', 8], ['text', 'Text', 0], ['images', 'Images', 6], ['shapes', 'Shapes', 5], ['layers', 'Layers', 5]];
+  const TOOLS = [['layouts', 'Layouts', 8], ['book', 'Book data', 8], ['text', 'Text', 0], ['images', 'Images', 6], ['shapes', 'Shapes', 0], ['layers', 'Layers', 0]];
+  const PANEL_LABEL = { text: 'Text', shapes: 'Shapes', layers: 'Layers' };
+  // A menu → the bar button that opened it (Escape gives focus back there).
+  const MENU_BTN = { fonts: 'font', color: 'color', opacity: 'op', arrange: 'arr', bg: 'bg', effects: 'fx', shape: 'shape', sfill: 'sfill', stroke: 'stroke', more: 'more' };
+  // A picker target → the bar button that shows that color.
+  const PK_BTN = { color: 'color', bg: 'bg', fxcolor: 'fx', fill: 'sfill', fill2: 'sfill', scolor: 'stroke' };
 
   let book = null, ctx = null;
   let E = null;          // the open editor (one per visit of step 09)
@@ -59,7 +72,9 @@
   function newEditor(rootEl) {
     return {
       root: rootEl, status: 'loading', data: null, cover: null, rev: 1,
-      sel: null, editing: null, act: null, menu: null,
+      sel: null, multi: [], editing: null, act: null, menu: null,
+      panel: 'text', layerMenu: null, renaming: null, rowDrag: null, fxSnap: null, alignTo: 'sel',
+      iconQ: '', iconN: 48, icons: 'idle',
       view: { z: 1, px: 91, py: 47 }, tpl: { op: 100, hide: false, pop: false }, guides: true, snap: true,
       fontQ: '', cat: 'All', fontBusy: null, fontErr: null,
       pk: { target: 'color', hue: 0, sat: 0, val: 0, hexDraft: '#1C1C1A', recent: [] },
@@ -162,23 +177,37 @@
   /* ── The frame (design 58) ── */
   function renderEditor() {
     E.root.innerHTML = `<div class="cv-root" data-cover>
-      <nav class="cv-tools" aria-label="Cover tools">${TOOLS.map(([k, label, part]) => `<button type="button" class="cv-tool${k === 'text' ? ' is-on' : ''}" data-k="tool-${k}" data-tool="${k}"
-        aria-pressed="${k === 'text'}"${part ? inert(part) : ''}>${ICON[k]}${label}</button>`).join('')}</nav>
-      <section class="cv-panel" aria-label="Text" data-panel></section>
+      <nav class="cv-tools" aria-label="Cover tools" data-tools>${toolsHtml()}</nav>
+      <section class="cv-panel" aria-label="${PANEL_LABEL[E.panel]}" data-panel></section>
       <main class="cv-main">
         <div class="cv-viewbar" role="toolbar" aria-label="Cover view" data-viewbar></div>
         <div class="cv-textbar" role="toolbar" aria-label="Selected text" data-textbar hidden></div>
         <div class="cv-alert" role="alert" data-alert hidden></div>
+        <div class="cv-capnote" role="status" data-capnote hidden></div>
         <div class="cv-wswrap" data-wswrap></div>
         <footer class="cv-foot" data-foot></footer>
       </main>
+      <div class="cv-lmenu-host" data-lmenu-host></div>
     </div>`;
     const v = E.view_ = C.view.create(E);
     E.root.querySelector('[data-wswrap]').append(v.el);
-    C.text.bindPanel(E.root.querySelector('[data-panel]'), E);
-    C.text.bindBar(E.root.querySelector('[data-textbar]'), E);
+    const panel = E.root.querySelector('[data-panel]'), bar = E.root.querySelector('[data-textbar]');
+    C.text.bindPanel(panel, E);
+    C.shapesUi.bindPanel(panel, E);
+    C.layersPanel.bind(panel, E);
+    C.text.bindBar(bar, E);
+    C.effects.bind(bar, E);
+    C.shapesUi.bindBar(bar, E);
+    C.multi.bind(bar, E);
+    C.layersPanel.bindMenu(E.root.querySelector('[data-lmenu-host]'), E);
+    E.root.querySelector('[data-tools]').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tool]');
+      if (!b || b.getAttribute('aria-disabled') === 'true') return;
+      showPanel(b.dataset.tool);
+    });
     bindViewBar(E.root.querySelector('[data-viewbar]'));
     E.root.querySelector('[data-alert]').addEventListener('click', (e) => { if (e.target.closest('[data-retry-save]')) retrySave(); });
+    E.root.querySelector('[data-capnote]').addEventListener('click', (e) => { if (e.target.closest('[data-cap-x]')) capNote(null); });
     E.root.querySelector('[data-foot]').addEventListener('click', (e) => { if (e.target.closest('[data-retry-save]')) retrySave(); });
     renderPanel();
     renderBars();
@@ -189,9 +218,41 @@
     bindKeys();
   }
 
+  function toolsHtml() {
+    return TOOLS.map(([k, label, part]) => `<button type="button" class="cv-tool${k === E.panel ? ' is-on' : ''}" data-k="tool-${k}" data-tool="${k}"
+        aria-pressed="${k === E.panel}"${part ? inert(part) : ''}>${ICON[k]}${label}</button>`).join('');
+  }
   function renderPanel() {
     const p = E.root.querySelector('[data-panel]');
-    keepFocus(p, () => { p.innerHTML = C.text.panelHtml(E); });
+    const top = p.scrollTop;
+    p.setAttribute('aria-label', PANEL_LABEL[E.panel]);
+    p.dataset.kind = E.panel;
+    keepFocus(p, () => { p.innerHTML = E.panel === 'shapes' ? C.shapesUi.panelHtml(E) : E.panel === 'layers' ? C.layersPanel.html(E) : C.text.panelHtml(E); });
+    p.scrollTop = top;
+  }
+  /** The tool rail: Text, Shapes or Layers (the design's showPanel). */
+  function showPanel(k) {
+    if (!PANEL_LABEL[k]) return;
+    E.panel = k; E.layerMenu = null; E.renaming = null;
+    const t = E.root.querySelector('[data-tools]');
+    keepFocus(t, () => { t.innerHTML = toolsHtml(); });
+    E.root.querySelector('[data-panel]').scrollTop = 0;
+    renderPanel(); renderMenu();
+    if (k === 'shapes') openIcons();
+  }
+  /** The icon set loads the first time the Shapes panel opens. */
+  function openIcons() {
+    if (C.iconSet) { E.icons = 'ready'; renderPanel(); return; }
+    const me = E;
+    E.icons = 'loading'; renderPanel();
+    C.shapesUi.loadIcons().then(() => { if (me === E) { E.icons = 'ready'; if (E.panel === 'shapes') renderPanel(); } },
+      () => { if (me === E) { E.icons = 'error'; if (E.panel === 'shapes') renderPanel(); } });
+  }
+  /** The Layers panel's ⋮ menu, to the right of the panel (design 66). */
+  function renderMenu() {
+    const host = E.root.querySelector('[data-lmenu-host]');
+    if (!host) return;
+    host.innerHTML = E.panel === 'layers' ? C.layersPanel.menuHtml(E) : '';
   }
 
   function viewBarHtml() {
@@ -243,12 +304,20 @@
     const vb = E.root.querySelector('[data-viewbar]');
     keepFocus(vb, () => { vb.innerHTML = viewBarHtml(); });
     const tb = E.root.querySelector('[data-textbar]');
-    const html = C.text.barHtml(E);
+    const l = selLayer();
+    const kind = E.multi.length > 1 ? 'multi' : l && l.type === 'text' ? 'text' : l && l.type === 'shape' ? 'shape' : null;
+    const html = kind === 'multi' ? C.multi.barHtml(E) : kind === 'text' ? C.text.barHtml(E) : kind === 'shape' ? C.shapesUi.barHtml(E) : '';
+    // A popover drawn again keeps where it was scrolled (Text effects is taller than a small window).
+    const scrolled = [...tb.querySelectorAll('.cv-pop, .cv-fx-tiles')].map((n) => [[...n.classList].find((c) => /^cv-(pop-|fx-tiles)/.test(c)), n.scrollTop, n.scrollLeft]);
     keepFocus(tb, () => { tb.innerHTML = html; });
     tb.hidden = !html;
+    tb.setAttribute('aria-label', kind === 'multi' ? 'Several layers selected' : kind === 'shape' ? 'Selected shape' : 'Selected text');
     const pk = E.root.querySelector('[data-picker]');
     if (pk) C.picker.bind(pk, E.pk, pickerApi());
+    if (E.menu === 'effects') C.effects.paintTiles(tb);
     clampPops();
+    for (const [cls, top, left] of scrolled) { const n = cls && tb.querySelector('.' + cls); if (n) { n.scrollTop = top; n.scrollLeft = left; } }
+    renderMenu();
     if (E.menu === 'fonts') {
       const on = tb.querySelector('.cv-font.is-on');
       if (on && !E.fontScrolled) { on.scrollIntoView({ block: 'nearest' }); E.fontScrolled = true; }
@@ -260,6 +329,9 @@
     for (const pop of E.root.querySelectorAll('.cv-viewbar > .cv-pop, .cv-textbar > .cv-pop')) {
       const bar = pop.parentElement.getBoundingClientRect(), r = pop.getBoundingClientRect();
       if (r.right > bar.right - 8) { pop.style.left = Math.max(8, bar.width - r.width - 8) + 'px'; pop.style.right = 'auto'; }
+      // A tall popover (Text effects, Fill, Border) stays inside the window height too; it scrolls inside.
+      const room = root.innerHeight - r.top - 12;
+      if (r.bottom > root.innerHeight - 8 && room > 160) { pop.style.maxHeight = room + 'px'; pop.style.overflowY = 'auto'; }
     }
   }
 
@@ -302,11 +374,27 @@
   /** Every change to the layers or the background goes here: undo, save, draw. */
   function commit(layers, bg, act, opt) {
     const prev = { layers: E.cover.layers, bg: E.cover.bg };
-    if (layers === prev.layers && bg === prev.bg) return;
+    if (layers === prev.layers && bg === prev.bg) return false;
+    // The caps 0030 checks (200 layers, 512 KB): a change that adds layers past them is refused here with a plain
+    // note, so a save never fails on them (its Retry could never pass).
+    if (layers.length > prev.layers.length) {
+      const f = C.model.fits({ layers });
+      if (!f.ok) { capNote(f.reason); return false; }
+    }
+    if (E.capMsg) capNote(null);
     E.hist.change(prev, act || null);
     E.cover = Object.assign({}, E.cover, { layers, bg });
     E.saver.changed();
     afterChange(act, opt);
+    return true;
+  }
+  /** The "cover is full" note (a warning with its icon and words), or none. */
+  function capNote(reason) {
+    E.capMsg = reason === 'layers' ? `The cover is full: it holds ${C.model.CAPS.layers} layers at most. Delete a layer, then add again.`
+      : reason ? 'The cover is full: its layers hold 512 KB of drawing at most. Delete a layer, then add again.' : null;
+    const n = E.root.querySelector('[data-capnote]'); if (!n) return;
+    n.hidden = !E.capMsg;
+    n.innerHTML = E.capMsg ? `${ICON.warn}<span>${esc(E.capMsg)}</span><button type="button" class="cv-x" data-k="cap-x" data-cap-x aria-label="Close">×</button>` : '';
   }
   /** opt: bars, panel, overlay (false: draw the canvas and move the frame only, e.g. while typing or on a slider). */
   function afterChange(act, opt) {
@@ -322,10 +410,34 @@
     const layers = E.cover.layers.map((l) => (l.id === id ? Object.assign({}, l, patch) : l));
     commit(layers, E.cover.bg, act, opt);
   }
+  /** A whole new layer list (align, distribute, reorder, several at once). act: a drag in progress. */
+  function commitLayers(layers, act) {
+    if (layers.length > E.cover.layers.length && !C.model.fits({ layers }).ok) return commit(layers, E.cover.bg, act || null);   // refused: the note shows
+    const ids = layers.map((l) => l.id);
+    E.multi = E.multi.filter((id) => ids.includes(id));
+    if (E.sel != null && !ids.includes(E.sel)) E.sel = null;
+    return commit(layers, E.cover.bg, act || null);
+  }
+  const setLayer = (id, patch) => patchLayer(id, patch, null);
+  /** The ids the bar and the keys act on: several, or the one selected. */
+  const selIds = () => (E.multi.length ? E.multi.slice() : E.sel != null ? [E.sel] : []);
+  function nudgeSel(dx, dy, shift) {
+    const ids = selIds(); if (!ids.length) return;
+    commit(C.model.nudge(E.cover.layers, ids, dx, dy, shift), E.cover.bg, null, { panel: false });
+  }
+
+  async function addShape(kind) {
+    const L = Object.assign({ id: C.model.nextId(E.cover.layers) }, C.shapes.defaults(kind, C.geo.geo(E.cover.fmt)), C.model.common());
+    addLayer(C.model.shapeLayer(L.id, L));
+  }
+  function addIcon(row) {
+    const id = C.model.nextId(E.cover.layers);
+    addLayer(C.model.shapeLayer(id, Object.assign({}, C.shapes.iconDefaults(row, C.geo.geo(E.cover.fmt)), C.model.common())));
+  }
 
   function addLayer(L) {
-    commit(E.cover.layers.concat([L]), E.cover.bg, null, { bars: false });
-    E.sel = L.id; E.editing = null; E.menu = null;
+    if (!commit(E.cover.layers.concat([L]), E.cover.bg, null, { bars: false })) return;
+    E.sel = L.id; E.multi = []; E.editing = null; E.menu = null;
     E.view_.sync(); renderBars();
     // Focus goes to the new layer's box, so the keyboard can move it at once.
     const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(L.id))}"]`);
@@ -382,16 +494,22 @@
     commit(C.model.arrange(E.cover.layers, l.id, mode, textH), E.cover.bg, null);
     E.menu = null; renderBars();
   }
+  function arrangeId(id, mode) { commit(C.model.arrange(E.cover.layers, id, mode, textH), E.cover.bg, null); }
   function duplicate() {
     const l = selLayer(); if (!l) return;
-    const r = C.model.dup(E.cover.layers, l.id, C.model.nextId(E.cover.layers));
-    E.sel = r.sel;
+    dupId(l.id);
+  }
+  /** The design's dupId: the copy just above, 14 px down and right, selected. */
+  function dupId(id) {
+    const r = C.model.dup(E.cover.layers, id, C.model.nextId(E.cover.layers));
+    if (!C.model.fits({ layers: r.layers }).ok) { commit(r.layers, E.cover.bg, null); return; }   // refused: the note shows
+    E.sel = r.sel; E.multi = []; E.layerMenu = null; E.menu = null;
     commit(r.layers, E.cover.bg, null);
   }
-  function removeSel() {
-    if (E.sel == null) return;
-    const ids = [E.sel];
-    E.sel = null; E.editing = null; E.menu = null;
+  function removeSel() { removeIds(selIds()); }
+  function removeIds(ids) {
+    if (!ids.length) return;
+    E.sel = null; E.multi = []; E.editing = null; E.menu = null; E.layerMenu = null; E.renaming = null;
     commit(C.model.remove(E.cover.layers, ids), E.cover.bg, null);
     E.view_.sync(); renderBars();
     const c = E.root.querySelector('[data-canvas]');
@@ -399,17 +517,78 @@
   }
 
   function select(id, opt) {
-    if (E.sel === id) return;
+    if (E.sel === id && !E.multi.length) return;
     if (E.editing != null && E.editing !== id) stopEdit(false);
-    E.sel = id; E.menu = null; E.fontScrolled = false; E.fontErr = null;
+    E.sel = id; E.multi = []; E.menu = null; E.fontScrolled = false; E.fontErr = null;
     E.view_.sync();
-    renderBars();
+    renderBars(); syncPanelSel();
     if (opt && opt.keepFocus && id != null) {
       const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`);
       if (hit) hit.focus({ preventScroll: true });
     }
   }
   const selLayer = () => (E && E.cover ? E.cover.layers.find((l) => l.id === E.sel) || null : null);
+  /** The design's selectIds: one id → that layer; two or more → several (no single selection). */
+  function selectIds(ids) {
+    const list = [...new Set(ids)].filter((id) => E.cover.layers.some((l) => l.id === id));
+    if (E.editing != null) stopEdit(false);
+    if (list.length === 1) { E.sel = list[0]; E.multi = []; }
+    else { E.sel = null; E.multi = list.length > 1 ? list : []; }
+    E.menu = null; E.fontScrolled = false; E.fontErr = null;
+    E.view_.sync(); renderBars(); syncPanelSel();
+  }
+  /** The Layers rows follow the selection in place; other panels do not show it. */
+  function syncPanelSel() {
+    if (E.panel === 'layers' && E.renaming == null && !E.layerMenu) C.layersPanel.syncSel(E.root.querySelector('[data-panel]'), E);
+    else if (E.panel === 'layers') renderPanel();
+  }
+  /** Shift- or Cmd-click: add or take away one layer. */
+  function toggleSel(id) {
+    const cur = selIds(), i = cur.indexOf(id);
+    if (i >= 0) cur.splice(i, 1); else cur.push(id);
+    selectIds(cur);
+  }
+
+  /* ── Layers panel actions ── */
+  function startRename(id) {
+    if (E.panel !== 'layers') showPanel('layers');
+    E.renaming = id; E.layerMenu = null;
+    renderPanel(); renderMenu();
+    const n = E.root.querySelector(`[data-rename="${CSS.escape(String(id))}"]`);
+    if (n) { n.focus({ preventScroll: true }); n.select(); }
+  }
+  /** value: the new name (empty: back to the automatic name), null: keep the old one. */
+  function endRename(value, refocus) {
+    const id = E.renaming; if (id == null) return;
+    E.renaming = null;
+    const l = E.cover.layers.find((x) => x.id === id);
+    if (l && value != null) {
+      const v = String(value).replace(/\s+/g, ' ').trim().slice(0, C.model.CAPS.label);
+      const auto = C.names.layerName(Object.assign({}, l, { label: null }));
+      const label = v && v !== auto ? v : undefined;
+      if (label !== l.label) {
+        const layers = E.cover.layers.map((x) => { if (x.id !== id) return x; const y = Object.assign({}, x); if (label) y.label = label; else delete y.label; return y; });
+        commit(layers, E.cover.bg, null);
+      } else renderPanel();
+    } else renderPanel();
+    if (refocus) { const n = E.root.querySelector(`[data-pick="${CSS.escape(String(id))}"]`); if (n) n.focus({ preventScroll: true }); }
+  }
+  /** The ⋮ menu opens to the right of the Layers panel, above everything (design 66: button right + 22 px). */
+  function openLayerMenu(id, btn) {
+    if (E.layerMenu && E.layerMenu.id === id) { closeLayerMenu(true); return; }
+    const R = E.root.getBoundingClientRect(), b = btn.getBoundingClientRect();
+    const h = 430, y = Math.max(8, Math.min(R.height - h - 8, b.top - R.top - 8));
+    E.layerMenu = { id, x: Math.round(b.right - R.left + 22), y: Math.round(y) };
+    E.menu = null;
+    renderBars(); renderPanel();
+    const f = E.root.querySelector('[data-lmenu-pop] [role="menuitem"]'); if (f) f.focus({ preventScroll: true });
+  }
+  function closeLayerMenu(refocus) {
+    const m = E.layerMenu; if (!m) return;
+    E.layerMenu = null;
+    renderMenu(); renderPanel();
+    if (refocus) { const b = E.root.querySelector(`[data-lmenu="${CSS.escape(String(m.id))}"]`); if (b) b.focus({ preventScroll: true }); }
+  }
 
   function startEdit(id) {
     const l = E.cover.layers.find((x) => x.id === id);
@@ -434,8 +613,8 @@
   function redo() { const s = E.hist.redo({ layers: E.cover.layers, bg: E.cover.bg }); if (s) restore(s); }
   function restore(s) {
     E.cover = Object.assign({}, E.cover, { layers: s.layers, bg: s.bg });
-    const k = C.history.keepSelection(s, E.sel, []);
-    E.sel = k.sel; E.editing = null;
+    const k = C.history.keepSelection(s, E.sel, E.multi);
+    E.sel = k.sel; E.multi = k.multi.length > 1 ? k.multi : []; E.editing = null;
     E.saver.changed();
     afterChange(null);
   }
@@ -443,16 +622,32 @@
   /* ── Menus and the picker ── */
   function closeMenus() {
     let changed = false;
-    if (E.menu) { E.menu = null; changed = true; }
+    if (E.menu) { E.menu = null; E.fxSnap = null; changed = true; }
+    if (E.layerMenu) { E.layerMenu = null; renderPanel(); changed = true; }
     if (changed) renderBars();
   }
   function toggleMenu(m) {
     E.menu = E.menu === m ? null : m;
+    E.layerMenu = null;
+    const l = selLayer();
     if (E.menu === 'color' || E.menu === 'bg') openPicker(E.menu === 'bg' ? 'bg' : 'color');
+    if (E.menu === 'effects' && l) { E.fxSnap = { id: l.id, fx: l.fx, curve: l.curve, dist: l.dist }; openPicker('fxcolor'); }
+    if (E.menu === 'sfill' && l) openPicker(E.pk.target === 'fill2' && l.fillMode === 'grad' ? 'fill2' : 'fill');
+    if (E.menu === 'stroke') openPicker('scolor');
+    if (E.menu !== 'effects') E.fxSnap = null;
     if (E.menu === 'fonts') E.fontScrolled = false;
-    renderBars();
+    renderBars(); if (E.panel === 'layers') renderPanel();
     const pop = E.root.querySelector('.cv-pop:not(.cv-tplpop)');
-    if (pop) { const f = pop.querySelector('[data-font-q], [data-pk-sv], input, button[role="menuitem"]'); if (f) f.focus({ preventScroll: true }); }
+    if (pop) { const f = pop.querySelector('.cv-fx-tile.is-on, [data-font-q], [data-pk-sv], input, button[role="menuitem"], .cv-segb.is-on, .cv-swap.is-on'); if (f) f.focus({ preventScroll: true }); }
+  }
+  /** Text effects OK (keep) or Cancel (back to { fx, curve, dist } from when the popover opened). */
+  function fxDone(keep) {
+    const sn = E.fxSnap;
+    E.menu = null; E.fxSnap = null;
+    if (!keep && sn && E.cover.layers.some((l) => l.id === sn.id)) patchLayer(sn.id, { fx: sn.fx, curve: sn.curve, dist: sn.dist });
+    else renderBars();
+    E.view_.sync();
+    const b = E.root.querySelector('[data-k="fx"]'); if (b) b.focus({ preventScroll: true });
   }
   function toggleTpl(on) {
     E.tpl.pop = on == null ? !E.tpl.pop : on;
@@ -460,26 +655,36 @@
     if (E.tpl.pop) { const r = E.root.querySelector('[data-tpl-op]'); if (r) r.focus({ preventScroll: true }); }
     else { const b = E.root.querySelector('[data-k="tpl"]'); if (b) b.focus({ preventScroll: true }); }
   }
-  function colorOf(t) { if (t === 'bg') return E.cover.bg; const l = selLayer(); return l ? l.color : '#1C1C1A'; }
-  function openPicker(t) {
-    const v = colorOf(t), hsv = C.picker.hexToHsv(v);
+  /** The color of a picker target: text color, effect color, fill, gradient end, border, or the background. */
+  function colorOf(t) {
+    if (t === 'bg') return E.cover.bg;
+    const l = selLayer(); if (!l) return '#1C1C1A';
+    if (t === 'fxcolor') return l.fx ? l.fx.color : '#1C1C1A';
+    return l[t] || '#1C1C1A';
+  }
+  function openPicker(t, hex) {
+    const v = hex || colorOf(t), hsv = C.picker.hexToHsv(v);
     Object.assign(E.pk, { target: t, hexDraft: v, sat: hsv.sat, val: hsv.val, hue: hsv.sat > 0 ? hsv.hue : E.pk.hue });
   }
   function applyColor(hex) {
     const o = { bars: false, panel: false, overlay: false };
-    if (E.pk.target === 'bg') { commit(E.cover.layers, hex, null, o); E.view_.sync(); }
-    else { const l = selLayer(); if (l) patchLayer(l.id, { color: hex }, null, o); }
+    const t = E.pk.target;
+    if (t === 'bg') { commit(E.cover.layers, hex, null, o); E.view_.sync(); if (E.panel === 'layers') renderPanel(); return; }
+    const l = selLayer(); if (!l) return;
+    if (t === 'fxcolor') patchLayer(l.id, { fx: Object.assign({}, l.fx, { color: hex }) }, null, o);
+    else patchLayer(l.id, { [t]: hex }, null, o);
   }
   /** While the square or the hue slider is dragged, the picker is updated in place (drawing it again would end the drag). */
   function updatePicker(hex) {
     const pk = E.root.querySelector('[data-picker]');
     if (pk) C.picker.update(pk, E.pk, hex);
-    const b = E.root.querySelector(E.pk.target === 'bg' ? '[data-k="bg"]' : '[data-k="color"]');
-    if (b) {
-      const sw = b.querySelector('.cv-swatch'); if (sw) sw.style.setProperty('--sw', hex);
-      const m = b.querySelector('.cv-mono'); if (m) m.textContent = hex;
-      if (E.pk.target !== 'bg') b.setAttribute('aria-label', `Text color ${hex}`);
-    }
+    const t = E.pk.target;
+    const b = E.root.querySelector(`.cv-viewbar [data-k="${PK_BTN[t]}"], .cv-textbar [data-k="${PK_BTN[t]}"]`);
+    if (!b || t === 'fxcolor') return;
+    if (t === 'scolor') { const ic = b.querySelector('.cv-strokeic'); if (ic) ic.style.setProperty('--sw', hex); return; }
+    const sw = b.querySelector('.cv-swatch');
+    if (sw) sw.style.setProperty(t === 'fill2' ? '--sw2' : '--sw', hex);
+    if (t === 'color') { const m = b.querySelector('.cv-mono'); if (m) m.textContent = hex; b.setAttribute('aria-label', `Text color ${hex}`); }
   }
   function pickerApi() {
     return {
@@ -495,7 +700,7 @@
         Object.assign(E.pk, { hue: h, sat: s, val: v, hexDraft: hex });
         applyColor(hex); updatePicker(hex);
       },
-      close() { const m = E.menu; E.menu = null; renderBars(); const b = E.root.querySelector(`[data-k="${m === 'bg' ? 'bg' : 'color'}"]`); if (b) b.focus({ preventScroll: true }); }
+      close() { const m = E.menu; E.menu = null; renderBars(); const b = E.root.querySelector(`[data-k="${MENU_BTN[m] || 'color'}"]`); if (b) b.focus({ preventScroll: true }); }
     };
   }
 
@@ -508,8 +713,10 @@
       const t = e.target;
       const mod = e.metaKey || e.ctrlKey, k = e.key;
       if (k === 'Escape') {
-        if (E.menu) { const m = E.menu; E.menu = null; renderBars(); const b = E.root.querySelector(`[data-k="${{ fonts: 'font', color: 'color', opacity: 'op', arrange: 'arr', bg: 'bg' }[m]}"]`); if (b) b.focus({ preventScroll: true }); return; }
+        if (E.layerMenu) { closeLayerMenu(true); return; }
+        if (E.menu) { const m = E.menu; E.menu = null; E.fxSnap = null; renderBars(); E.view_.sync(); const b = E.root.querySelector(`[data-k="${MENU_BTN[m]}"]`); if (b) b.focus({ preventScroll: true }); return; }
         if (E.tpl.pop && t && t.closest && t.closest('[data-tplpop]')) { toggleTpl(false); return; }
+        if (E.multi.length && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { selectIds([]); return; }
         if (E.sel != null && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { const id = E.sel; select(null); const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`); if (hit) hit.focus({ preventScroll: true }); }
         return;
       }
@@ -517,14 +724,21 @@
       if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
       if (t && t.closest && t.closest('[data-handle]')) return;   // view.js: arrows resize with a handle focused
-      if ((k === 'Delete' || k === 'Backspace') && E.sel != null) { e.preventDefault(); removeSel(); return; }
+      if (mod && (k === 'a' || k === 'A') && !(t && t.closest && t.closest('.cv-textbar, .cv-viewbar'))) { e.preventDefault(); selectIds(C.model.selectAll(E.cover.layers)); return; }
+      if ((k === 'Delete' || k === 'Backspace') && selIds().length && (!t || !t.closest || !t.closest('.cv-viewbar, .cv-textbar, .cv-tools'))) { e.preventDefault(); removeSel(); return; }
       const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k];
-      if (d && E.sel != null && (!t || !t.closest || !t.closest('.cv-viewbar, .cv-textbar, .cv-panel, .cv-tools'))) {
+      if (d && selIds().length && (!t || !t.closest || !t.closest('.cv-viewbar, .cv-textbar, .cv-panel, .cv-tools'))) {
         e.preventDefault();
-        commit(C.model.nudge(E.cover.layers, [E.sel], d[0], d[1], e.shiftKey), E.cover.bg, null, { panel: false });
+        nudgeSel(d[0], d[1], e.shiftKey);
         keepFocusHit();
       }
     });
+    // A press outside the Layers ⋮ menu closes it (as a click on the gray does for the bar popovers).
+    document.addEventListener('pointerdown', (e) => {
+      if (!E || E.status !== 'ready' || !E.layerMenu || !ctx.isActive(STEP)) return;
+      if (e.target.closest && e.target.closest('[data-lmenu-pop], [data-lmenu]')) return;
+      closeLayerMenu(false);
+    }, true);
     root.addEventListener('beforeunload', (e) => {
       const s = E && E.saver && ctx.isActive(STEP) ? E.saver : orphan;
       if (!s) return;
@@ -544,6 +758,11 @@
     return {
       textH, selLayer, select, startEdit, stopEdit, setText, patchLayer, addText, addBook, bookWords, pickFont,
       arrange, duplicate, removeSel, toggleMenu, toggleTpl, closeMenus,
+      // Part 5
+      commitLayers, setLayer, selIds, selectIds, toggleSel, nudgeSel, removeIds, dupId, arrangeId, addShape, addIcon, openIcons, showPanel,
+      startRename, endRename, openLayerMenu, closeLayerMenu, fxDone,
+      pickerTo(t, hex) { openPicker(t, hex); },
+      refreshPanel: renderPanel,
       refreshBars: renderBars,
       layerName: (l) => C.names.layerName(l),
       viewChanged() { if (E.view_) { E.view_.sync(); renderBars(); } },

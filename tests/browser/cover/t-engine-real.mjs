@@ -6,7 +6,7 @@
 //      text, so "Fonts embedded" fails by design (C1 blocks its export in the app).
 //   B. Full image: PNG for every layout at 6 × 9 and 8.5 × 11; JPG at the largest size
 //      (8.5 × 11, 828 pages, cream: 5,796 × 3,375 px); sizes = the 300 DPI wrap rounded up (D16).
-//   C. The QA sheets (effects, pictures, shapes, spine): checks, the PDF drawn by pdf.js
+//   C. The QA sheets (effects, pictures, shapes, spine, icons from Part 5): checks, the PDF drawn by pdf.js
 //      against the renderer (mean and p99 difference), the step at patch edges.
 //   D. The 288 layout cases and 24 Blank cases with real font metrics; spine text sizes.
 //   E. Every catalog face: embedded as itself, no warning, Typst width = canvas width (0.5%).
@@ -86,7 +86,7 @@ try {
   /* ── C ── */
   log('C. QA sheets');
   R.sheets = [];
-  for (const sheet of ['effects', 'photos', 'shapes', 'spine']) {
+  for (const sheet of ['effects', 'photos', 'shapes', 'spine', 'icons']) {
     const r = await c.page.evaluate(async (sheet) => {
       const H = kdpCoverHarness, cover = H.cover({ sheet });
       const p = await H.print(cover, { keep: true });

@@ -10,7 +10,8 @@
    "photo:<seed>" and "cutout:<seed>" (a transparent PNG).
 
    kdpCoverQa.BOOK
-   kdpCoverQa.sheet(key, fmt) → { fmt, bg, layers, layout } for 'effects', 'photos', 'shapes', 'spine'
+   kdpCoverQa.sheet(key, fmt) → { fmt, bg, layers, layout } for 'effects', 'photos', 'shapes', 'spine',
+                                'icons' (E16 Part 5: Tabler filled icons; needs js/cover/icon-set.js)
    kdpCoverQa.layout(key, fmt) → a ready layout on the design book (asset 'photo:<id>' on its pictures)
    kdpCoverQa.SHEETS
 ═══════════════════════════════════════════════════ */
@@ -18,7 +19,7 @@
   'use strict';
   const BOOK = { title: 'Micro Study Habits for Busy Adult Learners', subtitle: 'How to Keep Up With Your Course After Work, Even on Low-Energy Days', pen: 'Adnan Haroun' };
   const BLURB = 'You want to finish your course, but work takes your best hours. This book shows you how to study in ten-minute blocks, keep notes that stay useful, and plan a week you can actually keep. Each chapter ends with one small habit to try tomorrow.';
-  const SHEETS = ['effects', 'photos', 'shapes', 'spine'];
+  const SHEETS = ['effects', 'photos', 'shapes', 'spine', 'icons'];
 
   const K = () => root.kdpCover;
   const FX = (o) => Object.assign({ style: 'none', color: '#1C1C1A', int: 60, dist: 6, dir: 45, blur: 6, width: 2, depth: 6, pad: 8, round: 6 }, o);
@@ -104,6 +105,26 @@
         layers.push(S(o));
       });
       layers.push(T({ text: 'Shapes sheet', x: front(36), y: 560, w: 360, size: 18 }));
+    } else if (key === 'icons') {
+      // E16 Part 5: many arcs, several paths, the longest icon, stretched, gradient, borders, turned, flipped, see-through.
+      bg = '#F2EDE4';
+      // paw (5 paths) and sun (9 paths) sit where the borders go (i % 6 === 3): their inner outlines are drawn too.
+      const names = ['crown', 'leaf', 'butterfly', 'paw', 'laurel-wreath-1', 'star', 'heart', 'sparkles-2', 'feather', 'sun', 'clover', 'moon',
+        'flower', 'cloud', 'christmas-tree', 'mood-smile', 'file-music', 'book', 'bulb', 'trophy', 'binary-tree', 'rosette', 'shield', 'diamond', 'key', 'compass', 'cash-banknote', 'apple'];
+      const rows = C.iconSet.rows;
+      names.forEach((name, i) => {
+        const row = rows.find((r) => r[0] === name) || rows[i * 30];
+        const panel = i < 14 ? back : front, j = i % 14, col = j % 3, r = Math.floor(j / 3);
+        const o = Object.assign(C.shapes.iconDefaults(row, g), { x: panel(36 + col * 125), y: 40 + r * 105, w: 80, h: 80 });
+        if (i % 4 === 1) Object.assign(o, { w: 110, h: 60 });                                    // stretched
+        if (i % 5 === 2) Object.assign(o, { fillMode: 'grad', fill: '#1F3A5F', fill2: '#F2C14E', gAngle: 45 * (i % 8) });
+        if (i % 6 === 3) Object.assign(o, { sw: 2, scolor: '#E07A5F', dash: i % 12 === 3 ? 'solid' : 'dash' });
+        if (i % 7 === 4) Object.assign(o, { flipH: true, rot: 20 });
+        if (i % 9 === 5) o.op = 70;
+        if (i % 3 === 0) o.fill = '#7A2E2E';
+        layers.push(S(o));
+      });
+      layers.push(T({ text: 'Icons sheet', x: front(36), y: 560, w: 360, size: 18 }));
     } else if (key === 'spine') {
       // 120 pages: spine text by cap height (Q-9), the full title and pen name on one line.
       const b = C.layouts.build('band', BOOK, fmt, 1, BLURB, {});

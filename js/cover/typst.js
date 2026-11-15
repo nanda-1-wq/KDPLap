@@ -107,8 +107,10 @@
   }
 
   function shapeLayer(l) {
-    const comps = C.shapes.typstCurve(C.shapes.path(l));
-    if (!comps) return '';
+    // An icon (Part 5): one curve per path, non-zero (the SVG's rule); a shape: one even-odd curve (frame and ring holes).
+    const icon = l.kind === 'icon';
+    const all = (icon ? C.shapes.iconPaths(l) : [C.shapes.path(l)]).map((d) => C.shapes.typstCurve(d)).filter(Boolean);
+    if (!all.length) return '';
     const fill = l.kind === 'line' || l.fillMode === 'none' ? 'none' : col(l.fill);   // a gradient never gets here (flattened)
     let stroke = 'none';
     if (l.sw > 0) {
@@ -116,7 +118,8 @@
       const dash = l.dash === 'dash' ? `, dash: (${n(t * 3)}pt, ${n(t * 2)}pt)` : l.dash === 'dot' ? `, dash: (0pt, ${n(t * 2)}pt)` : '';
       stroke = `(paint: ${col(l.scolor)}, thickness: ${n(t)}pt, cap: "round", join: "round"${dash})`;
     }
-    return `#shape-box(${n(l.x)}, ${n(l.y)}, ${n(l.w)}, ${n(l.h)}, ${n(l.rot || 0)}, ${l.flipH ? -1 : 1}, ${l.flipV ? -1 : 1})[#place(top + left, curve(fill: ${fill}, fill-rule: "even-odd", stroke: ${stroke}, ${comps}))]`;
+    const rule = icon ? 'non-zero' : 'even-odd';
+    return `#shape-box(${n(l.x)}, ${n(l.y)}, ${n(l.w)}, ${n(l.h)}, ${n(l.rot || 0)}, ${l.flipH ? -1 : 1}, ${l.flipV ? -1 : 1})[${all.map((comps) => `#place(top + left, curve(fill: ${fill}, fill-rule: "${rule}", stroke: ${stroke}, ${comps}))`).join('')}]`;
   }
 
   function source(cover, plan, opt) {
