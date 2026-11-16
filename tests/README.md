@@ -309,11 +309,22 @@ tests/browser/run.sh cover t-icons.js    # the Tabler icons: loaded on first ope
 tests/browser/run.sh cover t-multi.js    # design 65: Shift / Cmd-click, box select, Cmd+A, align ×6 to 5 targets, space, duplicate, lock, delete, drag all, keys
 tests/browser/run.sh cover t-layers.js   # design 66: rows front first, select, eye, lock, ⋮ menu, rename, drag and keyboard reorder, Background row
 tests/browser/run.sh cover t-shots5.js   # STOP 5 compare shots (61, 64, 65, 66) and the icons grid → docs/reviews/e16-stop5/ (never in a sweep)
+# Part 6
+tests/browser/run.sh cover t-uploads.js  # rights first, JPG/PNG by bytes, 10 MB, 12,000 px, stored as sent, EXIF turn, failures, paste, Uploads, Replace, read back, missing (C15), Retry
+tests/browser/run.sh cover t-pdf.js      # a PDF page via pdf.js 6.4.299 (from .cache/format): checks, the page chooser, 300 DPI JPEG, big pages, password, pdf.js down
+tests/browser/run.sh cover t-crop.js     # design 62 crop: 8 handles, edge drags (20 px min), move the picture, keys, Zoom, Reset, Done, Escape, the ghost, DPI badge
+tests/browser/run.sh cover t-adjust.js   # the picture bar: flip, More, Adjust (one undo step a drag), Border, Mask, Opacity, Fill front/back/whole, Arrange, duplicate, lock, delete
+tests/browser/run.sh cover t-images-a11y.js  # Step D on every Part 6 surface, keyboard reach, icon + word on the red and amber parts
+tests/browser/run.sh cover t-shots6.js   # STOP 6 compare shot (62) and the Part 6 surfaces → docs/reviews/e16-stop6/ (never in a sweep)
+COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, the editor (text, effects, shapes, images, PDF, crop, undo, save); every Supabase call answered in the page (safari-stub.js), none reaches the host
 ```
 
 - `tests/browser/cover/mock.js` answers as 0030: `cover_json`, the design insert (rev 1, 23505 on a
   second one), the autosave update "where rev = $rev" (0 rows when the rev moved, rev + 1, the layer
   caps), the history insert. Modes: coverFail, coverSlow, saveFail, saveSlow, otherTab, histFail, fontsDown.
+  Part 6: cover_assets (0030's CHECKs) and the bucket (multipart upload, the path rule, JPEG/PNG, download);
+  modes uploadFail, rowFail, listFail, downloadFail, uploadSlow, pdfDown. `fixture-pictures.js` (PIC) makes
+  pictures and PDFs in the page and hands them to the real file field or a paste event.
 - `fixture-design-book.js` (run.sh puts a suite's `fixture-*.js` before its mock) is the design's book;
   `FIX.band(page)` builds the Band cover with the warm blurb from `js/cover/layouts.js` itself.
 - Fonts come from `tests/browser/.cache/cover-fonts` (the Part 2 cache). The run-code sandbox has no

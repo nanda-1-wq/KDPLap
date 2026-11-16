@@ -62,13 +62,13 @@ const test = async page => {
   ok(/step=9/.test(page.url()), '08 Next opens 09');
   ok((await CV.state(page)).status === 'ready', '09 draws the editor');
 
-  /* The tool rail: Text, Shapes and Layers work (Part 5); Layouts, Book data and Images are drawn inert. */
+  /* The tool rail: Text, Images (Part 6), Shapes and Layers work; Layouts and Book data are drawn inert. */
   const tools = await page.$$eval('[data-tool]', (a) => a.map((b) => [b.dataset.tool, b.getAttribute('aria-pressed'), b.getAttribute('aria-disabled'), b.title, b.innerText.trim()]));
   ok(tools.map((t) => t[4]).join('|') === 'Layouts|Book data|Text|Images|Shapes|Layers', `tools: ${tools.map((t) => t[4])}`);
-  const part = { layouts: 8, book: 8, images: 6 };
+  const part = { layouts: 8, book: 8 };
   for (const t of tools) {
     if (t[0] === 'text') ok(t[1] === 'true' && !t[2], 'Text: on');
-    else if (t[0] === 'shapes' || t[0] === 'layers') ok(t[1] === 'false' && !t[2], `${t[4]}: a live tool (Part 5)`);
+    else if (t[0] === 'shapes' || t[0] === 'layers' || t[0] === 'images') ok(t[1] === 'false' && !t[2], `${t[4]}: a live tool (Part ${t[0] === 'images' ? 6 : 5})`);
     else ok(t[2] === 'true' && t[3] === `Comes in Part ${part[t[0]]}`, `${t[4]}: inert, Comes in Part ${part[t[0]]}`);
   }
   ok(await page.$eval('[data-panel]', (p) => p.getAttribute('aria-label') === 'Text'), 'the Text panel is open');

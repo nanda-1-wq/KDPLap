@@ -6,6 +6,11 @@
 // Tests change globalThis.__store and globalThis.__modes.
 //   __modes: coverFail (n reads of cover_json fail), coverSlow (ms), saveFail (n saves fail), saveSlow (ms),
 //   otherTab (n saves find the rev moved: another tab saved), histFail (n snapshots fail), fontsDown (the font CDN)
+// Part 6: cover_assets (select own, insert with 0030's CHECKs: path <user>/assets/<id>.jpg|png, mime, bytes ≤ 10 MB,
+// 1 to 12,000 px, transparent only for PNG, rights for upload and pdf) and the bucket "covers" (upload: the 0030 path
+// rule and JPEG/PNG only; download). store.assets = rows, store.files = { path: { bytes (base64), type } }.
+//   __modes: uploadFail, rowFail, listFail, downloadFail (n calls fail), uploadSlow (ms), pdfDown (pdf.js does not load)
+// pdf.js 6.4.299 comes from tests/browser/.cache/format (the format suite's checked cache), never the network.
 // Fonts come from tests/browser/.cache/cover-fonts (the Part 2 cache, every file checked against its sha384 there).
 const U = '00000000-0000-4000-8000-000000000001';
 
@@ -24,6 +29,7 @@ async function setupCover(page) {
     design: null,                  // the cover_designs row, null before the first open
     history: [],                   // cover_design_history rows
     blurb: null,
+    assets: [], files: {}, uploads: [],
     writes: [], calls: [], cdn: [], saves: 0, reads: 0, dialogs: []
   };
   // "Leave site?" (beforeunload while a save is out or failed) must never block the next test: note it, accept it.
@@ -35,7 +41,7 @@ async function setupCover(page) {
     fmt: fmtToday(),
     pdf: store.pdf ? copy(store.pdf) : null,
     design: store.design ? copy(store.design) : null,
-    assets: [], blurb: store.blurb ? copy(store.blurb) : null, my_layouts: [],
+    assets: store.assets.filter((a) => store.design && store.design.layers.some((l) => l.type === 'image' && l.asset === a.id)).map(copy), blurb: store.blurb ? copy(store.blurb) : null, my_layouts: [],
     key: store.design ? 'k' + store.design.rev : null,
     last: { print: null, image: null, kindle: null },
     now: now()
@@ -65,6 +71,21 @@ async function setupCover(page) {
     }
     const extra = Object.keys(p).filter((k) => !['layers', 'bg', 'fmt', 'layout', 'last_remap'].includes(k));
     return extra.length ? 'columns ' + extra : '';
+  }
+
+  // cover_assets' CHECKs (0030 §5), as the database would refuse a row.
+  function badAsset(p) {
+    const extra = Object.keys(p).filter((k) => !['id', 'source', 'mime', 'path', 'remote', 'width', 'height', 'bytes', 'transparent', 'credit', 'origin_book_id', 'rights_at'].includes(k));
+    if (extra.length) return 'columns ' + extra;
+    if (!['upload', 'pdf', 'pixabay', 'unsplash'].includes(p.source)) return 'source';
+    if (!['image/jpeg', 'image/png'].includes(p.mime)) return 'mime';
+    if (p.source !== 'unsplash' && p.path !== `${U}/assets/${p.id}${p.mime === 'image/png' ? '.png' : '.jpg'}`) return 'path';
+    if (!(p.width >= 1 && p.width <= 12000 && p.height >= 1 && p.height <= 12000) || !Number.isInteger(p.width) || !Number.isInteger(p.height)) return 'px';
+    if (p.source !== 'unsplash' && !(p.bytes >= 1 && p.bytes <= 10485760)) return 'bytes';
+    if (p.transparent && p.mime !== 'image/png') return 'transparent';
+    if (['upload', 'pdf'].includes(p.source) && !p.rights_at) return 'rights';
+    if (p.path && !store.files[p.path]) return 'no file';
+    return '';
   }
 
   globalThis.__modes = globalThis.__modes || {};
@@ -137,6 +158,67 @@ async function setupCover(page) {
       store.history.push(row);
       return json(r, 201, [{ id: row.id, created_at: row.created_at }]);
     }
+    // Part 6: pictures (0030 cover_assets and the bucket "covers").
+    if (path === '/rest/v1/cover_assets' && method === 'GET') {
+      if (take('listFail')) return json(r, 500, { message: 'mock: assets down' });
+      return json(r, 200, store.assets.slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).map(copy));
+    }
+    if (path === '/rest/v1/cover_assets' && method === 'POST') {
+      const p = body();
+      store.writes.push({ table: 'cover_assets', insert: copy(p) });
+      if (take('rowFail')) return json(r, 500, { message: 'mock: asset row down' });
+      const bad = badAsset(p);
+      if (bad) return fail(r, 400, '23514', `mock: cover_assets check: ${bad}`);
+      const row = { id: p.id || id('a'), source: p.source, mime: p.mime, path: p.path, remote: p.remote || null, width: p.width, height: p.height, bytes: p.bytes, transparent: !!p.transparent,
+        rights_at: p.rights_at ? now() : null, credit: p.credit || null, origin_book_id: p.origin_book_id || null, created_at: now() };
+      store.assets.push(row);
+      return json(r, 201, [copy(row)]);
+    }
+    const so = path.match(/^\/storage\/v1\/object\/(?:authenticated\/)?covers\/(.+)$/);
+    if (so && method === 'POST') {
+      const name = decodeURIComponent(so[1]);
+      if (mode('uploadSlow')) await wait(mode('uploadSlow'));
+      if (take('uploadFail')) return json(r, 500, { statusCode: '500', error: 'mock', message: 'mock: storage down' });
+      // supabase-js sends a Blob as multipart form data: the file part carries the Blob's own type (as Storage reads it).
+      let buf = req.postDataBuffer();
+      let type = (req.headers()['content-type'] || '').split(';')[0];
+      if (type === 'multipart/form-data') {
+        const bd = '--' + (req.headers()['content-type'].match(/boundary=([^;]+)/) || [])[1];
+        let at = buf.indexOf(bd), file = null;
+        while (at >= 0) {
+          const next = buf.indexOf(bd, at + bd.length);
+          if (next < 0) break;
+          const part = buf.subarray(at + bd.length + 2, next - 2);
+          const he = part.indexOf('\r\n\r\n');
+          const head = part.subarray(0, he).toString('latin1');
+          if (/filename=/.test(head)) file = { type: ((head.match(/content-type:\s*([^\r\n;]+)/i) || [])[1] || '').trim(), buf: part.subarray(he + 4) };
+          at = next;
+        }
+        if (!file) return json(r, 400, { statusCode: '400', error: 'mock', message: 'no file part' });
+        buf = file.buf; type = file.type;
+      }
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/assets\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png)$/.test(name) || !name.startsWith(U + '/'))
+        return json(r, 403, { statusCode: '403', error: 'Unauthorized', message: 'new row violates row-level security policy' });
+      if (!['image/jpeg', 'image/png'].includes(type)) return json(r, 415, { statusCode: '415', error: 'invalid_mime_type', message: `mime type ${type} is not supported` });
+      if (buf.length > 10485760) return json(r, 413, { statusCode: '413', error: 'Payload too large', message: 'too large' });
+      if (store.files[name]) return json(r, 409, { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' });
+      store.files[name] = { buf, type, size: buf.length };
+      store.uploads.push({ name, type, size: buf.length });
+      return json(r, 200, { Key: `covers/${name}`, Id: id('f') });
+    }
+    if (so && method === 'GET') {
+      const name = decodeURIComponent(so[1]);
+      if (take('downloadFail')) return json(r, 500, { statusCode: '500', error: 'mock', message: 'mock: storage down' });
+      if (!store.files[name]) return json(r, 400, { statusCode: '404', error: 'not_found', message: 'Object not found' });
+      const f = store.files[name];
+      return r.fulfill({ status: 200, contentType: f.type, headers: cors, body: f.buf });
+    }
+    if (path === '/storage/v1/object/covers' && method === 'DELETE') {
+      const p = body() || {};
+      const gone = (p.prefixes || []).filter((n) => store.files[n]);
+      for (const n of gone) delete store.files[n];
+      return json(r, 200, gone.map((n) => ({ name: n })));
+    }
     // The rail's 07 and 08 marks (design 58 shows them done): a current run, and a current Print PDF when there is one.
     if (path === '/rest/v1/rpc/qc_mark') return json(r, 200, [{ checked_at: ago(1), current: true }]);
     if (path === '/rest/v1/rpc/pdf_marks') return json(r, 200, store.pdf ? [{ book_id: FIX.BOOK, exported_at: store.pdf.created_at, page_count: store.pdf.page_count, changed: !store.pdf.current }] : []);
@@ -147,9 +229,16 @@ async function setupCover(page) {
 
   // Cover fonts: the @expo-google-fonts TTFs, jsdelivr and unpkg alike, from the checked Part 2 cache.
   const fontFile = /^https:\/\/(cdn\.jsdelivr\.net\/npm|unpkg\.com)\/(@expo-google-fonts\/[^/]+)\/(.+\.ttf)$/;
+  const pdfFile = /^https:\/\/(cdn\.jsdelivr\.net\/npm|unpkg\.com)\/(pdfjs-dist@6\.4\.299)\/(build\/pdf(?:\.worker)?\.min\.mjs)$/;
   await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com)\//, async (r) => {
+    const pm = r.request().url().match(pdfFile);
+    if (pm) {
+      store.cdn.push(`${pm[2]}/${pm[3]}`);
+      if (mode('pdfDown')) return r.abort();
+      return r.fulfill({ path: `${CACHE}/format/${pm[2]}/${pm[3]}`, contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' } });
+    }
     const m = r.request().url().match(fontFile);
-    if (!m) return r.fallback();
+    if (!m) { store.cdn.push('NET ' + r.request().url()); return r.fallback(); }
     store.cdn.push(`${m[2]}/${m[3]}`);
     if (mode('fontsDown')) return r.abort();
     return r.fulfill({ path: `${CACHE}/cover-fonts/${m[2]}/${m[3]}`, contentType: 'font/ttf', headers: { 'access-control-allow-origin': '*' } });

@@ -21,8 +21,15 @@
    The one color picker now serves the text color, the effect color, the
    fill and gradient ends, the border and the background (E.pk.target).
 
-   Drawn and inert (aria-disabled, title "Comes in Part N"): the Layouts,
-   Book data and Images tools (8, 8, 6), Write blurb and Author line (8),
+   Part 6 (design 62) adds pictures (js/cover/images.js): the Images panel
+   (Uploads: the rights tick, Upload image, Upload PDF, Paste, Cmd/Ctrl+V),
+   the picture bar and crop mode (E.cropping, the design's cropping; view.js
+   draws the crop handles), and the picture store (E.pics) behind the
+   renderer's images callback. A picture removed from Uploads is a Must fix
+   (C15, kdpCover.checks with opt.missing).
+
+   Drawn and inert (aria-disabled, title "Comes in Part N"): the Layouts
+   and Book data tools (8, 8), the Pixabay and Unsplash tabs (7), Write blurb and Author line (8),
    the Checks chip's drawer and Preview final (9), Export cover (10). The
    chip label and the header reason are live (kdpCover.checks), only the
    drawer is not built.
@@ -56,12 +63,13 @@
     eye: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     lock20: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
   };
-  const TOOLS = [['layouts', 'Layouts', 8], ['book', 'Book data', 8], ['text', 'Text', 0], ['images', 'Images', 6], ['shapes', 'Shapes', 0], ['layers', 'Layers', 0]];
-  const PANEL_LABEL = { text: 'Text', shapes: 'Shapes', layers: 'Layers' };
+  const TOOLS = [['layouts', 'Layouts', 8], ['book', 'Book data', 8], ['text', 'Text', 0], ['images', 'Images', 0], ['shapes', 'Shapes', 0], ['layers', 'Layers', 0]];
+  const PANEL_LABEL = { text: 'Text', images: 'Images', shapes: 'Shapes', layers: 'Layers' };
   // A menu → the bar button that opened it (Escape gives focus back there).
-  const MENU_BTN = { fonts: 'font', color: 'color', opacity: 'op', arrange: 'arr', bg: 'bg', effects: 'fx', shape: 'shape', sfill: 'sfill', stroke: 'stroke', more: 'more' };
+  const MENU_BTN = { fonts: 'font', color: 'color', opacity: 'op', arrange: 'arr', bg: 'bg', effects: 'fx', shape: 'shape', sfill: 'sfill', stroke: 'stroke', more: 'more',
+    ifill: 'ifill', iadjust: 'iadjust', iborder: 'iborder', imask: 'imask' };
   // A picker target → the bar button that shows that color.
-  const PK_BTN = { color: 'color', bg: 'bg', fxcolor: 'fx', fill: 'sfill', fill2: 'sfill', scolor: 'stroke' };
+  const PK_BTN = { color: 'color', bg: 'bg', fxcolor: 'fx', fill: 'sfill', fill2: 'sfill', scolor: 'stroke', bcolor: 'iborder' };
 
   let book = null, ctx = null;
   let E = null;          // the open editor (one per visit of step 09)
@@ -70,11 +78,13 @@
 
   /* ── The editor object ── */
   function newEditor(rootEl) {
-    return {
+    const ed = {
       root: rootEl, status: 'loading', data: null, cover: null, rev: 1,
       sel: null, multi: [], editing: null, act: null, menu: null,
       panel: 'text', layerMenu: null, renaming: null, rowDrag: null, fxSnap: null, alignTo: 'sel',
       iconQ: '', iconN: 48, icons: 'idle',
+      // Part 6: the Images panel, Uploads, Replace, crop mode, the picture store
+      img: { rights: false, err: '', busy: '', pdf: null, tab: 'up' }, uploads: null, replaceId: null, cropping: null, pics: new Map(), bookId: null,
       view: { z: 1, px: 91, py: 47 }, tpl: { op: 100, hide: false, pop: false }, guides: true, snap: true,
       fontQ: '', cat: 'All', fontBusy: null, fontErr: null,
       pk: { target: 'color', hue: 0, sat: 0, val: 0, hexDraft: '#1C1C1A', recent: [] },
@@ -83,6 +93,8 @@
       view_: null, saver: null,
       ...api()
     };
+    ed.live = () => E === ed;   // async work (uploads, picture loads) checks it is still this visit's editor
+    return ed;
   }
 
   /* ── Loading ── */
@@ -105,6 +117,7 @@
       data = res.data;
     }
     E.data = data;
+    E.bookId = book.id;
     E.cover = C.model.normalize({ fmt: data.design.fmt, bg: data.design.bg, layers: data.design.layers, layout: data.design.layout });
     E.rev = data.design.rev;
     C.fonts.install();
@@ -130,6 +143,7 @@
       }
     });
     renderEditor();
+    C.images.loadUsed(E);
     ctx.setGate();
     // The Text panel's presets draw in Source Serif 4 Bold and IBM Plex Sans: load them now, so Add is instant.
     C.fonts.load('Source Serif 4', 700).catch(() => {});
@@ -195,7 +209,9 @@
     C.text.bindPanel(panel, E);
     C.shapesUi.bindPanel(panel, E);
     C.layersPanel.bind(panel, E);
+    C.images.bindPanel(panel, E);
     C.text.bindBar(bar, E);
+    C.images.bindBar(bar, E);
     C.effects.bind(bar, E);
     C.shapesUi.bindBar(bar, E);
     C.multi.bind(bar, E);
@@ -227,18 +243,20 @@
     const top = p.scrollTop;
     p.setAttribute('aria-label', PANEL_LABEL[E.panel]);
     p.dataset.kind = E.panel;
-    keepFocus(p, () => { p.innerHTML = E.panel === 'shapes' ? C.shapesUi.panelHtml(E) : E.panel === 'layers' ? C.layersPanel.html(E) : C.text.panelHtml(E); });
+    keepFocus(p, () => { p.innerHTML = E.panel === 'shapes' ? C.shapesUi.panelHtml(E) : E.panel === 'layers' ? C.layersPanel.html(E) : E.panel === 'images' ? C.images.panelHtml(E) : C.text.panelHtml(E); });
     p.scrollTop = top;
   }
   /** The tool rail: Text, Shapes or Layers (the design's showPanel). */
   function showPanel(k) {
     if (!PANEL_LABEL[k]) return;
     E.panel = k; E.layerMenu = null; E.renaming = null;
+    if (k !== 'images') E.replaceId = null;
     const t = E.root.querySelector('[data-tools]');
     keepFocus(t, () => { t.innerHTML = toolsHtml(); });
     E.root.querySelector('[data-panel]').scrollTop = 0;
     renderPanel(); renderMenu();
     if (k === 'shapes') openIcons();
+    if (k === 'images') C.images.loadUploads(E);
   }
   /** The icon set loads the first time the Shapes panel opens. */
   function openIcons() {
@@ -256,7 +274,7 @@
   }
 
   function viewBarHtml() {
-    const items = C.checks.run(E.cover);
+    const items = C.checks.run(E.cover, { missing: C.images.missing(E) });
     const sum = C.checks.summary(items);
     const bad = sum.errors > 0, warn = !bad && sum.warns > 0;
     return `
@@ -305,13 +323,13 @@
     keepFocus(vb, () => { vb.innerHTML = viewBarHtml(); });
     const tb = E.root.querySelector('[data-textbar]');
     const l = selLayer();
-    const kind = E.multi.length > 1 ? 'multi' : l && l.type === 'text' ? 'text' : l && l.type === 'shape' ? 'shape' : null;
-    const html = kind === 'multi' ? C.multi.barHtml(E) : kind === 'text' ? C.text.barHtml(E) : kind === 'shape' ? C.shapesUi.barHtml(E) : '';
+    const kind = E.multi.length > 1 ? 'multi' : l && l.type === 'text' ? 'text' : l && l.type === 'shape' ? 'shape' : l && l.type === 'image' ? 'image' : null;
+    const html = kind === 'multi' ? C.multi.barHtml(E) : kind === 'text' ? C.text.barHtml(E) : kind === 'shape' ? C.shapesUi.barHtml(E) : kind === 'image' ? C.images.barHtml(E) : '';
     // A popover drawn again keeps where it was scrolled (Text effects is taller than a small window).
     const scrolled = [...tb.querySelectorAll('.cv-pop, .cv-fx-tiles')].map((n) => [[...n.classList].find((c) => /^cv-(pop-|fx-tiles)/.test(c)), n.scrollTop, n.scrollLeft]);
     keepFocus(tb, () => { tb.innerHTML = html; });
     tb.hidden = !html;
-    tb.setAttribute('aria-label', kind === 'multi' ? 'Several layers selected' : kind === 'shape' ? 'Selected shape' : 'Selected text');
+    tb.setAttribute('aria-label', kind === 'multi' ? 'Several layers selected' : kind === 'shape' ? 'Selected shape' : kind === 'image' ? (E.cropping === E.sel ? 'Crop the picture' : 'Selected image') : 'Selected text');
     const pk = E.root.querySelector('[data-picker]');
     if (pk) C.picker.bind(pk, E.pk, pickerApi());
     if (E.menu === 'effects') C.effects.paintTiles(tb);
@@ -399,6 +417,8 @@
   /** opt: bars, panel, overlay (false: draw the canvas and move the frame only, e.g. while typing or on a slider). */
   function afterChange(act, opt) {
     const o = opt || {};
+    // Crop mode ends when its picture is locked, hidden or gone (from the Layers panel or the ⋮ menu too).
+    if (E.cropping != null) { const c = E.cover.layers.find((l) => l.id === E.cropping); if (!c || c.lock || c.hidden) { E.cropping = null; if (!act) o.bars = true; } }
     if (act) { E.view_.paint(); return; }   // a drag: the frame moves in view.js; bars wait for the end
     if (o.overlay === false) { E.view_.paint(); E.view_.syncSelBox(); } else E.view_.sync();
     if (o.bars !== false) renderBars();
@@ -437,7 +457,8 @@
 
   function addLayer(L) {
     if (!commit(E.cover.layers.concat([L]), E.cover.bg, null, { bars: false })) return;
-    E.sel = L.id; E.multi = []; E.editing = null; E.menu = null;
+    E.sel = L.id; E.multi = []; E.editing = null; E.menu = null; E.cropping = null;
+    C.images.ensure(E, L);
     E.view_.sync(); renderBars();
     // Focus goes to the new layer's box, so the keyboard can move it at once.
     const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(L.id))}"]`);
@@ -503,13 +524,14 @@
   function dupId(id) {
     const r = C.model.dup(E.cover.layers, id, C.model.nextId(E.cover.layers));
     if (!C.model.fits({ layers: r.layers }).ok) { commit(r.layers, E.cover.bg, null); return; }   // refused: the note shows
-    E.sel = r.sel; E.multi = []; E.layerMenu = null; E.menu = null;
+    E.sel = r.sel; E.multi = []; E.layerMenu = null; E.menu = null; E.cropping = null;
     commit(r.layers, E.cover.bg, null);
   }
   function removeSel() { removeIds(selIds()); }
   function removeIds(ids) {
     if (!ids.length) return;
-    E.sel = null; E.multi = []; E.editing = null; E.menu = null; E.layerMenu = null; E.renaming = null;
+    E.sel = null; E.multi = []; E.editing = null; E.menu = null; E.layerMenu = null; E.renaming = null; E.cropping = null;
+    if (ids.includes(E.replaceId)) E.replaceId = null;
     commit(C.model.remove(E.cover.layers, ids), E.cover.bg, null);
     E.view_.sync(); renderBars();
     const c = E.root.querySelector('[data-canvas]');
@@ -520,6 +542,7 @@
     if (E.sel === id && !E.multi.length) return;
     if (E.editing != null && E.editing !== id) stopEdit(false);
     E.sel = id; E.multi = []; E.menu = null; E.fontScrolled = false; E.fontErr = null;
+    if (E.cropping != null && E.cropping !== id) E.cropping = null;
     E.view_.sync();
     renderBars(); syncPanelSel();
     if (opt && opt.keepFocus && id != null) {
@@ -534,6 +557,7 @@
     if (E.editing != null) stopEdit(false);
     if (list.length === 1) { E.sel = list[0]; E.multi = []; }
     else { E.sel = null; E.multi = list.length > 1 ? list : []; }
+    if (E.cropping != null && E.cropping !== E.sel) E.cropping = null;
     E.menu = null; E.fontScrolled = false; E.fontErr = null;
     E.view_.sync(); renderBars(); syncPanelSel();
   }
@@ -609,12 +633,37 @@
     if (refocus) { const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`); if (hit) hit.focus({ preventScroll: true }); }
   }
 
+  /* ── Crop mode (design 62: cropping) ── */
+  function startCrop(id) {
+    const l = E.cover.layers.find((x) => x.id === id);
+    if (!l || l.type !== 'image' || l.lock) return;
+    if (E.editing != null) stopEdit(false);
+    E.sel = id; E.multi = []; E.menu = null; E.cropping = id;
+    E.view_.sync(); renderBars();
+    const b = E.root.querySelector('.cv-textbar [data-k="crop-zoom"]'); if (b) b.focus({ preventScroll: true });
+  }
+  function endCrop(refocus) {
+    if (E.cropping == null) return;
+    E.cropping = null;
+    E.view_.sync(); renderBars();
+    if (refocus) { const b = E.root.querySelector('.cv-textbar [data-k="crop"]'); if (b) b.focus({ preventScroll: true }); }
+  }
+  /** Arrow keys in crop mode move the picture inside its box (the design's drag of the picture). */
+  function movePic(dx, dy) {
+    const l = selLayer(); if (!l || l.type !== 'image') return;
+    const r = (l.rot || 0) * Math.PI / 180;
+    const lx = dx * Math.cos(r) + dy * Math.sin(r), ly = -dx * Math.sin(r) + dy * Math.cos(r);
+    const c = C.model.clampPic(Object.assign({}, l, { px: l.px + lx, py: l.py + ly }));
+    patchLayer(l.id, { px: c.px, py: c.py }, null, { panel: false });
+  }
+
   function undo() { const s = E.hist.undo({ layers: E.cover.layers, bg: E.cover.bg }); if (s) restore(s); }
   function redo() { const s = E.hist.redo({ layers: E.cover.layers, bg: E.cover.bg }); if (s) restore(s); }
   function restore(s) {
     E.cover = Object.assign({}, E.cover, { layers: s.layers, bg: s.bg });
     const k = C.history.keepSelection(s, E.sel, E.multi);
-    E.sel = k.sel; E.multi = k.multi.length > 1 ? k.multi : []; E.editing = null;
+    E.sel = k.sel; E.multi = k.multi.length > 1 ? k.multi : []; E.editing = null; E.cropping = null;
+    for (const l of s.layers) C.images.ensure(E, l);
     E.saver.changed();
     afterChange(null);
   }
@@ -634,6 +683,7 @@
     if (E.menu === 'effects' && l) { E.fxSnap = { id: l.id, fx: l.fx, curve: l.curve, dist: l.dist }; openPicker('fxcolor'); }
     if (E.menu === 'sfill' && l) openPicker(E.pk.target === 'fill2' && l.fillMode === 'grad' ? 'fill2' : 'fill');
     if (E.menu === 'stroke') openPicker('scolor');
+    if (E.menu === 'iborder') openPicker('bcolor');
     if (E.menu !== 'effects') E.fxSnap = null;
     if (E.menu === 'fonts') E.fontScrolled = false;
     renderBars(); if (E.panel === 'layers') renderPanel();
@@ -716,11 +766,14 @@
         if (E.layerMenu) { closeLayerMenu(true); return; }
         if (E.menu) { const m = E.menu; E.menu = null; E.fxSnap = null; renderBars(); E.view_.sync(); const b = E.root.querySelector(`[data-k="${MENU_BTN[m]}"]`); if (b) b.focus({ preventScroll: true }); return; }
         if (E.tpl.pop && t && t.closest && t.closest('[data-tplpop]')) { toggleTpl(false); return; }
+        if (E.cropping != null) { endCrop(true); return; }   // also from the Zoom slider of the crop bar
         if (E.multi.length && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { selectIds([]); return; }
         if (E.sel != null && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { const id = E.sel; select(null); const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`); if (hit) hit.focus({ preventScroll: true }); }
         return;
       }
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      // Undo and redo also work from a slider or a check box (the crop Zoom, Adjust); typing fields keep their own.
+      const typing = t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable || (t.tagName === 'INPUT' && !['range', 'checkbox'].includes(t.type)));
+      if (typing || (t && t.tagName === 'INPUT' && !(mod && /^[zZyY]$/.test(k)))) return;
       if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
       if (t && t.closest && t.closest('[data-handle]')) return;   // view.js: arrows resize with a handle focused
@@ -729,9 +782,15 @@
       const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k];
       if (d && selIds().length && (!t || !t.closest || !t.closest('.cv-viewbar, .cv-textbar, .cv-panel, .cv-tools'))) {
         e.preventDefault();
-        nudgeSel(d[0], d[1], e.shiftKey);
+        if (E.cropping != null && E.cropping === E.sel) movePic(d[0] * (e.shiftKey ? 10 : 1), d[1] * (e.shiftKey ? 10 : 1));
+        else nudgeSel(d[0], d[1], e.shiftKey);
         keepFocusHit();
       }
+    });
+    // Paste a picture (Cmd or Ctrl + V) while 09 is open (design onPaste).
+    document.addEventListener('paste', (e) => {
+      if (!E || E.status !== 'ready' || !ctx.isActive(STEP) || !E.root.isConnected) return;
+      C.images.onPaste(E, e);
     });
     // A press outside the Layers ⋮ menu closes it (as a click on the gray does for the bar popovers).
     document.addEventListener('pointerdown', (e) => {
@@ -761,6 +820,8 @@
       // Part 5
       commitLayers, setLayer, selIds, selectIds, toggleSel, nudgeSel, removeIds, dupId, arrangeId, addShape, addIcon, openIcons, showPanel,
       startRename, endRename, openLayerMenu, closeLayerMenu, fxDone,
+      // Part 6
+      addLayer, startCrop, endCrop, movePic, gate: () => ctx.setGate(),
       pickerTo(t, hex) { openPicker(t, hex); },
       refreshPanel: renderPanel,
       refreshBars: renderBars,
@@ -783,7 +844,7 @@
     /** The header line beside Next (design exportReason; Part 9 adds the size-change words, Part 10 "Done"). */
     nextNote() {
       if (!E || E.status !== 'ready') return 'Not done yet: export the cover files.';
-      const n = C.checks.run(E.cover).filter((c) => c.sev === 'error').length;
+      const n = C.checks.run(E.cover, { missing: C.images.missing(E) }).filter((c) => c.sev === 'error').length;
       return n ? `Fix ${n} problem${n === 1 ? '' : 's'} before export.` : 'Not done yet: export the cover files.';
     },
     /** Next opens 10 only after a current export (Part 10). */

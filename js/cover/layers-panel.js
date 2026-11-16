@@ -42,9 +42,14 @@
     return a;
   }
 
-  function mark(l) {
+  function mark(l, E) {
     if (l.type === 'text') return '<span class="cv-lr-t" aria-hidden="true">T</span>';
-    if (l.type === 'image') return '<span class="cv-lr-img" aria-hidden="true"></span>';
+    if (l.type === 'image') {
+      // Part 6: the picture itself (design 66's 30 px thumbnail), the sample's gradient, or the gray stand-in.
+      const p = E && C.images ? (l.asset == null ? 'sample' : C.images.state(E, l)) : null;
+      const t = p === 'ready' && E.pics.get(l.asset) ? E.pics.get(l.asset).thumb : null;
+      return t ? `<span class="cv-lr-img" aria-hidden="true"><img src="${t}" alt=""></span>` : `<span class="cv-lr-img${p === 'sample' ? ' is-sample' : ''}" aria-hidden="true"></span>`;
+    }
     return `<span class="cv-lr-sh" aria-hidden="true">${C.shapesUi.layerSvg(l)}</span>`;
   }
 
@@ -56,7 +61,7 @@
       const kind = l.type === 'text' ? 'Text' : l.type === 'image' ? 'Picture' : 'Shape';
       return `<div role="listitem" class="cv-lrow${on ? ' is-sel' : ''}${l.hidden ? ' is-hidden' : ''}${drag ? ' is-drag' : ''}" data-row="${esc(l.id)}" data-di="${di}"${drag ? ` style="transform:translateY(${drag}px)"` : ''}>
         <button type="button" class="cv-lr-grip" data-k="grip-${esc(l.id)}" data-grip="${esc(l.id)}" aria-label="Move ${esc(name)} up or down: drag, or press the arrow keys" title="Drag to reorder">${I.grip}</button>
-        ${mark(l)}
+        ${mark(l, E)}
         ${E.renaming === l.id
           ? `<input type="text" class="cv-lr-in" data-k="rename-${esc(l.id)}" data-rename="${esc(l.id)}" aria-label="Layer name" value="${esc(l.label || name)}" maxlength="${C.model.CAPS.label}">`
           : `<button type="button" class="cv-lr-name" data-k="row-${esc(l.id)}" data-pick="${esc(l.id)}" aria-pressed="${on}" aria-label="${esc(`${kind}: ${name}${l.hidden ? ', hidden' : ''}${l.lock ? ', locked' : ''}`)}">${esc(name)}</button>`}

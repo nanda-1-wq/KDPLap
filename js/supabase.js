@@ -1581,6 +1581,42 @@ window.kdp = {
     return { data: error ? null : (data && data[0]) || null, error };
   },
 
+  /** The signed-in user's id, from the local session (no request). From E15 (e15-archive, coverUserId). */
+  async coverUserId() {
+    const { data } = await window.sb.auth.getSession();
+    return data && data.session && data.session.user ? data.session.user.id : null;
+  },
+
+  /**
+   * Stores one picture (E16 Part 6; the E15 uploadCoverImage pattern, e15-archive): the file at
+   * <user id>/assets/<id>.jpg|png (one new id for the file and the row, upsert off: a picture is never
+   * overwritten), then its cover_assets row with the same id. A row that fails removes its file again.
+   * bytes: the file as sent (Uint8Array). mime: from the file's bytes (kdpCover.imagePrep.sniff), never
+   * from its name: supabase-js 2.49.4 sends a Blob with the Blob's own type.
+   * source: 'upload' | 'pdf'. rightsTicked: "I have the rights" was ticked (0030 needs it for both).
+   */
+  async uploadCoverAsset({ bytes, mime, width, height, transparent = false, source = 'upload', rightsTicked = false, originBookId = null }) {
+    const uid = await this.coverUserId();
+    if (!uid) return { data: null, error: new Error('Not signed in.') };
+    const id = crypto.randomUUID();
+    const path = `${uid}/assets/${id}.${mime === 'image/png' ? 'png' : 'jpg'}`;
+    const blob = new Blob([bytes], { type: mime });
+    const up = await window.sb.storage.from('covers').upload(path, blob, { contentType: mime, upsert: false, cacheControl: '3600' });
+    if (up.error) return { data: null, error: up.error };
+    const row = await this.addCoverAsset({ id, source, mime, path, width, height, bytes: blob.size, transparent: mime === 'image/png' && !!transparent, rightsTicked, originBookId });
+    if (row.error) {
+      try { await window.sb.storage.from('covers').remove([path]); } catch (e) { /* a file without a row is never listed */ }
+      return { data: null, error: row.error };
+    }
+    return row;
+  },
+
+  /** A stored picture's bytes (signed in, never a public URL). From E15 (downloadCoverImage). → { data: Blob, error } */
+  async downloadCoverAsset(path) {
+    const { data, error } = await window.sb.storage.from('covers').download(path);
+    return { data: error ? null : data, error };
+  },
+
   /**
    * Removes a picture: the row first, then its file through the Storage API.
    * A file that could not be removed is left (unseen, the row is gone) and

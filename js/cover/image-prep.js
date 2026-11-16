@@ -8,12 +8,13 @@
    uploadError, storedPx) are written in here because js/cover-math.js is
    not in E16.
 
-   Not E16's rules yet (Part 6 changes them, with its own tests):
-   - prepare() draws every picture on white and stores a JPEG: E16 keeps a
-     PNG's transparency (plan §2 cover_assets: image/png, `transparent`);
-   - prepare() caps the long side at 4,096 px: 0030 allows 12,000 px.
-   The export (js/cover/export.js) uses jpegColor() on the Kindle JPG and
-   sniff() on pictures; it never calls prepare().
+   prepare() is E15's and stays unused. E16's uploads (Part 6, plan §3
+   "Images", STOP 3 F5) follow E16: the file is stored as sent when it
+   passes the checks (a PNG keeps its transparency), JPG or PNG by its bytes,
+   10 MB at most (the bucket and cover_assets.bytes), 12,000 px at most on a
+   side (cover_assets width and height); a PDF page is drawn by pdf.js at
+   300 DPI and stored as a JPEG. The export (js/cover/export.js) uses
+   jpegColor() on the Kindle JPG and sniff() on pictures.
 
    Pure (no DOM, also in Deno):
    kdpCover.imagePrep.sniff(bytes)      → { type, w, h, alpha } from the file's first bytes
@@ -24,10 +25,22 @@
    kdpCover.imagePrep.luma(r, g, b)     → relative luminance (0..1) of an sRGB pixel
    kdpCover.imagePrep.ERROR_TEXT        → the message of each refusal (E15 words)
    kdpCover.imagePrep.E15               → the E15 limits prepare() uses
+   kdpCover.imagePrep.E16               → the E16 upload limits (Part 6; tests/limits-parity.test.js holds them to 0030)
+   kdpCover.imagePrep.E16_TEXT          → the words of each E16 refusal (design 62's words where it has them)
+   kdpCover.imagePrep.uploadError16({ type, bytes, w, h }) → null | 'type' | 'bytes' | 'side' | 'unreadable'
+   kdpCover.imagePrep.pdfScale(wPt, hPt) → { k, w, h, dpi }: a PDF page at 300 DPI, smaller only to fit
+                                          12,000 px a side and 16 MP (Safari's canvas)
+   kdpCover.imagePrep.fitSide(w, h, max) → { w, h } scaled down so the long side is at most max
 
    Browser:
    kdpCover.imagePrep.prepare(file)     → { ok, error } or { ok, blob, width, height, bytes, flattened, scaled, source }
    kdpCover.imagePrep.decode(blob)      → ImageBitmap
+   kdpCover.imagePrep.readPicture(file) → { ok, error } or { ok, bytes, mime, w, h, transparent, screen }
+                                          (E16: the bytes as sent; w × h as drawn, EXIF turn applied;
+                                          screen: a copy for the screen, 4,096 px at most a side)
+   kdpCover.imagePrep.screenCopy(src)   → the source, or a smaller canvas (long side 4,096 px)
+   kdpCover.imagePrep.thumb(src, side)  → a data URL thumbnail (JPEG; PNG when see-through)
+   kdpCover.imagePrep.pdfPage(lib, bytes, n) → { ok, error } or { ok, bytes, mime, w, h, dpi, pages }
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -62,6 +75,48 @@
       return null;
     }
   };
+
+  // E16 (Part 6): uploads are stored as sent. 0030: cover_assets.bytes ≤ 10 MB, width and height 1 to 12,000.
+  const E16 = { types: ['image/jpeg', 'image/png'], maxBytes: 10485760, maxSide: 12000, pdfBytes: 25 * 1024 * 1024, pdfDpi: 300,
+    pdfMaxArea: 16000000, screenSide: 4096, pdfQuality: 0.92 };
+  const E16_TEXT = {
+    rights: 'Tick the rights box first, then add the picture again.',
+    type: 'This file is not a JPG or PNG.',
+    bytes: 'This file is over 10 MB. Save it smaller and try again.',
+    side: 'This picture is over 12,000 px on one side. Save it smaller and try again.',
+    unreadable: 'This picture could not be opened.',
+    upload: 'The picture was not saved. Check your connection, then try again.',
+    pdfRights: 'Tick the rights box first.',
+    pdfType: 'This file is not a PDF.',
+    pdfBytes: 'This PDF is over 25 MB.',
+    pdfOpen: 'This PDF could not be opened.',
+    pdfPassword: 'This PDF has a password. Save a copy without the password, then try again.',
+    pdfPage: 'This page could not be drawn. Try another page.',
+    pdfBig: 'This page is too large to store as a picture, even at a lower DPI. Try another page.',
+    pdfEngine: 'The PDF reader did not load. Check your connection, then try again.',
+    pasteNone: 'There is no picture on the clipboard.',
+    pasteBlocked: 'Paste is blocked here. Press Cmd+V or Ctrl+V on the cover instead.'
+  };
+  function uploadError16({ type, bytes, w, h }) {
+    if (!E16.types.includes(type)) return 'type';
+    if (!(bytes > 0) || bytes > E16.maxBytes) return 'bytes';
+    if (!(w > 0) || !(h > 0)) return 'unreadable';
+    if (w > E16.maxSide || h > E16.maxSide) return 'side';
+    return null;
+  }
+  function fitSide(w, h, max) {
+    const long = Math.max(w, h);
+    if (long <= max) return { w: Math.round(w), h: Math.round(h) };
+    const k = max / long;
+    return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+  }
+  /** A PDF page (in pt) drawn at 300 DPI, lower only when it would pass 12,000 px a side or 16 MP. */
+  function pdfScale(wPt, hPt) {
+    let k = E16.pdfDpi / 72;
+    k = Math.min(k, E16.maxSide / Math.max(wPt, hPt), Math.sqrt(E16.pdfMaxArea / (wPt * hPt)));
+    const w = Math.max(1, Math.floor(wPt * k)), h = Math.max(1, Math.floor(hPt * k));
+    return { k, w, h, dpi: Math.floor(k * 72) };
+  }
 
   /* ── Pure ── */
 
@@ -261,5 +316,99 @@
     }
   }
 
-  C.imagePrep = { ERROR_TEXT, E15, sniff, jpegColor, luma, prepare, decode, makeCanvas };
+  /* ── E16 (Part 6) ── */
+
+  /** A picked or pasted file → its bytes as sent, its kind by its bytes, its size as drawn, a screen copy. */
+  async function readPicture(file) {
+    if (!file) return { ok: false, error: 'unreadable' };
+    if (file.size > E16.maxBytes) {
+      // over 10 MB: the kind first, so a 30 MB PDF or Word file still reads "not a JPG or PNG"
+      let head = null;
+      try { head = new Uint8Array(await file.slice(0, 65536).arrayBuffer()); } catch (e) { return { ok: false, error: 'unreadable' }; }
+      return { ok: false, error: sniff(head).type ? 'bytes' : 'type' };
+    }
+    let bytes;
+    try { bytes = new Uint8Array(await file.arrayBuffer()); } catch (e) { return { ok: false, error: 'unreadable' }; }
+    const info = sniff(bytes);
+    if (!info.type) return { ok: false, error: 'type' };
+    // the header's size first (refused before decoding a huge file); then the drawn size (an EXIF turn swaps w and h)
+    const pre = uploadError16({ type: info.type, bytes: bytes.length, w: info.w || 1, h: info.h || 1 });
+    if (pre) return { ok: false, error: pre };
+    let bmp;
+    try { bmp = await decode(new Blob([bytes], { type: info.type })); } catch (e) { return { ok: false, error: 'unreadable' }; }
+    const w = bmp.width, h = bmp.height;
+    const bad = uploadError16({ type: info.type, bytes: bytes.length, w, h });
+    if (bad) { if (bmp.close) bmp.close(); return { ok: false, error: bad }; }
+    let screen;
+    try { screen = screenCopy(bmp); } catch (e) { if (bmp.close) bmp.close(); return { ok: false, error: 'unreadable' }; }
+    if (screen !== bmp && bmp.close) bmp.close();
+    return { ok: true, bytes, mime: info.type, w, h, transparent: info.type === 'image/png' && info.alpha, screen };
+  }
+
+  /** The screen keeps a copy at most 4,096 px a side (a 12,000 px picture decoded whole is about 576 MB). */
+  function screenCopy(src) {
+    const w = src.width, h = src.height, s = fitSide(w, h, E16.screenSide);
+    if (s.w === w && s.h === h) return src;
+    const c = makeCanvas(s.w, s.h, true);
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(src, 0, 0, s.w, s.h);
+    return c;
+  }
+
+  /** A small picture for the Uploads tiles and the Layers rows. */
+  function thumb(src, side, transparent) {
+    const s = fitSide(src.width, src.height, side || 240);
+    const c = makeCanvas(s.w, s.h, true);
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(src, 0, 0, s.w, s.h);
+    const url = transparent ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.85);
+    c.width = 0;
+    return url;
+  }
+
+  const jpegBlob = (canvas, quality) => new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('no blob'))), 'image/jpeg', quality));
+
+  /**
+   * One page of a PDF as a 300 DPI picture (pdf.js 6.4.299, pinned, from kdpTypstRun.loadPdfjs()),
+   * drawn on white and stored as a JPEG (0.92; lower only to fit 10 MB). n: 1-based. Without n: the page count.
+   */
+  async function pdfPage(lib, data, n) {
+    let task = null, doc = null;
+    try {
+      try {
+        task = lib.getDocument({ data: data.slice(), verbosity: 0 });
+        doc = await task.promise;
+      } catch (e) {
+        return { ok: false, error: e && e.name === 'PasswordException' ? 'pdfPassword' : 'pdfOpen' };
+      }
+      const pages = doc.numPages;
+      if (n == null) return { ok: true, pages };
+      if (!(n >= 1 && n <= pages)) return { ok: false, error: 'pdfPage', pages };
+      let page;
+      try { page = await doc.getPage(n); } catch (e) { return { ok: false, error: 'pdfPage', pages }; }
+      const vp1 = page.getViewport({ scale: 1 });
+      const sc = pdfScale(vp1.width, vp1.height);
+      const vp = page.getViewport({ scale: sc.w / vp1.width });
+      const c = makeCanvas(sc.w, sc.h, true);
+      const g = c.getContext('2d', { alpha: false });
+      g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, sc.w, sc.h);
+      try { await page.render({ canvasContext: g, viewport: vp, background: '#FFFFFF' }).promise; }
+      catch (e) { c.width = 0; return { ok: false, error: 'pdfPage', pages }; }
+      let blob = null;
+      for (const q of [E16.pdfQuality, 0.85, 0.75]) {
+        blob = await jpegBlob(c, q);
+        if (blob.size <= E16.maxBytes) break;
+      }
+      c.width = 0;
+      if (!blob || blob.size > E16.maxBytes) return { ok: false, error: 'pdfBig', pages };
+      return { ok: true, bytes: new Uint8Array(await blob.arrayBuffer()), mime: 'image/jpeg', w: sc.w, h: sc.h, dpi: sc.dpi, pages };
+    } finally {
+      if (task) task.destroy().catch(() => {});
+    }
+  }
+
+  C.imagePrep = { ERROR_TEXT, E15, E16, E16_TEXT, uploadError16, fitSide, pdfScale, sniff, jpegColor, luma, prepare, decode, makeCanvas,
+    readPicture, screenCopy, thumb, pdfPage };
 })(globalThis);

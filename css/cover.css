@@ -25,6 +25,7 @@
   --cv-dot-ring: rgba(0, 0, 0, 0.5);
   --cv-edit-tint: rgba(46, 106, 230, 0.06);   /* the text box while typing in place */
   --cv-shadow-pop: 0 8px 24px rgba(28, 28, 26, 0.18);
+  --cv-sample: linear-gradient(165deg, #F7E1B5 0%, #EDA46F 38%, #B5596A 70%, #3E3557 100%);   /* the design's sample photo (a layout's picture before one is picked; drawing, as on the canvas) */
   --cv-shadow-paper: 0 1px 4px rgba(28, 28, 26, 0.25);
   --cv-tools-w: 80px;
   --cv-panel-w: 240px;
@@ -438,3 +439,88 @@
 .cv-panel > * { flex-shrink: 0; }
 /* STOP 5, F1 (owner): in Text effects the color square is 70 px, so the 4 shadow sliders show at a 900 px window with no scroll. */
 .cv-fx-box .cv-sv { height: 70px; }
+
+/* ══ E16 Part 6: pictures (design 62) ══ */
+/* Images panel: the source tabs (Pixabay and Unsplash come in Part 7). */
+.cv-srctabs { display: flex; gap: var(--space-1); padding: 3px; background: var(--mist); border-radius: 9px; }
+.cv-srctab { position: relative; flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; font-size: var(--text-xs); color: var(--ink); }
+.cv-srctab.is-on { background: var(--surface); box-shadow: var(--cv-shadow-paper); font-weight: 600; }
+.cv-srctab[data-inert] { color: var(--graphite); cursor: default; }
+.cv-replacing { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 10px; border-radius: var(--radius-md); background: var(--paper); border: 1px solid var(--stone); font-size: var(--text-sm); line-height: 1.4; }
+.cv-rights { align-items: flex-start; font-size: var(--text-sm); line-height: 1.45; }
+.cv-rights input { flex-shrink: 0; margin-top: 1px; accent-color: var(--ink); }
+.cv-upbtns { display: flex; gap: 6px; }
+/* The upload buttons are labels around a file field (design 62): 40 px look, 44 px click area, the ring on the label. */
+.cv-upbtn { position: relative; flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: var(--radius-md); background: var(--ink); color: var(--surface); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.cv-upbtn::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--control-h); transform: translateY(-50%); }
+.cv-upbtn.is-off { background: var(--mist); color: var(--muted); cursor: not-allowed; }
+.cv-upbtn input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.cv-upbtn:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cv-paste { position: relative; }
+.cv-paste.is-off { color: var(--muted); cursor: not-allowed; }
+.cv-uperr { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: var(--text-sm); line-height: 1.45; color: var(--danger); }
+.cv-uperr svg { flex-shrink: 0; margin-top: 3px; }
+.cv-pdfbox { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--stone); border-radius: var(--radius-lg); background: var(--surface); }
+.cv-pdf-name { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.cv-pdf-pages { font-size: var(--text-xs); color: var(--graphite); }
+.cv-pdf-btns { display: flex; gap: 6px; }
+.cv-sbtn-ink { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+.cv-sbtn { position: relative; }
+.cv-uptiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.cv-uptile { position: relative; padding: 0; border: 1px solid var(--stone); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; text-align: left; cursor: pointer; }
+.cv-uptile-img { display: block; width: 100%; height: 72px; object-fit: cover; }
+.cv-uptile-img.is-clear { object-fit: contain; background: repeating-conic-gradient(var(--stone) 0% 25%, var(--surface) 0% 50%) 0 0 / 14px 14px; }
+.cv-uptile-wait { display: flex; align-items: center; justify-content: center; background: var(--paper); font-size: var(--text-xs); color: var(--graphite); }
+.cv-uptile-s { display: block; padding: var(--space-1) 6px; font-size: var(--text-xs); color: var(--graphite); }
+.cv-root .cv-uptile::after { width: 100%; height: 100%; }
+
+/* The picture bar (design 62) and crop mode. */
+.cv-dpi { height: 30px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border-radius: 15px; border: 1px solid; font-size: var(--text-xs); white-space: nowrap; flex-shrink: 0; }
+.cv-dpi.is-ok { background: var(--success-bg); color: var(--success); border-color: var(--cv-success-line); }
+.cv-dpi.is-warn { background: var(--warning-bg); color: var(--warning); border-color: var(--cv-warning-line); }
+.cv-dpi.is-bad { background: var(--danger-bg); color: var(--danger); border-color: var(--cv-danger-line); }
+.cv-dpi svg { flex-shrink: 0; }
+.cv-picnote { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--danger); white-space: nowrap; }
+.cv-crop-t { font-weight: 600; }
+.cv-crop-help { color: var(--graphite); }
+.cv-cropzoom { height: var(--cv-btn); padding: 0 6px; display: inline-flex; align-items: center; gap: var(--space-2); }
+.cv-cropzoom input { width: 120px; height: 28px; margin: 0; accent-color: var(--ink); }
+.cv-cropzoom .cv-mono { min-width: 40px; font-size: var(--text-xs); }
+.cv-tb-ink { border-color: var(--ink); background: var(--ink); color: var(--surface); font-weight: 500; }
+.cv-pop-ifill { left: 150px; width: 230px; gap: 2px; }
+.cv-pop-iadjust { left: 300px; width: 300px; }
+.cv-pop-iborder { left: 380px; width: 300px; max-height: 640px; overflow-y: auto; }
+.cv-pop-imask { left: 460px; width: 260px; }
+.cv-pop-iop { left: 470px; width: 280px; }
+.cv-masks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cv-mask { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: var(--space-2) var(--space-1); border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-xs); }
+.cv-mask.is-on { border-color: var(--ink); background: var(--paper); }
+.cv-mask-s { width: 34px; height: 34px; background: var(--stone-2); }
+.cv-mask-rounded { border-radius: 6px; }
+.cv-mask-circle { border-radius: 50%; }
+.cv-mask-arch { border-radius: 50% 50% 0 0 / 40% 40% 0 0; }
+
+/* Crop handles on the cover: 4 black bars and 4 black corners (design 62), the frame dashed. */
+.cv-sel.is-crop { outline-style: dashed; outline-offset: 0; }
+.cv-h-crop { border-radius: calc(2px / var(--z)); background: var(--ink); border: calc(1px / var(--z)) solid var(--cv-white); }
+.cv-h-crop[data-c="nw"], .cv-h-crop[data-c="ne"], .cv-h-crop[data-c="se"], .cv-h-crop[data-c="sw"] { width: calc(12px / var(--z)); height: calc(12px / var(--z)); margin: calc(-6px / var(--z)) 0 0 calc(-6px / var(--z)); }
+.cv-h-crop[data-c="n"], .cv-h-crop[data-c="s"] { width: calc(26px / var(--z)); height: calc(7px / var(--z)); margin: calc(-3.5px / var(--z)) 0 0 calc(-13px / var(--z)); cursor: ns-resize; }
+.cv-h-crop[data-c="e"], .cv-h-crop[data-c="w"] { width: calc(7px / var(--z)); height: calc(26px / var(--z)); margin: calc(-13px / var(--z)) 0 0 calc(-3.5px / var(--z)); cursor: ew-resize; }
+.cv-h-crop[data-c="nw"], .cv-h-crop[data-c="se"] { cursor: nwse-resize; }
+.cv-h-crop[data-c="ne"], .cv-h-crop[data-c="sw"] { cursor: nesw-resize; }
+.cv-hit.is-sel.is-crop { cursor: grab; }
+
+/* A picture not there (R13): words and an icon over render.js's gray stand-in, at screen size whatever the zoom. */
+.cv-ph {
+  position: absolute; box-sizing: border-box; pointer-events: none; transform-origin: 50% 50%; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(4px / var(--z)); padding: calc(6px / var(--z));
+  border: calc(1.5px / var(--z)) dashed var(--graphite); color: var(--ink-2); text-align: center;
+}
+.cv-ph.is-loading { border-style: solid; border-color: var(--stone-2); color: var(--graphite); }
+.cv-ph.is-missing { border-color: var(--danger); color: var(--danger); }
+.cv-ph-ic { width: calc(28px / var(--z)); height: calc(28px / var(--z)); flex-shrink: 0; }
+.cv-ph-t { font-size: calc(13px / var(--z)); font-weight: 600; line-height: 1.3; }
+.cv-ph-s { font-size: calc(12px / var(--z)); line-height: 1.3; color: var(--ink-2); }
+.cv-lr-img { overflow: hidden; }
+.cv-lr-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.cv-lr-img.is-sample { background: var(--cv-sample); }

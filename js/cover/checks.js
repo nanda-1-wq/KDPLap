@@ -21,6 +21,8 @@
      C12 title contrast under 4.5 : 1 on what is under it         warn
      C13 the title sits on a photo                                tip
      C14 the back cover has no text                               tip
+     C15 a picture removed from Uploads (E16 Part 6, R13; only with
+         opt.missing: the ids of the assets that are gone)        error
 
    One planned change (D13, owner Q-9 and STOP 1): C3 and C4 measure spine
    text by its ink band (kdpCover.textlayout.inkBand): cap top to baseline
@@ -29,6 +31,7 @@
 
    kdpCover.checks.run(cover, opt) → [{ code, sev, msg, id?, fix? }]
        cover = { fmt, bg, layers };  opt.textH(l) → px (default textlayout.height)
+       opt.missing: a Set (or array) of asset ids no longer in Uploads (C15; without it, no C15)
    kdpCover.checks.summary(items)  → { errors, warns, tips, chip, line }  (design chipLabel and checksSummary)
    ═══════════════════════════════════════════════════ */
 (function (root) {
@@ -54,6 +57,7 @@
     const o = opt || {};
     const textH = o.textH || ((l) => C.textlayout.height(l));
     const spineInk = o.spineInk !== false;
+    const missing = o.missing ? (o.missing instanceof Set ? o.missing : new Set(o.missing)) : null;
     const Mo = C.model, P = C.palettes;
     const g = C.geo.geo(cover.fmt), layers = cover.layers || [], out = [];
     const live = [g.liveBack, g.liveFront];
@@ -87,7 +91,9 @@
         const sliver = (b.x > 0.5 && b.x < 13) || (b.y > 0.5 && b.y < 13) || (x1 < g.W - 0.5 && x1 > g.W - 13) || (y1 < g.H - 0.5 && y1 > g.H - 13);
         if (sliver) out.push({ code: 'C9', sev: 'warn', msg: nm(l) + ' stops just short of the edge. A thin line of background may show after the cut. Stretch it into the bleed or move it in.', id: l.id });
       }
-      if (l.type === 'image') {
+      if (l.type === 'image' && missing && l.asset && missing.has(l.asset)) {
+        out.push({ code: 'C15', sev: 'error', msg: nm(l) + ' is missing: it was removed from your uploads. Replace it or delete it.', id: l.id });
+      } else if (l.type === 'image') {
         const d = Mo.dpi(l);
         if (d < 200) out.push({ code: 'C10', sev: 'error', msg: nm(l) + ' is ' + d + ' DPI. It will print blurry. Use a bigger picture or make it smaller on the cover.', id: l.id });
         else if (d < 300) out.push({ code: 'C10', sev: 'warn', msg: nm(l) + ' is ' + d + ' DPI. KDP asks for 300; it may print soft.', id: l.id });

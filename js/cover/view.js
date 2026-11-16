@@ -29,6 +29,16 @@
    distortion shows 4 green corners (the design's quad handles): drag them,
    or focus one and use the arrow keys (1 px, Shift 10 px).
 
+   Part 6 (design 62): pictures come from kdpCover.images.source (a layout's
+   sample, a screen copy of the upload, or nothing while it loads or when it
+   is missing: render.js draws its gray stand-in, and the overlay adds the
+   placeholder's words and icon). Crop mode (E.cropping) shows the design's
+   4 black bars and 4 black corners (kind 'crop'), no rotate handle, a
+   dashed frame, and the whole picture at 35 % behind the box (the design's
+   ghost); a drag on the picture moves it inside the box (kind 'pic'), and
+   arrow keys do the same (editor.js movePic). A double-click on a picture,
+   or Enter on a selected picture's box, starts cropping.
+
    const v = kdpCover.view.create(E)   E: the editor (js/cover/editor.js)
    v.el            the workspace element
    v.paint()       the canvas again (after any layer change)
@@ -76,9 +86,10 @@
   }
 
   // Handles (the design's H factory): text = 4 corner marks + width; image = 4 corners; shape = 8 (a line: 2 ends).
-  const LABEL = { rot: 'Drag to rotate', width: 'Drag to change the width', scale: 'Drag to resize', box: 'Drag to resize' };
+  const LABEL = { rot: 'Drag to rotate', width: 'Drag to change the width', scale: 'Drag to resize', box: 'Drag to resize', crop: 'Drag to crop' };
   const CORNER = { nw: 'top left', n: 'top', ne: 'top right', e: 'right', se: 'bottom right', s: 'bottom', sw: 'bottom left', w: 'left' };
-  function handleList(l) {
+  function handleList(l, cropping) {
+    if (l.type === 'image' && cropping) return [['nw', 0, 0], ['n', 0.5, 0], ['ne', 1, 0], ['e', 1, 0.5], ['se', 1, 1], ['s', 0.5, 1], ['sw', 0, 1], ['w', 0, 0.5]].map(([c, x, y]) => ({ kind: 'crop', c, x, y }));
     if (l.type === 'image') return [['nw', 0, 0], ['ne', 1, 0], ['sw', 0, 1], ['se', 1, 1]].map(([c, x, y]) => ({ kind: 'scale', c, x, y }));
     if (l.type === 'shape') {
       const list = l.kind === 'line' ? [['w', 0, 0.5], ['e', 1, 0.5]] : [['nw', 0, 0], ['n', 0.5, 0], ['ne', 1, 0], ['e', 1, 0.5], ['se', 1, 1], ['s', 0.5, 1], ['sw', 0, 1], ['w', 0, 0.5]];
@@ -136,8 +147,31 @@
       ctx.clearRect(0, 0, cw, ch);
       const { z, px, py } = E.view;
       const ids = E.cover.layers.filter((l) => !l.hidden && l.id !== E.editing).map((l) => l.id);
-      C.render.paint(ctx, E.cover, { scale: z * dpr, x0: -px / z, y0: -py / z, bg: false, screen: true, ids, images: () => null });
+      const view = { scale: z * dpr, x0: -px / z, y0: -py / z, bg: false, screen: true, images: (l) => C.images.source(E, l) };
+      const cl = E.cropping != null ? E.cover.layers.find((l) => l.id === E.cropping && !l.hidden) : null;
+      if (!cl) C.render.paint(ctx, E.cover, Object.assign(view, { ids }));
+      else {
+        // Crop mode: the layers under the picture, its ghost (the whole picture at 35 %), then the picture and the rest.
+        const at = E.cover.layers.indexOf(cl);
+        C.render.paint(ctx, E.cover, Object.assign({}, view, { ids: ids.filter((id) => E.cover.layers.findIndex((l) => l.id === id) < at) }));
+        ghost(ctx, cl, z * dpr, px * dpr, py * dpr);
+        C.render.paint(ctx, E.cover, Object.assign({}, view, { ids: ids.filter((id) => E.cover.layers.findIndex((l) => l.id === id) >= at) }));
+      }
       E.painted = (E.painted || 0) + 1;
+    }
+    /** The design's ghost: the whole picture, faded, where it reaches past the box while cropping. */
+    function ghost(ctx, l, s, ox, oy) {
+      const src = C.images.source(E, l);
+      ctx.save();
+      ctx.setTransform(s, 0, 0, s, ox, oy);
+      ctx.translate(l.x + l.w / 2, l.y + l.h / 2);
+      if (l.rot) ctx.rotate(l.rot * Math.PI / 180);
+      ctx.translate(-l.w / 2 + l.px + l.pw / 2, -l.h / 2 + l.py + l.ph / 2);
+      ctx.scale(l.flipH ? -1 : 1, l.flipV ? -1 : 1);
+      ctx.globalAlpha = 0.35;
+      if (src) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(src, -l.pw / 2, -l.ph / 2, l.pw, l.ph); }
+      else { ctx.fillStyle = '#D9D9D6'; ctx.fillRect(-l.pw / 2, -l.ph / 2, l.pw, l.ph); }
+      ctx.restore();
     }
 
     /* ── Overlay ── */
@@ -177,23 +211,26 @@
         const name = E.layerName(l);
         const kind = l.type === 'text' ? 'Text' : l.type === 'image' ? 'Picture' : 'Shape';
         const on = (S && S.id === l.id) || M.includes(l.id);
+        const ps = l.type === 'image' ? C.images.state(E, l) : null;
+        if (ps === 'loading' || ps === 'failed' || ps === 'missing') out += placeholder(l, ps, i);
         out += `<button type="button" class="cv-hit${on ? ' is-sel' : ''}${M.includes(l.id) ? ' is-multi' : ''}${l.lock ? ' is-locked' : ''}" data-hit="${esc(l.id)}" style="${layerBox(l)};z-index:${i + 1}"
-          aria-label="${esc(`${kind}: ${name}${l.lock ? ', locked' : ''}`)}" aria-pressed="${on ? 'true' : 'false'}"></button>`;
+          aria-label="${esc(`${kind}: ${name}${l.lock ? ', locked' : ''}${ps === 'missing' ? ', picture missing' : ps === 'failed' ? ', the picture did not load' : ''}`)}" aria-pressed="${on ? 'true' : 'false'}"></button>`;
       }
       if (M.length > 1) {
         const B = C.geo.region(g(), 'sel', L.filter((l) => M.includes(l.id) && !l.hidden).map((l) => C.model.bbox(l, E.textH)));
         if (B && Number.isFinite(B.x)) out += `<div class="cv-group" aria-hidden="true" style="left:${B.x}px;top:${B.y}px;width:${B.w}px;height:${B.h}px;z-index:${n + 5}"></div>`;
       }
       if (S && !S.hidden) {
-        const hs = S.lock || E.editing === S.id ? [] : handleList(S);
-        out += `<div class="cv-sel${S.lock ? ' is-locked' : ''}" data-selbox style="${layerBox(S)};z-index:${n + 5}">
+        const crop = E.cropping === S.id && S.type === 'image';
+        const hs = S.lock || E.editing === S.id ? [] : handleList(S, crop);
+        out += `<div class="cv-sel${S.lock ? ' is-locked' : ''}${crop ? ' is-crop' : ''}" data-selbox style="${layerBox(S)};z-index:${n + 5}">
           ${S.lock ? '<span class="cv-tag">Locked</span>' : ''}
-          ${!S.lock && E.editing !== S.id ? '<span class="cv-rotline" aria-hidden="true"></span>' : ''}
+          ${!S.lock && E.editing !== S.id && !crop ? '<span class="cv-rotline" aria-hidden="true"></span>' : ''}
           ${hs.map((hd) => hd.kind === 'deco'
             ? `<span class="cv-h cv-h-deco" style="left:${hd.x * 100}%;top:${hd.y * 100}%" aria-hidden="true"></span>`
             : `<button type="button" class="cv-h cv-h-${hd.kind}" data-handle="${hd.kind}" data-c="${hd.c}" style="left:${hd.x * 100}%;top:${hd.y * 100}%"
                 aria-label="${esc(`${LABEL[hd.kind]}${hd.kind === 'width' ? '' : `, ${CORNER[hd.c]}`}. Arrow keys work too.`)}"></button>`).join('')}
-          ${!S.lock && E.editing !== S.id ? '<button type="button" class="cv-h cv-h-rot" data-handle="rot" data-c="rot" aria-label="Drag to rotate. Arrow keys work too."></button>' : ''}
+          ${!S.lock && E.editing !== S.id && !crop ? '<button type="button" class="cv-h cv-h-rot" data-handle="rot" data-c="rot" aria-label="Drag to rotate. Arrow keys work too."></button>' : ''}
           ${S.type === 'text' && S.dist && S.dist.on && S.dist.mode === 'free' && !S.lock && E.editing !== S.id
             ? quadOf(S, E.textH(S)).map((p, i) => `<button type="button" class="cv-h cv-h-quad" data-handle="quad" data-c="${i}" style="left:${p[0]}px;top:${p[1]}px"
                 aria-label="Drag this corner to distort the text, ${QUAD[i]}. Arrow keys work too."></button>`).join('') : ''}
@@ -218,6 +255,14 @@
       if (keep) { const k = front.querySelector(keep); if (k) k.focus({ preventScroll: true }); }
       const ta = front.querySelector('[data-edit]');
       if (ta && !kept) bindEdit(ta);
+    }
+
+    /** A picture that is not there yet, did not load, or was removed from Uploads (R13): words and an icon over its stand-in. */
+    function placeholder(l, st, i) {
+      const words = st === 'missing' ? ['Picture missing', 'Replace it or delete it.'] : st === 'failed' ? ['The picture did not load', 'Retry in the bar above.'] : ['Loading picture…', ''];
+      return `<div class="cv-ph is-${st}" data-ph="${esc(l.id)}" style="${layerBox(l)};z-index:${i + 1}" aria-hidden="true">
+        ${st === 'loading' ? '' : '<svg class="cv-ph-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 3l18 18"/><path d="M21 17l-5-5-3 3"/></svg>'}
+        <span class="cv-ph-t">${words[0]}</span>${words[1] ? `<span class="cv-ph-s">${words[1]}</span>` : ''}</div>`;
     }
 
     function editStyle(l) {
@@ -351,7 +396,7 @@
         }
         if (E.sel !== l.id || E.multi.length) E.select(l.id);
         if (l.lock) return;
-        startAct(e, 'move', l);
+        startAct(e, E.cropping === l.id && l.type === 'image' ? 'pic' : 'move', l);
         return;
       }
       pressed = null;
@@ -431,6 +476,11 @@
         return { patch: { x, y: L0.y + dy }, snap };
       }
       if (a.kind === 'width') return { patch: { w: Math.max(60, L0.w + lx) } };
+      if (a.kind === 'pic') {
+        const c = C.model.clampPic(Object.assign({}, L0, { px: L0.px + lx, py: L0.py + ly }));
+        return { patch: { px: c.px, py: c.py } };
+      }
+      if (a.kind === 'crop') return { patch: cropPatch(L0, a.corner, lx, ly) };
       if (a.kind === 'scale') {
         const c = a.corner, left = c.indexOf('w') >= 0, top = c.indexOf('n') >= 0;
         const w = Math.max(30, L0.w + (left ? -lx : lx)), f = w / L0.w, h = L0.h * f;
@@ -466,6 +516,17 @@
       return null;
     }
 
+    /** The design's crop drag: an edge moves in the layer's own axes; the picture stays where it is; 20 px at least. */
+    function cropPatch(L0, c, lx, ly) {
+      const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      let { x, y, w, h, px, py } = L0;
+      if (c.indexOf('w') >= 0) { const d = cl(lx, L0.px, L0.w - 20); x += d; w -= d; px -= d; }
+      if (c.indexOf('e') >= 0) { const d = cl(lx, 20 - L0.w, L0.px + L0.pw - L0.w); w += d; }
+      if (c.indexOf('n') >= 0) { const d = cl(ly, L0.py, L0.h - 20); y += d; h -= d; py -= d; }
+      if (c.indexOf('s') >= 0) { const d = cl(ly, 20 - L0.h, L0.py + L0.ph - L0.h); h += d; }
+      return { x, y, w, h, px, py };
+    }
+
     /* ── Keyboard on the overlay ── */
     front.addEventListener('click', (e) => {
       const hit = e.target.closest('[data-hit]');
@@ -474,6 +535,7 @@
       if (!l) return;
       if (e.shiftKey) { E.toggleSel(l.id); const n = front.querySelector(`[data-hit="${CSS.escape(String(l.id))}"]`); if (n) n.focus({ preventScroll: true }); return; }
       if (E.sel === l.id && l.type === 'text' && !l.lock) E.startEdit(l.id);
+      else if (E.sel === l.id && l.type === 'image' && !l.lock && E.cropping !== l.id) E.startCrop(l.id);
       else E.select(l.id, { keepFocus: true });
     });
     // Double-click on a text types in place (the design's onDoubleClick). The pointer is captured by the workspace,
@@ -481,6 +543,7 @@
     ws.addEventListener('dblclick', (e) => {
       const l = pressed != null && E.cover.layers.find((x) => x.id === pressed);
       if (l && l.type === 'text' && !l.lock) { e.preventDefault(); E.startEdit(l.id); }
+      else if (l && l.type === 'image' && !l.lock && E.cropping !== l.id) { e.preventDefault(); E.startCrop(l.id); }
     });
     // A handle with the keyboard: arrows resize or rotate (1 px or 1°; Shift: 10 px or 15°).
     front.addEventListener('keydown', (e) => {
@@ -497,6 +560,14 @@
         if (e.key === 'ArrowLeft') q[i][0] -= k; if (e.key === 'ArrowRight') q[i][0] += k;
         if (e.key === 'ArrowUp') q[i][1] -= k; if (e.key === 'ArrowDown') q[i][1] += k;
         E.patchLayer(S.id, { dist: Object.assign({}, S.dist, { q }) }, null, { bars: false }); E.keyEdited(hd);
+        return;
+      }
+      if (kind === 'crop') {
+        const k = e.shiftKey ? 10 : 1;
+        const lx = e.key === 'ArrowLeft' ? -k : e.key === 'ArrowRight' ? k : 0, ly = e.key === 'ArrowUp' ? -k : e.key === 'ArrowDown' ? k : 0;
+        const L0 = Object.assign({}, S);
+        E.patchLayer(S.id, cropPatch(L0, c, c.length === 2 || c === 'e' || c === 'w' ? lx : 0, c.length === 2 || c === 'n' || c === 's' ? ly : 0), null, { bars: false });
+        E.keyEdited(hd);
         return;
       }
       if (kind === 'rot') { let deg = (S.rot || 0) + d * (e.shiftKey ? 15 : 1); deg = ((deg + 540) % 360) - 180; patch = { rot: deg }; }

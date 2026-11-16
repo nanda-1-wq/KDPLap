@@ -491,3 +491,15 @@ Deno.test("09 Cover files: the upload store size, the bucket and cover_assets ag
   const t30 = read(M30).match(/char_length\(thumb\) <= (\d+) and thumb like '([^']+)'/);
   assertEquals([t30[1], t30[2]], [t29[1], t29[2]]);
 });
+
+Deno.test("09 Cover uploads (E16 Part 6): the browser's caps equal 0030's (10 MB, 12,000 px) and the layer cap", () => {
+  const e16 = read("js/cover/image-prep.js").match(/const E16 = \{([^}]+)\}/)[1];
+  const num = (k) => Number(e16.match(new RegExp(`${k}: ([\\d*\\s]+)[,}]`))[1].split("*").reduce((a, b) => a * Number(b), 1));
+  assertEquals(num("maxBytes"), Number(one(M30, String.raw`bytes between 1 and (\d+)`)));
+  assertEquals(num("maxSide"), Number(one(M30, String.raw`width between 1 and (\d+) and height`)));
+  assertEquals(num("maxSide"), Number(read(M30).match(/height between 1 and (\d+)\)/)[1]));
+  assertEquals(num("maxSide"), COVER.model.CAPS.natPx);
+  assertEquals(num("pdfBytes"), 25 * 1024 * 1024);
+  // the bucket takes the same two kinds the browser sends
+  assertEquals(read(M30).match(/allowed_mime_types = array\[([^\]]+)\]/)[1], "'image/jpeg', 'image/png'");
+});
