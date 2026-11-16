@@ -10,14 +10,14 @@ const test = async page => {
   await CV.open(page, { design: 'band' });
   const n0 = (await CV.state(page)).layers.length;
 
-  /* The panel: Uploads is the live tab; Pixabay and Unsplash come in Part 7. */
+  /* The panel: Uploads is the open tab; Pixabay and Unsplash are live since Part 7 (t-stock.js). */
   await page.click('[data-tool="images"]');
   await page.waitForSelector('[data-rights]');
   ok(await page.$eval('[data-panel]', (p) => p.getAttribute('aria-label') === 'Images'), 'the Images tool opens the Images panel');
   ok(await page.$eval('[data-tool="images"]', (b) => b.getAttribute('aria-pressed') === 'true' && !b.hasAttribute('aria-disabled')), 'Images: a live tool, pressed');
   const tabs = await page.$$eval('[role="tab"]', (a) => a.map((t) => [t.textContent, t.getAttribute('aria-selected'), t.getAttribute('aria-disabled'), t.title]));
   ok(tabs.map((t) => t[0]).join('|') === 'Uploads|Pixabay|Unsplash' && tabs[0][1] === 'true' && !tabs[0][2], `tabs: ${tabs.map((t) => t[0])}, Uploads on`);
-  ok(tabs[1][2] === 'true' && tabs[1][3] === 'Comes in Part 7' && tabs[2][2] === 'true' && tabs[2][3] === 'Comes in Part 7', 'Pixabay and Unsplash: inert, "Comes in Part 7"');
+  ok(tabs[1][1] === 'false' && !tabs[1][2] && !tabs[1][3] && tabs[2][1] === 'false' && !tabs[2][2] && !tabs[2][3], 'Pixabay and Unsplash: live tabs, not selected (Part 7)');
   ok((await CV.txt(page, '.cv-rights')) === 'I own this picture or PDF, or I have the right to use it on a book cover I sell.', 'the rights words are the design\'s');
   ok(await page.$eval('[data-up-file]', (i) => i.disabled && i.accept === 'image/jpeg,image/png') && await page.$eval('[data-up-pdf]', (i) => i.disabled && i.accept === 'application/pdf'), 'before the tick: both file fields are off (JPG/PNG, PDF)');
   // Owner, STOP 6: the size comes from this book at 300 DPI (geo.px300), not the design's fixed 3,800 × 2,800.
@@ -58,6 +58,7 @@ const test = async page => {
   const same = await page.evaluate(async (p) => { const a = new Uint8Array(await window.__pic.a.arrayBuffer()); const r = await window.kdp.downloadCoverAsset(p); const b = new Uint8Array(await r.data.arrayBuffer()); return a.length === b.length && a.every((v, i) => v === b[i]); }, row.path);
   ok(same, 'the bucket holds the very bytes picked (no new JPEG)');
   ok(row.source === 'upload' && row.mime === 'image/jpeg' && row.width === 1200 && row.height === 800 && !row.transparent && !!row.rights_at && row.origin_book_id === FIX.BOOK, 'the row: upload, image/jpeg, 1200 × 800, rights ticked, this book');
+  ok(st.writes.filter((w) => w.table === 'cover_assets').pop().insert.name === 'desk.jpg' && row.name === 'desk.jpg', 'the row keeps the file name (0031 cover_assets.name)');
   ok(st.calls.indexOf(`POST /storage/v1/object/covers/${row.path}`) < st.calls.indexOf('POST /rest/v1/cover_assets'), 'the file first, then the row');
   await CV.settled(page, 'saved');
   ok((CV.lastSave().body.layers || []).some((l) => l.asset === row.id), 'autosave writes the layer with its asset id');
@@ -155,7 +156,10 @@ const test = async page => {
   const tiles = await page.$$eval('[data-add-asset]', (a) => a.map((t) => t.dataset.addAsset));
   const order = st.assets.slice().sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0)).map((a) => a.id);
   ok(tiles.length === st.assets.length && tiles[0] === order[0], `Uploads: ${tiles.length} tiles, newest first`);
-  ok(await page.$eval('[data-add-asset]', (t) => /^Add (picture|PDF page), [\d,]+ × [\d,]+ px/.test(t.getAttribute('aria-label'))), 'a tile is labelled "Add picture, W × H px"');
+  // Part 7: the label names the picture (0031 cover_assets.name; the design's tile aria is "Add " + its name).
+  const lab0 = await page.$eval('[data-add-asset]', (t) => t.getAttribute('aria-label'));
+  const row0 = st.assets.find((a) => a.id === tiles[0]);
+  ok(lab0.startsWith(`Add ${row0.name}, `) && /, [\d,]+ × [\d,]+ px/.test(lab0), `a tile is labelled "Add <name>, W × H px": ${lab0}`);
   const nTile = (await PIC.layers(page)).length;
   await page.click(`[data-add-asset="${row.id}"]`);
   ok((await PIC.layers(page)).length === nTile + 1 && (await PIC.layers(page)).pop().asset === row.id, 'a tile adds that picture again');

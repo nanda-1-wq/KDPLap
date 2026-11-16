@@ -10,6 +10,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 const read = (p) => Deno.readTextFileSync(new URL(`../${p}`, import.meta.url));
 const SQL30 = read("supabase/migrations/0030_cover_layers.sql");
 const SQL29 = read("supabase/migrations/0029_cover.sql");
+const SQL31 = read("supabase/migrations/0031_stock.sql");
 
 /** Columns of each "create table public.x (...)" in a migration. */
 function tables(sql) {
@@ -19,9 +20,11 @@ function tables(sql) {
   }
   return out;
 }
-const COLS = Object.assign({}, tables(SQL29), tables(SQL30));
+const COLS = Object.assign({}, tables(SQL29), tables(SQL30), tables(SQL31));
 delete COLS.book_covers;
 delete COLS.cover_images;
+// 0031 adds cover_assets.name (E16 Part 7, owner STOP 6 N9).
+for (const m of SQL31.matchAll(/alter table public\.(\w+) add column (\w+) /g)) COLS[m[1]].push(m[2]);
 const RPCS = [...SQL30.matchAll(/create or replace function public\.(\w+)\(p_book_id uuid/g)].map((m) => m[1]);
 
 // ── The stand-in: records every call, answers with the next queued reply ──
@@ -45,6 +48,7 @@ globalThis.supabase = {
     from: (t) => builder(t),
     rpc: (name, args) => { log.push({ rpc: name, args }); return Promise.resolve(reply()); },
     storage: { from: (bucket) => ({ remove: (paths) => { log.push({ storage: bucket, remove: paths }); return Promise.resolve(reply()); } }) },
+    functions: { invoke: (name, opts) => { log.push({ fn: name, body: opts.body }); const r = reply(); return r.throws ? Promise.reject(new Error("offline")) : Promise.resolve(r); } },
     auth: {}
   })
 };
@@ -57,6 +61,7 @@ function checkNames() {
   for (const q of log) {
     if (q.rpc) { assert(RPCS.includes(q.rpc), `rpc ${q.rpc} is not a 0030 function`); continue; }
     if (q.storage) { assertEquals(q.storage, "covers"); continue; }
+    if (q.fn) { assertEquals(q.fn, "stock"); continue; }
     const cols = COLS[q.table];
     assert(cols, `table ${q.table} is not in 0029 / 0030`);
     for (const [op, a, b] of q.ops) {
@@ -191,3 +196,37 @@ Deno.test("cover_marks and cover_key: one book or all", async () => {
   assertEquals((await kdp.getCoverKey("b1")).data, "abc");
   checkNames();
 });
+
+Deno.test("assets: the name (0031) is cleaned, capped at 200 characters, or left to the database", async () => {
+  reset({ data: [{ id: "a1" }], error: null }, { data: [{ id: "a2" }], error: null }, { data: [{ id: "a3" }], error: null });
+  await kdp.addCoverAsset({ id: "a1", source: "upload", mime: "image/jpeg", path: "u/assets/a1.jpg", width: 1, height: 1, bytes: 1, rightsTicked: true, name: "  desk\tsunrise\n.jpg " });
+  await kdp.addCoverAsset({ id: "a2", source: "upload", mime: "image/jpeg", path: "u/assets/a2.jpg", width: 1, height: 1, bytes: 1, rightsTicked: true, name: "é".repeat(250) });
+  await kdp.addCoverAsset({ id: "a3", source: "pdf", mime: "image/jpeg", path: "u/assets/a3.jpg", width: 1, height: 1, bytes: 1, rightsTicked: true, name: "   " });
+  assertEquals(op(log[0], "insert")[1].name, "desk sunrise .jpg");
+  assertEquals([...op(log[1], "insert")[1].name].length, 200);
+  assertEquals(op(log[2], "insert")[1].name, null);
+  assert(op(log[0], "select")[1].split(", ").includes("name"));
+  checkNames();
+});
+
+Deno.test("stock: search and pick call the function \"stock\" with the action; errors come back as codes", async () => {
+  const filters = { type: "all", color: "transparent", editors: false, safe: true };
+  reset({ data: { results: [], total: 0 }, error: null });
+  assertEquals((await kdp.stockSearch({ source: "pixabay", q: "leaf", page: 2, filters })).data.total, 0);
+  assertEquals(log[0], { fn: "stock", body: { action: "search", source: "pixabay", q: "leaf", page: 2, filters } });
+  reset({ data: { asset: { id: "a1" } }, error: null });
+  assertEquals((await kdp.stockPick({ source: "unsplash", id: "Ab1", bookId: "b1" })).data.asset.id, "a1");
+  assertEquals(log[0].body, { action: "pick", source: "unsplash", id: "Ab1", bookId: "b1" });
+  const http = (status, body) => ({ data: null, error: { context: { status, json: () => (body === undefined ? Promise.reject(new Error("x")) : Promise.resolve(body)) } } });
+  reset(http(503, { error: "not_configured" }), http(429, { error: "rate_limited" }), http(401), http(500), { data: null, error: { message: "fetch failed" } }, { throws: true });
+  assertEquals((await kdp.stockSearch({ source: "pixabay", q: "a", filters })).error, { code: "not_configured" });
+  assertEquals((await kdp.stockPick({ source: "pixabay", id: "1" })).error, { code: "rate_limited" });
+  assertEquals((await kdp.stockSearch({ source: "unsplash", q: "a" })).error, { code: "unauthorized" });
+  assertEquals((await kdp.stockSearch({ source: "unsplash", q: "a" })).error, { code: "server_error" });
+  assertEquals((await kdp.stockSearch({ source: "unsplash", q: "a" })).error, { code: "network" });
+  assertEquals((await kdp.stockSearch({ source: "unsplash", q: "a" })).error, { code: "network" });
+  // only ids and words go up: never a link
+  assert(log.every((q) => !JSON.stringify(q.body).includes("http")));
+  checkNames();
+});
+

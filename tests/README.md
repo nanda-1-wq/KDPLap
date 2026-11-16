@@ -60,6 +60,25 @@ deno test --allow-read=supabase/functions/generate supabase/functions/generate/
   `deno test --allow-read --allow-write supabase/functions/generate/snapshot.test.ts -- --update`
 - Shared fakes: `test_fakes.ts`.
 
+
+## Edge Function `stock` (Deno, E16 Part 7)
+
+```sh
+deno check supabase/functions/stock/index.ts
+deno test --allow-read=supabase/functions supabase/functions/stock/
+```
+
+- `lib.test.ts`: the input checks (2 KB, words, page, filters, ids, no links),
+  the provider links (the Pixabay key in its query, Unsplash's in a header,
+  `content_filter=high`), the hosts, names and credits, which Pixabay file a pick
+  stores (10 MB and 12,000 px), the normalized results, the cached-answer check,
+  the picture header reader, the error map, and the CORS list equal to generate's.
+- `handler.test.ts`: the whole flow with fakes (`test_fakes.ts`; fake keys only):
+  sign-in, `not_configured` per source, the per-user limits and the Unsplash
+  budget, the cache (hit, miss, poisoned row, errors), provider errors, both picks
+  (lookup by id, the 10 MB cap while streaming, magic bytes, redirects, storage
+  and row, the Unsplash download ping), and no key in any log line or reply.
+- No live calls: Pixabay, Unsplash and Supabase are never reached.
 ## Browser helpers (Deno)
 
 ```sh
@@ -254,10 +273,11 @@ deno run --allow-read --allow-write tools/cover-golden.mjs # re-freeze, only if 
 ```sh
 deno test --allow-read tests/cover-data.test.js tests/limits-parity.test.js
 supabase/tests/sql/run.sh t0030.sql t0030_f8_nofn.sql t0029.sql rls_cross_user.sql
+supabase/tests/sql/run.sh t0031.sql t0031_f8_nofn.sql   # E16 Part 7: stock
 ```
 `cover-data.test.js` drives the 09 calls in `js/supabase.js` against a recording stand-in for
 supabase-js: every table, column and function they name exists in 0030 (or 0029 for
-cover_exports); the rev autosave and its `conflict` marker, the first-open insert, the
+cover_exports, 0031 for cover_assets.name); the stock calls go to the function "stock" with ids and words only; the rev autosave and its `conflict` marker, the first-open insert, the
 row-then-file delete, the per-kind export fields and the My layout upsert. The 09 checks in
 `limits-parity.test.js` read 0030 and t0030: the caps, trims, papers, pages, layout keys,
 spine per page, hex rule, the image px (14 sizes pinned in t0030) and the byte measure
@@ -316,6 +336,9 @@ tests/browser/run.sh cover t-crop.js     # design 62 crop: 8 handles, edge drags
 tests/browser/run.sh cover t-adjust.js   # the picture bar: flip, More, Adjust (one undo step a drag), Border, Mask, Opacity, Fill front/back/whole, Arrange, duplicate, lock, delete
 tests/browser/run.sh cover t-images-a11y.js  # Step D on every Part 6 surface, keyboard reach, icon + word on the red and amber parts
 tests/browser/run.sh cover t-shots6.js   # STOP 6 compare shot (62) and the Part 6 surfaces → docs/reviews/e16-stop6/ (never in a sweep)
+# Part 7
+tests/browser/run.sh cover t-stock.js    # design 63: the Pixabay and Unsplash tabs (Unsplash waits for Search, N10), the wide picker, filters, preview, picks (copy and link), Replace, credits, stock down, errors, More results, keys, Step D
+tests/browser/run.sh cover t-shots7.js   # STOP 7 compare shot (63) and the Part 7 surfaces → docs/reviews/e16-stop7/ (never in a sweep)
 COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, the editor (text, effects, shapes, images, PDF, crop, undo, save); every Supabase call answered in the page (safari-stub.js), none reaches the host
 ```
 
@@ -325,6 +348,9 @@ COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, 
   Part 6: cover_assets (0030's CHECKs) and the bucket (multipart upload, the path rule, JPEG/PNG, download);
   modes uploadFail, rowFail, listFail, downloadFail, uploadSlow, pdfDown. `fixture-pictures.js` (PIC) makes
   pictures and PDFs in the page and hands them to the real file field or a paste event.
+  Part 7: the function "stock" (search and pick, as the server answers), the providers' picture links and
+  cover_assets.name; modes stockFail/stockCode, pickFail/pickCode, stockNet, stockSlow, pickSlow, stockMany,
+  picDown. `fixture-stock.js` (STK) holds the design's sample results and draws their pictures in the page.
 - `fixture-design-book.js` (run.sh puts a suite's `fixture-*.js` before its mock) is the design's book;
   `FIX.band(page)` builds the Band cover with the warm blurb from `js/cover/layouts.js` itself.
 - Fonts come from `tests/browser/.cache/cover-fonts` (the Part 2 cache). The run-code sandbox has no
@@ -401,8 +427,10 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0029_f8_nofn` (E15 F8: the blurb and cover_pdf path on 0029's own grants; run.sh builds it without the default function grants, see below),
 `t0030` cover layers (E16 Part 3: the 6 trims, cover_fmt_ok, the layer caps with the exact 524,288-byte boundary and the pgBytes fixture, the grants, what 0030 dropped and kept, cover_designs with rev and the stale autosave, cover_design_history with 20 kept, cover_assets (upload, pdf, pixabay, unsplash; rights clock, path, hotlink, credit), cover_my_layouts (one per book, the export's upsert, the 100 cap, set null), what moves cover_key, the export guard with every refusal, the print size for 6 trims × 2 papers × 24, 54, 400 pages, the image px pinned from kdpCover.geo.px300, picture rights, cover_marks, cover_json, the bucket's JPEG + PNG and the assets path rule, a book delete),
 `t0030_f8_nofn` (E16 F8: the signed-in editor path on 0030's own grants),
+`t0031` stock (E16 Part 7: cover_assets.name with its plain names by source and the 200 cap, stock_cache with the server clock, the 24-hour purge and the 500 cap, stock_calls with no update or delete and the 2-hour purge of the caller's rows only, stock_usage on the database clock, the grants and trigger functions),
+`t0031_f8_nofn` (the stock path on 0031's own grants),
 `t_export_include` (E11: the fixture cases from `tests/fixtures/export-include.json`, recorded with the dialog's own list, read as not changed by export_badges; E13.1: the "final" cases give the same list from pdf_version_ids; run from the repo root),
-`rls_cross_user` (user B against user A's rows in every table; E15 and E16: the cover tables (32 tables after 0030), functions, the rev autosave, the move and give cases, and A's file in the "covers" bucket).
+`rls_cross_user` (user B against user A's rows in every table; E15 and E16: the cover tables (34 tables after 0031), functions, the rev autosave, the move and give cases, and A's file in the "covers" bucket).
 
 E15: `stub.sql` also copies the parts of Supabase Storage 0029 uses
 (`storage.buckets`, `storage.objects` with RLS on, `storage.foldername`,

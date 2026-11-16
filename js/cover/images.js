@@ -2,7 +2,7 @@
    NicheInk · 09 Cover: pictures (E16 Part 6, plan §3 "Images", design 62)
    /js/cover/images.js   (browser; needs model, geo, picker, image-prep, js/supabase.js)
 
-   The Images panel (Uploads; the Pixabay and Unsplash tabs come in Part 7):
+   The Images panel (Uploads; the Pixabay and Unsplash tabs are js/cover/stock.js, Part 7):
    the rights tick first, Upload image (JPG or PNG up to 10 MB and 12,000 px
    a side, stored as sent), Upload PDF (up to 25 MB; one page is drawn by
    pdf.js 6.4.299 as a 300 DPI picture and stored as a JPEG), Paste from
@@ -21,8 +21,11 @@
 
    Pictures on screen (the store, one per editor visit):
    - a layout's sample (asset null): the design's sample photo, a gradient;
-   - an upload: its file from the private bucket, kept as a copy of at most
-     4,096 px a side for the screen (the export reads the file again);
+   - an upload, a PDF page or a Pixabay pick: its file from the private
+     bucket, kept as a copy of at most 4,096 px a side for the screen (the
+     export reads the file again);
+   - an Unsplash pick (Part 7): linked, never copied; the screen loads it
+     from images.unsplash.com at 4,096 px on the long side;
    - loading, did not load (Retry in the bar), or missing: an asset id that
      is not in Uploads any more (plan R13). The layer keeps its box and
      shows a placeholder with words; a missing picture is a Must fix (C15).
@@ -34,6 +37,7 @@
    kdpCover.images.loadUsed(E)    → load the pictures the design uses (on open)
    kdpCover.images.loadUploads(E) → the Uploads list (when the panel opens)
    kdpCover.images.takeFile(E, file, fallbackName) → upload a picked or pasted file, then add or replace
+   kdpCover.images.adopt(E, row)  → a stock pick's cover_assets row: into Uploads, then add or replace
    kdpCover.images.onPaste(E, event) / pasteNow(E)
    kdpCover.images.dpiBadge(l)    → the badge's HTML
    kdpCover.images.SAMPLE         → the design's sample photo (CSS gradient)
@@ -42,7 +46,6 @@
   'use strict';
   const C = (root.kdpCover = root.kdpCover || {});
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const inert = (part) => ` aria-disabled="true" title="Comes in Part ${part}" data-inert="${part}"`;
   const I = {
     crop: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>',
     flip: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><path d="M9 7L4 17h5z"/><path d="M15 7l5 10h-5z"/></svg>',
@@ -114,10 +117,20 @@
     S.set(row.id, ent);
     ent.p = (async () => {
       try {
-        if (!row.path) throw new Error('linked pictures come in Part 7');
-        const res = await root.kdp.downloadCoverAsset(row.path);
-        if (res.error || !res.data) throw res.error || new Error('no file');
-        const bmp = await P().decode(res.data);
+        let blob;
+        if (row.path) {
+          const res = await root.kdp.downloadCoverAsset(row.path);
+          if (res.error || !res.data) throw res.error || new Error('no file');
+          blob = res.data;
+        } else {
+          // An Unsplash pick: the hotlink (images.unsplash.com sends CORS *), sized for the screen or the tile.
+          const url = C.stock.remoteUrl(row, screen ? 4096 : 480);
+          if (!url) throw new Error('no link');
+          const res = await root.fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          blob = await res.blob();
+        }
+        const bmp = await P().decode(blob);
         if (screen) {
           const src = P().screenCopy(bmp);
           if (src !== bmp && bmp.close) bmp.close();
@@ -179,7 +192,7 @@
     for (const [id, p] of S) if (p.st === 'missing' && have.has(id)) S.delete(id);
     changed(E);
     // Thumbnails two at a time (each file is decoded once, then let go).
-    const todo = res.data.filter((r) => r.path && !S.has(r.id));
+    const todo = res.data.filter((r) => (r.path || r.remote) && !S.has(r.id));
     let i = 0;
     const next = async () => { while (i < todo.length && me.live()) { const r = todo[i++]; await loadOne(E, r, false); } };
     await Promise.all([next(), next()]);
@@ -205,13 +218,11 @@
     E.addLayer(L);
     E.refreshPanel();
   }
-  const fromRow = (row, name) => ({ asset: row.id, name: String(name || 'Picture').slice(0, C.model.CAPS.name), natW: row.width, natH: row.height, transparent: !!row.transparent });
+  const fromRow = (row, name) => ({ asset: row.id, name: [...String(name || 'Picture')].slice(0, C.model.CAPS.name).join(''), natW: row.width, natH: row.height, transparent: !!row.transparent });
+  /** The name a picture was added under (0031 cover_assets.name: the file name, "<file> p.<n>", or the stock words). */
   function nameOf(row) {
-    const used = E_names.get(row.id);
-    if (used) return used;
-    return row.source === 'pdf' ? 'PDF page' : 'Picture';
+    return row.name || (row.source === 'pdf' ? 'PDF page' : row.source === 'unsplash' ? 'Unsplash photo' : row.source === 'pixabay' ? 'Pixabay picture' : 'Picture');
   }
-  const E_names = new Map();   // asset id → the name it was added under (this visit)
 
   function setErr(E, k) { E.img.err = k ? T(k) : ''; E.img.busy = ''; E.refreshPanel(); }
 
@@ -238,17 +249,26 @@
     E.img.busy = `Saving ${name} to your uploads…`; E.refreshPanel();
     let up;
     try {
-      up = await root.kdp.uploadCoverAsset({ bytes: r.bytes, mime: r.mime, width: r.w, height: r.h, transparent: r.transparent, source, rightsTicked: true, originBookId: E.bookId });
+      up = await root.kdp.uploadCoverAsset({ bytes: r.bytes, mime: r.mime, width: r.w, height: r.h, transparent: r.transparent, source, rightsTicked: true, originBookId: E.bookId, name });
     } catch (e) { up = { error: e }; }
     if (!me.live()) return;
     if (up.error || !up.data) { setErr(E, 'upload'); return; }
     const row = up.data;
     store(E).set(row.id, { st: 'ready', src: r.screen, thumb: P().thumb(r.screen, 240, row.transparent), row });
-    E_names.set(row.id, name);
-    if (Array.isArray(E.uploads)) E.uploads = [row].concat(E.uploads.filter((x) => x.id !== row.id));
-    else if (E.data) E.data.assets = ((E.data.assets) || []).concat([row]);
+    remember(E, row);
     E.img.busy = ''; E.img.err = '';
-    place(E, fromRow(row, name));
+    place(E, fromRow(row, nameOf(row)));
+  }
+  /** A new row joins Uploads (newest first), or the rows cover_json gave when Uploads is not listed yet. */
+  function remember(E, row) {
+    if (Array.isArray(E.uploads)) E.uploads = [row].concat(E.uploads.filter((x) => x.id !== row.id));
+    else if (E.data) E.data.assets = ((E.data.assets) || []).filter((x) => x.id !== row.id).concat([row]);
+  }
+  /** A stock pick (Part 7): the server stored the row (and, for Pixabay, the file). Add or replace as an upload does. */
+  function adopt(E, row) {
+    if (!row || !row.id) return;
+    remember(E, row);
+    place(E, fromRow(row, nameOf(row)));
   }
 
   /* ── PDF (design onPdf / placePdf; the real page through pdf.js) ── */
@@ -326,8 +346,9 @@
     const thumb = p && p.thumb ? `<img class="cv-uptile-img${r.transparent ? ' is-clear' : ''}" src="${p.thumb}" alt="">`
       : `<span class="cv-uptile-img cv-uptile-wait">${p && p.st === 'failed' ? 'Did not load' : 'Loading…'}</span>`;
     const what = E.replaceId != null ? 'Replace with' : 'Add';
-    const label = `${what} ${r.source === 'pdf' ? 'PDF page' : 'picture'}, ${sizeText(r)} px${r.transparent ? ', see-through' : ''}`;
-    return `<button type="button" class="cv-uptile" data-k="up-${esc(r.id)}" data-add-asset="${esc(r.id)}" aria-label="${esc(label)}">${thumb}<span class="cv-uptile-s cv-mono">${sizeText(r)}</span></button>`;
+    const stock = r.source === 'pixabay' ? 'Pixabay' : r.source === 'unsplash' ? 'Unsplash' : '';
+    const label = `${what} ${nameOf(r)}${stock ? ` (${stock})` : ''}, ${sizeText(r)} px${r.transparent ? ', see-through' : ''}`;
+    return `<button type="button" class="cv-uptile" data-k="up-${esc(r.id)}" data-add-asset="${esc(r.id)}" aria-label="${esc(label)}">${thumb}<span class="cv-uptile-s cv-mono">${sizeText(r)}</span>${stock ? `<span class="cv-uptile-src">${stock}</span>` : ''}</button>`;
   }
   /**
    * The Uploads help line (owner, STOP 6): the full-cover size in px comes from this book's size at 300 DPI,
@@ -341,12 +362,14 @@
   function panelHtml(E) {
     const im = E.img, rights = im.rights;
     const off = rights ? '' : ' disabled';
-    const tabs = [['up', 'Uploads', 0], ['pixabay', 'Pixabay', 7], ['unsplash', 'Unsplash', 7]];
-    const list = E.uploads;
-    return `
+    const tabs = [['up', 'Uploads'], ['pixabay', 'Pixabay'], ['unsplash', 'Unsplash']];
+    const list = E.uploads, tab = im.tab || 'up';
+    const head = `
       <div class="cv-cap">IMAGES</div>
-      <div class="cv-srctabs" role="tablist" aria-label="Image source">${tabs.map(([k, label, part]) => `<button type="button" role="tab" class="cv-srctab${k === 'up' ? ' is-on' : ''}" data-k="tab-${k}" aria-selected="${k === 'up'}"${part ? inert(part) : ''}>${label}</button>`).join('')}</div>
-      ${E.replaceId != null ? `<div class="cv-replacing"><span>Pick a picture to replace the selected one.</span><button type="button" class="cv-sbtn" data-k="rep-cancel" data-rep-cancel>Cancel</button></div>` : ''}
+      <div class="cv-srctabs" role="tablist" aria-label="Image source">${tabs.map(([k, label]) => `<button type="button" role="tab" class="cv-srctab${k === tab ? ' is-on' : ''}" data-k="tab-${k}" data-srctab="${k}" aria-selected="${k === tab}">${label}</button>`).join('')}</div>
+      ${E.replaceId != null ? `<div class="cv-replacing"><span>Pick a picture to replace the selected one.</span><button type="button" class="cv-sbtn" data-k="rep-cancel" data-rep-cancel>Cancel</button></div>` : ''}`;
+    if (tab !== 'up') return head + C.stock.panelHtml(E);
+    return `${head}
       <label class="cv-check cv-rights"><input type="checkbox" data-k="rights" data-rights${rights ? ' checked' : ''}>I own this picture or PDF, or I have the right to use it on a book cover I sell.</label>
       <div class="cv-upbtns">
         <label class="cv-upbtn${rights ? '' : ' is-off'}"><input type="file" accept="image/jpeg,image/png" data-k="up-file" data-up-file${off}>Upload image</label>
@@ -381,6 +404,13 @@
         return;
       }
       if (e.target.closest('[data-rep-cancel]')) { E.replaceId = null; E.refreshPanel(); return; }
+      const tb = e.target.closest('[data-srctab]');
+      if (tb) {
+        E.img.tab = tb.dataset.srctab; E.img.err = '';
+        // A stock tab shows its last answer for the words in the box, or searches them now (stock.js).
+        if (tb.dataset.srctab !== 'up') C.stock.show(E, tb.dataset.srctab); else E.refreshPanel();
+        return;
+      }
       if (e.target.closest('[data-up-retry]')) { loadUploads(E, true); return; }
       if (e.target.closest('[data-paste]')) { pasteNow(E); return; }
       if (e.target.closest('[data-pdf-place]')) { placePdf(E); return; }
@@ -490,7 +520,15 @@
             <button type="button" class="cv-linkbtn" data-k="rot-reset" data-iact="rot-reset">Reset</button></div>
           <label class="cv-check"><input type="checkbox" data-k="flipV" data-icheck="flipV"${l.flipV ? ' checked' : ''}>Flip top to bottom</label>
           <label class="cv-check"><input type="checkbox" data-k="noExport" data-icheck="noExport"${l.noExport ? ' checked' : ''}>Exclude from export</label>
-          <p class="cv-pop-p cv-pop-p-sm">Use it for a reference picture you trace over. It stays on the canvas but is left out of your files.</p></div>` : ''}`;
+          <p class="cv-pop-p cv-pop-p-sm">Use it for a reference picture you trace over. It stays on the canvas but is left out of your files.</p>
+          ${credit(E, l)}</div>` : ''}`;
+  }
+
+  /** A stock picture's credit in More (plan §7: picker, panel and the layer's More menu). */
+  function credit(E, l) {
+    const row = l.asset ? rowOf(E, l.asset) : null;
+    const html = row ? C.stock.creditHtml(row) : '';
+    return html ? `<p class="cv-pop-p cv-pop-p-sm cv-credit" data-credit>${html}</p>` : '';
   }
 
   /** Design fillFront / fillBack / fillCover: the box fills the part, into the bleed, unturned; the picture covers it. */
@@ -559,5 +597,5 @@
   function focusBar(E, k) { E.refreshBars(); const b = E.root.querySelector(`.cv-textbar [data-k="${k}"]`); if (b) b.focus({ preventScroll: true }); }
 
   C.images = { SAMPLE, panelHtml, bindPanel, barHtml, bindBar, state, source, missing, sample, loadUsed, loadUploads, ensure, takeFile, takePdf, placePdf,
-    onPaste, pasteNow, dpiBadge, helpText, fillPatch, zoomPatch, cropPct, rowOf };
+    onPaste, pasteNow, dpiBadge, helpText, fillPatch, zoomPatch, cropPct, rowOf, adopt, nameOf };
 })(globalThis);

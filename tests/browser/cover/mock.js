@@ -10,6 +10,14 @@
 // 1 to 12,000 px, transparent only for PNG, rights for upload and pdf) and the bucket "covers" (upload: the 0030 path
 // rule and JPEG/PNG only; download). store.assets = rows, store.files = { path: { bytes (base64), type } }.
 //   __modes: uploadFail, rowFail, listFail, downloadFail (n calls fail), uploadSlow (ms), pdfDown (pdf.js does not load)
+// Part 7: the Edge Function "stock" (search and pick, as supabase/functions/stock answers: the results of
+// fixture-stock.js, a Pixabay pick stores a copy in the bucket and a cover_assets row, an Unsplash pick a linked row),
+// the providers' picture links (pixabay.com/get, images.unsplash.com: the bytes fixture-stock.js drew in the page) and
+// cover_assets.name (0031: 1 to 200 characters; the database names a row without one by its source).
+// store.stock = { calls: [{ action, source, ... }], net: [urls] }, store.stockFiles = { 'pixabay/<id>': { buf, type } }.
+//   __modes: stockFail / pickFail (n calls answer stockCode / pickCode, default stock_unavailable), stockNet (n calls
+//   do not reach the function), stockSlow / pickSlow (ms), stockMany (Pixabay answers 30 results: 2 pages of 24),
+//   picDown (n picture links fail)
 // pdf.js 6.4.299 comes from tests/browser/.cache/format (the format suite's checked cache), never the network.
 // Fonts come from tests/browser/.cache/cover-fonts (the Part 2 cache, every file checked against its sha384 there).
 const U = '00000000-0000-4000-8000-000000000001';
@@ -29,7 +37,7 @@ async function setupCover(page) {
     design: null,                  // the cover_designs row, null before the first open
     history: [],                   // cover_design_history rows
     blurb: null,
-    assets: [], files: {}, uploads: [],
+    assets: [], files: {}, uploads: [], stock: { calls: [], net: [] }, stockFiles: {},
     writes: [], calls: [], cdn: [], saves: 0, reads: 0, dialogs: []
   };
   // "Leave site?" (beforeunload while a save is out or failed) must never block the next test: note it, accept it.
@@ -75,8 +83,9 @@ async function setupCover(page) {
 
   // cover_assets' CHECKs (0030 §5), as the database would refuse a row.
   function badAsset(p) {
-    const extra = Object.keys(p).filter((k) => !['id', 'source', 'mime', 'path', 'remote', 'width', 'height', 'bytes', 'transparent', 'credit', 'origin_book_id', 'rights_at'].includes(k));
+    const extra = Object.keys(p).filter((k) => !['id', 'source', 'mime', 'path', 'remote', 'width', 'height', 'bytes', 'transparent', 'credit', 'origin_book_id', 'rights_at', 'name'].includes(k));
     if (extra.length) return 'columns ' + extra;
+    if (p.name != null && (typeof p.name !== 'string' || [...p.name.trim()].length > 200 || /[\u0000-\u001f\u007f-\u009f]/.test(p.name))) return 'name';
     if (!['upload', 'pdf', 'pixabay', 'unsplash'].includes(p.source)) return 'source';
     if (!['image/jpeg', 'image/png'].includes(p.mime)) return 'mime';
     if (p.source !== 'unsplash' && p.path !== `${U}/assets/${p.id}${p.mime === 'image/png' ? '.png' : '.jpg'}`) return 'path';
@@ -86,6 +95,47 @@ async function setupCover(page) {
     if (['upload', 'pdf'].includes(p.source) && !p.rights_at) return 'rights';
     if (p.path && !store.files[p.path]) return 'no file';
     return '';
+  }
+
+  // 0031 cover_assets_guard: trimmed; blank or missing → a plain word by source.
+  const plainName = (p) => (p.name && p.name.trim()) || ({ pdf: 'PDF page', pixabay: 'Pixabay picture', unsplash: 'Unsplash photo' }[p.source] || 'Picture');
+
+  // Part 7: the stock function's answers (supabase/functions/stock/lib.ts ERROR_STATUS).
+  const STOCK_STATUS = { bad_request: 400, unauthorized: 401, not_found: 404, too_large: 422, bad_image: 422, rate_limited: 429, server_error: 500, stock_unavailable: 502, not_configured: 503, stock_busy: 503 };
+  function stockList(p) {
+    let list = STK.results(p.source);
+    if (p.source === 'pixabay' && mode('stockMany')) {
+      list = Array.from({ length: 30 }, (_, j) => { const b = list[j % list.length]; const nid = String(2000 + j); return { ...b, id: nid, thumb: b.thumb.replace(/g\d+_/, `g${nid}_`), preview: b.preview.replace(/g\d+_/, `g${nid}_`) }; });
+    }
+    if (/nothing/i.test(p.q || '')) return [];
+    const f = p.filters || {};
+    if (p.source === 'pixabay') {
+      if (f.color === 'transparent') list = list.filter((x) => x.transparent);
+      if (f.type && f.type !== 'all') list = list.filter((x) => x.type === f.type);
+    }
+    return list;
+  }
+  /** A pick, as the function does it: a Pixabay copy in the bucket + row; an Unsplash linked row. */
+  function stockPick(p) {
+    const base = (pid) => (Number(pid) >= 2000 ? String(1000 + ((Number(pid) - 2000) % STK.PIXABAY.length)) : pid);
+    const item = STK.results(p.source).find((x) => x.id === (p.source === 'pixabay' ? base(String(p.id)) : p.id));
+    if (!item) return { code: 'not_found' };
+    const aid = id('a');
+    const credit = { id: p.source === 'pixabay' ? Number(p.id) : p.id, author: item.author, authorUrl: item.authorUrl, pageUrl: item.pageUrl };
+    let row;
+    if (p.source === 'pixabay') {
+      const f = store.stockFiles[`pixabay/${item.id}`];
+      if (!f) return { code: 'stock_unavailable' };
+      const mime = f.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const path = `${U}/assets/${aid}.${mime === 'image/png' ? 'png' : 'jpg'}`;
+      store.files[path] = { buf: f.buf, type: mime, size: f.buf.length };
+      row = { id: aid, source: 'pixabay', mime, path, remote: null, width: item.width, height: item.height, bytes: f.buf.length, transparent: item.transparent };
+    } else {
+      row = { id: aid, source: 'unsplash', mime: 'image/jpeg', path: null, remote: { url: STK.raw(item.id), width: item.width, height: item.height }, width: item.width, height: item.height, bytes: null, transparent: false };
+    }
+    Object.assign(row, { rights_at: null, credit, origin_book_id: p.bookId || null, name: item.name, created_at: now() });
+    store.assets.push(row);
+    return { row };
   }
 
   globalThis.__modes = globalThis.__modes || {};
@@ -170,7 +220,7 @@ async function setupCover(page) {
       const bad = badAsset(p);
       if (bad) return fail(r, 400, '23514', `mock: cover_assets check: ${bad}`);
       const row = { id: p.id || id('a'), source: p.source, mime: p.mime, path: p.path, remote: p.remote || null, width: p.width, height: p.height, bytes: p.bytes, transparent: !!p.transparent,
-        rights_at: p.rights_at ? now() : null, credit: p.credit || null, origin_book_id: p.origin_book_id || null, created_at: now() };
+        rights_at: p.rights_at ? now() : null, credit: p.credit || null, origin_book_id: p.origin_book_id || null, name: plainName(p), created_at: now() };
       store.assets.push(row);
       return json(r, 201, [copy(row)]);
     }
@@ -219,6 +269,26 @@ async function setupCover(page) {
       for (const n of gone) delete store.files[n];
       return json(r, 200, gone.map((n) => ({ name: n })));
     }
+    // Part 7: the Edge Function "stock".
+    if (path === '/functions/v1/stock' && method === 'POST') {
+      const p = body();
+      store.stock.calls.push(copy(p));
+      if (take('stockNet')) return r.abort();
+      if (p.action === 'search') {
+        if (mode('stockSlow')) await wait(mode('stockSlow'));
+        if (take('stockFail')) { const c = mode('stockCode') || 'stock_unavailable'; return json(r, STOCK_STATUS[c], { error: c }); }
+        const all = stockList(p), page = p.page || 1;
+        return json(r, 200, { source: p.source, q: p.q, page, perPage: 24, total: all.length, results: all.slice((page - 1) * 24, page * 24), cached: false });
+      }
+      if (p.action === 'pick') {
+        if (mode('pickSlow')) await wait(mode('pickSlow'));
+        if (take('pickFail')) { const c = mode('pickCode') || 'stock_unavailable'; return json(r, STOCK_STATUS[c], { error: c }); }
+        const out = stockPick(p);
+        if (out.code) return json(r, STOCK_STATUS[out.code], { error: out.code });
+        return json(r, 200, { asset: copy(out.row) });
+      }
+      return json(r, 400, { error: 'bad_request' });
+    }
     // The rail's 07 and 08 marks (design 58 shows them done): a current run, and a current Print PDF when there is one.
     if (path === '/rest/v1/rpc/qc_mark') return json(r, 200, [{ checked_at: ago(1), current: true }]);
     if (path === '/rest/v1/rpc/pdf_marks') return json(r, 200, store.pdf ? [{ book_id: FIX.BOOK, exported_at: store.pdf.created_at, page_count: store.pdf.page_count, changed: !store.pdf.current }] : []);
@@ -242,6 +312,27 @@ async function setupCover(page) {
     store.cdn.push(`${m[2]}/${m[3]}`);
     if (mode('fontsDown')) return r.abort();
     return r.fulfill({ path: `${CACHE}/cover-fonts/${m[2]}/${m[3]}`, contentType: 'font/ttf', headers: { 'access-control-allow-origin': '*' } });
+  });
+  // Part 7: fixture-stock.js posts the pictures it drew; the providers' links serve them back.
+  await ctx.route('https://stock-files.test/**', (r) => {
+    const req = r.request();
+    const h = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: h });
+    store.stockFiles[req.url().replace('https://stock-files.test/', '')] = { buf: req.postDataBuffer(), type: (req.headers()['content-type'] || '').split(';')[0] };
+    return r.fulfill({ status: 200, headers: h, body: 'ok' });
+  });
+  await ctx.route(/^https:\/\/(pixabay\.com\/get|images\.unsplash\.com)\//, (r) => {
+    const url = r.request().url();
+    store.stock.net.push(url);
+    if (take('picDown')) return r.fulfill({ status: 503, body: 'down' });
+    let key = null;
+    const pm = url.match(/^https:\/\/pixabay\.com\/get\/g(\d+)_/);
+    if (pm) { const n = Number(pm[1]); key = `pixabay/${n >= 2000 ? 1000 + ((n - 2000) % STK.PIXABAY.length) : n}`; }
+    const um = url.match(/^https:\/\/images\.unsplash\.com\/photo-([A-Za-z0-9_-]+)/);
+    if (um) key = `unsplash/${um[1]}`;
+    const f = key && store.stockFiles[key];
+    if (!f) return r.fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' }, body: 'not found' });
+    return r.fulfill({ status: 200, contentType: f.type, headers: { 'access-control-allow-origin': '*' }, body: f.buf });
   });
   await ctx.route('**/supabase-js@2.49.4/dist/umd/supabase.js', (r) => r.fulfill({ path: `${CACHE}/supabase-2.49.4.js`, contentType: 'application/javascript', headers: { 'access-control-allow-origin': '*' } }));
   if (!globalThis.__withFonts) await ctx.route('**/fonts.googleapis.com/**', (r) => r.abort());

@@ -28,8 +28,13 @@
    renderer's images callback. A picture removed from Uploads is a Must fix
    (C15, kdpCover.checks with opt.missing).
 
+   Part 7 (design 63) adds stock pictures (js/cover/stock.js): the Pixabay
+   and Unsplash tabs of the Images panel and the wide picker over the panel
+   and the cover ([data-stock-host]; Escape closes it, the cover's keys rest
+   while it is open).
+
    Drawn and inert (aria-disabled, title "Comes in Part N"): the Layouts
-   and Book data tools (8, 8), the Pixabay and Unsplash tabs (7), Write blurb and Author line (8),
+   and Book data tools (8, 8), Write blurb and Author line (8),
    the Checks chip's drawer and Preview final (9), Export cover (10). The
    chip label and the header reason are live (kdpCover.checks), only the
    drawer is not built.
@@ -202,6 +207,7 @@
         <footer class="cv-foot" data-foot></footer>
       </main>
       <div class="cv-lmenu-host" data-lmenu-host></div>
+      <div class="cv-stock-host" data-stock-host></div>
     </div>`;
     const v = E.view_ = C.view.create(E);
     E.root.querySelector('[data-wswrap]').append(v.el);
@@ -216,9 +222,13 @@
     C.shapesUi.bindBar(bar, E);
     C.multi.bind(bar, E);
     C.layersPanel.bindMenu(E.root.querySelector('[data-lmenu-host]'), E);
+    C.stock.bindPanel(panel, E);
+    C.stock.bindHost(E.root.querySelector('[data-stock-host]'), E);
     E.root.querySelector('[data-tools]').addEventListener('click', (e) => {
       const b = e.target.closest('[data-tool]');
       if (!b || b.getAttribute('aria-disabled') === 'true') return;
+      // Part 7: the tool rail stays in view beside the wide picker; a tool closes it
+      if (E.stock && E.stock.open) { E.stock.open = false; E.stock.prev = null; renderStock(); }
       showPanel(b.dataset.tool);
     });
     bindViewBar(E.root.querySelector('[data-viewbar]'));
@@ -265,6 +275,16 @@
     E.icons = 'loading'; renderPanel();
     C.shapesUi.loadIcons().then(() => { if (me === E) { E.icons = 'ready'; if (E.panel === 'shapes') renderPanel(); } },
       () => { if (me === E) { E.icons = 'error'; if (E.panel === 'shapes') renderPanel(); } });
+  }
+  /** Part 7: the wide stock picker over the panel and the cover (design 63). */
+  function renderStock() {
+    const host = E.root.querySelector('[data-stock-host]');
+    if (!host) return;
+    // the results keep their scroll place over a redraw (a filter, a pick starting, More results)
+    const body = host.querySelector('[data-sd-body]'), top = body ? body.scrollTop : 0;
+    keepFocus(host, () => { host.innerHTML = C.stock.hostHtml(E); });
+    const nb = host.querySelector('[data-sd-body]');
+    if (nb && body) nb.scrollTop = top;
   }
   /** The Layers panel's ⋮ menu, to the right of the panel (design 66). */
   function renderMenu() {
@@ -763,6 +783,7 @@
       const t = e.target;
       const mod = e.metaKey || e.ctrlKey, k = e.key;
       if (k === 'Escape') {
+        if (C.stock.escape(E)) return;   // Part 7: the wide picker (its preview first)
         if (E.layerMenu) { closeLayerMenu(true); return; }
         if (E.menu) { const m = E.menu; E.menu = null; E.fxSnap = null; renderBars(); E.view_.sync(); const b = E.root.querySelector(`[data-k="${MENU_BTN[m]}"]`); if (b) b.focus({ preventScroll: true }); return; }
         if (E.tpl.pop && t && t.closest && t.closest('[data-tplpop]')) { toggleTpl(false); return; }
@@ -771,6 +792,8 @@
         if (E.sel != null && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { const id = E.sel; select(null); const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`); if (hit) hit.focus({ preventScroll: true }); }
         return;
       }
+      // Part 7: inside the wide picker the cover's keys (undo, select all, delete, arrows) do nothing.
+      if (t && t.closest && t.closest('[data-stockdlg]')) return;
       // Undo and redo also work from a slider or a check box (the crop Zoom, Adjust); typing fields keep their own.
       const typing = t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable || (t.tagName === 'INPUT' && !['range', 'checkbox'].includes(t.type)));
       if (typing || (t && t.tagName === 'INPUT' && !(mod && /^[zZyY]$/.test(k)))) return;
@@ -824,6 +847,7 @@
       addLayer, startCrop, endCrop, movePic, gate: () => ctx.setGate(),
       pickerTo(t, hex) { openPicker(t, hex); },
       refreshPanel: renderPanel,
+      refreshStock: renderStock,
       refreshBars: renderBars,
       layerName: (l) => C.names.layerName(l),
       viewChanged() { if (E.view_) { E.view_.sync(); renderBars(); } },

@@ -25,7 +25,27 @@ const TITLE_OPTION_COLS = 'id, title, subtitle, reason, keywords, unsourced, sho
 
 // 09 Cover (migration 0030). The design fields an autosave may write, and the columns each read returns.
 const COVER_DESIGN_FIELDS = ['layers', 'bg', 'fmt', 'layout', 'last_remap'];
-const COVER_ASSET_COLS = 'id, source, mime, path, remote, width, height, bytes, transparent, rights_at, credit, origin_book_id, created_at';
+const COVER_ASSET_COLS = 'id, source, mime, path, remote, width, height, bytes, transparent, rights_at, credit, origin_book_id, name, created_at';
+// 0031 cover_assets.name: control characters out, spaces folded, 200 characters at most (null: the database names it by source).
+function coverAssetName(v) {
+  const s = String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s ? [...s].slice(0, 200).join('').trim() : null;
+}
+// The Edge Function "stock": { data } or { error: { code } } (a non-2xx reply carries { error: code }).
+async function invokeStock(body) {
+  let res;
+  try { res = await window.sb.functions.invoke('stock', { body }); } catch (err) { return { data: null, error: { code: 'network' } }; }
+  if (!res.error) return { data: res.data, error: null };
+  const ctx = res.error.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const b = await ctx.json();
+      if (b && typeof b.error === 'string') return { data: null, error: { code: b.error } };
+    } catch (err) { /* not JSON */ }
+    return { data: null, error: { code: ctx.status === 401 ? 'unauthorized' : 'server_error' } };
+  }
+  return { data: null, error: { code: 'network' } };
+}
 const COVER_HISTORY_COLS = 'id, reason, fmt, bg, layout, created_at';
 const MY_LAYOUT_COLS = 'id, name, from_book_id, from_title, fmt, bg, layers, thumb, exported_at';
 
@@ -1571,11 +1591,12 @@ window.kdp = {
    * Adds a picture row after its file is in the bucket (upload, pdf, pixabay),
    * or a linked Unsplash picture (no file). rightsTicked: the writer ticked
    * "I have the rights" (the database takes the time from its own clock).
+   * name: the name it was added under (0031, 1 to 200 characters; the file name, "<file> p.<n>").
    */
   async addCoverAsset({ id, source, mime, path = null, remote = null, width, height, bytes = null,
-    transparent = false, rightsTicked = false, credit = null, originBookId = null }) {
+    transparent = false, rightsTicked = false, credit = null, originBookId = null, name = null }) {
     const row = { source, mime, path, remote, width, height, bytes, transparent, credit, origin_book_id: originBookId,
-      rights_at: rightsTicked ? new Date().toISOString() : null };
+      rights_at: rightsTicked ? new Date().toISOString() : null, name: coverAssetName(name) };
     if (id) row.id = id;
     const { data, error } = await window.sb.from('cover_assets').insert(row).select(COVER_ASSET_COLS);
     return { data: error ? null : (data && data[0]) || null, error };
@@ -1595,7 +1616,7 @@ window.kdp = {
    * from its name: supabase-js 2.49.4 sends a Blob with the Blob's own type.
    * source: 'upload' | 'pdf'. rightsTicked: "I have the rights" was ticked (0030 needs it for both).
    */
-  async uploadCoverAsset({ bytes, mime, width, height, transparent = false, source = 'upload', rightsTicked = false, originBookId = null }) {
+  async uploadCoverAsset({ bytes, mime, width, height, transparent = false, source = 'upload', rightsTicked = false, originBookId = null, name = null }) {
     const uid = await this.coverUserId();
     if (!uid) return { data: null, error: new Error('Not signed in.') };
     const id = crypto.randomUUID();
@@ -1603,12 +1624,26 @@ window.kdp = {
     const blob = new Blob([bytes], { type: mime });
     const up = await window.sb.storage.from('covers').upload(path, blob, { contentType: mime, upsert: false, cacheControl: '3600' });
     if (up.error) return { data: null, error: up.error };
-    const row = await this.addCoverAsset({ id, source, mime, path, width, height, bytes: blob.size, transparent: mime === 'image/png' && !!transparent, rightsTicked, originBookId });
+    const row = await this.addCoverAsset({ id, source, mime, path, width, height, bytes: blob.size, transparent: mime === 'image/png' && !!transparent, rightsTicked, originBookId, name });
     if (row.error) {
       try { await window.sb.storage.from('covers').remove([path]); } catch (e) { /* a file without a row is never listed */ }
       return { data: null, error: row.error };
     }
     return row;
+  },
+
+  /**
+   * Stock pictures (E16 Part 7): the Edge Function "stock" holds the Pixabay and Unsplash keys.
+   * stockSearch({ source, q, page, filters }) → { data: { source, q, page, perPage, total, results, cached }, error }
+   * stockPick({ source, id, bookId }) → { data: { asset }, error }   (asset: the new cover_assets row)
+   * error.code: bad_request, unauthorized, not_found, too_large, bad_image, rate_limited, server_error,
+   * stock_unavailable, not_configured, stock_busy, or 'network' when the function could not be reached.
+   */
+  async stockSearch({ source, q, page = 1, filters }) {
+    return invokeStock({ action: 'search', source, q, page, filters });
+  },
+  async stockPick({ source, id, bookId = null }) {
+    return invokeStock({ action: 'pick', source, id, bookId });
   },
 
   /** A stored picture's bytes (signed in, never a public URL). From E15 (downloadCoverImage). → { data: Blob, error } */

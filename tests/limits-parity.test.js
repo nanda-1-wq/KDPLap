@@ -503,3 +503,20 @@ Deno.test("09 Cover uploads (E16 Part 6): the browser's caps equal 0030's (10 MB
   // the bucket takes the same two kinds the browser sends
   assertEquals(read(M30).match(/allowed_mime_types = array\[([^\]]+)\]/)[1], "'image/jpeg', 'image/png'");
 });
+
+Deno.test("09 Cover stock (E16 Part 7): the stock function's caps equal 0030, 0031 and the bucket", () => {
+  const STOCK = "supabase/functions/stock/lib.ts";
+  const M31 = M("0031_stock.sql");
+  // the picture a pick stores fits the bucket and cover_assets (settled in Part 7: 10 MB, not 15)
+  const ts = (name) => Number(read(STOCK).match(new RegExp(`export const ${name} = ([\\d_]+);`))[1].replace(/_/g, ""));
+  assertEquals(ts("MAX_FILE_BYTES"), Number(one(M30, String.raw`bytes between 1 and (\d+)`)));
+  assertEquals(ts("MAX_SIDE"), Number(one(M30, String.raw`width between 1 and (\d+) and height`)));
+  assertEquals(Number(one(STOCK, String.raw`CREDIT_MAX_BYTES = (\d+);`)), Number(one(M30, String.raw`octet_length\(credit::text\) <= (\d+)`)));
+  // the name: 0031, the stock function and the browser's cleaner all stop at 200 characters
+  const sqlName = Number(one(M31, String.raw`char_length\(name\) between 1 and (\d+)`));
+  assertEquals(Number(one(STOCK, String.raw`NAME_MAX = (\d+);`)), sqlName);
+  assertEquals(Number(one("js/supabase.js", String.raw`function coverAssetName[\s\S]*?\.slice\(0, (\d+)\)`)), sqlName);
+  // the cache key is the sha256 hex the table checks; the body cap holds 24 results
+  assertEquals(read(M31).includes("key ~ '^[0-9a-f]{64}$'"), true);
+  assertEquals(Number(one(STOCK, String.raw`PER_PAGE = (\d+);`)), 24);
+});

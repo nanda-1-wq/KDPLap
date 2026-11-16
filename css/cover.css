@@ -32,6 +32,10 @@
   --cv-bar-h: 52px;
   --cv-foot-h: 34px;
   --cv-btn: 36px;               /* the look of a bar button; the click area is 44 px (::after) */
+  --cv-scrim: rgba(28, 28, 26, 0.35);              /* the gray behind the wide stock picker (design 63) */
+  --cv-shadow-dialog: 0 12px 40px rgba(28, 28, 26, 0.3);   /* the wide stock picker (design 63) */
+  --cv-pill: rgba(28, 28, 26, 0.75);               /* the PREVIEW pill on a stock result (design 63) */
+  --cv-checker: repeating-conic-gradient(var(--stone) 0% 25%, var(--surface) 0% 50%) 0 0 / 14px 14px;   /* behind see-through pictures */
 }
 
 /* No page scroll on 09: the workspace fills the screen (as 08). */
@@ -441,11 +445,10 @@
 .cv-fx-box .cv-sv { height: 70px; }
 
 /* ══ E16 Part 6: pictures (design 62) ══ */
-/* Images panel: the source tabs (Pixabay and Unsplash come in Part 7). */
+/* Images panel: the source tabs (Uploads here; Pixabay and Unsplash below, Part 7). */
 .cv-srctabs { display: flex; gap: var(--space-1); padding: 3px; background: var(--mist); border-radius: 9px; }
 .cv-srctab { position: relative; flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; font-size: var(--text-xs); color: var(--ink); }
 .cv-srctab.is-on { background: var(--surface); box-shadow: var(--cv-shadow-paper); font-weight: 600; }
-.cv-srctab[data-inert] { color: var(--graphite); cursor: default; }
 .cv-replacing { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 10px; border-radius: var(--radius-md); background: var(--paper); border: 1px solid var(--stone); font-size: var(--text-sm); line-height: 1.4; }
 .cv-rights { align-items: flex-start; font-size: var(--text-sm); line-height: 1.45; }
 .cv-rights input { flex-shrink: 0; margin-top: 1px; accent-color: var(--ink); }
@@ -524,3 +527,78 @@
 .cv-lr-img { overflow: hidden; }
 .cv-lr-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .cv-lr-img.is-sample { background: var(--cv-sample); }
+
+/* ══ E16 Part 7: stock pictures (design 63) ══ */
+.cv-uptile-src { display: block; padding: 0 6px var(--space-1); font-size: var(--text-xs); color: var(--graphite); }
+/* The small view under the Pixabay and Unsplash tabs. */
+.cv-stocksearch { display: flex; gap: 6px; margin: 0; }
+.cv-stock-q { flex: 1; min-width: 0; height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font: inherit; font-size: var(--text-sm); color: var(--ink); }
+.cv-stocksearch .cv-sbtn { height: 38px; }
+.cv-nobg { position: relative; min-height: var(--cv-btn); padding: 0 var(--space-3); display: inline-flex; align-items: center; gap: var(--space-2); border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-sm); align-self: flex-start; }
+.cv-nobg.is-on { border-color: var(--ink); background: var(--paper); font-weight: 600; }
+.cv-nobg-s { width: 16px; height: 16px; border-radius: 3px; background: repeating-conic-gradient(var(--stone) 0% 25%, var(--surface) 0% 50%) 0 0 / 8px 8px; box-shadow: inset 0 0 0 1px var(--stone-2); }
+.cv-stock-cap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-ui); line-height: 1.3; }
+.cv-stocktile .cv-uptile-img.is-clear, .cv-uptile-img.is-clear { background: var(--cv-checker); }
+.cv-stock-open { height: 40px; border-color: var(--ink); font-weight: 500; }
+.cv-stockerr { display: flex; gap: 6px; align-items: flex-start; padding: 10px var(--space-3); border-radius: var(--radius-md); background: var(--danger-bg); color: var(--cv-danger-ink); font-size: var(--text-xs); line-height: 1.5; }
+.cv-stockerr svg { flex-shrink: 0; margin-top: 2px; }
+.cv-root .cv-stocktile[aria-disabled="true"] { cursor: progress; opacity: 0.6; }
+.cv-credit a, .cv-sd a { color: inherit; }
+/* Step D: the credit links sit in a sentence; each gets the 44 px click area the buttons have. */
+.cv-credit a, .cv-sd-info a, .cv-sd-lic { position: relative; }
+.cv-credit a::after, .cv-sd-info a::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--control-h)); height: var(--control-h); transform: translate(-50%, -50%); }
+
+/* The wide picker: over the panel and the cover, under the step header (design 63: left of the tool rail, 24 px in). */
+.cv-stock-host:empty { display: none; }
+.cv-sd-wrap { position: absolute; left: var(--cv-tools-w); top: 0; right: 0; bottom: 0; z-index: 30; display: flex; padding: var(--space-6); box-sizing: border-box; background: var(--cv-scrim); }
+.cv-sd { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border-radius: 14px; box-shadow: var(--cv-shadow-dialog); overflow: hidden; }
+.cv-sd-head { display: flex; align-items: center; gap: 6px; padding: 0 var(--space-4) 0 var(--space-5); border-bottom: 1px solid var(--stone); flex-shrink: 0; }
+.cv-sd-tab { position: relative; height: var(--control-h); padding: 0 14px; border: 0; border-bottom: 3px solid transparent; background: transparent; font-size: var(--text-base); color: var(--graphite); }
+.cv-sd-tab.is-on { border-bottom-color: var(--ink); font-weight: 600; color: var(--ink); }
+.cv-sd-lic { display: inline-flex; align-items: center; min-height: var(--control-h); font-size: var(--text-sm); color: var(--ink); }
+.cv-sd-x { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; }
+.cv-sd-filters { display: flex; align-items: center; gap: var(--space-2); padding: 14px var(--space-5); margin: 0; border-bottom: 1px solid var(--mist); flex-wrap: wrap; font-size: var(--text-sm); flex-shrink: 0; }
+.cv-sd-q { flex: 1; min-width: 220px; height: var(--control-h); box-sizing: border-box; padding: 0 var(--space-3); border: 1px solid var(--stone); border-radius: var(--radius-md); font: inherit; font-size: var(--text-md); color: var(--ink); background: var(--surface); }
+/* Step D: a select cannot carry a 44 px ::after, so the filter row is 44 px tall (the design: 40). */
+.cv-sd-sel { height: var(--control-h); padding: 0 var(--space-2); border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font: inherit; font-size: var(--text-sm); color: var(--ink); }
+.cv-sd-check { position: relative; z-index: 0; height: var(--control-h); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.cv-sd-check::after { content: ""; position: absolute; z-index: -1; left: 0; right: 0; top: 50%; height: var(--control-h); transform: translateY(-50%); }
+.cv-sd-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+.cv-sd-go { height: var(--control-h); padding: 0 18px; border: 0; border-radius: var(--radius-md); background: var(--ink); font-size: var(--text-md); font-weight: 500; }
+.cv-root .cv-sd-go { color: var(--surface); }
+.cv-sd-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-4) var(--space-5); }
+.cv-sd-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1200px) { .cv-sd-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.cv-sd-tile { position: relative; border: 1px solid var(--stone); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); }
+.cv-sd-tile.is-busy { border-color: var(--ink); }
+.cv-sd-add { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.cv-root .cv-sd-add::after { width: 100%; height: 100%; }
+.cv-root .cv-sd-add[aria-disabled="true"] { cursor: progress; }
+.cv-sd-img { display: block; width: 100%; height: 140px; object-fit: cover; }
+.cv-sd-img.is-clear { object-fit: contain; background: var(--cv-checker); }
+.cv-sd-look { position: absolute; left: var(--space-2); top: var(--space-2); z-index: 1; height: 26px; padding: 0 10px; border: 0; border-radius: 13px; background: var(--cv-pill); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; }
+.cv-root .cv-sd-look { color: var(--surface); }
+.cv-sd-cap { padding: 6px var(--space-2); font-size: var(--text-xs); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-sd-msg { margin: 40px 0; text-align: center; font-size: var(--text-base); color: var(--graphite); }
+.cv-sd-down { margin: 40px auto; max-width: 520px; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; font-size: var(--text-base); line-height: 1.5; color: var(--danger); }
+.cv-sd-down p { margin: 0; }
+.cv-sd-err { margin-bottom: var(--space-3); }
+.cv-sd-more { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-5) 0 var(--space-2); }
+.cv-sd-prev { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--space-6); padding: var(--space-5); }
+.cv-sd-prevbox { min-height: 0; border: 1px solid var(--mist); border-radius: var(--radius-lg); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.cv-sd-prevbox.is-clear { background: var(--cv-checker); }
+.cv-sd-prevbox img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.cv-sd-info { display: flex; flex-direction: column; gap: 10px; font-size: var(--text-md); min-height: 0; overflow-y: auto; }
+.cv-sd-name { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.cv-sd-size { font-size: var(--text-xs); color: var(--graphite); }
+.cv-sd-print { display: flex; gap: 6px; align-items: flex-start; }
+.cv-sd-print svg { flex-shrink: 0; margin-top: 3px; }
+.cv-sd-print.is-ok { color: var(--success); }
+.cv-sd-print.is-warn { color: var(--warning); }
+.cv-sd-big { min-height: var(--control-h); border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-base); }
+.cv-sd-ink { border-color: var(--ink); background: var(--ink); font-weight: 500; }
+.cv-root .cv-sd-ink { color: var(--surface); }
+.cv-root .cv-sd-ink[aria-disabled="true"] { cursor: progress; }
+.cv-sd-foot { display: flex; align-items: center; gap: var(--space-4); padding: 10px var(--space-5); border-top: 1px solid var(--mist); font-size: var(--text-xs); color: var(--graphite); flex-shrink: 0; }
+.cv-sd-foot .cv-mono { white-space: nowrap; flex-shrink: 0; }
+.cv-sd-foot .cv-mono:empty { display: none; }

@@ -99,6 +99,11 @@ insert into public.cover_exports (user_id, book_id, kind, settings_key, engine, 
 insert into public.cover_exports (user_id, book_id, kind, settings_key, engine, width_px, height_px) values
   ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'kindle',
    public.cover_key('a3000000-0000-4000-8000-000000000001'), 'typst 0.14.2 · c1', 1600, 2560);
+-- 0031: a stock search answer and a stock call of A's.
+insert into public.stock_cache (user_id, key, body) values
+  ('00000000-0000-4000-8000-00000000000a', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '{"results": []}');
+insert into public.stock_calls (user_id, source, action, provider_calls) values
+  ('00000000-0000-4000-8000-00000000000a', 'pixabay', 'search', 1);
 insert into storage.objects (bucket_id, name, owner) values
   ('covers', '00000000-0000-4000-8000-00000000000a/assets/ac000000-0000-4000-8000-000000000001.jpg',
    '00000000-0000-4000-8000-00000000000a');
@@ -122,7 +127,7 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('32 public tables (0030: cover_designs, cover_design_history, cover_assets, cover_my_layouts; book_covers and cover_images dropped)', (select count(*) from rls_tables) = 32, (select count(*) from rls_tables)::text);
+select pg_temp.chk('34 public tables (0030: cover_designs, cover_design_history, cover_assets, cover_my_layouts; book_covers and cover_images dropped; 0031: stock_cache, stock_calls)', (select count(*) from rls_tables) = 34, (select count(*) from rls_tables)::text);
 select pg_temp.chk('A''s two cover exports recorded', (select count(*) from public.cover_exports) = 2);
 select pg_temp.chk('A''s file is in the bucket', (select count(*) from storage.objects where bucket_id = 'covers') = 1);
 select pg_temp.chk('A''s Print PDF row recorded', (select count(*) from public.book_exports where format = 'pdf') = 1);
@@ -146,9 +151,9 @@ select pg_temp.chk(t || ': B reads 0 of A''s rows',
 -- cover_blurbs and cover_exports (0029) no update and no delete,
 -- cover_designs (0030) no delete, cover_design_history (0030) no update and
 -- no delete, cover_assets (0030) no update: refused, not 0 rows.
-select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports', 'qc_runs', 'qc_dismissed', 'book_checks', 'cover_blurbs', 'cover_exports', 'cover_design_history', 'cover_assets') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports', 'qc_runs', 'qc_dismissed', 'book_checks', 'cover_blurbs', 'cover_exports', 'cover_design_history', 'cover_assets', 'stock_calls') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats', 'qc_runs', 'book_checks', 'cover_designs', 'cover_design_history', 'cover_blurbs', 'cover_exports') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats', 'qc_runs', 'book_checks', 'cover_designs', 'cover_design_history', 'cover_blurbs', 'cover_exports', 'stock_calls') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -256,6 +261,12 @@ select pg_temp.expect('storage: B cannot upload to A''s folder', $q$insert into 
 select pg_temp.expect('storage: B cannot use the old book path, even in B''s folder', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000b/b3000000-0000-4000-8000-000000000001/bc000000-0000-4000-8000-000000000003.jpg')$q$, '42501%');
 select pg_temp.expect('storage control: B uploads to B''s own assets folder', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000b/assets/bc000000-0000-4000-8000-000000000003.png')$q$, 'OK 1');
 select pg_temp.expect('storage control: B reads only B''s file', $q$select 1 from storage.objects where bucket_id = 'covers'$q$, 'OK 1');
+
+-- 0031: B cannot write stock rows as A, and B's stock_usage counts only B's calls.
+select pg_temp.expect('stock_cache: B cannot add an answer with A''s user id', $q$insert into public.stock_cache (user_id, key, body) values ('00000000-0000-4000-8000-00000000000a', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '{}')$q$, '42501%');
+select pg_temp.expect('stock_cache: B cannot overwrite A''s answer by upsert', $q$insert into public.stock_cache (key, body) values ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '{"b": 1}') on conflict (user_id, key) do update set body = excluded.body$q$, 'OK 1');
+select pg_temp.expect('stock_calls: B cannot log a call with A''s user id', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'pick', 2)$q$, '42501%');
+select pg_temp.chk('stock_usage: B sees none of A''s calls', public.stock_usage() = '{"searches": 0, "picks": 0, "unsplash_hour": 0}'::jsonb, public.stock_usage()::text);
 
 -- ── As user B: moving own rows to A is refused ──
 select pg_temp.expect('books: B gives a book to A refused', $q$update public.books set user_id = '00000000-0000-4000-8000-00000000000a' where id = 'b3000000-0000-4000-8000-000000000001'$q$, '42501%');
