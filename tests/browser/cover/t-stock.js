@@ -332,8 +332,9 @@ const test = async page => {
   ok(ring.join(' ') === 'solid 2px 2px rgb(28, 28, 26)', `the focus ring: 2 px ink, 2 px off (${ring})`);
   await page.keyboard.press('Escape');
 
-  /* ── At 1024 px: no sideways scroll, 4 a row ── */
+  /* ── At 1024 px: no sideways scroll, 4 a row (E16 Part 9: under 1200 px the panel opens over the cover from its tool) ── */
   await page.setViewportSize({ width: 1024, height: 900 });
+  await page.click('[data-tool="images"]');
   await page.click('[data-stock-open]');
   await settle();
   ok(await CV.noScroll(page) && await page.$eval('[data-sd-grid]', (g) => getComputedStyle(g).gridTemplateColumns.split(' ').length === 4), 'at 1024: no sideways scroll, 4 results a row');

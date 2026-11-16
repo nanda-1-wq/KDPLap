@@ -6,6 +6,7 @@
 // Tests change globalThis.__store and globalThis.__modes.
 //   __modes: coverFail (n reads of cover_json fail), coverSlow (ms), saveFail (n saves fail), saveSlow (ms),
 //   otherTab (n saves find the rev moved: another tab saved), histFail (n snapshots fail), fontsDown (the font CDN)
+// Part 9: the fmt and last_remap CHECKs of cover_designs (0030), so a remap save the database would refuse fails here.
 // Part 6: cover_assets (select own, insert with 0030's CHECKs: path <user>/assets/<id>.jpg|png, mime, bytes ≤ 10 MB,
 // 1 to 12,000 px, transparent only for PNG, rights for upload and pdf) and the bucket "covers" (upload: the 0030 path
 // rule and JPEG/PNG only; download). store.assets = rows, store.files = { path: { bytes (base64), type } }.
@@ -86,8 +87,19 @@ async function setupCover(page) {
         if (l.type === 'text' && (typeof l.text !== 'string' || [...l.text].length > 2000)) return 'text';
       }
     }
+    // Part 9: cover_fmt_ok (exactly trim, pages, paper; a 09 trim; whole pages 1 to 828; white or cream) and
+    // cover_designs_remap_check (null, or from and to pass cover_fmt_ok, moved an array of at most 200, ≤ 16 KB).
+    if ('fmt' in p && !fmtOk(p.fmt)) return 'fmt';
+    if ('last_remap' in p && p.last_remap !== null) {
+      const n = p.last_remap;
+      if (!n || typeof n !== 'object' || !Array.isArray(n.moved) || !fmtOk(n.from) || !fmtOk(n.to) || n.moved.length > 200 || utf8(JSON.stringify(n)) > 16384) return 'last_remap';
+    }
     const extra = Object.keys(p).filter((k) => !['layers', 'bg', 'fmt', 'layout', 'last_remap'].includes(k));
     return extra.length ? 'columns ' + extra : '';
+  }
+  function fmtOk(f) {
+    return !!f && typeof f === 'object' && !Array.isArray(f) && Object.keys(f).length === 3 && ['5x8', '5.25x8', '5.5x8.5', '6x9', '8x10', '8.5x11'].includes(f.trim)
+      && typeof f.pages === 'number' && Number.isInteger(f.pages) && f.pages >= 1 && f.pages <= 828 && ['white', 'cream'].includes(f.paper);
   }
 
   // cover_assets' CHECKs (0030 §5), as the database would refuse a row.

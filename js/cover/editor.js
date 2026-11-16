@@ -41,14 +41,22 @@
    (history.step). The pressed layout is saved in cover_designs.layout. A
    layout's sample photo is a Must fix (C16, STOP 6 N2 rec, opt.samples).
 
-   Drawn and inert (aria-disabled, title "Comes in Part N"): the Checks
-   chip's drawer and Preview final (9), Export cover (10). The chip label
-   and the header reason are live (kdpCover.checks), only the drawer is not
-   built.
+   Part 9 (designs 69, 70, 72, 73b, 74, 74b) adds the Checks drawer
+   (checks-drawer.js; the chip opens it), Preview final (preview.js), the
+   size change (resize-note.js: on open, a design laid out for another size
+   is remapped, saved with its new fmt and last_remap in one update, Undo
+   starts again, the view fits, and the amber note shows), offline
+   (offline.js: the amber bar, the design kept on this device and saved
+   when the connection is back, the newest rev wins on the next open), and
+   the window widths (narrow.js: 900 to 1199 px the panel opens over the
+   cover; under 900 px the full notice).
 
-   Size: the design is drawn and saved at the size it is laid out for
-   (cover_designs.fmt). When the book's size changed in 08, the remap and
-   its note come in Part 9; the export guard refuses such a design.
+   Drawn and inert (aria-disabled, title "Comes in Part 10"): Export cover,
+   in the header and in Preview final.
+
+   Load order (Part 9): cover_json, the kept offline copy against the row
+   (R15), the fonts and the real text metrics, the size remap (its heights
+   need the metrics), then the autosave.
 
    State lives in E (one object); render functions draw parts of the frame
    from it. The shell (js/book.js) calls init, render, nextNote, nextOff,
@@ -102,6 +110,9 @@
       img: { rights: false, err: '', busy: '', pdf: null, tab: 'up' }, uploads: null, replaceId: null, cropping: null, pics: new Map(), bookId: null,
       // Part 8: the Layouts panel (busy: the layout being applied; fonts: the 12 layouts' faces are loaded), My layouts, the note, the blurb dialog
       lay: { busy: null, err: '', fonts: false }, my: [], toast: null, blurb: null,
+      // Part 9: the Checks drawer, Preview final, the size note (cover_designs.last_remap), offline, the window width
+      checksOpen: false, pv: { open: false, cut: true, gray: false, painted: 0 }, remapNote: null, offline: C.offline.isOffline(),
+      width: C.narrow.mode(root.innerWidth), panelOpen: false, uid: null, kept: null,
       view: { z: 1, px: 91, py: 47 }, tpl: { op: 100, hide: false, pop: false }, guides: true, snap: true,
       fontQ: '', cat: 'All', fontBusy: null, fontErr: null,
       pk: { target: 'color', hue: 0, sat: 0, val: 0, hexDraft: '#1C1C1A', recent: [] },
@@ -119,7 +130,11 @@
     const me = E = newEditor(el);
     renderLoading();
     let res;
-    try { res = await kdp.getCover(book.id); } catch (e) { res = { error: e }; }
+    try {
+      const sess = await kdp.getSession().catch(() => null);
+      E.uid = sess && sess.user ? sess.user.id : null;
+      res = await kdp.getCover(book.id);
+    } catch (e) { res = { error: e }; }
     if (me !== E) return;
     if (res.error && res.error.notFound) { ctx.notFound(); return; }
     if (res.error) { renderError(); return; }
@@ -135,8 +150,26 @@
     }
     E.data = data;
     E.bookId = book.id;
-    E.cover = C.model.normalize({ fmt: data.design.fmt, bg: data.design.bg, layers: data.design.layers, layout: data.design.layout });
-    E.rev = data.design.rev;
+    const row = data.design;
+    // Part 9 (R15): a design kept on this device while offline. Its base rev is the row's rev or later: it is the
+    // newest, so it opens and saves. The row's rev is higher: when the copy is newer in time than the row (owner,
+    // STOP 9 N3: a save whose reply was lost, then more changes), the person picks: Keep them (the copy is saved as
+    // the row) or Use the saved version; otherwise the row wins. The copy that is not used goes into the history.
+    const kept = C.offline.read(E.uid, book.id);
+    let won = C.offline.settle(kept, row);
+    if (won === 'server' && C.offline.newerInTime(kept, row)) {
+      const pick = await askKept(kept);
+      if (me !== E) return;
+      if (pick === 'keep') won = 'local';
+    }
+    const src = won === 'local' ? kept : row;
+    E.kept = won;
+    if (won === 'server') {
+      kdp.addCoverSnapshot(book.id, 'visit', { layers: kept.layers, bg: kept.bg, fmt: kept.fmt || row.fmt, layout: kept.layout == null ? null : kept.layout })
+        .then((r) => { if (r && !r.error) C.offline.clear(E.uid, book.id); }).catch(() => {});
+    }
+    E.cover = C.model.normalize({ fmt: src.fmt || row.fmt, bg: src.bg, layers: src.layers, layout: src.layout === undefined ? row.layout : src.layout });
+    E.rev = row.rev;
     E.my = Array.isArray(data.my_layouts) ? data.my_layouts.slice() : [];
     C.fonts.install();
     C.textlayout.setMeasure(C.fonts.measure);
@@ -146,21 +179,41 @@
       return;
     }
     if (me !== E) return;
+    // Part 9 (plan §4): laid out for another size → the design's remap, unchanged; one update with layers, fmt and
+    // last_remap; the design as it was goes into the history (reason remap); Undo starts again; the view fits.
+    // The first snapshot: the row as it was (a newer kept copy replaces it), else the design before the remap.
+    const before = won === 'local' ? { layers: row.layers, bg: row.bg, fmt: row.fmt, layout: row.layout == null ? null : row.layout }
+      : { layers: E.cover.layers, bg: E.cover.bg, fmt: E.cover.fmt, layout: E.cover.layout == null ? null : E.cover.layout };
+    const rm = C.remap.changeFormat(E.cover, data.fmt);
+    const lastRemap = won === 'local' && kept.last_remap !== undefined ? kept.last_remap : row.last_remap;
+    if (rm) {
+      E.cover = rm.cover;
+      E.remapNote = Object.assign({}, rm.lastRemap, { at: data.now || new Date().toISOString(), seen: false });
+      E.remappedNow = true;
+    } else E.remapNote = lastRemap || null;
     E.status = 'ready';
     E.tpl.pop = newCover || !E.cover.layers.length;
     E.saver = C.save.create({
       bookId: book.id, rev: E.rev,
-      snapshot: { layers: E.cover.layers, bg: E.cover.bg, fmt: E.cover.fmt, layout: E.cover.layout },
-      read: () => ({ layers: me.cover.layers, bg: me.cover.bg, layout: me.cover.layout == null ? null : me.cover.layout }),
+      snapshot: before, snapReason: rm ? 'remap' : 'visit',
+      saved: { layout: row.layout == null ? null : row.layout, fmt: row.fmt, last_remap: row.last_remap == null ? null : row.last_remap },
+      read: () => ({ layers: me.cover.layers, bg: me.cover.bg, layout: me.cover.layout == null ? null : me.cover.layout, fmt: me.cover.fmt, last_remap: me.remapNote || null }),
+      offline: () => C.offline.isOffline(),   // the browser's own state: a saver left behind by 09 still reads it
+      // kept: 'server' while a losing copy waits for its snapshot (it is cleared there, never here)
+      keep: (d, rev) => { me.keptOk = C.offline.write(me.uid, book.id, d, rev); me.kept = 'mine'; return me.keptOk; },
+      onSaved: () => { if (me.kept !== 'server') C.offline.clear(me.uid, book.id); },
       onState: (st, info) => {
         // The shell's save line (sidebar and rail) shows 09's state too, with Retry (as 08).
-        ctx.renderSave(st === 'failed' ? 'error' : st, st === 'failed' ? 'Your last cover change was not saved.' : '', st === 'failed', STEP);
+        const line = st === 'failed' ? 'error' : st === 'offline' ? 'error' : st;
+        ctx.renderSave(line, st === 'failed' ? 'Your last cover change was not saved.' : st === 'offline' ? 'Offline: kept on this device.' : '', st === 'failed', STEP);
         if (st === 'saved' && orphan === me.saver) orphan = null;
         me.saveState = st; me.saveInfo = info;
         if (me === E) renderSave();
       }
     });
     renderEditor();
+    // The size remap, or a newer copy kept on this device, saves at once.
+    if (rm || won === 'local') E.saver.changed();
     C.images.loadUsed(E);
     ctx.setGate();
     // The Text panel's presets draw in Source Serif 4 Bold and IBM Plex Sans: load them now, so Add is instant.
@@ -177,6 +230,7 @@
           <div class="cv-loading-t">Loading your cover…</div>
           <div class="cv-loading-s">Getting your book size from 08 Format, your fonts and pictures.</div></div>
       </div></div>`;
+    applyWidth(true);
   }
 
   function renderError(title, text) {
@@ -187,7 +241,42 @@
       <p>${esc(text || 'Check your connection, then try again.')}</p>
       <div class="state-actions"><button type="button" class="btn btn-primary" data-cv-retry>Retry</button></div></div></div></div>`;
     E.root.querySelector('[data-cv-retry]').addEventListener('click', () => start(E.root));
-    ctx.setGate();
+    applyWidth(true);
+  }
+
+  /** Owner, STOP 9 (N3): changes kept on this device that are newer than the saved row → the person picks. */
+  function askKept(kept) {
+    return new Promise((resolve) => {
+      const at = new Date(kept.at);
+      const when = isNaN(at) ? 'earlier' : at.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      E.status = 'ask';
+      E.root.innerHTML = `<div class="cv-root cv-full" data-cover><div class="cv-locked">
+        <div class="cv-locked-card" role="alertdialog" aria-modal="true" aria-labelledby="cv-kept-h" aria-describedby="cv-kept-p" data-kept-ask>
+          <span class="cv-locked-icon">${C.offline.ICON}</span>
+          <h2 id="cv-kept-h">Unsaved changes on this device</h2>
+          <p class="cv-locked-p" id="cv-kept-p">You have changes on this device from ${esc(when)} that were not saved. Keep them, or use the saved version?</p>
+          <p class="cv-locked-s">The one you do not use is kept in your cover’s history.</p>
+          <div class="cv-kept-btns"><button type="button" class="btn btn-primary" data-k="kept-keep" data-kept-keep>Keep them</button>
+            <button type="button" class="btn btn-secondary" data-k="kept-saved" data-kept-saved>Use the saved version</button></div>
+        </div></div></div>`;
+      applyWidth(true);
+      const card = E.root.querySelector('[data-kept-ask]');
+      card.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-kept-keep], [data-kept-saved]');
+        if (!b) return;
+        E.status = 'loading';
+        renderLoading();
+        resolve(b.hasAttribute('data-kept-keep') ? 'keep' : 'saved');
+      });
+      // A modal choice: Tab stays on its two buttons.
+      card.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab') return;
+        const f = [...card.querySelectorAll('button')], i = f.indexOf(document.activeElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+      });
+      card.querySelector('[data-kept-keep]').focus();
+    });
   }
 
   /** Design 73: no current Print PDF, so the spine width is unknown. */
@@ -204,6 +293,7 @@
       if (e.metaKey || e.ctrlKey || e.shiftKey) return;
       e.preventDefault(); ctx.go(8);
     });
+    applyWidth(true);
   }
 
   /* ── The frame (design 58) ── */
@@ -214,15 +304,18 @@
       <main class="cv-main">
         <div class="cv-viewbar" role="toolbar" aria-label="Cover view" data-viewbar></div>
         <div class="cv-textbar" role="toolbar" aria-label="Selected text" data-textbar hidden></div>
+        <div class="cv-offbar" role="status" data-offbar hidden></div>
         <div class="cv-alert" role="alert" data-alert hidden></div>
+        <div class="cv-sizenote" role="status" data-sizenote hidden></div>
         <div class="cv-capnote" role="status" data-capnote hidden></div>
-        <div class="cv-wswrap" data-wswrap></div>
+        <div class="cv-wswrap" data-wswrap><div class="cv-ck-host" data-ck-host></div></div>
         <footer class="cv-foot" data-foot></footer>
       </main>
       <div class="cv-lmenu-host" data-lmenu-host></div>
       <div class="cv-stock-host" data-stock-host></div>
       <div class="cv-toast-host" data-toast-host></div>
       <div class="cv-blurb-host" data-blurb-host></div>
+      <div class="cv-pv-host" data-pv-host></div>
     </div>`;
     const v = E.view_ = C.view.create(E);
     E.root.querySelector('[data-wswrap]').append(v.el);
@@ -242,6 +335,11 @@
     C.layoutsPanel.bind(panel, E);
     C.bookData.bind(panel, E);
     C.blurb.bindHost(E.root.querySelector('[data-blurb-host]'), E);
+    C.checksDrawer.bind(E.root.querySelector('[data-ck-host]'), E);
+    C.preview.bind(E.root.querySelector('[data-pv-host]'), E);
+    C.resizeNote.bind(E.root.querySelector('[data-sizenote]'), E);
+    // Part 9, 900 to 1199 px: a press on the cover closes the panel that opened over it (design line 2291).
+    v.el.addEventListener('pointerdown', () => { if (E.width === 'narrow' && E.panelOpen) { E.panelOpen = false; applyWidth(); } }, true);
     E.root.querySelector('[data-toast-host]').addEventListener('click', (e) => {
       if (e.target.closest('[data-toast-undo]')) toastUndo();
       else if (e.target.closest('[data-toast-x]')) hideToast(true);
@@ -251,7 +349,7 @@
       if (!b || b.getAttribute('aria-disabled') === 'true') return;
       // Part 7: the tool rail stays in view beside the wide picker; a tool closes it
       if (E.stock && E.stock.open) { E.stock.open = false; E.stock.prev = null; renderStock(); }
-      showPanel(b.dataset.tool);
+      showPanel(b.dataset.tool, true);
     });
     bindViewBar(E.root.querySelector('[data-viewbar]'));
     E.root.querySelector('[data-alert]').addEventListener('click', (e) => { if (e.target.closest('[data-retry-save]')) retrySave(); });
@@ -261,9 +359,12 @@
     renderBars();
     renderFoot();
     renderSave();
-    // Open at 100 % centered (or Fit when that does not fit), as design 58.
-    root.requestAnimationFrame(() => { if (E && E.view_ === v) { v.center(); v.sync(); } });
+    renderSizeNote();
+    // Open at 100 % centered (or Fit when that does not fit), as design 58; after a size remap, Fit (plan §4).
+    const remapped = !!E.remappedNow;
+    root.requestAnimationFrame(() => { if (E && E.view_ === v) { if (remapped) v.fit(); else v.center(); v.sync(); } });
     bindKeys();
+    applyWidth(true);
   }
 
   function toolsHtml() {
@@ -282,9 +383,16 @@
     if (E.panel === 'layouts') C.layoutsPanel.paint(p, E);
     p.scrollTop = top;
   }
-  /** The tool rail: Text, Shapes or Layers (the design's showPanel). */
-  function showPanel(k) {
+  /** The tool rail: Text, Shapes or Layers (the design's showPanel). 900 to 1199 px: the panel opens over the cover;
+   *  the same tool pressed again closes it (fromTool; the design's line 1628). */
+  function showPanel(k, fromTool) {
     if (!PANEL_LABEL[k]) return;
+    if (E.width !== 'wide') {
+      const close = fromTool && E.panel === k && E.panelOpen;
+      E.panelOpen = !close;
+      applyWidth();
+      if (close) return;
+    }
     E.panel = k; E.layerMenu = null; E.renaming = null;
     if (k !== 'images') E.replaceId = null;
     const t = E.root.querySelector('[data-tools]');
@@ -338,8 +446,8 @@
       <label class="cv-vcheck"><input type="checkbox" data-k="snap" data-vb="snap"${E.snap ? ' checked' : ''}>Snap</label>
       <button type="button" class="cv-bgbtn${E.menu === 'bg' ? ' is-open' : ''}" data-k="bg" data-vb="bg" aria-expanded="${E.menu === 'bg'}"><span class="cv-swatch" style="--sw:${E.cover.bg}"></span>Background</button>
       <span class="cv-grow"></span>
-      <button type="button" class="cv-chip-chk${bad ? ' is-bad' : warn ? ' is-warn' : ' is-ok'}" data-k="chk" aria-expanded="false"${inert(9)}>${bad || warn ? ICON.warn : ICON.ok}${esc(sum.chip)}</button>
-      <button type="button" class="cv-tb cv-tb-pv" data-k="pv"${inert(9)}>${ICON.eye}Preview final</button>
+      <button type="button" class="cv-chip-chk${bad ? ' is-bad' : warn ? ' is-warn' : ' is-ok'}" data-k="chk" data-vb="chk" aria-expanded="${E.checksOpen}" aria-controls="cv-checks" title="Checks" aria-label="Checks: ${esc(sum.line)}">${bad || warn ? ICON.warn : ICON.ok}${esc(sum.chip)}</button>
+      <button type="button" class="cv-tb cv-tb-pv" data-k="pv" data-vb="pv">${ICON.eye}Preview final</button>
       ${E.menu === 'bg' ? `<div class="cv-pop cv-pop-bg" role="dialog" aria-label="Background color" data-picker>${C.picker.html(E.pk, { title: 'Background color', cur: E.cover.bg, note: 'The color fills the whole wrap, bleed included. For a photo background, use Images, then Fill whole cover.' })}</div>` : ''}`;
   }
 
@@ -355,6 +463,8 @@
       else if (a === 'fit') E.view_.fit();
       else if (a === 'tpl') toggleTpl();
       else if (a === 'bg') toggleMenu('bg');
+      else if (a === 'chk') toggleChecks();
+      else if (a === 'pv') openPreview();
     });
     el.addEventListener('change', (e) => {
       const a = e.target.dataset.vb;
@@ -368,6 +478,8 @@
     if (!E || E.status !== 'ready') return;
     const vb = E.root.querySelector('[data-viewbar]');
     keepFocus(vb, () => { vb.innerHTML = viewBarHtml(); });
+    renderChecks();
+    if (E.pv.open) C.preview.paint(E);
     const tb = E.root.querySelector('[data-textbar]');
     const l = selLayer();
     const kind = E.multi.length > 1 ? 'multi' : l && l.type === 'text' ? 'text' : l && l.type === 'shape' ? 'shape' : l && l.type === 'image' ? 'image' : null;
@@ -413,8 +525,9 @@
   function renderFoot() {
     const f = E.root.querySelector('[data-foot]');
     const L = C.names.labels(C.geo.geo(E.cover.fmt));
-    const st = E.saveState;
-    const text = st === 'saved' ? '✓ Saved' : st === 'saving' ? 'Saving…' : 'Not saved';
+    // Part 9 (design 73b): offline, the footer says so from the start (the design is kept on this device or already saved).
+    const st = E.offline && E.saveState !== 'failed' ? 'offline' : E.saveState;
+    const text = st === 'saved' ? '✓ Saved' : st === 'saving' ? 'Saving…' : st === 'offline' ? `${C.offline.ICON.replace('width="18" height="18"', 'width="12" height="12"')}${E.keptOk === false ? 'Offline · not kept: this browser’s storage is full' : 'Offline · kept on this device'}` : 'Not saved';
     f.innerHTML = `<span class="cv-specs"><span>${L.trim}</span><span>${L.pages}</span><span>${L.paper}</span><span>${L.spine}</span><span>${L.full}</span></span>
       <span class="cv-grow"></span><span class="cv-savetext is-${st}" data-savetext role="status">${text}</span>
       ${st === 'failed' ? '<button type="button" class="cv-foot-retry" data-k="foot-retry" data-retry-save>Retry</button>' : ''}`;
@@ -424,6 +537,9 @@
   function renderSave() {
     // 09 may have been left (another step draws in the same element): nothing of the editor to update.
     if (!E || E.status !== 'ready' || !E.root.querySelector('[data-cover] [data-alert]')) return;
+    const off = E.root.querySelector('[data-offbar]');
+    off.hidden = !E.offline;
+    off.innerHTML = E.offline ? C.offline.barHtml() : '';
     const bar = E.root.querySelector('[data-alert]');
     const failed = E.saveState === 'failed';
     bar.hidden = !failed;
@@ -431,6 +547,121 @@
       <button type="button" class="cv-alert-btn" data-k="alert-retry" data-retry-save>Retry</button>` : '';
     keepFocus(E.root.querySelector('[data-foot]'), renderFoot);
     E.view_ && E.view_.paint();
+    if (E.width === 'tiny') renderTiny();
+  }
+
+  /* ── Part 9: the Checks drawer (design 70) ── */
+  const checkItems = () => C.checks.run(E.cover, checkOpt());
+  function renderChecks() {
+    const host = E.root.querySelector('[data-ck-host]'); if (!host) return;
+    const body = host.querySelector('[data-ck-body]'), top = body ? body.scrollTop : 0;
+    keepFocus(host, () => { host.innerHTML = E.checksOpen ? C.checksDrawer.html(E, checkItems()) : ''; });
+    const nb = host.querySelector('[data-ck-body]'); if (nb) nb.scrollTop = top;
+  }
+  function toggleChecks() {
+    E.checksOpen = !E.checksOpen;
+    E.menu = null; E.layerMenu = null;
+    renderBars(); renderMenu();
+    if (E.checksOpen) { const h = E.root.querySelector('[data-ck-host]'); const f = h.querySelector('.cv-ck-btn') || h.querySelector('[data-ck-close]'); if (f) f.focus({ preventScroll: true }); }
+  }
+  function closeChecks(refocus) {
+    if (!E.checksOpen) return;
+    E.checksOpen = false; renderBars();
+    if (refocus) { const b = E.root.querySelector('[data-k="chk"]'); if (b) b.focus({ preventScroll: true }); }
+  }
+  /** Show me: when the layers (ids) are out of sight, the cover moves so their box is in the middle. */
+  function showLayer(ids) {
+    const list = [].concat(ids).map((id) => E.cover.layers.find((l) => l.id === id)).filter(Boolean);
+    if (!list.length || !E.view_) return;
+    const bs = list.map((l) => C.model.bbox(l, textH));
+    const x0 = Math.min(...bs.map((b) => b.x)), y0 = Math.min(...bs.map((b) => b.y)), x1 = Math.max(...bs.map((b) => b.x + b.w)), y1 = Math.max(...bs.map((b) => b.y + b.h));
+    const ws = E.view_.el, v = E.view, ww = ws.clientWidth, wh = ws.clientHeight;
+    const L = v.px + x0 * v.z, T = v.py + y0 * v.z, R = v.px + x1 * v.z, B = v.py + y1 * v.z;
+    if (L >= 0 && T >= 0 && R <= ww && B <= wh) return;
+    v.px = ww / 2 - (x0 + x1) / 2 * v.z; v.py = wh / 2 - (y0 + y1) / 2 * v.z;
+    E.view_.sync(); renderBars();
+  }
+
+  /* ── Part 9: Preview final (design 69) ── */
+  function openPreview() {
+    if (E.editing != null) stopEdit(false);
+    E.sel = null; E.multi = []; E.cropping = null; E.menu = null; E.layerMenu = null; E.fxSnap = null;
+    E.pv.open = true;
+    E.view_.sync(); renderBars(); renderMenu();
+    renderPreview();
+    const f = E.root.querySelector('[data-pv-host] [data-pv-close]'); if (f) f.focus({ preventScroll: true });
+  }
+  function renderPreview() {
+    const host = E.root.querySelector('[data-pv-host]'); if (!host) return;
+    // Below the book head, over the step rail too (design 69: the whole width under the head).
+    const head = document.querySelector('[data-book-head]');
+    host.style.setProperty('--cv-pv-top', (head ? Math.max(0, head.getBoundingClientRect().bottom) : 0) + 'px');
+    // The step rail runs beside the book head: its top part is covered too, so the head row reads as design 69's.
+    host.style.setProperty('--cv-pv-rail', (head ? Math.max(0, head.getBoundingClientRect().left) : 0) + 'px');
+    keepFocus(host, () => { host.innerHTML = C.preview.hostHtml(E); });
+    if (E.pv.open) C.preview.paint(E);
+  }
+  function closePreview() {
+    if (!E.pv.open) return;
+    E.pv.open = false; renderPreview();
+    const b = E.root.querySelector('[data-k="pv"]'); if (b) b.focus({ preventScroll: true });
+  }
+
+  /* ── Part 9: the size note (design 72) ── */
+  function renderSizeNote() {
+    const el = E.root.querySelector('[data-sizenote]'); if (!el) return;
+    const html = C.resizeNote.html(E);
+    keepFocus(el, () => { el.innerHTML = html; });
+    el.hidden = !html;
+  }
+  function closeSizeNote() {
+    if (!E.remapNote) return;
+    E.remapNote = Object.assign({}, E.remapNote, { seen: true });
+    renderSizeNote();
+    E.saver.changed();
+    ctx.setGate();
+    const c = E.root.querySelector('[data-canvas]'); if (c) c.focus({ preventScroll: true });
+  }
+
+  /* ── Part 9: the window width (designs 74 and 74b) ── */
+  let tinyEl = null;
+  function applyWidth(first) {
+    if (!E || !E.root.isConnected) { dropTiny(); return; }
+    const m = C.narrow.mode(root.innerWidth), was = E.width;
+    E.width = m;
+    if (m === 'wide') E.panelOpen = false;
+    // Loading, Locked and the load error read the width too (the header's reason line hides under 1200 px);
+    // the notice under 900 px is for the editor only (those states are one card that fits any width).
+    const r = E.root.querySelector('[data-cover]');
+    if (r) { r.classList.toggle('cv-narrow', m !== 'wide'); r.classList.toggle('cv-panel-open', m !== 'wide' && E.panelOpen); }
+    if (E.status !== 'ready') { dropTiny(); ctx.setGate(); return; }
+    if (m === 'tiny') renderTiny(); else dropTiny();
+    if (!first && was !== m) { renderFoot(); if (E.view_) E.view_.sync(); }
+    ctx.setGate();
+  }
+  function renderTiny() {
+    const layout = document.querySelector('.book-layout');
+    if (!tinyEl) { tinyEl = document.createElement('div'); tinyEl.className = 'cv-tiny-host'; document.body.append(tinyEl); }
+    tinyEl.innerHTML = C.narrow.noticeHtml(root.innerWidth, E.saveState === 'offline' && E.keptOk === false ? 'lost' : E.saveState);
+    if (layout) layout.inert = true;
+  }
+  function dropTiny() {
+    if (!tinyEl) return;
+    tinyEl.remove(); tinyEl = null;
+    const layout = document.querySelector('.book-layout'); if (layout) layout.inert = false;
+  }
+
+  /* ── Part 9: offline (design 73b) ── */
+  function setOffline(off) {
+    if (E) E.offline = off;
+    if (!E || E.status !== 'ready' || !ctx.isActive(STEP)) { if (!off && orphan) orphan.retry(); return; }
+    E.offline = off;
+    renderSave();
+    if (E.blurb && E.blurb.open) renderBlurb();
+    if (E.panel === 'images') renderPanel();
+    if (E.stock && E.stock.open) renderStock();
+    if (!off) E.saver.retry();
+    else if (E.saver.pending()) E.saver.flush();
   }
 
   /* ── Changes ── */
@@ -472,6 +703,7 @@
     if (o.overlay === false) { E.view_.paint(); E.view_.syncSelBox(); } else E.view_.sync();
     if (o.bars !== false) renderBars();
     if (o.panel !== false) renderPanel();
+    if (C.resizeNote.pending(E)) renderSizeNote();   // Part 9: Show what moved and Add spine text follow the layers
     ctx.setGate();
   }
 
@@ -923,6 +1155,8 @@
   }
   async function writeBlurb() {
     const B = E.blurb; if (!B || !B.open || B.busy) return;
+    // Part 9: offline, no AI call (design 73b: AI needs a connection); nothing is counted.
+    if (E.offline) { B.err = C.offline.BLOCKED.ai; renderBlurb(); return; }
     const me = E, seq = ++B.seq;
     B.busy = true; B.err = ''; B.saveErr = '';
     renderBlurb();
@@ -1074,16 +1308,25 @@
       if (!E || E.status !== 'ready' || !ctx.isActive(STEP) || !E.root.isConnected) return;
       const t = e.target;
       const mod = e.metaKey || e.ctrlKey, k = e.key;
+      // Part 9: under 900 px the notice covers the editor: its keys rest.
+      if (E.width === 'tiny') return;
       // Part 8: while the blurb dialog is open the cover's keys rest; Escape closes it.
       if (E.blurb && E.blurb.open) { if (k === 'Escape') { e.preventDefault(); closeBlurb(); } return; }
+      // Part 9: Preview final is a modal dialog; Escape closes it.
+      if (E.pv.open) { if (k === 'Escape') { e.preventDefault(); closePreview(); } return; }
       if (k === 'Escape') {
         if (C.stock.escape(E)) return;   // Part 7: the wide picker (its preview first)
+        // Part 9: Escape in the Checks drawer (or on its chip) closes the drawer first.
+        if (E.checksOpen && t && t.closest && t.closest('[data-ck-host], [data-k="chk"]')) { e.preventDefault(); closeChecks(true); return; }
         if (E.layerMenu) { closeLayerMenu(true); return; }
         if (E.menu) { const m = E.menu; E.menu = null; E.fxSnap = null; renderBars(); E.view_.sync(); const b = E.root.querySelector(`[data-k="${MENU_BTN[m]}"]`); if (b) b.focus({ preventScroll: true }); return; }
         if (E.tpl.pop && t && t.closest && t.closest('[data-tplpop]')) { toggleTpl(false); return; }
         if (E.cropping != null) { endCrop(true); return; }   // also from the Zoom slider of the crop bar
         if (E.multi.length && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { selectIds([]); return; }
-        if (E.sel != null && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { const id = E.sel; select(null); const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`); if (hit) hit.focus({ preventScroll: true }); }
+        if (E.sel != null && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) { const id = E.sel; select(null); const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`); if (hit) hit.focus({ preventScroll: true }); return; }
+        // Part 9: the Checks drawer, then the panel open over the cover (900 to 1199 px).
+        if (E.checksOpen) { closeChecks(true); return; }
+        if (E.width === 'narrow' && E.panelOpen) { E.panelOpen = false; applyWidth(); const b = E.root.querySelector(`[data-tool="${E.panel}"]`); if (b) b.focus({ preventScroll: true }); }
         return;
       }
       // Part 7: inside the wide picker the cover's keys (undo, select all, delete, arrows) do nothing.
@@ -1108,6 +1351,7 @@
     document.addEventListener('paste', (e) => {
       if (!E || E.status !== 'ready' || !ctx.isActive(STEP) || !E.root.isConnected) return;
       if (E.blurb && E.blurb.open) return;   // Part 8: a paste into the blurb draft is text
+      if (E.pv.open || E.width === 'tiny') return;   // Part 9: Preview final and the narrow notice
       C.images.onPaste(E, e);
     });
     // A press outside the Layers ⋮ menu closes it (as a click on the gray does for the bar popovers).
@@ -1116,9 +1360,18 @@
       if (e.target.closest && e.target.closest('[data-lmenu-pop], [data-lmenu]')) return;
       closeLayerMenu(false);
     }, true);
+    // Part 9: offline and back online; the window width.
+    root.addEventListener('offline', () => setOffline(true));
+    root.addEventListener('online', () => setOffline(false));
+    root.addEventListener('resize', () => {
+      if (!E || !ctx.isActive(STEP)) { dropTiny(); return; }
+      applyWidth();
+      if (E.status === 'ready' && E.pv.open) renderPreview();   // Preview final follows the window (its size, the head's height)
+    });
     root.addEventListener('beforeunload', (e) => {
       const s = E && E.saver && ctx.isActive(STEP) ? E.saver : orphan;
       if (!s) return;
+      s.keepNow();   // Part 9: offline, the last changes are kept on this device first
       if (s.pending() || s.state() === 'failed') { e.preventDefault(); e.returnValue = ''; }
     });
   }
@@ -1143,13 +1396,17 @@
       // Part 8
       applyLayout, applyMy, removeMy, swapPalette, addAllBook, addSpine, openBlurb, closeBlurb, writeBlurb, putBlurb, bioText,
       refreshBlurb: renderBlurb,
+      // Part 9
+      checkItems, closeChecks, showLayer, closePreview, closeSizeNote,
+      refreshPreview: renderPreview,
       pickerTo(t, hex) { openPicker(t, hex); },
       refreshPanel: renderPanel,
       refreshStock: renderStock,
       refreshBars: renderBars,
       layerName: (l) => C.names.layerName(l),
-      viewChanged() { if (E.view_) { E.view_.sync(); renderBars(); } },
-      wsResized() { if (E.view_) E.view_.sync(); },
+      // 09 may have been left (E is null) when a resize or a late view change arrives.
+      viewChanged() { if (E && E.view_) { E.view_.sync(); renderBars(); } },
+      wsResized() { if (E && E.view_) E.view_.sync(); },
       dragEnded() { renderBars(); renderPanel(); ctx.setGate(); },
       keyEdited(hd) { E.view_.sync(); renderBars(); ctx.setGate(); const n = E.root.querySelector(`[data-handle="${hd.dataset.handle}"][data-c="${hd.dataset.c}"]`); if (n) n.focus({ preventScroll: true }); }
     };
@@ -1166,6 +1423,7 @@
     /** The header line beside Next (design exportReason; Part 9 adds the size-change words, Part 10 "Done"). */
     nextNote() {
       if (!E || E.status !== 'ready') return 'Not done yet: export the cover files.';
+      if (C.resizeNote.pending(E)) return 'The book size changed: export again.';   // Part 9 (design 72)
       const n = C.checks.run(E.cover, checkOpt()).filter((c) => c.sev === 'error').length;
       return n ? `Fix ${n} problem${n === 1 ? '' : 's'} before export.` : 'Not done yet: export the cover files.';
     },
@@ -1177,10 +1435,12 @@
     flush() { if (E && E.saver) E.saver.flush(); },
     leave() {
       const me = E;
+      dropTiny();
       if (!me || !me.saver) { E = null; return Promise.resolve(); }
       if (me.editing != null) me.editing = null;
       // A save that fails here stays in the sidebar's save line with Retry (orphan), as 08's do.
-      return me.saver.flush().catch(() => {}).then(() => { if (me.saver.state() === 'failed') orphan = me.saver; if (E === me) E = null; });
+      // Part 9: offline, the saver stays reachable too, so it saves when the connection is back.
+      return me.saver.flush().catch(() => {}).then(() => { const st = me.saver.state(); if (st === 'failed' || st === 'offline') orphan = me.saver; if (E === me) E = null; });
     },
     retrySave,
     /** Tests only: the editor state. */

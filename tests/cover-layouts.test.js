@@ -3,7 +3,8 @@
 // Port proof: with the design's own text-height estimate, every layer number and every
 // check equals the design (tests/fixtures/cover-golden.json, made by tools/cover-golden.mjs).
 // Built: with kdpCover.textlayout (the stub measure, not real font metrics), the 288 have no
-// check problem (no error, no warning) and each Blank has exactly the 3 "missing" Must fix items.
+// check problem (no error, no warning) and each Blank has exactly the 3 "missing" Must fix items. Owner STOP 9: with
+// the editor's opt.samples, each of the 288 applied with no saved blurb shows C17 (and C16 for a photo layout).
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { K, GOLDEN, near, pos, chk, goldChk, designTextH, DESIGN_BOOK, fk, G6 } from "./lib/cover-load.js";
 
@@ -39,6 +40,24 @@ for (const c of GOLDEN.layouts) {
     const items = run(c.fmt, b.bg, b.layers);
     assertEquals(items.filter((x) => x.sev !== "tip").map((x) => x.code + " " + x.msg), []);
     assertEquals(K.checks.summary(items).chip, "Ready");
+  });
+}
+
+// Owner, STOP 9 (C17): the 288 again with the editor's checks (opt.samples). A layout applied with no saved blurb shows
+// the sample blurb as a Must fix (C17, one, on the blurb layer), next to C16 for a layout's sample photo; with a saved
+// blurb there is no C17 and the rest is as above (no problem but C16).
+const PHOTO = ["picfull", "picband", "arch"];
+for (const c of GOLDEN.layouts) {
+  Deno.test(`samples: ${c.key} at ${fk(c.fmt)} with no saved blurb shows C17${PHOTO.includes(c.key) ? " and C16" : ""}`, () => {
+    const b = K.layouts.build(c.key, DESIGN_BOOK, c.fmt, 1);
+    const bl = b.layers.filter((l) => l.src === "blurb");
+    assertEquals(bl.length, 1, "one blurb layer");
+    const items = run(c.fmt, b.bg, b.layers, { samples: true }).filter((x) => x.sev !== "tip");
+    const want = (PHOTO.includes(c.key) ? ["C16"] : []).concat(["C17"]).sort();
+    assertEquals(items.map((x) => x.code).sort(), want);
+    assertEquals(items.find((x) => x.code === "C17").id, bl[0].id);
+    const real = K.layouts.build(c.key, DESIGN_BOOK, c.fmt, 1, "You signed up for the course.");
+    assertEquals(run(c.fmt, real.bg, real.layers, { samples: true }).filter((x) => x.sev !== "tip").map((x) => x.code), PHOTO.includes(c.key) ? ["C16"] : []);
   });
 }
 

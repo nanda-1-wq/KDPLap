@@ -79,8 +79,9 @@ const test = async page => {
   ok(stSub.text === FIX.subtitle, 'the subtitle is its own line, its own words');
   ok(stRest && stRest.text === 'for Busy Adult Learners' && stRest.color === stTitle.color && stRest.font === 'IBM Plex Sans' && stRest.weight === 700 && stRest.x === stTitle.x && stRest.w === stTitle.w, `the rest line: the title's color and box, Plex Sans Bold, ${stRest && stRest.size} pt`);
   const geo = await E(() => { const E = window.kdpBookSteps[9]._debug(), T = kdpCover.textlayout; const L = E.cover.layers; const t = L.find((l) => l.src === 'title'), r = L.find((l) => l.src === 'titlerest'), u = L.find((l) => l.src === 'subtitle');
-    return { lines: T.lines(r).length, gapTop: r.y - (t.y + T.height(t)), gapSub: u.y - (r.y + T.height(r)), probs: kdpCover.checks.run(E.cover, { samples: true }).filter((c) => c.sev !== 'tip').length }; });
-  ok(geo.lines === 1 && geo.gapTop > 0 && geo.gapSub > 0 && geo.probs === 0, `one line between the big title and the subtitle, with real fonts; no check problem (gaps ${geo.gapTop.toFixed(1)} / ${geo.gapSub.toFixed(1)} px)`);
+    return { lines: T.lines(r).length, gapTop: r.y - (t.y + T.height(t)), gapSub: u.y - (r.y + T.height(r)), probs: kdpCover.checks.run(E.cover, { samples: true }).filter((c) => c.sev !== 'tip').map((c) => c.code).join() }; });
+  // Owner STOP 9: no saved blurb, so the layout's sample blurb is the one problem (C17).
+  ok(geo.lines === 1 && geo.gapTop > 0 && geo.gapSub > 0 && geo.probs === 'C17', `one line between the big title and the subtitle, with real fonts; no check problem but the sample blurb (C17) (gaps ${geo.gapTop.toFixed(1)} / ${geo.gapSub.toFixed(1)} px; ${geo.probs})`);
 
   /* Note timer: gone after 6 s. */
   await page.click('[data-lay="corner"]');
@@ -112,7 +113,8 @@ const test = async page => {
   await page.waitForFunction(() => window.kdpBookSteps[9]._debug().cover.layout === 'picfull', null, { timeout: 10000 });
   const chk = await page.evaluate(() => { const E = window.kdpBookSteps[9]._debug(); return kdpCover.checks.run(E.cover, { missing: [], samples: true }).filter((c) => c.code === 'C16').map((c) => c.msg); });
   ok(chk.length === 1 && chk[0] === '"Sample photo (replace it)" is a sample. Replace it with your own picture, or delete it.', `C16: ${chk[0]}`);
-  ok(/Fix 1 problem before export\./.test(await CV.txt(page, '.next-note')) && /1 to fix/.test(await CV.txt(page, '[data-k="chk"]')), 'the header and the chip count it');
+  // Owner STOP 9: with no saved blurb, the sample blurb (C17) is a second Must fix.
+  ok(/Fix 2 problems before export\./.test(await CV.txt(page, '.next-note')) && /2 to fix/.test(await CV.txt(page, '[data-k="chk"]')), 'the header and the chip count it (C16 and C17)');
   // Without the option the pure checks keep the Part 1 rule (the 288 layout cases).
   ok((await page.evaluate(() => kdpCover.checks.run(window.kdpBookSteps[9]._debug().cover, {}).filter((c) => c.code === 'C16').length)) === 0, 'without opt.samples: no C16');
 
@@ -136,8 +138,8 @@ const test = async page => {
   ok(big === Math.round(129 * 8.5 / 11), `8.5 × 11: the small covers are wider (${big} px)`);
   await page.click('[data-lay="band"]');
   await page.waitForFunction(() => window.kdpBookSteps[9]._debug().cover.layout === 'band', null, { timeout: 10000 });
-  const fit = await E(() => { const E = window.kdpBookSteps[9]._debug(), g = kdpCover.geo.geo(E.cover.fmt), b = E.cover.layers[0]; return { x: b.x, w: b.w, foldR: g.foldR, W: g.W, probs: kdpCover.checks.run(E.cover, { samples: true }).filter((c) => c.sev === 'error').length }; });
-  ok(Math.abs(fit.x - fit.foldR) < 1 && Math.abs(fit.x + fit.w - fit.W) < 1 && fit.probs === 0, `Band at 8.5 × 11: the band spans the front, no Must fix (x ${fit.x.toFixed(1)}, foldR ${fit.foldR.toFixed(1)})`);
+  const fit = await E(() => { const E = window.kdpBookSteps[9]._debug(), g = kdpCover.geo.geo(E.cover.fmt), b = E.cover.layers[0]; return { x: b.x, w: b.w, foldR: g.foldR, W: g.W, probs: kdpCover.checks.run(E.cover, { samples: true }).filter((c) => c.sev === 'error').map((c) => c.code).join() }; });
+  ok(Math.abs(fit.x - fit.foldR) < 1 && Math.abs(fit.x + fit.w - fit.W) < 1 && fit.probs === 'C17', `Band at 8.5 × 11: the band spans the front, no Must fix but the sample blurb (C17) (x ${fit.x.toFixed(1)}, foldR ${fit.foldR.toFixed(1)}; ${fit.probs})`);
   globalThis.__store.book.trim = '6x9'; globalThis.__store.book.paper = 'white'; globalThis.__store.pdf.page_count = FIX.fmt.pages;
 
   /* A layout's fonts do not load: a clear error, the cover unchanged; then it works. */

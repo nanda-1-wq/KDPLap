@@ -74,7 +74,7 @@ Deno.test("history.step: the next change is its own step, even within 0.5 s", ()
 
 Deno.test("C16: a layout's sample photo is a Must fix, only with opt.samples (STOP 6 N2 rec)", () => {
   for (const key of ["picfull", "picband", "arch"]) {
-    const b = K.layouts.build(key, DESIGN_BOOK, G6, 1);
+    const b = K.layouts.build(key, DESIGN_BOOK, G6, 1, "Real words.");   // a real blurb: no C17 here
     const cover = { fmt: G6, bg: b.bg, layers: b.layers };
     assertEquals(K.checks.run(cover).filter((c) => c.code === "C16"), [], key);
     const items = K.checks.run(cover, { samples: true }).filter((c) => c.code === "C16");
@@ -89,6 +89,24 @@ Deno.test("C16: a layout's sample photo is a Must fix, only with opt.samples (ST
   // C16 comes before the DPI rule for the same layer (a sample has no real size).
   const order = K.checks.run({ fmt: G6, bg: b.bg, layers: b.layers }, { samples: true }).filter((c) => c.id === img.id).map((c) => c.code);
   assertEquals(order, ["C16"]);
+});
+
+Deno.test("C17: a layout's sample blurb is a Must fix with Show me and Write blurb, only with opt.samples (owner, STOP 9)", () => {
+  const b = K.layouts.build("band", DESIGN_BOOK, G6, 1);   // no saved blurb: the placeholder
+  const bl = b.layers.find((l) => l.src === "blurb");
+  assertEquals(bl.text, K.layouts.BLURB_PLACEHOLDER);
+  assert(K.layouts.BLURB_PLACEHOLDER.startsWith("Your back blurb goes here"), "checks.js matches the placeholder's start");
+  const cover = { fmt: G6, bg: b.bg, layers: b.layers };
+  assertEquals(K.checks.run(cover).filter((c) => c.code === "C17"), []);
+  const items = K.checks.run(cover, { samples: true });
+  assertEquals(items.filter((c) => c.code === "C17"), [{ code: "C17", sev: "error", msg: "The back blurb is still the sample text. Write your blurb or delete it.", id: bl.id, fix: { label: "Write blurb", action: "blurb" } }]);
+  assertEquals([K.checks.summary(items).chip, K.checks.summary(items).line], ["1 to fix", "1 must fix"]);
+  // A real blurb, a hidden or an excluded sample, a deleted blurb: no C17. Other text with those words: no C17.
+  const run = (layers) => K.checks.run({ fmt: G6, bg: b.bg, layers }, { samples: true }).filter((c) => c.code === "C17").length;
+  const patch = (p) => b.layers.map((l) => (l === bl ? Object.assign({}, l, p) : l));
+  assertEquals([run(patch({ text: "Real words." })), run(patch({ hidden: true })), run(patch({ noExport: true })), run(b.layers.filter((l) => l !== bl)), run(patch({ src: null }))], [0, 0, 0, 0, 0]);
+  // An edited sample that still holds the sample words: still C17 (the same matcher as bookdata.realBlurb).
+  assertEquals(run(patch({ text: K.layouts.BLURB_PLACEHOLDER + " And more." })), 1);
 });
 
 Deno.test("ready layouts with this book's words: Stack and Bold show the full title (D15)", () => {

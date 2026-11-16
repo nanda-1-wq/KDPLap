@@ -251,14 +251,10 @@
   async function kindle(cover, o) {
     const t0 = now();
     await prepare(cover);
-    const g = C.geo.geo(cover.fmt), S = C.kindle.SIZE, kp = C.kindle.plan(g, S);
+    const S = C.kindle.SIZE;
     const cv = C.render.canvas(S.w, S.h);
     const ctx = cv.getContext('2d', { alpha: false });
-    ctx.fillStyle = cover.bg; ctx.fillRect(0, 0, S.w, S.h);
-    ctx.save();
-    ctx.beginPath(); ctx.rect(kp.dst.x, kp.dst.y, kp.dst.w, kp.dst.h); ctx.clip();
-    C.render.paint(ctx, cover, { scale: kp.scale, x0: kp.src.x - kp.dst.x / kp.scale, y0: kp.src.y - kp.dst.y / kp.scale, images: o.images });
-    ctx.restore();
+    const kp = C.kindle.paint(ctx, cover, S, o.images);   // E16 Part 9: the same painting as Preview final
     const bytes = await blobBytes(cv, 'image/jpeg', o.quality || 0.92);
     cv.width = 0;
     return { bytes, w: S.w, h: S.h, mode: kp.mode, color: C.imagePrep.jpegColor(bytes), size: C.imagePrep.sniff(bytes), ms: now() - t0 };

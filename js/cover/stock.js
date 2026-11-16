@@ -91,6 +91,7 @@
       case 'bad_image': return 'This picture is not a JPG or PNG we can use. Pick another one.';
       case 'not_found': return `This picture is no longer on ${name}. Pick another one.`;
       case 'unauthorized': return 'Your session has ended. Sign in again, then try once more.';
+      case 'offline': return C.offline.BLOCKED.stock;   // E16 Part 9: no call while offline (design 73b)
       case 'bad_request': case 'server_error': return pick ? 'We couldn’t add this picture. Try again in a minute.' : 'We couldn’t search right now. Try again in a minute.';
       default: return `${name} is not answering right now. Try again in a minute, or use your own uploads.`;   // design 63 (stock down)
     }
@@ -144,6 +145,8 @@
     const page = more ? r.page + 1 : 1;
     if (more) { r.more = true; r.moreCode = null; }
     else r = S.res[src] = { key, st: 'loading', code: null, list: [], total: 0, page: 0, more: false, moreCode: null };
+    // E16 Part 9: offline, no call (Pixabay and Unsplash need a connection); a later search tries again.
+    if (E.offline) { r.more = false; if (more) r.moreCode = 'offline'; else { r.st = 'error'; r.code = 'offline'; } refresh(E); return; }
     refresh(E);
     let out;
     try { out = await root.kdp.stockSearch({ source: src, q: S.q, page, filters: filters(S, src) }); } catch (e) { out = { error: { code: 'network' } }; }
@@ -189,6 +192,7 @@
   async function pick(E, item) {
     const S = state(E);
     if (!item || S.busy) return;
+    if (E.offline) { S.err = errText('offline', item.source, true); refresh(E); return; }   // E16 Part 9
     S.busy = item.id; S.err = ''; refresh(E);
     let out;
     try { out = await root.kdp.stockPick({ source: item.source, id: item.id, bookId: E.bookId }); } catch (e) { out = { error: { code: 'network' } }; }

@@ -1,0 +1,214 @@
+{
+ "date": "2026-11-16T18:32:05.535Z",
+ "steps": {
+  "open": {
+   "w": 1440,
+   "h": 848,
+   "ok": true
+  },
+  "viewport": [
+   1440,
+   900
+  ],
+  "band": {
+   "layers": 5,
+   "chip": "1 to fix"
+  },
+  "before": {
+   "mode": "wide",
+   "h": 900,
+   "tiny": false,
+   "inert": false,
+   "at": "cv-chip-chk is-bad",
+   "w": 1440,
+   "chk": [
+    1204,
+    88,
+    89
+   ]
+  },
+  "checks": {
+   "w": 380,
+   "items": [
+    "C2:Must fix"
+   ],
+   "focus": "Show me"
+  },
+  "showMe": {
+   "sub": 3,
+   "focus": "3",
+   "open": false,
+   "sel": 3
+  },
+  "preview": {
+   "thumb": [
+    75,
+    120
+   ],
+   "tNavy": [
+    31,
+    58,
+    95
+   ],
+   "shape": 1.3468453333333334,
+   "note": "Everything you see here goes into your files. Template lines and guides never print.",
+   "dpr": 2,
+   "navy": [
+    31,
+    58,
+    95
+   ],
+   "big": [
+    888,
+    659
+   ],
+   "kNavy": [
+    31,
+    58,
+    95
+   ],
+   "bg": "#FFFFFF",
+   "words": "Made from your print front: cut at the trim, then 0.19 in trimmed from each side to the Kindle shape (1 : 1.6). Keep words inside the safe area and nothing is lost.",
+   "focus": "Back to editing",
+   "corner": [
+    255,
+    255,
+    255
+   ],
+   "kindle": [
+    200,
+    320
+   ],
+   "modal": true,
+   "cw": 1775
+  },
+  "bleedBw": {
+   "pressed": "true",
+   "big": [
+    881,
+    659
+   ],
+   "shape": 1.3374711351351352,
+   "gray": [
+    "grayscale(1)",
+    "grayscale(1)",
+    "grayscale(1)"
+   ]
+  },
+  "escape": {
+   "focus": "pv",
+   "open": false
+  },
+  "narrow": {
+   "w": 1024,
+   "panel": "none",
+   "cls": true,
+   "note": "none",
+   "mode": "narrow",
+   "scroll": true
+  },
+  "overlay": {
+   "w": 240,
+   "kind": "images",
+   "z": "25",
+   "pos": "absolute"
+  },
+  "fx": {
+   "tiles": 9,
+   "room": [
+    99,
+    13,
+    312,
+    69,
+    97,
+    312,
+    69,
+    41,
+    41
+   ]
+  },
+  "fx848": {
+   "h": 848,
+   "scrolls": "visible",
+   "room": [
+    99,
+    -39,
+    312,
+    17,
+    45,
+    312,
+    17,
+    -11,
+    -11
+   ]
+  },
+  "at800": {
+   "status": "ready",
+   "w": 800,
+   "inert": true,
+   "tiny": true,
+   "mode": "tiny",
+   "outer": 800
+  },
+  "tiny": {
+   "w": 800,
+   "p": "The editor needs at least 900 px. This window is 800 px. Make the window wider, or open NicheInk on a computer.",
+   "full": true,
+   "saved": "Your cover is saved. Nothing is lost.",
+   "inert": true,
+   "scroll": true
+  },
+  "back": {
+   "inert": false,
+   "tiny": false,
+   "mode": "wide",
+   "layers": 5
+  }
+ },
+ "safari": "27.0.1",
+ "rects": [
+  [
+   1440,
+   952,
+   1440,
+   952
+  ],
+  [
+   1024,
+   952,
+   1024,
+   952
+  ],
+  [
+   1024,
+   900,
+   1024,
+   900
+  ],
+  [
+   1024,
+   952,
+   1024,
+   952
+  ],
+  [
+   800,
+   952,
+   800,
+   952
+  ],
+  [
+   1440,
+   952,
+   1440,
+   952
+  ]
+ ],
+ "network": {
+  "unknown": [],
+  "calls": 17,
+  "resources": []
+ },
+ "pass": 20,
+ "fails": []
+}

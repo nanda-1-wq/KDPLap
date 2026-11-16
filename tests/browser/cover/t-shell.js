@@ -1,5 +1,5 @@
 // E16 Part 4: 09 in the shell (designs 58, 51b): header, Next, the rail and the sidebar, the first open,
-// the parts drawn inert ("Comes in Part N": Checks drawer, Preview final, Export cover), the status bar, no sideways scroll.
+// the parts drawn inert ("Comes in Part N": Export cover; the Checks drawer and Preview final are live from Part 9), the status bar, no sideways scroll.
 const test = async page => {
   const { log, ok } = CV.log();
   const st = globalThis.__store;
@@ -70,14 +70,15 @@ const test = async page => {
     else ok(t[1] === 'false' && !t[2], `${t[4]}: a live tool`);
   }
   ok(await page.$eval('[data-panel]', (p) => p.getAttribute('aria-label') === 'Text'), 'the Text panel is open');
-  // Part 8: Write blurb and Author line are live; the chip's drawer and Preview final stay inert until Part 9.
+  // Part 8: Write blurb and Author line are live. Part 9: the chip's drawer and Preview final are live too.
   ok(await page.$eval('[data-k="blurb"]', (b) => !b.hasAttribute('aria-disabled') && b.textContent === 'Write blurb') && await page.$eval('[data-k="author"]', (b) => !b.hasAttribute('aria-disabled')), 'Write blurb and Author line: live (Part 8)');
-  for (const [k, n] of [['chk', 9], ['pv', 9]]) {
-    ok(await page.$eval(`[data-k="${k}"]`, (b, n) => b.getAttribute('aria-disabled') === 'true' && b.title === `Comes in Part ${n}`, n), `${k}: inert, Comes in Part ${n}`);
+  for (const k of ['chk', 'pv']) {
+    ok(await page.$eval(`[data-k="${k}"]`, (b) => !b.hasAttribute('aria-disabled') && !b.hasAttribute('data-inert')), `${k}: live (Part 9)`);
   }
   ok((await CV.txt(page, '[data-k="chk"]')) === '3 to fix', `the chip label is live: ${await CV.txt(page, '[data-k="chk"]')}`);
-  await page.click('[data-k="chk"]', { force: true });
-  ok(!(await page.$('[aria-label="Checks"]')), 'the chip opens no drawer yet (Part 9)');
+  await page.click('[data-k="chk"]');
+  ok(!!(await page.$('aside[aria-label="Checks"]')), 'the chip opens the Checks drawer (Part 9)');
+  await page.click('[data-ck-close]');
 
   /* Status bar (design 58). */
   ok((await CV.txt(page, '.cv-specs')) === '6 × 9 in 54 pages white paper spine 0.122 in full 12.372 × 9.25 in', `status bar: ${await CV.txt(page, '.cv-specs')}`);

@@ -12,6 +12,9 @@
    kdpCover.kindle.plan(g, box)  → how to paint the front into a box (default 1600 × 2560):
        { mode: 'cut' | 'fit', scale, src: {x, y, w, h} board px, dst: {x, y, w, h} box px, pad }
    kdpCover.kindle.transform(g, w, h) → the design's preview CSS transform for a w × h box
+   kdpCover.kindle.paint(ctx, cover, box, images) → paints the Kindle front into a box of ctx (browser:
+       needs kdpCover.render). The Kindle JPG (export.kindle) and Preview final (E16 Part 9) both use it,
+       so the preview is the file.
    ═══════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -34,5 +37,15 @@
       : 'scale(' + (h / g.kH) + ') translate(' + -g.kx + 'px,' + -g.ky + 'px)';
   }
 
-  C.kindle = { SIZE, plan, transform };
+  function paint(ctx, cover, box, images) {
+    const g = C.geo.geo(cover.fmt), kp = plan(g, box);
+    ctx.fillStyle = cover.bg; ctx.fillRect(0, 0, box.w, box.h);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(kp.dst.x, kp.dst.y, kp.dst.w, kp.dst.h); ctx.clip();
+    C.render.paint(ctx, cover, { scale: kp.scale, x0: kp.src.x - kp.dst.x / kp.scale, y0: kp.src.y - kp.dst.y / kp.scale, images });
+    ctx.restore();
+    return kp;
+  }
+
+  C.kindle = { SIZE, plan, transform, paint };
 })(globalThis);
