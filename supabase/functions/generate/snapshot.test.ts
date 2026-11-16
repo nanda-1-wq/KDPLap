@@ -306,23 +306,31 @@ Deno.test("snapshot: promise_check request", async (t) => {
   await assertSnapshot(t, L.buildRequest(job), { name: "buildRequest promise_check" });
 });
 
-/* ── cover_blurb (E15 Part 5): the request and every reply and error shape ── */
+/* ── cover_blurb v2 (generate v28, E16 Part 8): the requests and every reply and error shape ── */
 
 Deno.test("snapshot: cover_blurb request and replies", async (t) => {
   const job = L.stageDef("cover_blurb").check(L.parseInput(JSON.stringify(cbid))!, coverCtx()) as L.CoverBlurbJob;
   await assertSnapshot(t, L.buildRequest(job), { name: "buildRequest cover_blurb" });
-  const out = { headline: "Move with ease, one chair at a time", blurb: "You want to move without pain.\n\nAbout 72% of readers feel better. Pull up a chair and start today." };
+  const withAuthor = { ...cbid, length: "long", tone: "expert", authorLine: true };
+  const jobA = L.stageDef("cover_blurb").check(L.parseInput(JSON.stringify(withAuthor))!, coverCtx()) as L.CoverBlurbJob;
+  await assertSnapshot(t, L.buildRequest(jobA), { name: "buildRequest cover_blurb author line" });
+  const out = { blurb: "You want to move without pain.\n\nAbout 72% of readers feel better. Pull up a chair and start today." };
+  const line = "Nora Hale taught gentle movement classes to more than 400 students.";
   const cases: [string, Setup, () => Request][] = [
     ["success", { provider: reply("end_turn", out) }, () => post(cbid)],
-    ["blank headline", { provider: reply("end_turn", { ...out, headline: " " }) }, () => post(cbid)],
+    ["author line", { provider: reply("end_turn", { ...out, author_line: line }) }, () => post(withAuthor)],
+    ["blank author line", { provider: reply("end_turn", { ...out, author_line: " " }) }, () => post(withAuthor)],
     ["empty blurb", { provider: reply("end_turn", { ...out, blurb: "" }) }, () => post(cbid)],
-    ["max_tokens", { provider: reply("max_tokens", '{"headline":"Mo') }, () => post(cbid)],
+    ["over 1,500 with the author line", { provider: reply("end_turn", { blurb: "b".repeat(1480), author_line: line }) }, () => post(withAuthor)],
+    ["max_tokens", { provider: reply("max_tokens", '{"blurb":"Mo') }, () => post(cbid)],
     ["refusal", { provider: reply("refusal", "") }, () => post(cbid)],
     ["timeout", { provider: timeout }, () => post(cbid)],
     ["not locked", { coverBlurb: coverCtx({ positioning: { ...LOCKED, locked_at: null } }) }, () => post(cbid)],
     ["no title", { coverBlurb: coverCtx({ book: { title: null, subtitle: null } }) }, () => post(cbid)],
+    ["no bio", { coverBlurb: coverCtx({ bio: null }) }, () => post(withAuthor)],
     ["not visible", { coverBlurb: null }, () => post(cbid)],
     ["extra key", {}, () => post({ ...cbid, blurb: "Mine." })],
+    ["v27 body", {}, () => post({ stage: "cover_blurb", bookId: cbid.bookId })],
   ];
   for (const [name, s, req] of cases) await assertSnapshot(t, await run(s, req()), { name: `handler cover_blurb ${name}` });
 });

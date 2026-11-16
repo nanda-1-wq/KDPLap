@@ -12,6 +12,7 @@ import "../../js/cover/palettes.js";
 import "../../js/cover/kindle.js";
 import "../../js/cover/checks.js";
 import "../../js/cover/layouts.js";
+import "../../js/cover/blurb.js";
 import { designTextH, DESIGN_BOOK, TRIMS, PAGES4, PAPERS } from "./design-cover.js";
 
 export const K = globalThis.kdpCover;

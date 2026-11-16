@@ -18,7 +18,10 @@ for (const c of GOLDEN.palettes) {
     const pal = P().PALETTES.find((x) => x[0] === c.name)[1];
     const r = P().swap(b.layers, b.bg, pal);
     assertEquals(r.bg, c.bg);
-    near(r.layers.map(colorsOf), c.layers);
+    // D15 (STOP 8): Stack and Bold have the rest line too; it keeps the title's color (the design has no such layer).
+    near(r.layers.filter((l) => l.src !== "titlerest").map(colorsOf), c.layers);
+    const rest = r.layers.find((l) => l.src === "titlerest");
+    if (rest) assertEquals(rest.color, r.layers.find((l) => l.src === "title").color);
   });
 }
 

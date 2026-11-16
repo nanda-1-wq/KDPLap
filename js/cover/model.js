@@ -42,7 +42,8 @@
   const FX_DEF = { style: 'none', color: '#1C1C1A', int: 60, dist: 6, dir: 45, blur: 6, width: 2, depth: 6, pad: 8, round: 6 };
   const FX_STYLES = [['none', 'None', '#1C1C1A'], ['shadow', 'Shadow', '#1C1C1A'], ['lift', 'Lift', '#1C1C1A'], ['glow', 'Glow', '#F2C14E'], ['outline', 'Outline', '#F2C14E'],
     ['hollow', 'Hollow', '#1C1C1A'], ['3d', '3D', '#E07A5F'], ['echo', 'Echo', '#E07A5F'], ['bg', 'Background', '#F2C14E']];
-  const SRC = ['title', 'subtitle', 'pen', 'blurb', 'spine'];
+  // titlerest (E16 Part 8, STOP 8): a Stack or Bold title's words after the third, on their own line.
+  const SRC = ['title', 'titlerest', 'subtitle', 'pen', 'blurb', 'spine'];
   const CAPS = { layers: 200, text: 2000, bytes: 512 * 1024, label: 80, name: 200, natPx: 12000 };
   // The design's control ranges (sliders and number boxes).
   const RANGE = {

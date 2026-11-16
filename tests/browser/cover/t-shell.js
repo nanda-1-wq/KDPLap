@@ -1,5 +1,5 @@
 // E16 Part 4: 09 in the shell (designs 58, 51b): header, Next, the rail and the sidebar, the first open,
-// the parts drawn inert ("Comes in Part N"), the status bar, no sideways scroll.
+// the parts drawn inert ("Comes in Part N": Checks drawer, Preview final, Export cover), the status bar, no sideways scroll.
 const test = async page => {
   const { log, ok } = CV.log();
   const st = globalThis.__store;
@@ -62,19 +62,17 @@ const test = async page => {
   ok(/step=9/.test(page.url()), '08 Next opens 09');
   ok((await CV.state(page)).status === 'ready', '09 draws the editor');
 
-  /* The tool rail: Text, Images (Part 6), Shapes and Layers work; Layouts and Book data are drawn inert. */
+  /* The tool rail: every tool works (Layouts and Book data from Part 8). */
   const tools = await page.$$eval('[data-tool]', (a) => a.map((b) => [b.dataset.tool, b.getAttribute('aria-pressed'), b.getAttribute('aria-disabled'), b.title, b.innerText.trim()]));
   ok(tools.map((t) => t[4]).join('|') === 'Layouts|Book data|Text|Images|Shapes|Layers', `tools: ${tools.map((t) => t[4])}`);
-  const part = { layouts: 8, book: 8 };
   for (const t of tools) {
     if (t[0] === 'text') ok(t[1] === 'true' && !t[2], 'Text: on');
-    else if (t[0] === 'shapes' || t[0] === 'layers' || t[0] === 'images') ok(t[1] === 'false' && !t[2], `${t[4]}: a live tool (Part ${t[0] === 'images' ? 6 : 5})`);
-    else ok(t[2] === 'true' && t[3] === `Comes in Part ${part[t[0]]}`, `${t[4]}: inert, Comes in Part ${part[t[0]]}`);
+    else ok(t[1] === 'false' && !t[2], `${t[4]}: a live tool`);
   }
   ok(await page.$eval('[data-panel]', (p) => p.getAttribute('aria-label') === 'Text'), 'the Text panel is open');
-  await page.click('[data-tool="layouts"]', { force: true });
-  ok(await page.$eval('[data-panel]', (p) => p.getAttribute('aria-label') === 'Text' && /ADD A HEADING|Add a heading/.test(p.innerText)), 'an inert tool changes nothing');
-  for (const [k, n] of [['blurb', 8], ['author', 8], ['chk', 9], ['pv', 9]]) {
+  // Part 8: Write blurb and Author line are live; the chip's drawer and Preview final stay inert until Part 9.
+  ok(await page.$eval('[data-k="blurb"]', (b) => !b.hasAttribute('aria-disabled') && b.textContent === 'Write blurb') && await page.$eval('[data-k="author"]', (b) => !b.hasAttribute('aria-disabled')), 'Write blurb and Author line: live (Part 8)');
+  for (const [k, n] of [['chk', 9], ['pv', 9]]) {
     ok(await page.$eval(`[data-k="${k}"]`, (b, n) => b.getAttribute('aria-disabled') === 'true' && b.title === `Comes in Part ${n}`, n), `${k}: inert, Comes in Part ${n}`);
   }
   ok((await CV.txt(page, '[data-k="chk"]')) === '3 to fix', `the chip label is live: ${await CV.txt(page, '[data-k="chk"]')}`);

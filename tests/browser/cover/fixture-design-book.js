@@ -25,5 +25,29 @@ const FIX = {
       return { layers: r.layers, bg: r.bg, layout: 'band' };
     }, { book: { title: FIX.title, subtitle: FIX.subtitle, pen: FIX.pen }, fmt: FIX.fmt, blurb: FIX.blurbWarm });
     return JSON.parse(JSON.stringify(globalThis.__band));
+  },
+  /**
+   * Part 8: the design's My layouts sample (67 sampleMy): Band, navy, from another made-up book in the
+   * series ("Deep Focus for Night Students (example)", its subtitle; the pen name stays), exported Oct 30,
+   * as a cover_my_layouts row with layers and a front thumbnail drawn by the app's own renderer.
+   */
+  async my(page) {
+    if (!globalThis.__my) {
+      await page.goto('http://127.0.0.1:5500/tests/browser/cover/engine.html', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.kdpCover && window.kdpCover.render, null, { timeout: 10000 });
+      globalThis.__my = await page.evaluate(async ({ fmt, pen }) => {
+        const K = kdpCover;
+        const r = K.layouts.build('band', { title: 'Deep Focus for Night Students', subtitle: 'Study Smarter When the Day Is Done', pen }, fmt, 1, null);
+        K.fonts.install(); K.textlayout.setMeasure(K.fonts.measure);
+        await K.fonts.loadAll(r.layers);
+        const g = K.geo.geo(fmt), h = 180, w = Math.round(h * g.trimW / g.trimH);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        K.render.paint(c.getContext('2d'), { fmt, bg: r.bg, layers: r.layers }, { scale: h / g.trimH, x0: g.foldR, y0: g.b, images: () => null });
+        return { layers: r.layers, bg: r.bg, thumb: c.toDataURL('image/jpeg', 0.85) };
+      }, { fmt: FIX.fmt, pen: FIX.pen });
+    }
+    const m = JSON.parse(JSON.stringify(globalThis.__my));
+    return { id: 'b7b7b7b7-0000-4000-8000-00000000007b', user_id: '00000000-0000-4000-8000-000000000001', name: 'Band, navy', from_book_id: 'd8d8d8d8-0000-4000-8000-0000000000d8',
+      from_title: 'Deep Focus for Night Students (example)', fmt: { ...FIX.fmt }, bg: m.bg, layers: m.layers, thumb: m.thumb, exported_at: '2026-10-30T12:00:00.000Z' };
   }
 };

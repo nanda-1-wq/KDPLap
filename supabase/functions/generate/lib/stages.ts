@@ -29,7 +29,7 @@ import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type
 import { CHECK, IMPROVE, PROMISE, SECTION_MAX_CHARS } from "./limits.ts";
 import { checkKeyOf, type CheckJob, checkKnown, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM, sectionRefs } from "./section_check.ts";
 import { chapterOf, interpretPromiseCheck, PROMISE_SCHEMA, PROMISE_SYSTEM, type PromiseContext, type PromiseJob, promiseKey, promiseKnown, promiseSections, promiseUserMessage } from "./promise_check.ts";
-import { COVER_BLURB_SCHEMA, COVER_BLURB_SYSTEM, type CoverBlurbContext, type CoverBlurbJob, coverBlurbKnown, coverBlurbUserMessage, interpretCoverBlurb } from "./cover_blurb.ts";
+import { bioText, COVER_BLURB_SYSTEM, type CoverBlurbContext, type CoverBlurbJob, coverBlurbSchema, coverBlurbUserMessage, interpretCoverBlurb } from "./cover_blurb.ts";
 import type { SavedTitleOption, Store } from "./types.ts";
 
 export type Job =
@@ -493,26 +493,31 @@ const promiseCheck: StageDef<"promise_check", PromiseContext> = {
 };
 
 /**
- * cover_blurb (E15 Part 5, plan section 7): the back cover headline and blurb.
+ * cover_blurb v2 (generate v28, E16 Part 8; v1 was E15 Part 5): the back cover
+ * blurb in the writer's length and tone, with an optional last line about the
+ * author from the pen name's bio. No headline.
  * Checks before any money is spent, in this order: the book is the caller's
  * (not_found, from the read); the positioning is locked; the book has a title
- * (not_enough_facts, missing "title"). Then the handler's monthly and
+ * (not_enough_facts, missing "title"); with the author line asked for, the pen
+ * name has a bio (not_enough_facts, missing "bio": the browser turns the tick
+ * off without one, the server refuses it too). Then the handler's monthly and
  * per-minute limits. The server saves nothing: the browser saves the blurb as
- * a version and the headline on Accept. A call the browser leaves still
- * finishes and counts (the tokens are spent).
+ * a version when the writer puts it on the cover. A call the browser leaves
+ * still finishes and counts (the tokens are spent).
  */
 const coverBlurb: StageDef<"cover_blurb", CoverBlurbContext> = {
   read: (store, input) => store.getCoverBlurbContext(input.bookId),
   check: (input, ctx) => {
     if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
     if (!str(ctx.book.title)) return { fail: "not_enough_facts", extra: { missing: "title" } };
-    return { stage: "cover_blurb", ctx, bookId: input.bookId };
+    if (input.authorLine && !bioText(ctx)) return { fail: "not_enough_facts", extra: { missing: "bio" } };
+    return { stage: "cover_blurb", ctx, bookId: input.bookId, length: input.length, tone: input.tone, authorLine: input.authorLine };
   },
-  prompt: (job) => [COVER_BLURB_SYSTEM, COVER_BLURB_SCHEMA, coverBlurbUserMessage(job.ctx)],
-  interpret: (job, httpOk, body) => interpretCoverBlurb(httpOk, body, coverBlurbKnown(job.ctx)),
+  prompt: (job) => [COVER_BLURB_SYSTEM, coverBlurbSchema(job), coverBlurbUserMessage(job.ctx, job)],
+  interpret: (job, httpOk, body) => interpretCoverBlurb(httpOk, body, job.ctx, job.authorLine),
   reply: (_job, out) => {
     const c = out.coverBlurb!;
-    return { stage: "cover_blurb", headline: c.headline, blurb: c.blurb, words: c.words, unsourced: c.unsourced };
+    return { stage: "cover_blurb", blurb: c.blurb, words: c.words, unsourced: c.unsourced };
   },
 };
 

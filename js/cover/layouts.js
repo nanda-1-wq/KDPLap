@@ -11,9 +11,13 @@
 
    Stack and Bold split the title (the design hardcodes "MICRO / STUDY /
    HABITS" for its sample book): the first 3 words in capitals are the big
-   title, and the other words go in front of the subtitle, so the cover
-   shows the full title (owner STOP 1, N4; planned difference D15: the
-   design's Stack drops them). Bold gives the design's words exactly.
+   title, and the other words ("for Busy Adult Learners") are their own
+   line under it (src 'titlerest'): the title color, IBM Plex Sans Bold,
+   sized down by half points to fit one line of the title's box (24 to
+   12 pt). The subtitle stays its own line below (owner STOP 1, N4 and
+   STOP 8; planned difference D15: the design's Stack drops the words and
+   its Bold joins them to the subtitle with ". "). The rest line takes the
+   next free id, so every other layer keeps the design's id.
 
    kdpCover.layouts.LIST / KEYS / BLURB_PLACEHOLDER
    kdpCover.layouts.base(key, book, startId, blurbText) → { layers, bg, nextId } at 6 × 9 / 54 / white
@@ -37,8 +41,29 @@
   const words = (t) => String(t || '').split(' ');
   const head3 = (t) => words(t).slice(0, 3).map((w) => w.toUpperCase());
   const rest3 = (t) => words(t).slice(3).join(' ');
-  /** The title's words after the third, then the subtitle: "for Busy Adult Learners. How to Keep Up…" */
-  const subWithRest = (B) => { const rest = rest3(B.title); return (rest ? rest + '. ' : '') + String(B.subtitle || ''); };
+  // The title's other words (STOP 8): their own line, the title color, bold, fit to the box.
+  const REST = { font: 'IBM Plex Sans', weight: 700, max: 24, min: 12, gap: 8, subGap: 10 };
+  /** Sizes the rest line: the largest half point from 24 down to 12 that keeps it on one line of its box. */
+  function fitRest(L) {
+    const TL = C.textlayout;
+    L.size = REST.max;
+    while (L.size > REST.min && TL.lines(L).length > 1) L.size -= 0.5;
+    return L;
+  }
+  /**
+   * The rest line under the big title, or null when the title has 3 words or fewer. The subtitle moves down
+   * only when the rest line would reach it.
+   */
+  function addRest(L, B, id) {
+    const text = rest3(B.title);
+    if (!text) return;
+    const TL = C.textlayout, i = L.findIndex((l) => l.src === 'title'), t = L[i];
+    const R = fitRest(C.model.textLayer(id, { src: 'titlerest', text, x: t.x, y: 0, w: t.w, font: REST.font, size: REST.max, weight: REST.weight, color: t.color, align: t.align }));
+    R.y = t.y + TL.height(t) + REST.gap;
+    L.splice(i + 1, 0, R);
+    const sub = L.find((l) => l.src === 'subtitle');
+    if (sub) sub.y = Math.max(sub.y, R.y + TL.height(R) + REST.subGap);
+  }
   const blurbOf = (bt) => (bt && bt.indexOf('Your back blurb goes here') < 0 ? bt : BLURB_PLACEHOLDER);
 
   function base(key, book, startId, blurbText) {
@@ -54,7 +79,7 @@
     let L = [], bg = '#FFFFFF';
     if (key === 'band') { bg = '#F2EDE4'; L = [S({ x: F, y: 150, w: FW, h: 210, fill: '#1F3A5F' }), title({ x: at(360), y: 175, w: 360, color: '#FFFFFF' }), sub({ x: at(330), y: 390, w: 330, color: '#1F3A5F' }), pen({ x: at(300), y: 565, w: 300, color: '#1F3A5F' }), blurb('#3D3D39')]; }
     if (key === 'center') { bg = '#F2EDE4'; L = [title({ x: at(360), y: 170, w: 360, size: 38, color: '#2F4A3A' }), S({ kind: 'line', x: at(120), y: 330, w: 120, h: 24, fillMode: 'none', sw: 2, scolor: '#2F4A3A' }), sub({ x: at(320), y: 370, w: 320, color: '#3D3D39' }), pen({ x: at(300), y: 565, w: 300, color: '#2F4A3A' }), blurb('#3D3D39')]; }
-    if (key === 'stack') { bg = '#FFFFFF'; L = [S({ x: F, y: 0, w: 30, h: 648, fill: '#E07A5F' }), T({ src: 'title', text: head3(B.title).join('\n'), x: 490, y: 90, w: 330, font: 'Bebas Neue', size: 78, color: '#1C1C1A', align: 'left' }), sub({ text: subWithRest(B), x: 490, y: 400, w: 320, align: 'left', color: '#3D3D39' }), pen({ x: 490, y: 565, w: 300, align: 'left', color: '#E07A5F' }), blurb('#3D3D39')]; }
+    if (key === 'stack') { bg = '#FFFFFF'; L = [S({ x: F, y: 0, w: 30, h: 648, fill: '#E07A5F' }), T({ src: 'title', text: head3(B.title).join('\n'), x: 490, y: 90, w: 330, font: 'Bebas Neue', size: 78, color: '#1C1C1A', align: 'left' }), sub({ x: 490, y: 400, w: 320, align: 'left', color: '#3D3D39' }), pen({ x: 490, y: 565, w: 300, align: 'left', color: '#E07A5F' }), blurb('#3D3D39')]; }
     if (key === 'corner') { bg = '#2F4A3A'; L = [title({ x: 480, y: 70, w: 330, align: 'left', color: '#F2EDE4' }), sub({ x: 480, y: 250, w: 300, align: 'left', color: '#CFE3D6' }), S({ kind: 'burst', x: 690, y: 400, w: 120, h: 120, fill: '#F2C14E', points: 14, depth: 82 }), pen({ x: 480, y: 575, w: 300, align: 'left', color: '#F2EDE4' }), blurb('#F2EDE4')]; }
     if (key === 'picfull') { bg = '#3E3557'; L = [I({ x: 0, y: 0, w: 866, h: 648, dark: 30 }), title({ x: at(360), y: 200, w: 360, color: '#FFFFFF' }), sub({ x: at(320), y: 380, w: 320, color: '#F2EDE4' }), pen({ x: at(300), y: 575, w: 300, color: '#FFFFFF' }), blurb('#FFFFFF')]; }
     if (key === 'framed') { bg = '#F2EDE4'; L = [S({ kind: 'frame', x: 472, y: 40, w: 350, h: 568, fill: '#2F4A3A', thick: 5 }), title({ x: at(300), y: 150, w: 300, size: 32, color: '#2F4A3A' }), S({ kind: 'diamond', x: cx - 9, y: 318, w: 18, h: 18, fill: '#E07A5F' }), sub({ x: at(270), y: 360, w: 270, size: 12, color: '#3D3D39' }), pen({ x: at(260), y: 530, w: 260, color: '#2F4A3A' }), blurb('#3D3D39')]; }
@@ -63,9 +88,10 @@
     if (key === 'stripes') { bg = '#FFFFFF'; L = [S({ x: 0, y: 0, w: 866, h: 52, fill: '#E07A5F' }), S({ x: 0, y: 52, w: 866, h: 52, fill: '#F2C14E' }), S({ x: 0, y: 104, w: 866, h: 52, fill: '#2F4A3A' }), title({ x: 480, y: 200, w: 340, size: 34, align: 'left', color: '#1C1C1A' }), sub({ x: 480, y: 400, w: 320, align: 'left', color: '#3D3D39' }), pen({ x: 480, y: 575, w: 300, align: 'left', color: '#2F4A3A' }), blurb('#3D3D39')]; }
     if (key === 'ribbon') { bg = '#F2EDE4'; L = [S({ kind: 'seal', x: 710, y: 50, w: 100, h: 100, fill: '#F2C14E' }), S({ kind: 'ribbon', x: F + 20, y: 230, w: FW - 40, h: 150, fill: '#7A2E2E' }), title({ x: at(300), y: 255, w: 300, size: 24, color: '#FFFFFF' }), sub({ x: at(320), y: 420, w: 320, size: 12, color: '#3D3D39' }), pen({ x: at(300), y: 575, w: 300, color: '#7A2E2E' }), blurb('#3D3D39')]; }
     if (key === 'bold') {
-      bg = '#F2C14E'; L = [T({ src: 'title', text: head3(B.title).join(' '), x: 470, y: 60, w: 360, font: 'Anton', size: 66, color: '#1C1C1A', align: 'left' }), S({ x: 470, y: 400, w: 90, h: 10, fill: '#1C1C1A' }), T({ src: 'subtitle', text: subWithRest(B), x: 470, y: 430, w: 330, font: 'IBM Plex Sans', size: 12, color: '#1C1C1A', align: 'left' }), pen({ x: 470, y: 585, w: 300, align: 'left', color: '#1C1C1A' }), blurb('#1C1C1A')];
+      bg = '#F2C14E'; L = [T({ src: 'title', text: head3(B.title).join(' '), x: 470, y: 60, w: 360, font: 'Anton', size: 66, color: '#1C1C1A', align: 'left' }), S({ x: 470, y: 400, w: 90, h: 10, fill: '#1C1C1A' }), T({ src: 'subtitle', text: String(B.subtitle || ''), x: 470, y: 430, w: 330, font: 'IBM Plex Sans', size: 12, color: '#1C1C1A', align: 'left' }), pen({ x: 470, y: 585, w: 300, align: 'left', color: '#1C1C1A' }), blurb('#1C1C1A')];
     }
     if (key === 'picband') { bg = '#F2EDE4'; L = [I({ x: F, y: 0, w: FW, h: 340 }), title({ x: at(360), y: 370, w: 360, size: 30, color: '#1C1C1A' }), sub({ x: at(320), y: 490, w: 320, size: 12, color: '#3D3D39' }), pen({ x: at(300), y: 585, w: 300, color: '#7A2E2E' }), blurb('#3D3D39')]; }
+    if (key === 'stack' || key === 'bold') addRest(L, B, nid());
     return { layers: L, bg, nextId: id };
   }
 
@@ -110,9 +136,11 @@
   function applyMy(entry, book, fmt, startId, blurbText, opt) {
     const g = C.geo.geo(fmt), B = book || {};
     let id = startId;
-    const L = C.remap.remap(entry.layers, C.geo.geo(entry.fmt || AUTHORED), g, opt).layers.filter((l) => l.src !== 'spine' || g.spineTextOk).map((l) => {
+    const split = entry.layers.some((l) => l.src === 'titlerest');   // a Stack or Bold title: 3 big words + the rest line
+    const L = C.remap.remap(entry.layers, C.geo.geo(entry.fmt || AUTHORED), g, opt).layers.filter((l) => (l.src !== 'spine' || g.spineTextOk) && (l.src !== 'titlerest' || rest3(B.title))).map((l) => {
       const c = Object.assign({}, l, { id: id++ });
-      if (c.src === 'title') c.text = /\n/.test(l.text) ? head3(B.title).join('\n') : String(B.title || '');
+      if (c.src === 'title') c.text = /\n/.test(l.text) ? head3(B.title).join('\n') : split ? head3(B.title).join(' ') : String(B.title || '');
+      else if (c.src === 'titlerest') fitRest(Object.assign(c, { text: rest3(B.title) }));
       else if (c.src === 'subtitle') c.text = String(B.subtitle || '');
       else if (c.src === 'pen') c.text = String(B.pen || '');
       else if (c.src === 'blurb') c.text = blurbOf(blurbText);

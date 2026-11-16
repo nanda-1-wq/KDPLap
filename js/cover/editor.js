@@ -33,11 +33,18 @@
    and the cover ([data-stock-host]; Escape closes it, the cover's keys rest
    while it is open).
 
-   Drawn and inert (aria-disabled, title "Comes in Part N"): the Layouts
-   and Book data tools (8, 8), Write blurb and Author line (8),
-   the Checks chip's drawer and Preview final (9), Export cover (10). The
-   chip label and the header reason are live (kdpCover.checks), only the
-   drawer is not built.
+   Part 8 (designs 67, 68) adds the Layouts panel (layouts-panel.js: My
+   layouts, the 6 series colors, 12 ready layouts + Blank; a layout applies
+   at once, with the 6 s Undo note), the Book data panel (bookdata.js) and
+   the back blurb dialog (blurb.js; generate cover_blurb v28). A layout, a
+   palette and a blurb put on the cover are each one Undo step
+   (history.step). The pressed layout is saved in cover_designs.layout. A
+   layout's sample photo is a Must fix (C16, STOP 6 N2 rec, opt.samples).
+
+   Drawn and inert (aria-disabled, title "Comes in Part N"): the Checks
+   chip's drawer and Preview final (9), Export cover (10). The chip label
+   and the header reason are live (kdpCover.checks), only the drawer is not
+   built.
 
    Size: the design is drawn and saved at the size it is laid out for
    (cover_designs.fmt). When the book's size changed in 08, the remap and
@@ -68,8 +75,11 @@
     eye: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     lock20: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
   };
-  const TOOLS = [['layouts', 'Layouts', 8], ['book', 'Book data', 8], ['text', 'Text', 0], ['images', 'Images', 0], ['shapes', 'Shapes', 0], ['layers', 'Layers', 0]];
-  const PANEL_LABEL = { text: 'Text', images: 'Images', shapes: 'Shapes', layers: 'Layers' };
+  const TOOLS = [['layouts', 'Layouts', 0], ['book', 'Book data', 0], ['text', 'Text', 0], ['images', 'Images', 0], ['shapes', 'Shapes', 0], ['layers', 'Layers', 0]];
+  const PANEL_LABEL = { layouts: 'Layouts', book: 'Book data', text: 'Text', images: 'Images', shapes: 'Shapes', layers: 'Layers' };
+  const TOAST_MS = 6000;
+  // The checks the editor runs: C15 (a removed picture) and C16 (a layout's sample photo, STOP 6 N2 rec).
+  const checkOpt = () => ({ missing: C.images.missing(E), samples: true });
   // A menu → the bar button that opened it (Escape gives focus back there).
   const MENU_BTN = { fonts: 'font', color: 'color', opacity: 'op', arrange: 'arr', bg: 'bg', effects: 'fx', shape: 'shape', sfill: 'sfill', stroke: 'stroke', more: 'more',
     ifill: 'ifill', iadjust: 'iadjust', iborder: 'iborder', imask: 'imask' };
@@ -90,6 +100,8 @@
       iconQ: '', iconN: 48, icons: 'idle',
       // Part 6: the Images panel, Uploads, Replace, crop mode, the picture store
       img: { rights: false, err: '', busy: '', pdf: null, tab: 'up' }, uploads: null, replaceId: null, cropping: null, pics: new Map(), bookId: null,
+      // Part 8: the Layouts panel (busy: the layout being applied; fonts: the 12 layouts' faces are loaded), My layouts, the note, the blurb dialog
+      lay: { busy: null, err: '', fonts: false }, my: [], toast: null, blurb: null,
       view: { z: 1, px: 91, py: 47 }, tpl: { op: 100, hide: false, pop: false }, guides: true, snap: true,
       fontQ: '', cat: 'All', fontBusy: null, fontErr: null,
       pk: { target: 'color', hue: 0, sat: 0, val: 0, hexDraft: '#1C1C1A', recent: [] },
@@ -125,6 +137,7 @@
     E.bookId = book.id;
     E.cover = C.model.normalize({ fmt: data.design.fmt, bg: data.design.bg, layers: data.design.layers, layout: data.design.layout });
     E.rev = data.design.rev;
+    E.my = Array.isArray(data.my_layouts) ? data.my_layouts.slice() : [];
     C.fonts.install();
     C.textlayout.setMeasure(C.fonts.measure);
     try { await C.fonts.loadAll(E.cover.layers); } catch (e) {
@@ -138,7 +151,7 @@
     E.saver = C.save.create({
       bookId: book.id, rev: E.rev,
       snapshot: { layers: E.cover.layers, bg: E.cover.bg, fmt: E.cover.fmt, layout: E.cover.layout },
-      read: () => ({ layers: me.cover.layers, bg: me.cover.bg }),
+      read: () => ({ layers: me.cover.layers, bg: me.cover.bg, layout: me.cover.layout == null ? null : me.cover.layout }),
       onState: (st, info) => {
         // The shell's save line (sidebar and rail) shows 09's state too, with Retry (as 08).
         ctx.renderSave(st === 'failed' ? 'error' : st, st === 'failed' ? 'Your last cover change was not saved.' : '', st === 'failed', STEP);
@@ -208,6 +221,8 @@
       </main>
       <div class="cv-lmenu-host" data-lmenu-host></div>
       <div class="cv-stock-host" data-stock-host></div>
+      <div class="cv-toast-host" data-toast-host></div>
+      <div class="cv-blurb-host" data-blurb-host></div>
     </div>`;
     const v = E.view_ = C.view.create(E);
     E.root.querySelector('[data-wswrap]').append(v.el);
@@ -224,6 +239,13 @@
     C.layersPanel.bindMenu(E.root.querySelector('[data-lmenu-host]'), E);
     C.stock.bindPanel(panel, E);
     C.stock.bindHost(E.root.querySelector('[data-stock-host]'), E);
+    C.layoutsPanel.bind(panel, E);
+    C.bookData.bind(panel, E);
+    C.blurb.bindHost(E.root.querySelector('[data-blurb-host]'), E);
+    E.root.querySelector('[data-toast-host]').addEventListener('click', (e) => {
+      if (e.target.closest('[data-toast-undo]')) toastUndo();
+      else if (e.target.closest('[data-toast-x]')) hideToast(true);
+    });
     E.root.querySelector('[data-tools]').addEventListener('click', (e) => {
       const b = e.target.closest('[data-tool]');
       if (!b || b.getAttribute('aria-disabled') === 'true') return;
@@ -253,7 +275,11 @@
     const top = p.scrollTop;
     p.setAttribute('aria-label', PANEL_LABEL[E.panel]);
     p.dataset.kind = E.panel;
-    keepFocus(p, () => { p.innerHTML = E.panel === 'shapes' ? C.shapesUi.panelHtml(E) : E.panel === 'layers' ? C.layersPanel.html(E) : E.panel === 'images' ? C.images.panelHtml(E) : C.text.panelHtml(E); });
+    keepFocus(p, () => {
+      p.innerHTML = E.panel === 'shapes' ? C.shapesUi.panelHtml(E) : E.panel === 'layers' ? C.layersPanel.html(E) : E.panel === 'images' ? C.images.panelHtml(E)
+        : E.panel === 'layouts' ? C.layoutsPanel.html(E) : E.panel === 'book' ? C.bookData.html(E) : C.text.panelHtml(E);
+    });
+    if (E.panel === 'layouts') C.layoutsPanel.paint(p, E);
     p.scrollTop = top;
   }
   /** The tool rail: Text, Shapes or Layers (the design's showPanel). */
@@ -267,6 +293,7 @@
     renderPanel(); renderMenu();
     if (k === 'shapes') openIcons();
     if (k === 'images') C.images.loadUploads(E);
+    if (k === 'layouts') loadLayoutFonts();
   }
   /** The icon set loads the first time the Shapes panel opens. */
   function openIcons() {
@@ -294,7 +321,7 @@
   }
 
   function viewBarHtml() {
-    const items = C.checks.run(E.cover, { missing: C.images.missing(E) });
+    const items = C.checks.run(E.cover, checkOpt());
     const sum = C.checks.summary(items);
     const bad = sum.errors > 0, warn = !bad && sum.warns > 0;
     return `
@@ -420,6 +447,8 @@
       if (!f.ok) { capNote(f.reason); return false; }
     }
     if (E.capMsg) capNote(null);
+    // Part 8: the layout note's Undo is for the layout only: any later change closes it (replaceAll shows its own after).
+    if (E.toast && !act) hideToast(false);
     E.hist.change(prev, act || null);
     E.cover = Object.assign({}, E.cover, { layers, bg });
     E.saver.changed();
@@ -688,6 +717,269 @@
     afterChange(null);
   }
 
+  /* ── Part 8: layouts, series colors, book data (designs 67, 68) ── */
+  /** The book's own words for the layouts (layouts.js book). */
+  const layoutBook = () => ({ title: bookWords('title'), subtitle: bookWords('subtitle'), pen: bookWords('pen') });
+  /** The blurb a layout carries: the cover's own (not the placeholder), else the newest saved version, else none (the placeholder). */
+  function currentBlurb() {
+    const real = C.bookData.realBlurb(E.cover.layers);
+    if (real) return real.text;
+    return E.data && E.data.blurb && E.data.blurb.body ? E.data.blurb.body : null;
+  }
+  const bioText = () => String((E && E.data && E.data.book && E.data.book.bio_text) || '').trim();
+
+  /** The 12 layouts' faces, loaded when the Layouts panel opens; the small covers are drawn once they are in. */
+  function loadLayoutFonts() {
+    if (E.lay.fonts || E.lay.fontLoad) return;
+    const me = E;
+    E.lay.fontLoad = Promise.all(C.layoutsPanel.FONTS.map(([f, w]) => C.fonts.load(f, C.fonts.snap(f, w) || w)))
+      .then(() => { if (me === E) { E.lay.fonts = true; if (E.panel === 'layouts') renderPanel(); } })
+      .catch(() => { if (me === E) E.lay.fontLoad = null; });   // the small covers stay plain; opening the panel again tries again
+  }
+
+  /**
+   * One layout (ready or My) in place of the cover: one Undo step of its own (the toast's Undo takes back
+   * only this), the pressed layout saved with the design, the selection cleared.
+   */
+  function replaceAll(r, layoutKey, text) {
+    const prevLayout = E.cover.layout == null ? null : E.cover.layout;
+    if (E.editing != null) stopEdit(false);
+    E.sel = null; E.multi = []; E.cropping = null; E.menu = null; E.replaceId = null; E.layerMenu = null;
+    E.cover.layout = layoutKey;
+    E.hist.step();
+    if (!commit(r.layers, r.bg, null)) { E.cover.layout = prevLayout; renderPanel(); return; }
+    E.hist.step();
+    for (const l of r.layers) C.images.ensure(E, l);
+    E.view_.sync(); renderBars();
+    if (text) showToast(text, prevLayout); else hideToast(false);
+  }
+
+  /** A ready layout (or Blank) at once (design applyLayout); the note offers Undo when it replaced layers. */
+  async function applyLayout(key) {
+    if (E.lay.busy || !C.layouts.KEYS.includes(key)) return;
+    const me = E;
+    const r = C.layouts.build(key, layoutBook(), E.cover.fmt, C.model.nextId(E.cover.layers), currentBlurb());
+    E.lay.busy = key; E.lay.err = ''; renderPanel();
+    try { await C.fonts.loadAll(r.layers); } catch (e) {
+      if (me !== E) return;
+      E.lay.busy = null; E.lay.err = 'We couldn’t load the fonts of this layout. Check your connection, then try again.'; renderPanel();
+      return;
+    }
+    if (me !== E) return;
+    E.lay.busy = null;
+    const had = E.cover.layers.length > 0;
+    const name = (C.layouts.LIST.find((x) => x[0] === key) || ['', 'Layout'])[1];
+    replaceAll(r, key, had ? `${name} applied. Your old design is one Undo away.` : null);
+  }
+
+  /** A My layout on this book (design applyMy): its layers remapped, this book's words (plan D2), its own photos. */
+  async function applyMy(id) {
+    const m = (E.my || []).find((x) => x.id === id);
+    if (E.lay.busy || !m) return;
+    const me = E;
+    E.lay.busy = 'my:' + id; E.lay.err = ''; renderPanel();
+    let res;
+    try { res = await root.kdp.getMyLayout(id); } catch (e) { res = { error: e }; }
+    if (me !== E) return;
+    const fail = (msg) => { E.lay.busy = null; E.lay.err = msg; renderPanel(); };
+    if (res.error || !res.data) { fail('We couldn’t open this layout. Check your connection, then try again.'); return; }
+    const r = C.layouts.applyMy(res.data, layoutBook(), E.cover.fmt, C.model.nextId(E.cover.layers), currentBlurb());
+    // Its photos are in Uploads: read the list first, so they load (and a removed one shows as missing, C15).
+    if (r.layers.some((l) => l.type === 'image' && l.asset) && !Array.isArray(E.uploads)) await C.images.loadUploads(E, true);
+    try { await C.fonts.loadAll(r.layers); } catch (e) {
+      if (me === E) fail('We couldn’t load the fonts of this layout. Check your connection, then try again.');
+      return;
+    }
+    if (me !== E) return;
+    E.lay.busy = null;
+    const had = E.cover.layers.length > 0;
+    replaceAll(r, 'my:' + id, `"${m.name}" applied with this book’s title, subtitle and pen name.${had ? ' Undo brings back what you had.' : ''}`);
+  }
+
+  /** The × on a My layout (design: at once, no question; the design file stays as it is). */
+  async function removeMy(id) {
+    const i = (E.my || []).findIndex((x) => x.id === id);
+    if (i < 0 || E.lay.busy) return;
+    const me = E;
+    let res;
+    try { res = await root.kdp.removeMyLayout(id); } catch (e) { res = { error: e }; }
+    if (me !== E) return;
+    if (res && res.error && !res.error.notFound) { E.lay.err = 'We couldn’t remove this layout. Check your connection, then try again.'; renderPanel(); return; }
+    E.lay.err = '';
+    E.my = E.my.filter((x) => x.id !== id);
+    renderPanel();
+    // Focus goes to the next row's ×, else the previous one, else the first ready layout.
+    const p = E.root.querySelector('[data-panel]');
+    const xs = p.querySelectorAll('[data-my-x]');
+    const n = xs[Math.min(i, xs.length - 1)] || p.querySelector('[data-lay]');
+    if (n) n.focus({ preventScroll: true });
+  }
+
+  /** Series colors (design swapPalette): one Undo step; the layout stays pressed. */
+  function swapPalette(i) {
+    const row = C.palettes.PALETTES[i]; if (!row) return;
+    const r = C.palettes.swap(E.cover.layers, E.cover.bg, row[1]);
+    const same = r.bg === E.cover.bg && r.layers.every((l, j) => JSON.stringify(l) === JSON.stringify(E.cover.layers[j]));
+    if (same) return;
+    E.hist.step();
+    commit(r.layers, r.bg, null);
+    E.hist.step();
+  }
+
+  /** Book data, Add all to the cover: the title, subtitle and pen name that are not on it yet, selected together. */
+  async function addAllBook() {
+    const keys = ['title', 'subtitle', 'pen'].filter((k) => !E.cover.layers.some((l) => l.src === k) && bookWords(k));
+    if (!keys.length) return;
+    const me = E, weights = {};
+    for (const k of keys) {
+      const S = C.model.BOOK_STYLE[k];
+      const w = await withFace(S.font, S.weight);
+      if (me !== E || w == null) return;
+      weights[k] = w;
+    }
+    const keep = keys.filter((k) => !E.cover.layers.some((l) => l.src === k));
+    if (!keep.length) return;
+    const g = C.geo.geo(E.cover.fmt);
+    let id = C.model.nextId(E.cover.layers);
+    const add = keep.map((k) => { const L = C.model.newBookText(k, bookWords(k), g, id++); L.weight = weights[k]; return L; });
+    if (!commit(E.cover.layers.concat(add), E.cover.bg, null, { bars: false })) return;
+    selectIds(add.map((a) => a.id));
+  }
+
+  /** Book data, Add spine text (the full title and the pen name, plan D13): only on a thick enough book. */
+  async function addSpine() {
+    if (E.cover.layers.some((l) => l.src === 'spine') || !C.geo.geo(E.cover.fmt).spineTextOk) return;
+    const me = E;
+    const w = await withFace('IBM Plex Sans', 600);
+    if (me !== E || w == null) return;
+    const L = C.layouts.spineLayer(C.model.nextId(E.cover.layers), E.cover.fmt, layoutBook());
+    if (L) addLayer(L);
+  }
+
+  /* ── The note with Undo (design toast, 6 s) ── */
+  function renderToast() {
+    const host = E.root.querySelector('[data-toast-host]'); if (!host) return;
+    const t = E.toast;
+    keepFocus(host, () => {
+      host.innerHTML = t ? `<div class="cv-toast" role="status"><span>${esc(t.text)}</span>
+        <button type="button" class="cv-toast-undo" data-k="toast-undo" data-toast-undo>Undo</button>
+        <button type="button" class="cv-toast-x" data-k="toast-x" data-toast-x aria-label="Close">×</button></div>` : '';
+    });
+  }
+  function showToast(text, prevLayout) {
+    if (E.toast) clearTimeout(E.toast.timer);
+    const me = E;
+    E.toast = { text, prevLayout, timer: setTimeout(() => { if (me === E && E.toast) hideToast(false); }, TOAST_MS) };
+    renderToast();
+  }
+  function hideToast(refocus) {
+    if (!E.toast) return;
+    clearTimeout(E.toast.timer);
+    const had = E.root.querySelector('[data-toast-host]').contains(document.activeElement);
+    E.toast = null; renderToast();
+    if (refocus || had) { const c = E.root.querySelector('[data-canvas]'); if (c) c.focus({ preventScroll: true }); }
+  }
+  /** Undo from the note: the layout's step, and the pressed layout as it was. */
+  function toastUndo() {
+    const t = E.toast; if (!t) return;
+    hideToast(true);
+    undo();
+    E.cover.layout = t.prevLayout;
+    E.saver.changed();
+    renderPanel();
+  }
+
+  /* ── The back blurb dialog (design 68) ── */
+  function renderBlurb() {
+    const host = E.root.querySelector('[data-blurb-host]'); if (!host) return;
+    const ta = host.querySelector('[data-bl-text]'), caret = ta && document.activeElement === ta ? [ta.selectionStart, ta.selectionEnd] : null;
+    const scroll = ta ? ta.scrollTop : 0;
+    keepFocus(host, () => { host.innerHTML = C.blurb.hostHtml(E); });
+    const nt = host.querySelector('[data-bl-text]');
+    if (nt) { nt.scrollTop = scroll; if (caret) try { nt.setSelectionRange(caret[0], caret[1]); } catch (e) { /* not a text field */ } }
+  }
+  /** opener: the button that opened it (focus goes back there); opt.author: tick the author line (Text panel, Author line). */
+  function openBlurb(opener, opt) {
+    const prev = E.blurb, real = C.bookData.realBlurb(E.cover.layers);
+    const draft = real ? real.text : E.data && E.data.blurb && E.data.blurb.body ? E.data.blurb.body : '';
+    const bio = !!bioText();
+    E.blurb = {
+      open: true, len: prev ? prev.len : 'medium', tone: prev ? prev.tone : 'warm',
+      author: bio && (opt && opt.author != null ? !!opt.author : prev ? prev.author : true),
+      draft, shown: !!draft, aiText: null, unsourced: [], busy: false, err: '', saving: false, saveErr: '', seq: 0,
+      opener: opener && opener.getAttribute ? opener.getAttribute('data-k') : null
+    };
+    E.menu = null; renderBars();
+    renderBlurb();
+    const f = E.root.querySelector('[data-blurb-host] .cv-bl-seg.is-on');
+    if (f) f.focus({ preventScroll: true });
+  }
+  function closeBlurb() {
+    const B = E.blurb; if (!B || !B.open) return;
+    B.open = false; B.seq++;   // a reply that comes after this is let go (the server still counts a finished call)
+    renderBlurb();
+    const o = B.opener && E.root.querySelector(`[data-k="${CSS.escape(B.opener)}"]`);
+    if (o) o.focus({ preventScroll: true });
+  }
+  async function writeBlurb() {
+    const B = E.blurb; if (!B || !B.open || B.busy) return;
+    const me = E, seq = ++B.seq;
+    B.busy = true; B.err = ''; B.saveErr = '';
+    renderBlurb();
+    let res;
+    try { res = await root.kdp.generate({ stage: 'cover_blurb', bookId: book.id, length: B.len, tone: B.tone, authorLine: !!(B.author && bioText()) }); } catch (e) { res = { error: { code: 'network' } }; }
+    if (me !== E || E.blurb !== B || !B.open || seq !== B.seq) return;
+    B.busy = false;
+    if (res.error || !res.data || typeof res.data.blurb !== 'string' || !res.data.blurb.trim()) {
+      B.err = C.blurb.errorText(res.error || {});
+      renderBlurb();
+      const w = E.root.querySelector('[data-blurb-host] [data-bl-write]'); if (w) w.focus({ preventScroll: true });
+      return;
+    }
+    B.draft = res.data.blurb; B.aiText = res.data.blurb; B.shown = true;
+    B.unsourced = Array.isArray(res.data.unsourced) ? res.data.unsourced.filter((x) => typeof x === 'string') : [];
+    renderBlurb();
+    const t = E.root.querySelector('[data-blurb-host] [data-bl-text]'); if (t) t.focus({ preventScroll: true });
+  }
+  /**
+   * Put on the back cover: the version is saved first (0029 cover_blurbs; 'ai' when the AI's draft goes on
+   * unchanged, else 'manual'); only then the one blurb layer gets the words (or a new one is placed, from the
+   * layouts' 6 × 9 place, remapped). A failed save keeps the dialog open and the cover as it was.
+   */
+  async function putBlurb() {
+    const B = E.blurb; if (!B || !B.open || B.busy || B.saving) return;
+    const body = B.draft.trim();
+    if (!body || C.blurb.fit(body).key === 'long') return;
+    const me = E;
+    B.saving = true; B.saveErr = ''; renderBlurb();
+    const ex = E.cover.layers.find((l) => l.src === 'blurb');
+    const w = ex ? ex.weight : await withFace('IBM Plex Sans', 400);
+    if (me !== E || E.blurb !== B) return;
+    if (w == null) { B.saving = false; B.saveErr = 'We couldn’t load the blurb’s font. Check your connection, then try again.'; renderBlurb(); return; }
+    const source = B.aiText != null && body === B.aiText.trim() ? 'ai' : 'manual';
+    let res;
+    try { res = await root.kdp.addCoverBlurb(book.id, body, source); } catch (e) { res = { error: e }; }
+    if (me !== E || E.blurb !== B) return;
+    B.saving = false;
+    if (res.error || !res.data) { B.saveErr = 'We couldn’t save the blurb. Check your connection, then try again. Your cover did not change.'; renderBlurb(); return; }
+    E.data.blurb = res.data;
+    B.open = false; B.seq++;
+    renderBlurb();
+    if (E.editing != null) stopEdit(false);
+    E.hist.step();
+    let id;
+    if (ex) { id = ex.id; E.sel = id; E.multi = []; E.cropping = null; patchLayer(id, { text: body.slice(0, C.model.CAPS.text) }); }
+    else {
+      const L0 = C.model.textLayer(C.model.nextId(E.cover.layers), { src: 'blurb', text: body, x: 60, y: 120, w: 310, font: 'IBM Plex Sans', size: 11, weight: w, align: 'left', color: '#1C1C1A' });
+      const L = C.remap.remap([L0], C.geo.geo(C.layouts.AUTHORED), C.geo.geo(E.cover.fmt)).layers[0];
+      id = L.id;
+      addLayer(L);
+    }
+    E.hist.step();
+    E.view_.sync(); renderBars(); renderPanel();
+    const hit = E.root.querySelector(`[data-hit="${CSS.escape(String(id))}"]`); if (hit) hit.focus({ preventScroll: true });
+  }
+
   /* ── Menus and the picker ── */
   function closeMenus() {
     let changed = false;
@@ -782,6 +1074,8 @@
       if (!E || E.status !== 'ready' || !ctx.isActive(STEP) || !E.root.isConnected) return;
       const t = e.target;
       const mod = e.metaKey || e.ctrlKey, k = e.key;
+      // Part 8: while the blurb dialog is open the cover's keys rest; Escape closes it.
+      if (E.blurb && E.blurb.open) { if (k === 'Escape') { e.preventDefault(); closeBlurb(); } return; }
       if (k === 'Escape') {
         if (C.stock.escape(E)) return;   // Part 7: the wide picker (its preview first)
         if (E.layerMenu) { closeLayerMenu(true); return; }
@@ -813,6 +1107,7 @@
     // Paste a picture (Cmd or Ctrl + V) while 09 is open (design onPaste).
     document.addEventListener('paste', (e) => {
       if (!E || E.status !== 'ready' || !ctx.isActive(STEP) || !E.root.isConnected) return;
+      if (E.blurb && E.blurb.open) return;   // Part 8: a paste into the blurb draft is text
       C.images.onPaste(E, e);
     });
     // A press outside the Layers ⋮ menu closes it (as a click on the gray does for the bar popovers).
@@ -845,6 +1140,9 @@
       startRename, endRename, openLayerMenu, closeLayerMenu, fxDone,
       // Part 6
       addLayer, startCrop, endCrop, movePic, gate: () => ctx.setGate(),
+      // Part 8
+      applyLayout, applyMy, removeMy, swapPalette, addAllBook, addSpine, openBlurb, closeBlurb, writeBlurb, putBlurb, bioText,
+      refreshBlurb: renderBlurb,
       pickerTo(t, hex) { openPicker(t, hex); },
       refreshPanel: renderPanel,
       refreshStock: renderStock,
@@ -868,7 +1166,7 @@
     /** The header line beside Next (design exportReason; Part 9 adds the size-change words, Part 10 "Done"). */
     nextNote() {
       if (!E || E.status !== 'ready') return 'Not done yet: export the cover files.';
-      const n = C.checks.run(E.cover, { missing: C.images.missing(E) }).filter((c) => c.sev === 'error').length;
+      const n = C.checks.run(E.cover, checkOpt()).filter((c) => c.sev === 'error').length;
       return n ? `Fix ${n} problem${n === 1 ? '' : 's'} before export.` : 'Not done yet: export the cover files.';
     },
     /** Next opens 10 only after a current export (Part 10). */

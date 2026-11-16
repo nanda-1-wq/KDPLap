@@ -20,7 +20,8 @@
 
    const s = kdpCover.save.create({ bookId, rev, snapshot, read, onState, delay })
      snapshot: { layers, bg, fmt, layout } as loaded (for the visit snapshot)
-     read(): { layers, bg } to write now
+     read(): { layers, bg[, layout] } to write now (layout: the pressed ready layout or My layout, E16 Part 8;
+             sent only when it changed since the last good save)
      onState(state, info): 'saved' | 'saving' | 'failed'; info = { conflict, message }
    s.changed()       a change happened: save soon
    s.flush()         save now (Promise: resolves when nothing is left to save, or it failed)
@@ -34,6 +35,8 @@
   function create(o) {
     const delay = o.delay == null ? 700 : o.delay;
     let rev = o.rev, state = 'saved', timer = null, running = null, dirty = false, snapDone = false, conflict = false;
+    // E16 Part 8: the pressed layout is written only when it changed since the last good save.
+    let savedLayout = o.snapshot && o.snapshot.layout !== undefined ? o.snapshot.layout : null;
     const set = (st, info) => { state = st; o.onState(st, info || {}); };
 
     function changed() {
@@ -63,8 +66,10 @@
             if (cur.error || !cur.data || !cur.data.design) throw cur.error || new Error('The cover could not be read.');
             rev = cur.data.design.rev;
           }
-          const res = await root.kdp.saveCoverDesign(o.bookId, rev, { layers: want.layers, bg: want.bg });
+          const newLayout = want.layout !== undefined && want.layout !== savedLayout;
+          const res = await root.kdp.saveCoverDesign(o.bookId, rev, Object.assign({ layers: want.layers, bg: want.bg }, newLayout ? { layout: want.layout } : {}));
           if (res.error) throw res.error;
+          if (newLayout) savedLayout = want.layout;
           rev = res.data.rev;
           conflict = false;
           set(dirty ? 'saving' : 'saved');

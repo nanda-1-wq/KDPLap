@@ -25,7 +25,7 @@
    POST { stage: "promise_check", bookId, chapterId }
                                                 → { stage, chapter_id, verdict, reason, quote, section_id, unsourced, words, versions, inputs_key, checked_at }
                                                   (E14.5, not streamed; the server reads the saved text)
-   POST { stage: "cover_blurb", bookId }        → { stage, headline, blurb, words, unsourced }
+   POST { stage: "cover_blurb", bookId, length, tone, authorLine } → { stage, blurb, words, unsourced }  (v28)
                                                   (E15 Part 5, not streamed; nothing is saved: the
                                                   browser saves the blurb version and the headline)
    or { error: <code> }.
@@ -467,19 +467,22 @@ function openStore(authHeader: string): Store {
       return data as { checked_at: string; inputs_key: string };
     },
 
-    // cover_blurb (E15 Part 5), through RLS as the caller: the title, the
-    // subtitle, the pen name and the positioning. Nothing from the Brief or
-    // Research (owner, C8: facts only from the locked Positioning). null = not
-    // the caller's book. The stage saves nothing.
+    // cover_blurb (E15 Part 5; v2 in E16 Part 8), through RLS as the caller:
+    // the title, the subtitle, the pen name and its bio (the author line), and
+    // the positioning. Nothing from the Brief or Research (owner, C8: facts only
+    // from the locked Positioning). null = not the caller's book. The stage
+    // saves nothing.
     async getCoverBlurbContext(bookId) {
-      const data = await readBook(bookId, `id, title, subtitle, pen_names ( name ),
+      const data = await readBook(bookId, `id, title, subtitle, pen_names ( name, bio_text ),
         positioning ( one_sentence, reader_promise, approach, lacks, selling_points, focus_tags,
                       drift_flags, drift_checked_at, locked_at, updated_at )`);
       if (!data) return null;
+      const pen = one(data.pen_names) as { name: string; bio_text: string | null } | null;
       return {
         bookId: data.id as string,
         book: { title: data.title ?? null, subtitle: data.subtitle ?? null },
-        penName: (one(data.pen_names) as { name: string } | null)?.name ?? null,
+        penName: pen?.name ?? null,
+        bio: pen?.bio_text ?? null,
         positioning: one(data.positioning) as CoverBlurbContext["positioning"],
       };
     },

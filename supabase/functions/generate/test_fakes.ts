@@ -228,13 +228,16 @@ export const PROMISE_QUOTE = "Chair yoga also helps you lose weight fast, so you
 export const PROMISE_OUT = { verdict: "drifts", reason: "Weight loss is not in the reader promise. Cut it or tie it to moving safely.", quote: PROMISE_QUOTE };
 export const promiseReply = (out: unknown = PROMISE_OUT) => () => Promise.resolve(anthropic("end_turn", out));
 
-/* ── cover_blurb (E15 Part 5) ── */
+/* ── cover_blurb (E15 Part 5; v2 in E16 Part 8) ── */
 
-/** The book of the chair yoga fixtures with its locked positioning (made-up text). */
+/** The chair yoga pen name's bio, as a writer might enter it in Pen Names (made-up text). */
+export const COVER_BIO = "Nora Hale taught gentle movement classes to more than 400 students at a community center. She lives in Maine with her husband and two cats.";
+/** The book of the chair yoga fixtures with its locked positioning and its pen name's bio (made-up text). */
 export const coverCtx = (extra: Partial<CoverBlurbContext> = {}): CoverBlurbContext => ({
-  bookId: BOOK_ID, book: { title: "Chair Yoga for Seniors Over 60", subtitle: "Gentle 15-Minute Routines" }, penName: "Nora Hale", positioning: LOCKED, ...extra,
+  bookId: BOOK_ID, book: { title: "Chair Yoga for Seniors Over 60", subtitle: "Gentle 15-Minute Routines" }, penName: "Nora Hale", bio: COVER_BIO, positioning: LOCKED, ...extra,
 });
-export const cbid = { stage: "cover_blurb", bookId: BOOK_ID };
+/** v28's request: Medium, Warm, no author line (the dialog's first state without the tick). */
+export const cbid = { stage: "cover_blurb", bookId: BOOK_ID, length: "medium", tone: "warm", authorLine: false };
 
 /** One SSE event as Anthropic sends it. */
 export const aev = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;

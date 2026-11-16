@@ -23,6 +23,8 @@
      C14 the back cover has no text                               tip
      C15 a picture removed from Uploads (E16 Part 6, R13; only with
          opt.missing: the ids of the assets that are gone)        error
+     C16 a layout's sample photo still on the cover (E16 Part 8,
+         STOP 6 N2, rec; only with opt.samples)                   error
 
    One planned change (D13, owner Q-9 and STOP 1): C3 and C4 measure spine
    text by its ink band (kdpCover.textlayout.inkBand): cap top to baseline
@@ -32,6 +34,7 @@
    kdpCover.checks.run(cover, opt) → [{ code, sev, msg, id?, fix? }]
        cover = { fmt, bg, layers };  opt.textH(l) → px (default textlayout.height)
        opt.missing: a Set (or array) of asset ids no longer in Uploads (C15; without it, no C15)
+       opt.samples: true to flag a layout's sample photo (an image layer with no asset; C16; without it, no C16)
    kdpCover.checks.summary(items)  → { errors, warns, tips, chip, line }  (design chipLabel and checksSummary)
    ═══════════════════════════════════════════════════ */
 (function (root) {
@@ -91,7 +94,9 @@
         const sliver = (b.x > 0.5 && b.x < 13) || (b.y > 0.5 && b.y < 13) || (x1 < g.W - 0.5 && x1 > g.W - 13) || (y1 < g.H - 0.5 && y1 > g.H - 13);
         if (sliver) out.push({ code: 'C9', sev: 'warn', msg: nm(l) + ' stops just short of the edge. A thin line of background may show after the cut. Stretch it into the bleed or move it in.', id: l.id });
       }
-      if (l.type === 'image' && missing && l.asset && missing.has(l.asset)) {
+      if (l.type === 'image' && o.samples && l.asset == null) {
+        out.push({ code: 'C16', sev: 'error', msg: nm(l) + ' is a sample. Replace it with your own picture, or delete it.', id: l.id });
+      } else if (l.type === 'image' && missing && l.asset && missing.has(l.asset)) {
         out.push({ code: 'C15', sev: 'error', msg: nm(l) + ' is missing: it was removed from your uploads. Replace it or delete it.', id: l.id });
       } else if (l.type === 'image') {
         const d = Mo.dpi(l);

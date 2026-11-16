@@ -12,6 +12,7 @@
    h.change(prev, act)  call with the state BEFORE a change to layers or bg; act = the running drag ({ pushed }) or null
    h.undo(cur) → the state to show, or null      h.redo(cur) → the state to show, or null
    h.canUndo() / h.canRedo() / h.reset() / h.size()
+   h.step()   the next change is its own step, whatever the time (E16 Part 8: a layout, a palette, the blurb)
    kdpCover.history.keepSelection(snap, sel, multi) → { sel, multi } that still exist (design restore)
    ═══════════════════════════════════════════════════ */
 (function (root) {
@@ -47,6 +48,7 @@
       canUndo: () => past.length > 0,
       canRedo: () => future.length > 0,
       reset() { past = []; future = []; lastPush = 0; },
+      step() { lastPush = 0; },
       size: () => ({ past: past.length, future: future.length })
     };
   }

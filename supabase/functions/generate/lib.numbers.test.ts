@@ -63,15 +63,14 @@ Deno.test("number rule: Outline, the outline check and the AI section check give
   }
 });
 
-Deno.test("number rule: the cover blurb (E15) gives the same answer, in the blurb and in the headline", async () => {
-  // A book with no number in its title, subtitle or positioning.
-  const ctx = coverCtx({ book: { title: "Calm Seated Yoga", subtitle: "Gentle Routines at Home" }, positioning: null });
-  const known = L.coverBlurbKnown(ctx);
+Deno.test("number rule: the cover blurb (v28) gives the same answer, in the blurb and in the author line", async () => {
+  // A book with no number in its title, subtitle, positioning or bio.
+  const ctx = coverCtx({ book: { title: "Calm Seated Yoga", subtitle: "Gentle Routines at Home" }, positioning: null, bio: "Nora Hale teaches seated yoga." });
   for (const [phrase, want] of TABLE) {
-    const b = L.interpretCoverBlurb(true, await body({ headline: "Move with ease", blurb: phrase }), known);
+    const b = L.interpretCoverBlurb(true, await body({ blurb: phrase }), ctx, false);
     assertEquals(b.coverBlurb!.unsourced, want, `cover blurb: ${phrase}`);
-    const h = L.interpretCoverBlurb(true, await body({ headline: phrase, blurb: "Sit tall and breathe." }), known);
-    assertEquals(h.coverBlurb!.unsourced, want, `cover headline: ${phrase}`);
+    const a = L.interpretCoverBlurb(true, await body({ blurb: "Sit tall and breathe.", author_line: phrase }), ctx, true);
+    assertEquals(a.coverBlurb!.unsourced, want, `cover author line: ${phrase}`);
   }
 });
 

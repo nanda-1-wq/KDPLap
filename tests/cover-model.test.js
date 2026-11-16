@@ -90,6 +90,20 @@ Deno.test("a stacked title keeps its stacked form on the new book", () => {
   assertEquals(r.layers.find((l) => l.src === "title").text, "MICRO\nSTUDY\nHABITS");
 });
 
+Deno.test("a My layout with the rest line (STOP 8): this book's 3 big words and its rest; none when the title is short", () => {
+  const b = K.layouts.build("bold", { title: "One Two Three Four Five", subtitle: "s", pen: "p" }, G6, 1);
+  const r = K.layouts.applyMy({ bg: b.bg, fmt: G6, layers: b.layers }, DESIGN_BOOK, G6, 1).layers;
+  assertEquals(r.find((l) => l.src === "title").text, "MICRO STUDY HABITS");
+  const rest = r.find((l) => l.src === "titlerest");
+  assertEquals(rest.text, "for Busy Adult Learners");
+  assert(rest.size >= 12 && rest.size <= 24 && K.textlayout.lines(rest).length === 1, String(rest.size));
+  const short = K.layouts.applyMy({ bg: b.bg, fmt: G6, layers: b.layers }, { title: "Sleep Well", subtitle: "s", pen: "p" }, G6, 1).layers;
+  assertEquals([short.find((l) => l.src === "title").text, short.some((l) => l.src === "titlerest")], ["SLEEP WELL", false]);
+  // a Band title (no rest line) still takes the whole title
+  const band = K.layouts.build("band", DESIGN_BOOK, G6, 1);
+  assertEquals(K.layouts.applyMy({ bg: band.bg, fmt: G6, layers: band.layers }, DESIGN_BOOK, G6, 1).layers.find((l) => l.src === "title").text, DESIGN_BOOK.title);
+});
+
 Deno.test("nudge (1 px, 10 with Shift), remove, select all skip locked and hidden layers", () => {
   const L = [M().shapeLayer(1, { x: 0, y: 0, w: 1, h: 1 }), M().shapeLayer(2, { x: 0, y: 0, w: 1, h: 1, lock: true }), Object.assign(M().shapeLayer(3, { x: 0, y: 0, w: 1, h: 1 }), { hidden: true })];
   assertEquals(M().nudge(L, [1, 2], 1, 0, false).map((l) => l.x), [1, 0, 0]);

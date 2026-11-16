@@ -49,7 +49,7 @@ Deno.test("stage table: promise_check (E14.5) is a normal JSON stage, not stream
   assertEquals(L.MAX_BODY_BYTES, 262_144);
 });
 
-Deno.test("stage table: cover_blurb (E15 Part 5) is a normal JSON stage, not streamed, and saves nothing", () => {
+Deno.test("stage table: cover_blurb (E15 Part 5; v2 in E16 Part 8) is a normal JSON stage, not streamed, and saves nothing", () => {
   const d = L.stageDef("cover_blurb");
   assertEquals([d.stream, d.save, d.interpretAlone], [undefined, undefined, undefined]);
   assertEquals(L.MODEL_FOR_STAGE.cover_blurb, "claude-sonnet-5-5");

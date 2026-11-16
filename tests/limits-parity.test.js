@@ -520,3 +520,16 @@ Deno.test("09 Cover stock (E16 Part 7): the stock function's caps equal 0030, 00
   assertEquals(read(M31).includes("key ~ '^[0-9a-f]{64}$'"), true);
   assertEquals(Number(one(STOCK, String.raw`PER_PAGE = (\d+);`)), 24);
 });
+
+Deno.test("09 Cover blurb (E16 Part 8): the dialog's lengths, tones and cap equal generate v28 and 0029", () => {
+  // the dialog sends only these values; parseInput refuses any other
+  assertEquals(COVER.blurb.LENGTHS.map((x) => x[0]), [...L.COVER_LENGTHS]);
+  assertEquals(COVER.blurb.TONES.map((x) => x[0]), [...L.COVER_TONES]);
+  // "about 80 words" in the dialog is the prompt's target
+  assertEquals(COVER.blurb.LENGTHS.map((x) => x[2]), L.COVER_LENGTHS.map((k) => `about ${L.COVER.words[k].target} words`));
+  // the cap: the dialog, the server and cover_blurbs.body
+  assertEquals(COVER.blurb.MAX_CHARS, L.COVER.blurbChars);
+  assertEquals(Number(one(M("0029_cover.sql"), String.raw`char_length\(body\) between 1 and (\d+) and body = btrim\(body\)`)), L.COVER.blurbChars);
+  // the fit note's last step is the cap (a draft the database could not save is "too long")
+  assertEquals(COVER.blurb.FIT.at10, COVER.blurb.MAX_CHARS);
+});

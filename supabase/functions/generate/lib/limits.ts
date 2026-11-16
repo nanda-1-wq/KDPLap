@@ -196,17 +196,26 @@ export const PROMISE = {
   quoteChars: 300,
 } as const;
 
-// The back cover headline and blurb (E15 Part 5, stage cover_blurb, plan §7, not
-// streamed). The prompt asks for a headline of at most 12 words and a blurb of 100
-// to 150 words. Our code keeps a headline of at most 12 words and 80 characters
-// (0029 book_covers.headline) and a blurb of 1 to 1,500 characters (0029
-// cover_blurbs.body), so every reply can be saved. Same numbers as js/cover-blurb.js
-// LIMITS (tests/limits-parity.test.js).
+// The back cover blurb (stage cover_blurb v2, generate v28, E16 Part 8, plan §3; not
+// streamed). The writer picks a length and a tone, and whether the blurb ends with one
+// line about the author from the pen name's bio. The prompt asks for the length's words
+// (about 80, 130 or 180, with the range below). Our code keeps a blurb of 1 to 1,500
+// characters (0029 cover_blurbs.body), the author line included, so every reply can be
+// saved; the bio goes in the prompt cut at a word to bioChars. No headline (v27 had one).
+// The browser's own copies: js/cover/blurb.js LENGTHS, TONES and MAX_CHARS
+// (tests/limits-parity.test.js holds them equal).
+export const COVER_LENGTHS = ["short", "medium", "long"] as const;
+export type CoverLength = (typeof COVER_LENGTHS)[number];
+export const COVER_TONES = ["warm", "direct", "expert"] as const;
+export type CoverTone = (typeof COVER_TONES)[number];
 export const COVER = {
-  headlineWords: 12,
-  headlineChars: 80,
-  blurbMinWords: 100,
-  blurbMaxWords: 150,
+  words: {
+    short: { target: 80, min: 70, max: 90 },
+    medium: { target: 130, min: 115, max: 145 },
+    long: { target: 180, min: 160, max: 200 },
+  },
+  authorLineWords: 30,
+  bioChars: 1500,
   blurbChars: 1500,
 } as const;
 
@@ -299,7 +308,7 @@ export type GenerateInput =
   | { stage: "section_write"; bookId: string; sectionId: string; baseVersionId: string | null; more: boolean }
   | { stage: "section_check"; bookId: string; sectionId: string; baseVersionId: string }
   | { stage: "promise_check"; bookId: string; chapterId: string }
-  | { stage: "cover_blurb"; bookId: string }
+  | { stage: "cover_blurb"; bookId: string; length: CoverLength; tone: CoverTone; authorLine: boolean }
   | {
     stage: "section_improve"; bookId: string; sectionId: string; baseVersionId: string | null; action: ImproveAction;
     selection: string; before: string; after: string; instruction: string | null;
@@ -329,7 +338,8 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *                    instruction 1 to 300 after trim (sent trimmed)
  *   section_check:   { stage, bookId, sectionId, baseVersionId (uuid, never null) }   at most 2 KB
  *   promise_check:   { stage, bookId, chapterId }   at most 2 KB
- *   cover_blurb:     { stage, bookId }             at most 2 KB
+ *   cover_blurb:     { stage, bookId, length, tone, authorLine }   at most 2 KB; length one of
+ *                    COVER_LENGTHS, tone one of COVER_TONES, authorLine true or false (v28)
  * Anything else is null.
  */
 export function parseInput(raw: string): GenerateInput | null {
@@ -418,7 +428,16 @@ export function parseInput(raw: string): GenerateInput | null {
     };
   }
 
-  if (stage === "brief_help" || stage === "review_insights" || stage === "drift_check" || stage === "title_ideas" || stage === "outline_check" || stage === "cover_blurb") {
+  if (stage === "cover_blurb") {
+    if (!sameKeys(o, ["stage", "bookId", "length", "tone", "authorLine"])) return null;
+    if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
+    if (typeof o.length !== "string" || !(COVER_LENGTHS as readonly string[]).includes(o.length)) return null;
+    if (typeof o.tone !== "string" || !(COVER_TONES as readonly string[]).includes(o.tone)) return null;
+    if (typeof o.authorLine !== "boolean") return null;
+    return { stage, bookId: o.bookId.toLowerCase(), length: o.length as CoverLength, tone: o.tone as CoverTone, authorLine: o.authorLine };
+  }
+
+  if (stage === "brief_help" || stage === "review_insights" || stage === "drift_check" || stage === "title_ideas" || stage === "outline_check") {
     if (!sameKeys(o, ["stage", "bookId"])) return null;
     if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
     return { stage, bookId: o.bookId.toLowerCase() };

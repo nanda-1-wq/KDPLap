@@ -1685,6 +1685,20 @@ window.kdp = {
     return { data: error ? null : (data && data[0]) || null, error };
   },
 
+  /**
+   * A back cover blurb version (0029 cover_blurbs; the newest is current, 20
+   * kept per book). source: 'ai' (the AI's draft put on unchanged) or
+   * 'manual'. body: 1 to 1,500 characters, trimmed. → { data: { id, body,
+   * source, created_at } }.
+   */
+  async addCoverBlurb(bookId, body, source) {
+    const { data, error } = await window.sb
+      .from('cover_blurbs')
+      .insert({ book_id: bookId, body: String(body || '').trim(), source })
+      .select('id, body, source, created_at');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
   /** The × on a My layout. 0 rows is an error. */
   async removeMyLayout(id) {
     const { error, count } = await window.sb.from('cover_my_layouts').delete({ count: 'exact' }).eq('id', id);

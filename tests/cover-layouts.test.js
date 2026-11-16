@@ -9,18 +9,21 @@ import { K, GOLDEN, near, pos, chk, goldChk, designTextH, DESIGN_BOOK, fk, G6 } 
 
 const run = (fmt, bg, layers, opt) => K.checks.run({ fmt, bg, layers }, opt);
 
-// D15 (owner STOP 1, N4): Stack puts the title's other words before the subtitle. The port proof
-// puts the design's subtitle words back before the remap, so every number is compared with the design.
+// D15 (owner STOP 1, N4 and STOP 8): Stack and Bold put the title's other words on their own line (src
+// titlerest) under the big title; the subtitle moves down only when that line reaches it. The port proof takes
+// the rest line out and puts the design's subtitle back (Stack: its words at y 400; Bold: "for Busy Adult
+// Learners. " + its words at y 430) before the remap, so every other number is compared with the design.
+const DESIGN_SUB = { stack: { text: DESIGN_BOOK.subtitle, y: 400 }, bold: { text: "for Busy Adult Learners. " + DESIGN_BOOK.subtitle, y: 430 } };
+const asDesign = (key, layers) => layers.filter((l) => l.src !== "titlerest").map((l) => (l.src === "subtitle" ? Object.assign({}, l, DESIGN_SUB[key]) : l));
 function portBuild(key, fmt) {
-  if (key !== "stack") return K.layouts.build(key, DESIGN_BOOK, fmt, 1, undefined, { textH: designTextH });
+  if (!DESIGN_SUB[key]) return K.layouts.build(key, DESIGN_BOOK, fmt, 1, undefined, { textH: designTextH });
   const b = K.layouts.base(key, DESIGN_BOOK, 1);
-  b.layers = b.layers.map((l) => (l.src === "subtitle" ? Object.assign({}, l, { text: DESIGN_BOOK.subtitle }) : l));
-  b.layers = K.remap.remap(b.layers, K.geo.geo(K.layouts.AUTHORED), K.geo.geo(fmt), { textH: designTextH }).layers;
+  b.layers = K.remap.remap(asDesign(key, b.layers), K.geo.geo(K.layouts.AUTHORED), K.geo.geo(fmt), { textH: designTextH }).layers;
   return b;
 }
 
 for (const c of GOLDEN.layouts) {
-  Deno.test(`port: ${c.key} at ${fk(c.fmt)} equals the design${c.key === "stack" ? " (design subtitle words, D15)" : ""}`, () => {
+  Deno.test(`port: ${c.key} at ${fk(c.fmt)} equals the design${DESIGN_SUB[c.key] ? " (the rest line out, the design's subtitle back, D15)" : ""}`, () => {
     const b = portBuild(c.key, c.fmt);
     assertEquals(b.bg, c.bg);
     near(b.layers.map(pos), c.layers, "layers");
@@ -69,33 +72,56 @@ Deno.test("every layout's full layers at 6 × 9 equal the design (every field; t
   for (const c of GOLDEN.layoutsFull) {
     const b = K.layouts.build(c.key, DESIGN_BOOK, G6, 1, undefined, { textH: designTextH });
     assertEquals(b.bg, c.bg, c.key);
-    assertEquals(b.nextId, c.nextId, c.key);
+    // D15: Stack and Bold have one more layer, the rest line, with the next id.
+    assertEquals(b.nextId, c.nextId + (DESIGN_SUB[c.key] ? 1 : 0), c.key);
     const gold = c.layers.map((l) => {
       const o = Object.assign({}, l);
       if (o.type === "image") { delete o.bg; o.asset = null; }
-      if (c.key === "stack" && o.src === "subtitle") o.text = "for Busy Adult Learners. " + DESIGN_BOOK.subtitle;   // D15
       return o;
     });
-    near(b.layers, gold, c.key);
+    near(DESIGN_SUB[c.key] ? asDesign(c.key, b.layers) : b.layers, gold, c.key);
   }
 });
 
-Deno.test("Stack and Bold split the title: the first 3 words big, the other words before the subtitle (Stack: D15)", () => {
-  const st = K.layouts.base("stack", DESIGN_BOOK, 1).layers;
-  assertEquals(st.find((l) => l.src === "title").text, "MICRO\nSTUDY\nHABITS");
-  assertEquals(st.find((l) => l.src === "subtitle").text, "for Busy Adult Learners. " + DESIGN_BOOK.subtitle);
-  const bold = K.layouts.base("bold", DESIGN_BOOK, 1).layers;
-  assertEquals(bold.find((l) => l.src === "title").text, "MICRO STUDY HABITS");
-  assertEquals(bold.find((l) => l.src === "subtitle").text, "for Busy Adult Learners. " + DESIGN_BOOK.subtitle);
+Deno.test("Stack and Bold split the title: the first 3 words big, the other words their own line, the subtitle its own (D15, STOP 8)", () => {
+  const TL = K.textlayout;
+  for (const [key, sub0] of [["stack", 400], ["bold", 430]]) {
+    const L = K.layouts.base(key, DESIGN_BOOK, 1).layers;
+    const t = L.find((l) => l.src === "title"), r = L.find((l) => l.src === "titlerest"), s = L.find((l) => l.src === "subtitle");
+    assertEquals(t.text, key === "stack" ? "MICRO\nSTUDY\nHABITS" : "MICRO STUDY HABITS", key);
+    assertEquals(s.text, DESIGN_BOOK.subtitle, key);
+    // the rest line: right under the title (8 px), in its box and color, IBM Plex Sans Bold, one line, 12 to 24 pt
+    assertEquals([r.text, r.x, r.w, r.color, r.align, r.font, r.weight], ["for Busy Adult Learners", t.x, t.w, t.color, t.align, "IBM Plex Sans", 700], key);
+    assertEquals(r.y, t.y + TL.height(t) + 8, key);
+    assert(r.size <= 24 && r.size >= 12 && r.size * 2 === Math.round(r.size * 2) && TL.lines(r).length === 1, `${key} ${r.size}`);
+    assert(r.size === 24 || TL.lines(Object.assign({}, r, { size: r.size + 0.5 })).length > 1, `${key}: the largest size that fits`);
+    // the order: the rest line comes right after the title; it has the next free id
+    assertEquals(L.indexOf(r), L.indexOf(t) + 1, key);
+    assertEquals(r.id, Math.max(...L.map((l) => l.id)), key);
+    // the subtitle stays at the design's place, or moves just below the rest line when that reaches it
+    assertEquals(s.y, Math.max(sub0, r.y + TL.height(r) + 10), key);
+    assert(s.y >= r.y + TL.height(r), `${key}: no overlap`);
+  }
 });
 
-Deno.test("Stack and Bold with a short title: no rest, the subtitle stays as it is", () => {
+Deno.test("Stack and Bold: a long rest of the title steps down, never under 12 pt", () => {
+  const TL = K.textlayout;
+  const long = { title: "Micro Study Habits for Busy Adult Learners Who Work Nights and Weekends Too", subtitle: "s", pen: "p" };
+  const r = K.layouts.base("stack", long, 1).layers.find((l) => l.src === "titlerest");
+  assertEquals(r.text, "for Busy Adult Learners Who Work Nights and Weekends Too");
+  assert(r.size >= 12 && r.size < 24, String(r.size));
+  assert(r.size === 12 || TL.lines(r).length === 1, String(r.size));
+});
+
+Deno.test("Stack and Bold with a short title: no rest line, the subtitle stays as it is", () => {
   const book = { title: "Chair Yoga", subtitle: "Ten Minutes a Day", pen: "A. Writer" };
   assertEquals(K.layouts.base("stack", book, 1).layers.find((l) => l.src === "title").text, "CHAIR\nYOGA");
   assertEquals(K.layouts.base("stack", book, 1).layers.find((l) => l.src === "subtitle").text, "Ten Minutes a Day");
   const bold = K.layouts.base("bold", book, 1).layers;
   assertEquals(bold.find((l) => l.src === "title").text, "CHAIR YOGA");
   assertEquals(bold.find((l) => l.src === "subtitle").text, "Ten Minutes a Day");
+  for (const key of ["stack", "bold"]) assertEquals(K.layouts.base(key, book, 1).layers.some((l) => l.src === "titlerest"), false, key);
+  assertEquals(K.layouts.base("stack", book, 1).layers.find((l) => l.src === "subtitle").y, 400);
 });
 
 Deno.test("the blurb: the placeholder until there is a real one", () => {

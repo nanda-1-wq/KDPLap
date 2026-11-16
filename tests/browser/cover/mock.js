@@ -18,6 +18,13 @@
 //   __modes: stockFail / pickFail (n calls answer stockCode / pickCode, default stock_unavailable), stockNet (n calls
 //   do not reach the function), stockSlow / pickSlow (ms), stockMany (Pixabay answers 30 results: 2 pages of 24),
 //   picDown (n picture links fail)
+// Part 8: cover_my_layouts (store.my: rows with layers; cover_json lists them without layers, newest export first;
+// select one by id; delete one by id), cover_blurbs (insert: 0029's CHECKs, body 1 to 1,500 characters and trimmed,
+// source ai or manual; store.blurbs; the newest is cover_json's blurb) and the Edge Function "generate" (stage
+// cover_blurb v28 only: { stage, bookId, length, tone, authorLine } exactly, as limits.ts parseInput; the reply
+// store.ai (a function of the request, or { blurb, words, unsourced }); store.gen = the requests).
+//   __modes: myFail / myDelFail / blurbFail (n calls fail), genFail (n calls answer genCode, default ai_unavailable),
+//   genNet (n calls do not reach the function), genSlow (ms)
 // pdf.js 6.4.299 comes from tests/browser/.cache/format (the format suite's checked cache), never the network.
 // Fonts come from tests/browser/.cache/cover-fonts (the Part 2 cache, every file checked against its sha384 there).
 const U = '00000000-0000-4000-8000-000000000001';
@@ -38,6 +45,7 @@ async function setupCover(page) {
     history: [],                   // cover_design_history rows
     blurb: null,
     assets: [], files: {}, uploads: [], stock: { calls: [], net: [] }, stockFiles: {},
+    my: [], blurbs: [], gen: [], ai: null,
     writes: [], calls: [], cdn: [], saves: 0, reads: 0, dialogs: []
   };
   // "Leave site?" (beforeunload while a save is out or failed) must never block the next test: note it, accept it.
@@ -49,7 +57,8 @@ async function setupCover(page) {
     fmt: fmtToday(),
     pdf: store.pdf ? copy(store.pdf) : null,
     design: store.design ? copy(store.design) : null,
-    assets: store.assets.filter((a) => store.design && store.design.layers.some((l) => l.type === 'image' && l.asset === a.id)).map(copy), blurb: store.blurb ? copy(store.blurb) : null, my_layouts: [],
+    assets: store.assets.filter((a) => store.design && store.design.layers.some((l) => l.type === 'image' && l.asset === a.id)).map(copy), blurb: store.blurbs.length ? copy(store.blurbs[store.blurbs.length - 1]) : store.blurb ? copy(store.blurb) : null,
+    my_layouts: store.my.slice().sort((a, b) => (a.exported_at < b.exported_at ? 1 : -1)).map((m) => { const c = copy(m); delete c.layers; delete c.user_id; return c; }),
     key: store.design ? 'k' + store.design.rev : null,
     last: { print: null, image: null, kindle: null },
     now: now()
@@ -288,6 +297,44 @@ async function setupCover(page) {
         return json(r, 200, { asset: copy(out.row) });
       }
       return json(r, 400, { error: 'bad_request' });
+    }
+    // Part 8: My layouts, blurb versions, generate cover_blurb v28.
+    if (path === '/rest/v1/cover_my_layouts' && method === 'GET') {
+      if (take('myFail')) return json(r, 500, { message: 'mock: my layouts down' });
+      return json(r, 200, store.my.filter((m) => m.id === eq('id')).map((m) => { const c = copy(m); delete c.user_id; return c; }));
+    }
+    if (path === '/rest/v1/cover_my_layouts' && method === 'DELETE') {
+      store.writes.push({ table: 'cover_my_layouts', del: eq('id') });
+      if (take('myDelFail')) return json(r, 500, { message: 'mock: my layouts down' });
+      const n = store.my.length;
+      store.my = store.my.filter((m) => m.id !== eq('id'));
+      return r.fulfill({ status: 204, headers: { ...cors, 'content-range': `*/${n - store.my.length}` } });
+    }
+    if (path === '/rest/v1/cover_blurbs' && method === 'POST') {
+      const p = body();
+      store.writes.push({ table: 'cover_blurbs', insert: copy(p) });
+      if (take('blurbFail')) return json(r, 500, { message: 'mock: blurbs down' });
+      const b = String(p.body == null ? '' : p.body);
+      if (p.book_id !== FIX.BOOK) return fail(r, 403, '42501', 'new row violates row-level security policy');
+      if (![...b].length || [...b].length > 1500 || b !== b.trim() || !['ai', 'manual'].includes(p.source)) return fail(r, 400, '23514', 'mock: cover_blurbs check');
+      const row = { id: id('b'), body: b, source: p.source, created_at: now() };
+      store.blurbs.push(row);
+      return json(r, 201, [copy(row)]);
+    }
+    if (path === '/functions/v1/generate' && method === 'POST') {
+      const p = body();
+      store.gen.push(copy(p));
+      if (take('genNet')) return r.abort();
+      if (mode('genSlow')) await wait(mode('genSlow'));
+      const keys = Object.keys(p || {}).sort().join(',');
+      if (!p || p.stage !== 'cover_blurb' || keys !== 'authorLine,bookId,length,stage,tone' || !['short', 'medium', 'long'].includes(p.length)
+        || !['warm', 'direct', 'expert'].includes(p.tone) || typeof p.authorLine !== 'boolean') return json(r, 400, { error: 'bad_request' });
+      if (p.bookId !== FIX.BOOK) return json(r, 404, { error: 'not_found' });
+      if (p.authorLine && !String(store.book.bio || '').trim()) return json(r, 422, { error: 'not_enough_facts', missing: 'bio' });
+      if (take('genFail')) { const c = mode('genCode') || 'ai_unavailable'; return json(r, { monthly_limit: 429, rate_limited: 429, positioning_not_locked: 409, not_enough_facts: 422 }[c] || 502, { error: c }); }
+      const out = typeof store.ai === 'function' ? store.ai(p) : store.ai || { blurb: FIX.blurbWarm + (p.authorLine ? '\n\n' + FIX.bio : ''), unsourced: [] };
+      const blurb = out.blurb;
+      return json(r, 200, { stage: 'cover_blurb', blurb, words: (blurb.match(/\S+/g) || []).length, unsourced: out.unsourced || [] });
     }
     // The rail's 07 and 08 marks (design 58 shows them done): a current run, and a current Print PDF when there is one.
     if (path === '/rest/v1/rpc/qc_mark') return json(r, 200, [{ checked_at: ago(1), current: true }]);

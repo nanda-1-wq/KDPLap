@@ -106,8 +106,8 @@ export interface Store {
    */
   savePromiseCheck(s: PromiseCheckSave): Promise<{ checked_at: string; inputs_key: string }>;
   /**
-   * cover_blurb (E15 Part 5): the book's title and subtitle, its pen name and
-   * the positioning, through RLS. Nothing from the Brief or Research (C8).
+   * cover_blurb (E15 Part 5; v2 in E16 Part 8): the book's title and subtitle,
+   * its pen name and the pen name's bio, and the positioning, through RLS. Nothing from the Brief or Research (C8).
    * null = not the caller's book. The stage saves nothing.
    */
   getCoverBlurbContext(bookId: string): Promise<CoverBlurbContext | null>;

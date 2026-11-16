@@ -34,7 +34,6 @@
   };
   const WEIGHT = { 400: 'Regular', 600: 'Semibold', 700: 'Bold' };
   const CATS = ['All', 'Serif', 'Sans', 'Display', 'Script', 'Mono'];
-  const inert = (part) => ` aria-disabled="true" title="Comes in Part ${part}" data-inert="${part}"`;
 
   /* ── Font list ── */
   let ORDER = null;
@@ -71,8 +70,8 @@
       <div class="cv-cap">FROM YOUR BOOK</div>
       <div class="cv-bookrows">
         ${bookRow(E, 'title', 'Title')}${bookRow(E, 'subtitle', 'Subtitle')}${bookRow(E, 'pen', 'Pen name')}
-        <div class="cv-bookrow"><span>Back blurb</span><button type="button" class="cv-sbtn" data-k="blurb"${inert(8)}>Write blurb</button></div>
-        <div class="cv-bookrow"><span>Author line</span><button type="button" class="cv-sbtn" data-k="author"${inert(8)}>Add</button></div>
+        <div class="cv-bookrow"><span>Back blurb</span><button type="button" class="cv-sbtn" data-k="blurb" data-text-blurb>${C.bookData.realBlurb(E.cover.layers) ? 'Edit blurb' : 'Write blurb'}</button></div>
+        <div class="cv-bookrow"><span>Author line</span><button type="button" class="cv-sbtn" data-k="author" data-text-author${E.bioText() ? '' : ' aria-disabled="true" title="Add a bio in Pen Names first."'}>Add</button></div>
       </div>
       <p class="cv-help cv-help-sm">Words come from 04 Title and Pen Names. Change them there.</p>`;
   }
@@ -81,7 +80,10 @@
       const t = e.target.closest('[data-add-text]');
       if (t) { E.addText(t.dataset.addText); return; }
       const b = e.target.closest('[data-add-book]');
-      if (b && b.getAttribute('aria-disabled') !== 'true') E.addBook(b.dataset.addBook);
+      if (b && b.getAttribute('aria-disabled') !== 'true') { E.addBook(b.dataset.addBook); return; }
+      // Part 8: Back blurb opens the blurb dialog; Author line opens it with the author line ticked (STOP 8, new: the design's button had no action).
+      const w = e.target.closest('[data-text-blurb], [data-text-author]');
+      if (w && w.getAttribute('aria-disabled') !== 'true') E.openBlurb(w, w.hasAttribute('data-text-author') ? { author: true } : null);
     });
   }
 
