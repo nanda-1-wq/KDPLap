@@ -78,13 +78,29 @@ Deno.test("Markdown: parts off, About off by default", () => {
   assert(!md.includes("[Verify"));
 });
 
-Deno.test("DOCX: page size for every trim, equal 0.75 in margins", async () => {
-  const sizes = { "5x8": [7200, 11520], "5.5x8.5": [7920, 12240], "6x9": [8640, 12960], "7x10": [10080, 14400], "8.5x11": [12240, 15840] };
+Deno.test("DOCX: page size for every trim, equal 0.75 in margins (E13.2b: not on the large trims)", async () => {
+  const sizes = { "5x8": [7200, 11520], "5.25x8": [7560, 11520], "5.5x8.5": [7920, 12240], "6x9": [8640, 12960], "7x10": [10080, 14400] };
   for (const [trim, [w, h]] of Object.entries(sizes)) {
     const { doc } = await build({}, { ...DATA, book: { ...DATA.book, trim } });
     assertEquals(count(doc, new RegExp(`<w:pgSz w:w="${w}" w:h="${h}"`, "g")), 2, trim);
     assertEquals(count(doc, /<w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/g), 2, trim);
   }
+});
+
+Deno.test("E13.2b DOCX: large trims keep a 5.5 in line (owner Q5): equal side margins, 1 in top and bottom", async () => {
+  // 8 x 10: (8 - 5.5) / 2 = 1.25 in = 1800 twips. 8.5 x 11: 1.5 in = 2160 twips.
+  const want = { "8x10": [11520, 14400, 1800], "8.5x11": [12240, 15840, 2160] };
+  for (const [trim, [w, h, side]] of Object.entries(want)) {
+    const { doc } = await build({}, { ...DATA, book: { ...DATA.book, trim } });
+    assertEquals(count(doc, new RegExp(`<w:pgSz w:w="${w}" w:h="${h}"`, "g")), 2, trim);
+    assertEquals(count(doc, new RegExp(`<w:pgMar w:top="1440" w:right="${side}" w:bottom="1440" w:left="${side}"`, "g")), 2, trim);
+    assertEquals((w - 2 * side) / 1440, 5.5, trim);
+  }
+});
+
+Deno.test("E13.2b DOCX: its large trims are kdpFormatRules.LARGE", async () => {
+  await import("../js/format-rules.js");
+  assertEquals(X.LARGE, globalThis.kdpFormatRules.LARGE);
 });
 
 Deno.test("DOCX: page numbers only in the body, from 1, centered; none on the front matter", async () => {

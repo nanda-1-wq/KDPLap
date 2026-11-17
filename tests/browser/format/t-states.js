@@ -76,7 +76,7 @@ const test = async page => {
   st.cdn = [];
   await FM.open(page);
   await page.waitForSelector('[data-fmt-state]:not([hidden])', { timeout: 5000 });
-  ok((await state()) === 'No Print PDF for 7 × 10 in The Print PDF works with 6 × 9, 5.5 × 8.5, 5.25 × 8 and 5 × 8 in. Pick one of these under Trim size. Your text does not change.', `7 × 10: ${await state()}`);
+  ok((await state()) === 'No Print PDF for 7 × 10 in The Print PDF works with 6 × 9, 5.5 × 8.5, 5.25 × 8, 5 × 8, 8 × 10 and 8.5 × 11 in. Pick one of these under Trim size. Your text does not change.', `7 × 10: ${await state()}`);
   ok(st.cdn.length === 0, '7 × 10: no engine download');
   await page.selectOption('[data-fmt-trim]', '6x9');
   await page.click('dialog [data-change]');

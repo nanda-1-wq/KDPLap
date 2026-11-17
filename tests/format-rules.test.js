@@ -89,12 +89,43 @@ Deno.test("normalize: missing or wrong values become the defaults", () => {
   for (const s of F.STYLES) assertEquals(F.normalize({ style: s }).style, s);
 });
 
-Deno.test("trims: group A only, in the 08 order; anything else reads as 6 x 9", () => {
-  assertEquals(F.TRIMS, ["6x9", "5.5x8.5", "5.25x8", "5x8"]);
+Deno.test("trims: group A in the 08 order, then 8 x 10 and 8.5 x 11 (E13.2b); anything else reads as 6 x 9", () => {
+  assertEquals(F.TRIMS, ["6x9", "5.5x8.5", "5.25x8", "5x8", "8x10", "8.5x11"]);
+  assertEquals(F.LARGE, ["8x10", "8.5x11"]);
   assertEquals(F.trimSize("5.25x8"), { w: 5.25, h: 8 });
   assertEquals(F.trimSize("5.5x8.5"), { w: 5.5, h: 8.5 });
-  assert(F.isGroupA("5x8") && !F.isGroupA("7x10") && !F.isGroupA("8.5x11") && !F.isGroupA(null));
+  assertEquals(F.trimSize("8x10"), { w: 8, h: 10 });
+  assertEquals(F.trimSize("8.5x11"), { w: 8.5, h: 11 });
+  assert(F.isGroupA("5x8") && F.isGroupA("8x10") && F.isGroupA("8.5x11") && !F.isGroupA("7x10") && !F.isGroupA(null));
+  assert(F.isLarge("8x10") && F.isLarge("8.5x11") && !F.isLarge("6x9") && !F.isLarge("7x10") && !F.isLarge(null));
   assertEquals(F.trimSize("7x10"), { w: 6, h: 9 });
+});
+
+Deno.test("E13.2b layout: today's margins up to 6 x 9; large trims 5.5 in wide, type x 1.1 (STOP 1, layout A)", () => {
+  const base = { margin: { inside: 0.75, outside: 0.5, top: 0.75, bottom: 0.75 }, scale: 1 };
+  for (const t of ["6x9", "5.5x8.5", "5.25x8", "5x8", "7x10", null]) assertEquals(F.layout(t), base, String(t));
+  assertEquals(F.layout("8x10"), { margin: { inside: 1.125, outside: 1.375, top: 0.875, bottom: 0.875 }, scale: 1.1 });
+  assertEquals(F.layout("8.5x11"), { margin: { inside: 1.25, outside: 1.75, top: 1, bottom: 1 }, scale: 1.1 });
+  for (const t of F.LARGE) {
+    const l = F.layout(t);
+    assertEquals(F.trimSize(t).w - l.margin.inside - l.margin.outside, 5.5, t);
+    // Every margin is above KDP's minimum at every page count (inside 0.875 in at most; others 0.25 in).
+    assert(l.margin.inside >= F.kdpMargin(828).inside && Math.min(l.margin.outside, l.margin.top, l.margin.bottom) >= 0.25, t);
+  }
+  F.layout("8x10").margin.inside = 9;   // a copy: the rule cannot be changed from outside
+  assertEquals(F.layout("8x10").margin.inside, 1.125);
+});
+
+Deno.test("E13.2b trimsText: every Print PDF trim in one phrase (T1 to T3)", () => {
+  assertEquals(F.trimsText("or"), "6 × 9, 5.5 × 8.5, 5.25 × 8, 5 × 8, 8 × 10 or 8.5 × 11 in");
+  assertEquals(F.trimsText("and"), "6 × 9, 5.5 × 8.5, 5.25 × 8, 5 × 8, 8 × 10 and 8.5 × 11 in");
+  assertEquals(F.trimsText(), F.trimsText("or"));
+});
+
+Deno.test("E13.2b maxPages: KDP's page limits by trim and paper (black ink)", () => {
+  for (const t of ["6x9", "5.5x8.5", "5.25x8", "5x8", "8x10"]) assertEquals([F.maxPages(t, "white"), F.maxPages(t, "cream")], [828, 776], t);
+  assertEquals([F.maxPages("8.5x11", "white"), F.maxPages("8.5x11", "cream")], [590, 550]);
+  assertEquals(F.maxPages("6x9", undefined), 828);
 });
 
 Deno.test("kdpMargin: the KDP tiers at their edges", () => {
@@ -141,12 +172,16 @@ Deno.test("fileName: {title-slug}-print-{trim}.pdf", () => {
   assertEquals(F.fileName("Café Ünder", "5.25x8"), "cafe-under-print-5.25x8.pdf");
   assertEquals(F.fileName("", "5x8"), "book-print-5x8.pdf");
   assertEquals(F.fileName("T", "7x10"), "t-print-6x9.pdf");
+  assertEquals(F.fileName("T", "8.5x11"), "t-print-8.5x11.pdf");
+  assertEquals(F.fileName("T", "8x10"), "t-print-8x10.pdf");
 });
 
 Deno.test("E13.2 MARGIN equals the template's margins (js/format/book.typ)", () => {
   const typ = Deno.readTextFileSync(new URL("../js/format/book.typ", import.meta.url));
-  const m = /#let MARGIN = \(inside: ([0-9.]+)in, outside: ([0-9.]+)in/.exec(typ);
+  const m = /#let MARGIN = \(inside: ([0-9.]+)in, outside: ([0-9.]+)in, top: ([0-9.]+)in, bottom: ([0-9.]+)in\)/.exec(typ);
   assertEquals([Number(m[1]), Number(m[2])], [F.MARGIN.inside, F.MARGIN.outside]);
+  // E13.2b: the template's default page is layout('6x9').
+  assertEquals({ inside: Number(m[1]), outside: Number(m[2]), top: Number(m[3]), bottom: Number(m[4]) }, F.layout("6x9").margin);
 });
 
 Deno.test("E13.2 PART_ROWS: design 41 order, every switch is a 0027 part key", () => {
@@ -166,7 +201,17 @@ Deno.test("E13.2 trimText and marginNote", () => {
   assertEquals(F.marginNote(12), `KDP minimum 0.375 in inside for 24 to 150 pages. ${fixed}`);
   assertEquals(F.marginNote(160), `KDP minimum 0.5 in inside for 151 to 300 pages. ${fixed}`);
   assertEquals(F.marginNote(720), `KDP minimum 0.875 in inside for 701 to 828 pages. ${fixed}`);
-  assertEquals(F.marginNote(900), `KDP prints up to 828 pages. ${fixed}`);
+  assertEquals(F.marginNote(900), `KDP prints up to 828 pages at 6 × 9 in on white paper. ${fixed}`);
+  // E13.2b: the trim's margins (T4) and KDP's limit for the trim and paper (T5).
+  assertEquals(F.marginNote(48, "5x8"), `KDP minimum 0.375 in inside for 24 to 150 pages. ${fixed}`);
+  assertEquals(F.marginNote(48, "8x10"), "KDP minimum 0.375 in inside for 24 to 150 pages. We use 1.125 in inside and 1.375 in outside, mirrored.");
+  assertEquals(F.marginNote(0, "8.5x11"), "KDP's minimum inside margin depends on the page count. We use 1.25 in inside and 1.75 in outside, mirrored.");
+  assertEquals(F.marginNote(776, "6x9", "cream"), `KDP minimum 0.875 in inside for 701 to 828 pages. ${fixed}`);
+  assertEquals(F.marginNote(777, "6x9", "cream"), `KDP prints up to 776 pages at 6 × 9 in on cream paper. ${fixed}`);
+  assertEquals(F.marginNote(590, "8.5x11", "white"), "KDP minimum 0.75 in inside for 501 to 700 pages. We use 1.25 in inside and 1.75 in outside, mirrored.");
+  assertEquals(F.marginNote(591, "8.5x11", "white"), "KDP prints up to 590 pages at 8.5 × 11 in on white paper. We use 1.25 in inside and 1.75 in outside, mirrored.");
+  assertEquals(F.marginNote(551, "8.5x11", "cream"), "KDP prints up to 550 pages at 8.5 × 11 in on cream paper. We use 1.25 in inside and 1.75 in outside, mirrored.");
+  assertEquals(F.marginNote(829, "8x10", "white"), "KDP prints up to 828 pages at 8 × 10 in on white paper. We use 1.125 in inside and 1.375 in outside, mirrored.");
 });
 
 const v3 = (id, content, extra = {}) => ({ id, version_no: 1, content, ...extra });
@@ -213,6 +258,27 @@ Deno.test("E13.2 ready: every warning, in order, with the section to open in 06"
   assertEquals(t["also-by"].text, "2 Also by books were left out. They no longer have this pen name.");
 });
 
+Deno.test("E13.2b ready: KDP's page limit by trim and paper (T6, T7)", () => {
+  const m = F.modelOf(book3([{ id: "a", position: 1, title: "", status: "final", version: v3("va", "x") }]), {});
+  const w = (pages, trim, paper) => F.ready({ model: m, missing: [], pages, trim, paper }).warnings.map((x) => x.text);
+  // Group A on white: as before (701 to 828 the margin, over 828 too long).
+  assertEquals(w(828, "6x9", "white"), ["Over 700 pages. KDP asks for 0.875 in inside. This book uses 0.75 in."]);
+  assertEquals(w(829, "5x8", "white"), ["829 pages. KDP prints up to 828 pages at 5 × 8 in on white paper."]);
+  // Group A on cream: KDP stops at 776.
+  assertEquals(w(776, "6x9", "cream"), ["Over 700 pages. KDP asks for 0.875 in inside. This book uses 0.75 in."]);
+  assertEquals(w(777, "6x9", "cream"), ["777 pages. KDP prints up to 776 pages at 6 × 9 in on cream paper."]);
+  // Large trims: the inside margin is wide enough at every count, so no margin warning.
+  assertEquals(w(828, "8x10", "white"), []);
+  assertEquals(w(829, "8x10", "white"), ["829 pages. KDP prints up to 828 pages at 8 × 10 in on white paper."]);
+  assertEquals(w(777, "8x10", "cream"), ["777 pages. KDP prints up to 776 pages at 8 × 10 in on cream paper."]);
+  assertEquals(w(590, "8.5x11", "white"), []);
+  assertEquals(w(591, "8.5x11", "white"), ["591 pages. KDP prints up to 590 pages at 8.5 × 11 in on white paper."]);
+  assertEquals(w(550, "8.5x11", "cream"), []);
+  assertEquals(w(551, "8.5x11", "cream"), ["551 pages. KDP prints up to 550 pages at 8.5 × 11 in on cream paper."]);
+  // No trim or paper given: 6 x 9 on white (the 08 callers before E13.2b Part 3).
+  assertEquals(F.ready({ model: m, missing: [], pages: 777 }).warnings.map((x) => x.key), ["margin"]);
+});
+
 Deno.test("E13.2 ready: page limits (owner Q8: a warning only), several characters, a chapter, not checked yet", () => {
   const d = book3([{ id: "a", position: 1, title: "", status: "final", version: v3("va", "x") }]);
   d.chapters[0].needs_review = true;
@@ -220,6 +286,7 @@ Deno.test("E13.2 ready: page limits (owner Q8: a warning only), several characte
   assertEquals(F.ready({ model: m, missing: [], pages: 702 }).warnings.map((w) => w.text),
     ["Chapter 1 needs review in 05 Outline.", "Over 700 pages. KDP asks for 0.875 in inside. This book uses 0.75 in."]);
   assertEquals(F.ready({ model: m, missing: [], pages: 830 }).warnings.map((w) => w.key), ["review-chapter", "long"]);
+  assertEquals(F.ready({ model: m, missing: [], pages: 830 }).warnings[1].text, "830 pages. KDP prints up to 828 pages at 6 × 9 in on white paper.");
   const many = [{ char: "✓", code: "U+2713", where: ["1.1"] }, { char: "😀", code: "U+1F600", where: [] }, { char: "→", code: "U+2192", where: [] }, { char: "⅞", code: "U+215E", where: [] }];
   assertEquals(F.ready({ model: m, missing: many, pages: 48 }).warnings.find((w) => w.key === "chars").text,
     "4 characters are not in the font (“✓” (U+2713), an emoji, “→” (U+2192) and more, first in 1.1). They print as a box.");

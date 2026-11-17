@@ -103,13 +103,13 @@ const test = async page => {
   await page.waitForFunction(() => document.querySelector('[data-step-title]').textContent === 'Brief', null, { timeout: 5000 });
   await page.waitForSelector('[data-chips="trim_size"]', { timeout: 5000 });
   ok(await page.$eval('[data-chips="trim_size"] [data-value="5x8"]', (c) => c.getAttribute('aria-pressed') === 'true' || c.getAttribute('aria-checked') === 'true' || c.classList.contains('is-on')), '01 Brief shows the new trim');
-  ok((await FM.all(page, '[data-chips="trim_size"] .tone-chip')).join('|') === '5 × 8 in|5.25 × 8 in|5.5 × 8.5 in|6 × 9 in', 'Brief chips: group A');
+  ok((await FM.all(page, '[data-chips="trim_size"] .tone-chip')).join('|') === '5 × 8 in|5.25 × 8 in|5.5 × 8.5 in|6 × 9 in|8 × 10 in|8.5 × 11 in', 'Brief chips: the 6 Print PDF trims (E13.2b)');
 
   /* A trim outside group A (old 7 × 10): an extra choice and the Print PDF note. */
   st.brief.trim_size = '7x10';
   await FM.open(page);
-  ok((await page.$$eval('[data-fmt-trim] option', (o) => o.map((x) => x.textContent))).join() === '6 × 9 in,5.5 × 8.5 in,5.25 × 8 in,5 × 8 in,7 × 10 in' && await page.$eval('[data-fmt-trim]', (s) => s.value === '7x10'), '7 × 10: an extra choice, chosen');
-  ok((await FM.txt(page, '.fmt-trim-off')) === 'Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8 or 5 × 8 in. Pick one of these.' && await page.$eval('.fmt-trim-off svg', () => true), '7 × 10: the note with an icon');
+  ok((await page.$$eval('[data-fmt-trim] option', (o) => o.map((x) => x.textContent))).join() === '6 × 9 in,5.5 × 8.5 in,5.25 × 8 in,5 × 8 in,8 × 10 in,8.5 × 11 in,7 × 10 in' && await page.$eval('[data-fmt-trim]', (s) => s.value === '7x10'), '7 × 10: an extra choice, chosen');
+  ok((await FM.txt(page, '.fmt-trim-off')) === 'Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8, 5 × 8, 8 × 10 or 8.5 × 11 in. Pick one of these.' && await page.$eval('.fmt-trim-off svg', () => true), '7 × 10: the note with an icon');
 
   /* 900 px: both dialogs fit, no sideways scroll. */
   await page.setViewportSize({ width: 900, height: 900 });

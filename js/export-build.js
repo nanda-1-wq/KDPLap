@@ -7,6 +7,9 @@
    kdpExportBuild.toDocx(model, docx, { year }) → a docx Document (docx 9.5.1, global "docx")
      Page size from the Brief (trim, inches × 1440 twips). Equal margins of
      0.75 in: docx 9.5.1 has no mirrored-margins option (owner choice 4).
+     E13.2b (owner Q5): on the large trims (8 × 10, 8.5 × 11) the side margins
+     are (width − 5.5) / 2, so the line is 5.5 in, as in the Print PDF; 1 in
+     top and bottom.
      Front matter (title page, copyright, contents) is its own section with
      an empty footer: no page numbers. The body section starts on a new page
      and numbers its pages from 1 in a centered footer, from the first chapter
@@ -26,6 +29,20 @@
   const str = (v) => (typeof v === 'string' ? v.trim() : '');
   const TWIPS = 1440;
   const MARGIN = Math.round(0.75 * TWIPS);
+  // E13.2b: the same trims as kdpFormatRules.LARGE (tests/export-build.test.js keeps them equal).
+  const LARGE = ['8x10', '8.5x11'];
+  const LINE = 5.5;
+
+  /** The DOCX page for a trim: size and margins in twips. */
+  function pageFor(trim) {
+    const t = String(trim || '6x9');
+    const [w, h] = t.split('x').map(Number);
+    const width = w || 6;
+    const size = { width: Math.round(width * TWIPS), height: Math.round((h || 9) * TWIPS) };
+    if (!LARGE.includes(t)) return { size, margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN } };
+    const side = Math.round(((width - LINE) / 2) * TWIPS);
+    return { size, margin: { top: TWIPS, right: side, bottom: TWIPS, left: side } };
+  }
 
   /** "Chapter 3: Seated twists", "Introduction", "Conclusion". */
   function chapterHeading(c) {
@@ -110,9 +127,8 @@
   function toDocx(m, docx, { year }) {
     const { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Footer, PageNumber, InternalHyperlink, Bookmark, LevelFormat, SectionType } = docx;
     const b = m.book || {};
-    const [w, h] = String(b.trim || '6x9').split('x').map(Number);
-    const page = { size: { width: Math.round((w || 6) * TWIPS), height: Math.round((h || 9) * TWIPS) },
-      margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN, header: 576, footer: 576, gutter: 0 } };
+    const pg = pageFor(b.trim);
+    const page = { size: pg.size, margin: { ...pg.margin, header: 576, footer: 576, gutter: 0 } };
 
     const runs = (text) => inlineRuns(text).map((r) => new TextRun({ text: r.text, bold: r.bold || undefined, italics: r.italics || undefined }));
     let listNo = 0;
@@ -236,5 +252,5 @@
     });
   }
 
-  root.kdpExportBuild = { toMarkdown, toDocx, inlineRuns, chapterHeading, mdBody };
+  root.kdpExportBuild = { toMarkdown, toDocx, inlineRuns, chapterHeading, mdBody, pageFor, LARGE };
 })(globalThis);

@@ -31,9 +31,22 @@ Deno.test("words per page: one shared estimate, about 250 at 6 x 9 (owner, E9)",
   assertEquals(W.pages(15_000, "6x9"), 60);
   assertEquals([W.pages(8000, "6x9"), W.pages(12000, "6x9")], [30, 50]);
   assertEquals(W.pages(150_000, "6x9"), 600);
-  assertEquals(W.pages(15_000, "8.5x11"), 35);   // a bigger page holds more words (34.7)
+  assertEquals(W.pages(15_000, "8.5x11"), 55);   // E13.2b: 1.13 x a 6 x 9 page, measured (53.1), not page area
   assertEquals([W.pages(3_100, "6x9"), W.pages(3_200, "6x9")], [10, 15]);   // 12.4 and 12.8: at least 10, then nearest 5
   assertEquals(W.pages(100, "6x9"), 10);         // at least 10
+});
+
+Deno.test("E13.2b words per page: group A and 7 x 10 unchanged; the large trims measured (STOP 1)", () => {
+  // Today's numbers (word-budget.js at 2bbd878), so no estimate on an existing book moves.
+  const words = [3100, 5000, 8000, 11100, 12000, 15000, 20000, 30000, 50000, 150000];
+  const before = { "5x8": [15, 25, 45, 60, 65, 80, 110, 160, 270, 810], "5.25x8": [15, 25, 40, 55, 60, 75, 105, 155, 255, 770],
+    "5.5x8.5": [15, 25, 35, 50, 55, 70, 90, 140, 230, 695], "6x9": [10, 20, 30, 45, 50, 60, 80, 120, 200, 600],
+    "7x10": [10, 15, 25, 35, 35, 45, 60, 95, 155, 465] };
+  for (const [t, want] of Object.entries(before)) assertEquals(words.map((n) => W.pages(n, t)), want, t);
+  assertEquals(W.LARGE_FACTOR, { "8x10": 1.03, "8.5x11": 1.13 });
+  assertEquals([W.perPage("8x10"), W.perPage("8.5x11"), W.perPage("6x9")], [257.5, 282.5, 250]);
+  assertEquals(words.map((n) => W.pages(n, "8x10")), [10, 20, 30, 45, 45, 60, 80, 115, 195, 585]);
+  assertEquals(words.map((n) => W.pages(n, "8.5x11")), [10, 20, 30, 40, 40, 55, 70, 105, 175, 530]);
 });
 
 Deno.test("word target: a range, 30K+, a custom target with 10% either side, or none", () => {

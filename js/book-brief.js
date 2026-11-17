@@ -48,8 +48,9 @@
     ['hobby_craft', 'Hobby and craft guide'], ['reference', 'Reference guide'], ['memoir', 'Memoir or personal story'],
     ['other', 'Other']
   ];
-  // Group A (E13.1, owner Q4): the Print PDF trims. An old 7x10 or 8.5x11 shows as an extra choice.
-  const TRIMS = ['5x8', '5.25x8', '5.5x8.5', '6x9'];
+  // Group A (E13.1, owner Q4): the Print PDF trims; E13.2b (owner Q6) adds 8x10 and 8.5x11 after 6x9.
+  // An old 7x10 shows as an extra choice. tests/limits-parity.test.js keeps this equal to kdpFormatRules.TRIMS.
+  const TRIMS = ['5x8', '5.25x8', '5.5x8.5', '6x9', '8x10', '8.5x11'];
   // [key, chip text]. The words of each range live in js/word-budget.js (kdpWords.RANGES).
   const LENGTHS = [
     ['5-8k', '5K to 8K words'], ['8-12k', '8K to 12K'],

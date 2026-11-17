@@ -121,6 +121,7 @@ Deno.test("mainTyp: the head, the defaults (Classic) and the trim", () => {
   assert(src.startsWith('#import "/book.typ": book, chapter, drop, after-drop\n#show: book.with(\n'));
   assertStringIncludes(src, '  style: "classic",');
   assertStringIncludes(src, "  trim: (w: 5.5, h: 8.5),");
+  assertStringIncludes(src, "  margin: (inside: 0.75in, outside: 0.5in, top: 0.75in, bottom: 0.75in), type-scale: 1,");
   assertStringIncludes(src, '  plain-title: "Chair Yoga: \\"Gentle\\" #1",');
   assertStringIncludes(src, "  title: [Chair Yoga: \"Gentle\" \\#1],");
   assertStringIncludes(src, "  subtitle: [Moves for 60\\+ \\$5],");
@@ -131,6 +132,13 @@ Deno.test("mainTyp: the head, the defaults (Classic) and the trim", () => {
   assertStringIncludes(src, "  about: none, about-recto: true,");
   assertStringIncludes(src, "  also-by: (),");
   assertStringIncludes(src, "[Copyright © 2026 Nora Hale. All rights reserved.");
+});
+
+Deno.test("E13.2b mainTyp: the large trims pass their page and margins; other trims read as 6 x 9", () => {
+  const src = (trim) => build({}, { trim });
+  assertStringIncludes(src("8x10"), "  trim: (w: 8, h: 10),\n  margin: (inside: 1.125in, outside: 1.375in, top: 0.875in, bottom: 0.875in), type-scale: 1.1,");
+  assertStringIncludes(src("8.5x11"), "  trim: (w: 8.5, h: 11),\n  margin: (inside: 1.25in, outside: 1.75in, top: 1in, bottom: 1in), type-scale: 1.1,");
+  assertStringIncludes(src("7x10"), "  trim: (w: 6, h: 9),\n  margin: (inside: 0.75in, outside: 0.5in, top: 0.75in, bottom: 0.75in), type-scale: 1,");
 });
 
 Deno.test("mainTyp: Final sections only, in order; Draft and Reviewed are left out", () => {

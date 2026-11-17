@@ -370,7 +370,7 @@ COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, 
 ## Print engine (E13.1 and E13.2, real CDN, Node + playwright-core)
 
 ```sh
-FORMAT_OUT=<a scratch folder> node tests/browser/format/t-engine-real.mjs   # Chrome: sizes, times, SRI on both CDNs, 5 fonts, 07 glyph table, 4 styles x 4 trims, 17 checks
+FORMAT_OUT=<a scratch folder> node tests/browser/format/t-engine-real.mjs   # Chrome: sizes, times, SRI on both CDNs, 5 fonts, 07 glyph table, 4 styles x 6 trims, 17 checks, group A golden bytes
 FORMAT_OUT=<a scratch folder> node tests/browser/format/t-fallback.mjs      # Chrome: the main-thread fallback, forced with the test-only flag
 FORMAT_OUT=<a scratch folder> node tests/browser/format/t-safari.mjs        # real Safari: a 212-page book falls back by itself
 FORMAT_OUT=<a scratch folder> node tests/browser/format/t-cdn.mjs           # Chrome: jsdelivr down (then unpkg first), a wrong file, both CDNs down
@@ -393,8 +393,16 @@ node tools/make-style-samples.mjs             # once: app/format/style-*.png
   table (`js/qc-glyphs.js`) against the real fonts' cmaps (E13.2), and each
   style on each group A trim (plus two option sets): PDF checks, fonts
   embedded as FontFile2 and only the style's families, no Typst warning, the
-  17 layout checks (`layout-checks.js`, from the E13.0 bench), words per page
-  within 10% across styles; then the converter cases printed and read back.
+  17 layout checks (`layout-checks.js`, from the E13.0 bench; the margins from
+  `kdpFormatRules.layout(trim)`), words per page within 10% across styles.
+  E13.2b: 6 trims; the 16 group A builds (4 styles x 4 trims) must give the
+  exact bytes in `golden-group-a.json` (made before E13.2b: the large trims
+  never move an old book); on 8 x 10 and 8.5 x 11 a line is within 8% of the
+  same style at 6 x 9 and at most 80 characters, and `kdpWords.LARGE_FACTOR`
+  is within 5% of the measured words per page. Then the converter cases
+  printed and read back. If the Typst version or a font file changes on
+  purpose, the golden bytes change too: re-make the file from a run before
+  the change and say so in the STOP report.
 - `t-fallback.mjs` checks the owner's rules for the fallback (Nov 4):
   the worker ended after a crash and a new one started only when a build
   needs it (no idle worker); the fallback chosen by the error (an overflow in
@@ -522,6 +530,14 @@ screen view: modal, focus kept and given back, Previous / Next, arrow keys, Esc 
 pdf_marks read). `format t-shots` (STOP 2), `t-shots3` (STOP 3) and `t-shots4` (STOP 4; run `books t-badge` first)
 make the compare images in `docs/reviews/e13-2-stop<n>/`; they are not checks, they overwrite tracked images: never
 run them in a sweep.
+For E13.2b (trims 8 × 10 and 8.5 × 11, plan `docs/reviews/2026-11-17-e13-2b-plan.md`): `format t-large` (08 at both
+large trims: 6 trims in the select, the margin note with the trim's margins after the real build, the cream note
+on and off with no rebuild, the Ready box, the spread at 1440, 900 and full screen, 6 × 9 on cream with no note),
+`brief t-trims` (the 6 chips, click and Tab and Space, the save, the page estimates at both trims, the row at 1440
+and 900 and at 200% text); `format t-trim`, `t-dialogs`, `t-states`, `t-export`, `brief t-length` and `settings
+t-settings` check the 6 trims and the texts built from `kdpFormatRules.trimsText`. The book wizard has no phone
+layout, so 390 px is a picture only. `format`, `brief`, `settings` and `qc` `t-shots-e132b` make
+`docs/reviews/e13-2b-stop3/` (not checks; never in a sweep; the 08 one builds a 618-page book, about 2 minutes).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every

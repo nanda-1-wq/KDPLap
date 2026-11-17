@@ -201,7 +201,11 @@
     const b = model.book || {};
     const title = s0(b.title).trim() || 'Untitled book';
     const pen = s0(b.pen_name).trim();
-    const trim = F().trimSize(extras.trim || b.trim);
+    const trimKey = extras.trim || b.trim;
+    const trim = F().trimSize(trimKey);
+    // E13.2b: the page layout for the trim (large trims: wider margins, type x 1.1).
+    const lay = F().layout(F().isGroupA(trimKey) ? trimKey : '6x9');
+    const m = lay.margin;
     const parts = st.parts;
     const recto = st.recto_start ? 'true' : 'false';
     const bio = parts.about ? plainParas(b.bio) : [];
@@ -211,6 +215,7 @@
       '#show: book.with(',
       `  style: ${str(st.style)},`,
       `  trim: (w: ${trim.w}, h: ${trim.h}),`,
+      `  margin: (inside: ${m.inside}in, outside: ${m.outside}in, top: ${m.top}in, bottom: ${m.bottom}in), type-scale: ${lay.scale},`,
       `  title: ${markup(title)},`,
       `  plain-title: ${str(title)},`,
       `  subtitle: ${optMarkup(b.subtitle)},`,

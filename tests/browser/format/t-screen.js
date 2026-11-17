@@ -42,7 +42,7 @@ const test = async page => {
   await FM.saved(page);
 
   /* PAGE · PRINT */
-  ok((await page.$$eval('[data-fmt-trim] option', (o) => o.map((x) => x.textContent))).join() === '6 × 9 in,5.5 × 8.5 in,5.25 × 8 in,5 × 8 in', 'trim: group A, 6 × 9 first');
+  ok((await page.$$eval('[data-fmt-trim] option', (o) => o.map((x) => x.textContent))).join() === '6 × 9 in,5.5 × 8.5 in,5.25 × 8 in,5 × 8 in,8 × 10 in,8.5 × 11 in', 'trim: group A, 6 × 9 first, then 8 × 10 and 8.5 × 11 (E13.2b)');
   ok(await page.$eval('[data-fmt-trim]', (s) => s.value === '6x9'), 'trim from the Brief');
   ok((await page.$$eval('[data-fmt-select="paper"] option', (o) => o.map((x) => x.textContent))).join() === 'White,Cream', 'paper: White, Cream');
   ok((await page.$eval('.fmt-trim-pic', (e) => e.getAttribute('aria-label'))) === 'Trim drawing, 6 by 9 inches' && (await FM.txt(page, '.fmt-trim-pic')) === '6×9', 'trim drawing');

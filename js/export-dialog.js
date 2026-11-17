@@ -175,11 +175,10 @@
     </div></fieldset>`;
   }
 
-  /** The page strip: which pages get a number (estimates by words, 250 a page at 6 × 9). */
+  /** The page strip: which pages get a number (estimates by words, kdpWords.perPage: 250 a page at 6 × 9). */
   function stripHtml(m) {
     const p = m.parts;
-    const [w, h] = String(m.book.trim || '6x9').split('x').map(Number);
-    const perPage = 250 * ((w * h) || 54) / 54;
+    const perPage = kdpWords.perPage(m.book.trim || '6x9');
     const sheet = (cap, front, no, lines) => `<span class="exp-pg"><span class="exp-sheet${front ? ' is-front' : ''}">${'<i></i>'.repeat(lines)}${no ? `<span class="exp-no">${no}</span>` : ''}</span><span class="exp-pg-cap">${cap}</span></span>`;
     const out = [];
     if (p.title) out.push(sheet('Title', true, '', 1));

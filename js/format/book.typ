@@ -2,10 +2,15 @@
 // /js/format/book.typ, imported by the main.typ that js/format/md2typst.js
 // writes. Typst 0.14.2 (typst.ts 0.7.0). From the E13.0 proof template.
 //
-// Page: the Brief's trim (group A: 5 x 8, 5.25 x 8, 5.5 x 8.5, 6 x 9 in).
-// Margins are fixed and mirrored: 0.75 in inside, 0.5 in outside, 0.75 in
-// top and bottom. KDP's minimum is 0.375 in inside for 24 to 150 pages and
-// 0.25 in outside; 0.75 in inside is enough up to 700 pages.
+// Page: the Brief's trim (group A: 5 x 8, 5.25 x 8, 5.5 x 8.5, 6 x 9 in;
+// E13.2b: also 8 x 10 and 8.5 x 11 in).
+// Margins are mirrored. Up to 6 x 9: 0.75 in inside, 0.5 in outside, 0.75 in
+// top and bottom (MARGIN). KDP's minimum is 0.375 in inside for 24 to 150
+// pages and 0.25 in outside; 0.75 in inside is enough up to 700 pages.
+// E13.2b (STOP 1, layout A): the large trims get wider margins and type
+// x 1.1, so the text is 5.5 in wide. The margins and the scale come from
+// kdpFormatRules.layout(trim) through book(margin:, type-scale:); every size in
+// pt below is multiplied by the scale (1 up to 6 x 9: the same bytes).
 //
 // Order: title page (right-hand), copyright (left-hand), contents (right-hand),
 // the body (page 1 is a right-hand page), About the author, Also by.
@@ -40,7 +45,7 @@
 #let MARGIN = (inside: 0.75in, outside: 0.5in, top: 0.75in, bottom: 0.75in)
 
 // Set once by book(); read by the header, the chapter openings and the drop cap.
-#let geo = state("nicheink-geo", (width: 6in, height: 9in, style: STYLES.modern, running: true, header-title: ""))
+#let geo = state("nicheink-geo", (width: 6in, height: 9in, style: STYLES.modern, running: true, header-title: "", margin: MARGIN, sc: 1))
 
 // Page p (physical) is blank when a part ended before it and the next part starts after it.
 #let is-blank(p) = {
@@ -76,8 +81,8 @@
   if not g.running { return none }
   let p = here().page()
   if quiet(p) { return none }
-  set text(font: g.style.head, size: 8pt, tracking: 0.08em, hyphenate: false)
-  let w = g.width - MARGIN.inside - MARGIN.outside
+  set text(font: g.style.head, size: 8pt * g.sc, tracking: 0.08em, hyphenate: false)
+  let w = g.width - g.margin.inside - g.margin.outside
   if calc.even(p) {
     align(left, fit(upper(g.header-title), w))
   } else {
@@ -89,7 +94,8 @@
 #let footer() = context {
   let p = here().page()
   if quiet(p) { return none }
-  set text(size: 9pt)
+  let g = geo.get()
+  set text(size: 9pt * g.sc)
   align(center, counter(page).display("1"))
 }
 
@@ -104,7 +110,7 @@
   context {
     let g = geo.get()
     // The chapter title one third down the page.
-    v(g.height / 3 - MARGIN.top - 0.3in)
+    v(g.height / 3 - g.margin.top - 0.3in)
     if label != none {
       align(center, text(font: g.style.head, size: 0.82em, tracking: 0.14em, hyphenate: false, upper(label)))
       v(0.12in)
@@ -137,7 +143,7 @@
 #let contents(sections: false) = context {
   let g = geo.get()
   set par(first-line-indent: 0pt, justify: false)
-  v(g.height / 3 - MARGIN.top - 0.3in)
+  v(g.height / 3 - g.margin.top - 0.3in)
   align(center, text(font: g.style.head, size: 1.45em, weight: g.style.head-weight, hyphenate: false, [Contents]))
   v(0.3in)
   let items = query(selector(<part-start>).or(heading.where(level: 2)))
@@ -156,6 +162,7 @@
 #let book(
   style: "modern",
   trim: (w: 6, h: 9),
+  margin: MARGIN, type-scale: 1,
   title: [], plain-title: "", subtitle: none, author: none, plain-author: none,
   copyright: [], isbn: none,
   title-page: true, copyright-page: true, contents-page: true, contents-sections: false,
@@ -165,20 +172,21 @@
   body,
 ) = {
   let st = STYLES.at(style)
+  let sc = type-scale
   let width = trim.w * 1in
   let height = trim.h * 1in
   set document(title: plain-title, author: if plain-author != none { plain-author } else { () }, date: none)
   set page(
     width: width,
     height: height,
-    margin: MARGIN,
+    margin: margin,
     binding: left,
     header: header(),
     footer: footer(),
     header-ascent: 35%,
     footer-descent: 35%,
   )
-  set text(font: st.body, size: st.size, lang: "en", hyphenate: true)
+  set text(font: st.body, size: st.size * sc, lang: "en", hyphenate: true)
   set par(justify: true, leading: st.leading, spacing: st.leading, first-line-indent: 0.25in)
   set list(indent: 0.15in, body-indent: 0.5em)
   set enum(indent: 0.15in, body-indent: 0.5em)
@@ -198,21 +206,21 @@
   show link: underline
 
   geo.update((width: width, height: height, style: st, running: running-header,
-    header-title: if header-title != none { header-title } else { plain-title }))
+    header-title: if header-title != none { header-title } else { plain-title }, margin: margin, sc: sc))
 
   // ── Front matter: no header, no number ──
   let front = false
   if title-page {
     set par(first-line-indent: 0pt, justify: false)
     v(height * 0.18)
-    align(center, text(font: st.head, size: 24pt, weight: st.head-weight, hyphenate: false, title))
+    align(center, text(font: st.head, size: 24pt * sc, weight: st.head-weight, hyphenate: false, title))
     if subtitle != none {
       v(0.25in)
-      align(center, text(size: 12.5pt, style: "italic", hyphenate: false, subtitle))
+      align(center, text(size: 12.5pt * sc, style: "italic", hyphenate: false, subtitle))
     }
     if author != none {
       v(1fr)
-      align(center, text(font: st.head, size: 13pt, author))
+      align(center, text(font: st.head, size: 13pt * sc, author))
       v(0.6in)
     }
     front = true
@@ -221,7 +229,7 @@
   if copyright-page {
     if front { pagebreak() }
     set par(first-line-indent: 0pt, justify: false)
-    set text(size: 8.5pt)
+    set text(size: 8.5pt * sc)
     v(1fr)
     copyright
     if isbn != none { parbreak(); [ISBN #isbn] }

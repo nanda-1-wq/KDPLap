@@ -9,6 +9,10 @@
    kdpWords.WORDS_PER_PAGE   about 250 words a page at 6 × 9 in
    kdpWords.RANGES           Brief length_range key → [low, high or null]
    kdpWords.pages(words, trim)   page estimate, nearest 5, at least 10 ("6x9" etc.)
+   kdpWords.perPage(trim)    words a page at the trim (the estimate's rate)
+   kdpWords.LARGE_FACTOR     E13.2b: words a page against 6 × 9 on the large
+     trims, measured by the real engine (STOP 1, mean of the 4 styles; the
+     8.5 × 11 page has wider margins and type × 1.1, so page area overstates it)
    kdpWords.target(brief)    the Brief's word target, or null:
      { kind: 'range' | 'custom', min, max (null for 30K+), label }
      A custom target counts as met within 10% either side.
@@ -36,11 +40,21 @@
   // (supabase/functions/generate/lib/limits.ts LENGTH_RANGES).
   const RANGES = { '5-8k': [5000, 8000], '8-12k': [8000, 12000], '12-20k': [12000, 20000], '20-30k': [20000, 30000], '30k+': [30000, null] };
 
+  // E13.2b (owner, STOP 1): measured, not page area (area says 1.48 and 1.73).
+  // tests/browser/format/t-engine-real.mjs checks them within 5%.
+  const LARGE_FACTOR = { '8x10': 1.03, '8.5x11': 1.13 };
+
+  /** Words a page at a trim: the large trims by LARGE_FACTOR, every other trim by page area. */
+  function perPage(trim) {
+    const t = String(trim || '6x9');
+    if (Object.prototype.hasOwnProperty.call(LARGE_FACTOR, t)) return WORDS_PER_PAGE * LARGE_FACTOR[t];
+    const [w, h] = t.split('x').map(Number);
+    return WORDS_PER_PAGE * ((w * h) || BASE_AREA) / BASE_AREA;
+  }
+
   /** Pages at a trim size: at least 10, rounded to the nearest 5 (owner, E9). */
   function pages(words, trim) {
-    const [w, h] = String(trim || '6x9').split('x').map(Number);
-    const perPage = WORDS_PER_PAGE * ((w * h) || BASE_AREA) / BASE_AREA;
-    return Math.max(10, Math.round(words / perPage / 5) * 5);
+    return Math.max(10, Math.round(words / perPage(trim) / 5) * 5);
   }
 
   function short(n) {
@@ -92,5 +106,5 @@
     return words ? { text: `${num(words)} words · no target yet`, pct: 0 } : { text: 'No word target yet', pct: 0 };
   }
 
-  root.kdpWords = { WORDS_PER_PAGE, RANGES, pages, target, within, short, count, bookProgress };
+  root.kdpWords = { WORDS_PER_PAGE, LARGE_FACTOR, RANGES, pages, perPage, target, within, short, count, bookProgress };
 })(globalThis);

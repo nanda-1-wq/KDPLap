@@ -14,7 +14,8 @@
 
 (function (root) {
   const PT = 72;
-  const MARGIN = { inside: 0.75 * PT, outside: 0.5 * PT, top: 0.75 * PT, bottom: 0.75 * PT };
+  // E13.2b: the margins come from kdpFormatRules.layout(trim) (large trims: wider), set per run.
+  let MARGIN = { inside: 0.75 * PT, outside: 0.5 * PT, top: 0.75 * PT, bottom: 0.75 * PT };
   const KDP_OUTSIDE = 0.25;
   const NAMES = [
     'page size equals the trim (pdf.js)', 'text block starts at the mirrored margin',
@@ -37,6 +38,8 @@
   };
 
   async function run(pdfjs, bytes, { meta, trim, titles, bookTitle, settings = {}, corners = true }) {
+    const lm = root.kdpFormatRules.layout(trim).margin;
+    MARGIN = { inside: lm.inside * PT, outside: lm.outside * PT, top: lm.top * PT, bottom: lm.bottom * PT };
     const [tw, th] = String(trim).split('x').map(Number);
     const PAGE = { w: tw * PT, h: th * PT };
     const running = settings.running_header !== false;

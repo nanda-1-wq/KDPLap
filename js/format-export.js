@@ -70,7 +70,7 @@
   /** Why Print PDF cannot be made now, or ''. */
   function blocked() {
     const { fmt, exp } = st.data;
-    if (!F().isGroupA(fmt.book.trim)) return `Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8 or 5 × 8 in. This book is ${F().trimText(fmt.book.trim)}. Change it under Trim size.`;
+    if (!F().isGroupA(fmt.book.trim)) return `Print PDF needs ${F().trimsText('or')}. This book is ${F().trimText(fmt.book.trim)}. Change it under Trim size.`;
     const model = F().modelOf(exp, F().normalize(fmt.settings));
     if (model.empty) return 'Nothing to format yet. Mark sections Final in 06 Write.';
     return '';

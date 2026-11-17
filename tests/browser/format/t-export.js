@@ -147,7 +147,7 @@ const test = async page => {
   await FM.open(page);
   await openPanel().catch(() => {});
   await page.waitForSelector(`${panel} .fmt-exp-why`, { timeout: 10000 });
-  ok((await rows())[0].includes('Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8 or 5 × 8 in.') && await page.$eval(`${panel} .fmt-exp-row .btn`, (b) => b.disabled), '7 × 10: why, Export off');
+  ok((await rows())[0].includes('Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8, 5 × 8, 8 × 10 or 8.5 × 11 in. This book is 7 × 10 in.') && await page.$eval(`${panel} .fmt-exp-row .btn`, (b) => b.disabled), '7 × 10: why, Export off');
   await page.keyboard.press('Escape');
   st.brief.trim_size = '6x9';
 

@@ -12,10 +12,15 @@
 //      FontFile2, only the style's families, no Type 3, page count), the 17
 //      layout checks, words per page and characters per line; words per page of
 //      the 4 styles within 10% on every trim; two option sets per style
+//      E13.2b: 6 trims (8x10, 8.5x11 with their own margins); the 4 old trims
+//      give the same bytes as before E13.2b (golden-group-a.json); on the large
+//      trims a line is within 8% of the same style at 6x9 and at most 80
+//      characters; kdpWords.LARGE_FACTOR within 5% of the measured ratio
 //   8. the converter cases and 300 fuzz strings, printed and read back
 // Placeholder books only. Results: tests/browser/format/out/engine-real.json.
 // Exit code 1 when a check fails. Needs tests/browser/serve.py (started if down).
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 import { chrome, ensureServer, save, log, median } from './lib.mjs';
 
 createRequire(import.meta.url)('../../../js/format/files.js');
@@ -28,7 +33,9 @@ const R = { date: new Date().toISOString() };
 const BOOK = { chapters: 8, sections: 3 };
 const LONG = { chapters: 30, sections: 3, seed: 2 };   // 164 pages in Classic 6 x 9 (Safari's worker limit is about 160)
 const STYLES = ['classic', 'modern', 'clean', 'warm'];
-const TRIMS = ['6x9', '5.5x8.5', '5.25x8', '5x8'];
+const TRIMS = ['6x9', '5.5x8.5', '5.25x8', '5x8', '8x10', '8.5x11'];
+const LARGE = ['8x10', '8.5x11'];
+const GOLDEN = JSON.parse(fs.readFileSync(new URL('./golden-group-a.json', import.meta.url), 'utf8')).builds;
 const FAMILY_RE = { classic: [/EBGaramond/], modern: [/SourceSerif4/, /SourceSans3/], clean: [/Literata/], warm: [/Lora/] };
 const FAMILY = { classic: ['eb-garamond'], modern: ['source-serif-4', 'source-sans-3'], clean: ['literata'], warm: ['lora'] };
 
@@ -183,7 +190,7 @@ try {
       const b = await H.build(e, { book: { chapters: 8, sections: 3 }, style: run.style, trim: run.trim, settings: run.settings || {}, alsoBy: run.alsoBy || [] });
       const l = await H.layout(b);
       return {
-        pages: b.pages, words: b.words, ms: Math.round(b.ms.roundTrip), diagnostics: b.diagnostics,
+        pages: b.pages, words: b.words, sha: b.sha, ms: Math.round(b.ms.roundTrip), diagnostics: b.diagnostics,
         checks: b.checks.map((c) => ({ key: c.key, pass: c.pass, detail: c.detail })),
         fonts: b.info.fonts.map((f) => ({ name: f.name, file: f.file, subtype: f.subtype })),
         layoutPassed: l.checks.filter((c) => c.pass).length, layoutTotal: l.checks.length,
@@ -207,6 +214,33 @@ try {
     const spread = Math.round((Math.max(...wpp) / Math.min(...wpp) - 1) * 1000) / 10;
     R.wordsPerPageSpread[trim] = { wordsPerPage: Object.fromEntries(STYLES.map((s, i) => [s, wpp[i]])), spreadPercent: spread };
     expect(spread <= 10, `${trim}: words per page differ by ${spread}% between styles`);
+  }
+
+  log('E13.2b: group A bytes, large-trim lines and the page estimate factor');
+  const def = (style, trim) => R.builds.find((b) => b.style === style && b.trim === trim && b.options === 'default');
+  R.goldenGroupA = [];
+  for (const [key, g] of Object.entries(GOLDEN)) {
+    const [style, trim] = key.split(' ');
+    const b = def(style, trim);
+    const same = !!b && b.sha === g.sha && b.pages === g.pages;
+    R.goldenGroupA.push({ key, same });
+    expect(same, `${key}: the PDF bytes changed (E13.2b must not move the old trims)`);
+  }
+  expect(R.goldenGroupA.length === 16, `golden builds: ${R.goldenGroupA.length} of 16`);
+  const factors = await w.page.evaluate(() => kdpWords.LARGE_FACTOR);
+  R.large = {};
+  for (const trim of LARGE) {
+    const rows = STYLES.map((s) => ({ style: s, cpl: def(s, trim).metrics.charsPerLine, base: def(s, '6x9').metrics.charsPerLine,
+      ratio: def(s, trim).metrics.wordsPerPage / def(s, '6x9').metrics.wordsPerPage }));
+    for (const r of rows) {
+      const off = Math.abs(r.cpl / r.base - 1) * 100;
+      expect(off <= 8 && r.cpl <= 80, `${r.style} ${trim}: ${r.cpl} characters a line (6x9: ${r.base}; within 8% and at most 80)`);
+    }
+    const measured = Math.round(rows.reduce((a, r) => a + r.ratio, 0) / rows.length * 1000) / 1000;
+    const gap = Math.round(Math.abs(factors[trim] / measured - 1) * 1000) / 10;
+    R.large[trim] = { charsPerLine: Object.fromEntries(rows.map((r) => [r.style, r.cpl])), wordsPerPageRatio: measured, factor: factors[trim], gapPercent: gap };
+    expect(gap <= 5, `${trim}: kdpWords.LARGE_FACTOR ${factors[trim]} is ${gap}% from the measured ${measured}`);
+    log(trim, JSON.stringify(R.large[trim]));
   }
 
   log('converter cases');

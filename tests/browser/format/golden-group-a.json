@@ -1,0 +1,70 @@
+{
+  "note": "E13.2b: SHA-384 of the Print PDF for the placeholder book (8 x 3, default settings) built with book.typ and md2typst.js at 2bbd878 (before E13.2b), Typst 0.14.2. t-engine-real.mjs checks that every group A trim still gives these exact bytes.",
+  "made": "2026-11-17",
+  "builds": {
+    "classic 6x9": {
+      "sha": "sha384-Js++d4nlMtb7DJYmSu1nQrdrmT0/l2/7dzxnVBzLyP/Ii4IXanZXsUeLIs48DbWc",
+      "pages": 52
+    },
+    "classic 5.5x8.5": {
+      "sha": "sha384-2ZCOi9ZTsiDUFnkgRiDQKpcYLtJGi7mmQy5U6vJ4rExyJ+7yOrWxs9uMlBKr44vw",
+      "pages": 52
+    },
+    "classic 5.25x8": {
+      "sha": "sha384-CjY2mLwzU5c4rw3JifQ8RqxqkDkmllQrLix3j9FZr2IO8acIx5oPYWDbMaX1ewsg",
+      "pages": 60
+    },
+    "classic 5x8": {
+      "sha": "sha384-hXHoT7KChF/4BjNacJvWh7b3XkhKDLI6SPPfYpQEFjD8HC3XaQwymyVnweJlhrMM",
+      "pages": 62
+    },
+    "modern 6x9": {
+      "sha": "sha384-D/3utQmKmoFXV4lrasccetWYxSjY1TFirdEGBFDIg727dce4Di1GEZqL0JgYuJi5",
+      "pages": 52
+    },
+    "modern 5.5x8.5": {
+      "sha": "sha384-kBb/6V82bamSc/PHwlSN2agDVJbXWzHMrdiE9lYVpv0egYvuvw5WW1MYVoxcIH3a",
+      "pages": 56
+    },
+    "modern 5.25x8": {
+      "sha": "sha384-mkJIA6N7NOb1lCdl4A+lyAstCFDd1dpro+P3iMHIozTIgoM1s3DWUcfquiOAIHm1",
+      "pages": 60
+    },
+    "modern 5x8": {
+      "sha": "sha384-HeDu607Ey7MTAX4x/OgbZ1OcmxCKGhrDl8YwVABkyDEwWPZa3qH0hX4AITe6PP9E",
+      "pages": 70
+    },
+    "clean 6x9": {
+      "sha": "sha384-L1/r93LcgXsQFAsf8K9F4b9JXgPRHDv4Vz/xzUHUKY4bS61jOVshWmEihWYa+14R",
+      "pages": 52
+    },
+    "clean 5.5x8.5": {
+      "sha": "sha384-mzf61VS/M2GdOngQZAvmMk+Nz9+/rfDTCO+xjWRIHzVp8yspfvZ2hZ3zuuaeoFWH",
+      "pages": 56
+    },
+    "clean 5.25x8": {
+      "sha": "sha384-x3leM8nZhs9OtP6aB7pgIpyC49IVtOWQZ2zV67Belc8rs6ThNnU3xzlKS/BU9SEO",
+      "pages": 60
+    },
+    "clean 5x8": {
+      "sha": "sha384-L334A1DXtHCQxfCYNfotycTRyt2NxtciXIIDUZBo1boPdWMnoyMSlwVBiFg6PAO/",
+      "pages": 68
+    },
+    "warm 6x9": {
+      "sha": "sha384-Hv72r8UjrEd8uSon01OPCXNOQgesRALU3PdW5VHfNG4eu/mBHl02LGMyjKga01Ke",
+      "pages": 52
+    },
+    "warm 5.5x8.5": {
+      "sha": "sha384-7LuIEDeASgmxS4ubutrE9gP2LyfGpuclpX+4GmdokC3ymSHlWjjH42gtoLauhHaO",
+      "pages": 56
+    },
+    "warm 5.25x8": {
+      "sha": "sha384-A329qWnL3fj+Vsh5gxSct/JTEgkN2LX8mO/GK+M+fTSH9Lg+xH3ToSHONtTc8TiL",
+      "pages": 60
+    },
+    "warm 5x8": {
+      "sha": "sha384-fj8GxdMKBJVSQj5gtsjrCynFib/aOgw77D9M11nhu/ZOk2dWLYEt+G8N9rtCRMP/",
+      "pages": 68
+    }
+  }
+}

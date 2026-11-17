@@ -17,8 +17,9 @@
 
 (async function () {
   const NAME_MAX = 60;
-  // Group A (E13.1, owner Q4): the Print PDF trims. An old 7x10 or 8.5x11 shows as an extra choice.
-  const TRIMS = ['5x8', '5.25x8', '5.5x8.5', '6x9'];
+  // Group A (E13.1, owner Q4): the Print PDF trims; E13.2b (owner Q6) adds 8x10 and 8.5x11 after 6x9.
+  // An old 7x10 shows as an extra choice.
+  const TRIMS = ['5x8', '5.25x8', '5.5x8.5', '6x9', '8x10', '8.5x11'];
   const { esc, ICON } = kdpUi;
   const fmt = (v) => Number(v || 0).toLocaleString('en-US');
   const trimText = (t) => `${t.replace('x', ' × ')} in`;

@@ -14,6 +14,7 @@ import "../js/qc-promise-key.js";
 import "../js/qc-lists.js";
 import "../js/qc-glyphs.js";
 import "../js/qc-rules.js";
+import "../js/format-rules.js";   // E13.2b: kdpFormatRules.maxPages (07 reads it at run time)
 import { big, book, BOOKS, chapter, section } from "./fixtures/qc-books.js";
 import { resultsProblem } from "./lib/qc-shape.js";
 
@@ -339,7 +340,7 @@ Deno.test("missing_char: book, chapter and section titles print too", () => {
   assert(rows.every((x) => x.start === null));
 });
 
-Deno.test("length: the page estimate around 24 pages and past 828; the trim counts", () => {
+Deno.test("length: the page estimate around 24 pages and past KDP's limit; the trim counts", () => {
   const md = (n) => `${"word ".repeat(n).trim()}.`;
   // pages() rounds to the nearest 5: 5,624 words is 20 pages, 5,625 is 25.
   const r = text(md(5624));
@@ -347,9 +348,15 @@ Deno.test("length: the page estimate around 24 pages and past 828; the trim coun
   assertEquals([hits(r, "length")[0].key, hits(r, "length")[0].section_id], ["length", null]);
   assertEquals(has(md(5625), "length"), false);
   const trim = (t, n) => run(book({ trim: t, chapters: [chapter("Paths", [section(md(n))])] }));
-  assertEquals(hits(trim("8.5x11", 7000), "length").length, 1);
+  // E13.2b: 8.5 x 11 holds 282.5 words a page (measured, not page area): 6,000 words is 20 pages, 7,000 is 25.
+  assertEquals(hits(trim("8.5x11", 6000), "length").length, 1);
+  assertEquals(hits(trim("8.5x11", 7000), "length").length, 0);
   assertEquals(hits(trim("5x8", 7000), "length").length, 0);
-  assertEquals(hits(run(book({ chapters: [chapter("Paths", [section(md(207000))])] })), "length")[0].message, "About 830 pages. KDP takes at most 828 for a paperback.");
+  assertEquals(hits(run(book({ chapters: [chapter("Paths", [section(md(207000))])] })), "length")[0].message, "About 830 pages. KDP takes at most 828 at 6 × 9 in on white paper.");
+  // E13.2b (T8): KDP's limit for the trim, on white paper (07 does not read the paper).
+  assertEquals(hits(trim("8.5x11", 168000), "length")[0].message, "About 595 pages. KDP takes at most 590 at 8.5 × 11 in on white paper.");
+  assertEquals(hits(trim("8.5x11", 166000), "length"), []);
+  assertEquals(hits(trim("8x10", 214000), "length")[0].message, "About 830 pages. KDP takes at most 828 at 8 × 10 in on white paper.");
   assertEquals(hits(run(book({ chapters: [chapter("Paths", [section(md(206000))])] })), "length"), []);
 });
 

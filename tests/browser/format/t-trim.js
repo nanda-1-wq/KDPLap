@@ -1,9 +1,9 @@
 // D2 bug 4 (owner, Nov 9): the trim drawing keeps the page's shape and its label sits under it, never
-// inside, for every group A trim and an old 7 × 10 or 8.5 × 11; at 1440 and 900 px. E13.2.
+// inside, for every Print PDF trim (E13.2b: with 8 × 10 and 8.5 × 11) and an old 7 × 10; at 1440 and 900 px. E13.2.
 const test = async page => {
   const { log, ok } = FM.log();
   const st = globalThis.__store;
-  const TRIMS = [['6x9', '6×9'], ['5.5x8.5', '5.5×8.5'], ['5.25x8', '5.25×8'], ['5x8', '5×8'], ['7x10', '7×10'], ['8.5x11', '8.5×11']];
+  const TRIMS = [['6x9', '6×9'], ['5.5x8.5', '5.5×8.5'], ['5.25x8', '5.25×8'], ['5x8', '5×8'], ['8x10', '8×10'], ['8.5x11', '8.5×11'], ['7x10', '7×10']];
   for (const [w, h] of [[1440, 1100], [900, 900]]) {
     await page.setViewportSize({ width: w, height: h });
     for (const [trim, label] of TRIMS) {

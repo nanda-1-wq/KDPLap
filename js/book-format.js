@@ -359,10 +359,12 @@
     if (build.pages && eng.state === 'ready') { build = { state: 'idle', pages: 0, info: null, error: null }; scheduleBuild(true); }
   }
 
-  /** The page and spine chips, and the margin note with the KDP minimum for the page count. */
+  /** The page and spine chips, the margin note with the KDP minimum for the page count, the cream note. */
   function paintChips() {
     const m = sel('[data-fmt-margin]');
-    if (m) m.textContent = F().marginNote(canPreview() ? build.pages : 0);
+    if (m) m.textContent = F().marginNote(canPreview() ? build.pages : 0, bookTrim(), settings.paper);
+    const pn = sel('[data-fmt-paper-note]');
+    if (pn) pn.hidden = !paperNote(bookTrim(), settings.paper);
     const el = sel('[data-fmt-chips]');
     if (!el) return;
     if (!build.pages || !canPreview() || mode !== 'print') { el.innerHTML = ''; return; }
@@ -413,7 +415,7 @@
     } else if (!groupA()) {
       kind = 'quiet';
       html = `<strong class="fmt-state-title">No Print PDF for ${esc(F().trimText(bookTrim()))}</strong>
-        <span>The Print PDF works with 6 × 9, 5.5 × 8.5, 5.25 × 8 and 5 × 8 in. Pick one of these under Trim size. Your text does not change.</span>`;
+        <span>The Print PDF works with ${esc(F().trimsText('and'))}. Pick one of these under Trim size. Your text does not change.</span>`;
     } else if (eng.state === 'error') {
       kind = 'danger';
       role = 'alert';
@@ -485,7 +487,7 @@
     const rebuildError = build.state === 'error' && build.pages
       ? `<div class="alert alert-error fmt-alert" role="alert">${IC.x}<div><p class="alert-text">The preview could not be updated. It shows your last good pages.</p>
           <button type="button" class="link-btn" data-fmt-retry-build>Try again</button></div></div>` : '';
-    const r = F().ready({ model, missing, pages: build.pages, dropped: droppedAlsoBy() });
+    const r = F().ready({ model, missing, pages: build.pages, dropped: droppedAlsoBy(), trim: bookTrim(), paper: settings.paper });
     const things = r.warnings.length + (rebuildError ? 1 : 0);
     if (things) paintToCheck(r.warnings.length ? `${things === 1 ? '1 thing' : `${things} things`} to check` : 'Preview not updated');
     if (r.warnings.length) {
@@ -586,23 +588,27 @@
             <label class="fmt-field">Trim size
               <select class="fmt-select" data-fmt-trim>${trims.map((t) => `<option value="${t}"${t === trim ? ' selected' : ''}>${F().trimText(t)}</option>`).join('')}</select></label>
             <label class="fmt-field">Paper
-              <select class="fmt-select" data-fmt-select="paper"><option value="white"${st.paper === 'white' ? ' selected' : ''}>White</option><option value="cream"${st.paper === 'cream' ? ' selected' : ''}>Cream</option></select></label>
+              <select class="fmt-select" data-fmt-select="paper" aria-describedby="fmtPaperNote"><option value="white"${st.paper === 'white' ? ' selected' : ''}>White</option><option value="cream"${st.paper === 'cream' ? ' selected' : ''}>Cream</option></select></label>
           </div>
           <div class="fmt-trim-pic" role="img" aria-label="Trim drawing, ${esc(F().trimText(trim).replace(' × ', ' by ').replace(' in', ' inches'))}">
             <span class="fmt-trim-page" style="--trim-ratio: ${trimRatio(trim)}" aria-hidden="true"></span>
             <span class="fmt-trim-label" aria-hidden="true">${esc(trim.replace('x', '×'))}</span>
           </div>
         </div>
-        ${groupA() ? '' : `<p class="field-error fmt-trim-off" role="note">${ICON.warn(13)}<span>Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8 or 5 × 8 in. Pick one of these.</span></p>`}
+        <p class="fmt-hint fmt-paper-note" id="fmtPaperNote" data-fmt-paper-note${paperNote(trim, st.paper) ? '' : ' hidden'}>KDP's Expanded Distribution needs white paper at this size.</p>
+        ${groupA() ? '' : `<p class="field-error fmt-trim-off" role="note">${ICON.warn(13)}<span>Print PDF needs ${esc(F().trimsText('or'))}. Pick one of these.</span></p>`}
         <label class="fmt-field">Header title, left pages
           <input class="fmt-input" type="text" maxlength="200" value="${esc(st.header_title || '')}" placeholder="${esc((fmt.book.title || '').trim() || 'Book title')}"
             aria-describedby="fmtHeaderHint" data-fmt-header${st.running_header ? '' : ' disabled'} />
           <span class="fmt-hint" id="fmtHeaderHint">Long titles are cut with "…".</span></label>
         ${check('data-fmt-flag="running_header"', 'Running header', st.running_header)}
         ${check('data-fmt-flag="recto_start"', 'Chapters start on a right-hand page', st.recto_start)}
-        <p class="fmt-hint fmt-margin" data-fmt-margin>${esc(F().marginNote(0))}</p>
+        <p class="fmt-hint fmt-margin" data-fmt-margin>${esc(F().marginNote(0, trim, st.paper))}</p>
       </fieldset>`;
   }
+
+  /** E13.2b (T9): on a large trim, KDP's Expanded Distribution takes white paper only (KDP help GQTT4W3T5AYK7L45). */
+  const paperNote = (trim, paper) => F().isLarge(trim) && paper === 'cream';
 
   /** The small trim drawing keeps the page's shape: width ÷ height. Its label sits under it (D2 bug 4). */
   function trimRatio(trim) {

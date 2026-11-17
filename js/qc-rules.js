@@ -45,8 +45,12 @@
   const CAPS = { perGroup: 100, total: 400, sources: 50, sourceSections: 400, citation: 200, message: 300, quote: 300, key: 300, bytes: 370000, words: 1000000 };
   // Owner Q5: 4 or more letters, 20 or more uses and 25 or more per 10,000 words, at most 5 words.
   const OVERUSED = { letters: 4, uses: 20, per10k: 25, max: 5 };
-  // KDP paperback page limits.
+  // KDP paperback page limits. The most pages depend on the trim (E13.2b):
+  // kdpFormatRules.maxPages(trim, 'white'). 07 does not read the paper (it
+  // lives in book_formats), so it uses white; 08 checks cream with the real count.
   const PAGES = { min: 24, max: 828 };
+  const maxPages = (trim) => (root.kdpFormatRules && root.kdpFormatRules.maxPages ? root.kdpFormatRules.maxPages(trim, 'white') : PAGES.max);
+  const trimName = (trim) => `${String(trim || '6x9').replace('x', ' × ')} in`;
   const PARAGRAPH_MIN_WORDS = 8;
   // The 08 defaults before there is a book_formats row, equal to qc_inputs_key (tests/limits-parity.test.js).
   const DEFAULTS = { style: 'classic', copyright: true };
@@ -608,7 +612,7 @@
     if (reads.length) {
       const pages = W.pages(ctx.words, ctx.book.trim);
       if (pages < PAGES.min) add(7, 'length', 'length', null, `About ${fmt(pages)} pages. KDP needs at least ${PAGES.min} for a paperback.`, null);
-      else if (pages > PAGES.max) add(7, 'length', 'length', null, `About ${fmt(pages)} pages. KDP takes at most ${PAGES.max} for a paperback.`, null);
+      else if (pages > maxPages(ctx.book.trim)) add(7, 'length', 'length', null, `About ${fmt(pages)} pages. KDP takes at most ${fmt(maxPages(ctx.book.trim))} at ${trimName(ctx.book.trim)} on white paper.`, null);
       disclaimer(reads, ctx, add);
     }
     for (const r of reads) {
