@@ -1719,6 +1719,84 @@ window.kdp = {
     return { data: error ? null : (data && data[0]) || null, error };
   },
 
+  /**
+   * E16 Part 10: the files of one export in ONE insert (print, and image and kindle when made). PostgREST
+   * sends one statement, so the rows go in together or not at all: a refused row (the guard: cover_stale,
+   * cover_rights, cover_resized, …) leaves none. rows: [{ kind, settingsKey, engine, widthIn, heightIn,
+   * spineIn, thumb } | { kind, settingsKey, engine, widthPx, heightPx }]. → { data: [{ id, kind, created_at }] }
+   */
+  async recordCoverExports(bookId, rows) {
+    const list = (rows || []).map((r) => {
+      const row = { book_id: bookId, kind: r.kind, settings_key: r.settingsKey, engine: r.engine };
+      if (r.kind === 'print') Object.assign(row, { width_in: r.widthIn, height_in: r.heightIn, spine_in: r.spineIn, thumb: r.thumb || null });
+      else Object.assign(row, { width_px: r.widthPx, height_px: r.heightPx });
+      return row;
+    });
+    if (!list.length) return { data: null, error: new Error('Nothing to record.') };
+    const { data, error } = await window.sb.from('cover_exports').insert(list).select('id, kind, created_at');
+    return { data: error ? null : (data || []), error };
+  },
+
+  /**
+   * E16 Part 10 (STOP 6 N6): where a picture is used, before its × removes it: the user's saved cover
+   * designs (book ids) and My layouts (a count) whose layers name the asset. Under RLS (own rows only).
+   */
+  async coverAssetUse(assetId) {
+    const pat = JSON.stringify([{ asset: String(assetId) }]);
+    const [d, m] = await Promise.all([
+      window.sb.from('cover_designs').select('book_id').contains('layers', pat),
+      window.sb.from('cover_my_layouts').select('id').contains('layers', pat)
+    ]);
+    if (d.error || m.error) return { data: null, error: d.error || m.error };
+    return { data: { books: (d.data || []).map((r) => r.book_id), layouts: (m.data || []).length }, error: null };
+  },
+
+  /**
+   * E16 Part 10 (STOP 6 N8): the orphan-file sweep when 09 opens, best effort. Files under <user>/assets/
+   * with no cover_assets row and older than one hour (a tab closed between the upload and the row) are
+   * removed through the Storage API. Safe by construction:
+   * - the complete cover_assets list is read first; when it fails (or may be cut at 1,000 rows), nothing is removed;
+   * - the folder is read page by page; a failed page stops the sweep (nothing removed);
+   * - only names <uuid>.jpg|png are touched, never another folder (E15's <book>/<id>.jpg stay);
+   * - the age comes from the server's times (the file's created_at against `now`, cover_json's clock).
+   * → { data: { checked, removed: [paths] }, error }
+   */
+  async sweepCoverAssets(now) {
+    const uid = await this.coverUserId();
+    if (!uid) return { data: null, error: new Error('Not signed in.') };
+    const nowMs = Date.parse(now);
+    if (!Number.isFinite(nowMs)) return { data: null, error: new Error('No server time.') };
+    const rows = await this.listCoverAssets();
+    if (rows.error || !Array.isArray(rows.data)) return { data: null, error: rows.error || new Error('No list.') };
+    // The API returns at most 1,000 rows a read: a longer list may be cut, so nothing is removed then.
+    if (rows.data.length >= 1000) return { data: { checked: 0, removed: [], skipped: 'many' }, error: null };
+    const known = new Set(rows.data.map((r) => r.path).filter(Boolean));
+    const NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png)$/;
+    const PAGE = 100, MAX_PAGES = 50, HOUR = 3600e3;
+    const gone = [];
+    let checked = 0;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const { data, error } = await window.sb.storage.from('covers').list(`${uid}/assets`, { limit: PAGE, offset: page * PAGE, sortBy: { column: 'name', order: 'asc' } });
+      if (error || !Array.isArray(data)) return { data: null, error: error || new Error('No folder list.') };
+      for (const f of data) {
+        if (!f || typeof f.name !== 'string' || !NAME.test(f.name) || !f.id) continue;   // folders have no id
+        checked++;
+        const path = `${uid}/assets/${f.name}`;
+        const at = Date.parse(f.created_at);
+        if (!known.has(path) && Number.isFinite(at) && nowMs - at > HOUR) gone.push(path);
+      }
+      if (data.length < PAGE) break;
+    }
+    // Removed 100 a call; a failed call stops there (the rest waits for the next sweep).
+    const removed = [];
+    for (let i = 0; i < gone.length; i += PAGE) {
+      const rm = await window.sb.storage.from('covers').remove(gone.slice(i, i + PAGE));
+      if (rm.error) return { data: { checked, removed }, error: rm.error };
+      removed.push(...(rm.data || []).map((x) => x.name));
+    }
+    return { data: { checked, removed }, error: null };
+  },
+
   /** The 09 mark and the Books card: [{ book_id, pdf_current, print_at, print_changed, image_at, image_changed, kindle_at, kindle_changed, thumb }]. One book, or all. */
   async listCoverMarks(bookId) {
     const { data, error } = await window.sb.rpc('cover_marks', bookId ? { p_book_id: bookId } : {});

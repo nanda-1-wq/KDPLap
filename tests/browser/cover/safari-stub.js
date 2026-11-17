@@ -14,7 +14,7 @@
   const now = () => new Date().toISOString();
   const ago = (d) => new Date(Date.now() - d * 86400e3).toISOString();
   const copy = (x) => JSON.parse(JSON.stringify(x));
-  const S = window.__sbStub = { calls: [], unknown: [], design: null, history: [], assets: [], files: {}, saves: 0 };
+  const S = window.__sbStub = { calls: [], unknown: [], design: null, history: [], assets: [], files: {}, saves: 0, exports: [], my: [], refused: [] };
   const book = { title: 'Micro Study Habits for Busy Adult Learners', subtitle: 'How to Keep Up With Your Course After Work, Even on Low-Energy Days', pen: 'Adnan Haroun', trim: '6x9', paper: 'white' };
   const pdf = { export_id: 'e0000001-0000-4000-8000-000000000000', page_count: 54, created_at: ago(1), current: true };
   const session = { access_token: 'stub.eyJzdWIiOiJzdHViIn0.stub', refresh_token: 'stub', token_type: 'bearer', expires_in: 3600 * 24 * 365, expires_at: Math.floor(Date.now() / 1000) + 3600 * 24 * 365,
@@ -33,8 +33,17 @@
     book: { id: BOOK, title: book.title, subtitle: book.subtitle, pen_name_id: PEN, pen_name: book.pen, bio_text: null, trim: book.trim, paper: book.paper },
     fmt: { trim: book.trim, pages: 54, paper: book.paper }, pdf: copy(pdf), design: S.design ? copy(S.design) : null,
     assets: S.assets.filter((a) => S.design && S.design.layers.some((l) => l.asset === a.id)).map(copy), blurb: null, my_layouts: [],
-    key: S.design ? 'k' + S.design.rev : null, last: { print: null, image: null, kindle: null }, now: now()
+    key: keyOf(), last: { print: lastOf('print'), image: lastOf('image'), kindle: lastOf('kindle') }, now: now()
   });
+  // Part 10: cover_key as 32 hex (a hash of the design's layers, bg and fmt, as 0030's md5), the export rows, My layouts.
+  function keyOf() {
+    if (!S.design) return null;
+    const str = JSON.stringify({ layers: S.design.layers, bg: S.design.bg, fmt: S.design.fmt });
+    let out = '';
+    for (const seed of [0x811c9dc5, 0x01000193, 0x9e3779b1, 0x85ebca6b]) { let h = seed >>> 0; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } out += h.toString(16).padStart(8, '0'); }
+    return out;
+  }
+  function lastOf(kind) { const e = S.exports.filter((x) => x.kind === kind).pop(); return e ? { id: e.id, created_at: e.created_at, settings_key: e.settings_key, snapshot: {} } : null; }
   const H = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'content-range': '0-0/*' };
   const json = (status, body) => new Response(body === undefined ? '' : JSON.stringify(body), { status, headers: H });
 
@@ -86,6 +95,22 @@
       const f = S.files[decodeURIComponent(so[1])];
       return f ? new Response(f, { status: 200, headers: { 'content-type': f.type } }) : json(400, { statusCode: '404', message: 'Object not found' });
     }
+    // Part 10
+    if (path === '/rest/v1/rpc/cover_key') return json(200, body().p_book_id === BOOK ? keyOf() : null);
+    if (path === '/rest/v1/rpc/cover_marks') return json(200, []);
+    if (path === '/rest/v1/cover_exports' && method === 'POST') {
+      const list = [].concat(body());
+      if (list.some((p) => p.settings_key !== keyOf())) { S.refused.push('cover_stale'); return json(400, { code: 'P0001', message: 'cover_stale', details: '' }); }
+      const rows = list.map((p, i) => Object.assign({ id: 'x' + (S.exports.length + i + 1), created_at: now() }, p));
+      S.exports.push(...rows);
+      return json(201, rows.map((x) => ({ id: x.id, kind: x.kind, created_at: x.created_at })));
+    }
+    if (path === '/rest/v1/cover_my_layouts' && method === 'POST') {
+      const p = body(); const old = S.my.find((m) => m.from_book_id === p.from_book_id);
+      const row = Object.assign(old || { id: 'm' + (S.my.length + 1) }, p, { exported_at: now() }); if (!old) S.my.push(row);
+      return json(201, [{ id: row.id, exported_at: row.exported_at }]);
+    }
+    if (path === '/storage/v1/object/list/covers' && method === 'POST') return json(200, []);
     if (path === '/rest/v1/rpc/qc_mark') return json(200, [{ checked_at: ago(1), current: true }]);
     if (path === '/rest/v1/rpc/pdf_marks') return json(200, [{ book_id: BOOK, exported_at: pdf.created_at, page_count: 54, changed: false }]);
     if (path === '/rest/v1/pen_names' && method === 'GET') return json(200, [{ id: PEN, name: book.pen, voice: {} }]);

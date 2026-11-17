@@ -51,16 +51,22 @@
    the window widths (narrow.js: 900 to 1199 px the panel opens over the
    cover; under 900 px the full notice).
 
-   Drawn and inert (aria-disabled, title "Comes in Part 10"): Export cover,
-   in the header and in Preview final.
+   Part 10 (designs 71, 71b, 73d) adds the Export dialog
+   (export-dialog.js: the Print PDF, the full image, the Kindle JPG; Must
+   fix and offline block it; steps with Stop; the files, downloads and the
+   zip; the cover_exports rows in one insert; My layouts), the header "Done:
+   cover files exported." with Next on (from the last print export's key
+   on open, then from this visit's export, off again after any change),
+   the 09 rail mark (cover_marks), the remove × on Uploads tiles (images.js)
+   and the orphan-file sweep once per page when 09 opens (supabase.js).
 
    Load order (Part 9): cover_json, the kept offline copy against the row
    (R15), the fonts and the real text metrics, the size remap (its heights
    need the metrics), then the autosave.
 
    State lives in E (one object); render functions draw parts of the frame
-   from it. The shell (js/book.js) calls init, render, nextNote, nextOff,
-   exportInert, leave, flush and retrySave.
+   from it. The shell (js/book.js) calls init, render, isDone, nextNote,
+   nextOff, openExport, leave, flush and retrySave.
    ═══════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -98,6 +104,15 @@
   let E = null;          // the open editor (one per visit of step 09)
   let orphan = null;     // a saver whose last save failed while 09 was left: Retry in the sidebar still reaches it
   let keyBound = false;
+  let mark = null;       // Part 10: this book's cover_marks row (the 09 rail mark while 09 is not open)
+  let swept = false;     // Part 10: the orphan-file sweep runs once per page
+  const sigOf = (c) => JSON.stringify({ l: c.layers, b: c.bg, f: c.fmt });
+  /** Part 10: a current export of exactly this design (the header "Done", Next on, the rail mark). */
+  function doneNow() {
+    if (E && E.status === 'ready') return !!E.doneSig && sigOf(E.cover) === E.doneSig;
+    if (E && E.status !== 'error') return false;
+    return !!(mark && mark.print_at && !mark.print_changed);
+  }
 
   /* ── The editor object ── */
   function newEditor(rootEl) {
@@ -192,6 +207,10 @@
       E.remappedNow = true;
     } else E.remapNote = lastRemap || null;
     E.status = 'ready';
+    // Part 10: the last Print PDF export was made from this very design (its key is today's, no remap, no newer copy).
+    const lp = data.last && data.last.print;
+    E.doneSig = lp && data.key && lp.settings_key === data.key && !rm && won !== 'local' ? sigOf(E.cover) : null;
+    E.lastPrintAt = lp ? lp.created_at : null;
     E.tpl.pop = newCover || !E.cover.layers.length;
     E.saver = C.save.create({
       bookId: book.id, rev: E.rev,
@@ -216,6 +235,12 @@
     if (rm || won === 'local') E.saver.changed();
     C.images.loadUsed(E);
     ctx.setGate();
+    // Part 10 (STOP 6 N8): files left without a row, once per page, best effort, never offline.
+    if (!swept && !C.offline.isOffline()) {
+      swept = true;
+      const me2 = E;
+      me2.sweep = root.kdp.sweepCoverAssets(data.now).then((r) => (me2.sweepResult = r), (e) => (me2.sweepResult = { error: e }));
+    }
     // The Text panel's presets draw in Source Serif 4 Bold and IBM Plex Sans: load them now, so Add is instant.
     C.fonts.load('Source Serif 4', 700).catch(() => {});
     C.fonts.load('IBM Plex Sans', 600).catch(() => {});
@@ -316,6 +341,7 @@
       <div class="cv-toast-host" data-toast-host></div>
       <div class="cv-blurb-host" data-blurb-host></div>
       <div class="cv-pv-host" data-pv-host></div>
+      <div class="cv-ex-host" data-ex-host></div>
     </div>`;
     const v = E.view_ = C.view.create(E);
     E.root.querySelector('[data-wswrap]').append(v.el);
@@ -338,6 +364,7 @@
     C.checksDrawer.bind(E.root.querySelector('[data-ck-host]'), E);
     C.preview.bind(E.root.querySelector('[data-pv-host]'), E);
     C.resizeNote.bind(E.root.querySelector('[data-sizenote]'), E);
+    C.exportDialog.bindHost(E.root.querySelector('[data-ex-host]'), E);
     // Part 9, 900 to 1199 px: a press on the cover closes the panel that opened over it (design line 2291).
     v.el.addEventListener('pointerdown', () => { if (E.width === 'narrow' && E.panelOpen) { E.panelOpen = false; applyWidth(); } }, true);
     E.root.querySelector('[data-toast-host]').addEventListener('click', (e) => {
@@ -607,6 +634,35 @@
     const b = E.root.querySelector('[data-k="pv"]'); if (b) b.focus({ preventScroll: true });
   }
 
+  /* ── Part 10: the Export dialog (designs 71, 71b, 73d; js/cover/export-dialog.js) ── */
+  function renderExport() {
+    const host = E.root.querySelector('[data-ex-host]'); if (!host) return;
+    keepFocus(host, () => { host.innerHTML = C.exportDialog.hostHtml(E); });
+  }
+  function openExport(opener) {
+    if (E.editing != null) stopEdit(false);
+    if (E.pv.open) closePreview();
+    if (E.blurb && E.blurb.open) closeBlurb();
+    if (E.stock && E.stock.open) { E.stock.open = false; E.stock.prev = null; renderStock(); }
+    E.menu = null; E.layerMenu = null; E.cropping = null;
+    if (E.checksOpen) { E.checksOpen = false; }
+    renderBars(); renderMenu();
+    C.exportDialog.open(E, opener);
+  }
+  /** The rows are in: Done in the header, Next on, the size note closes (last_remap.seen), the rail mark. */
+  function exported({ key, sig, at }) {
+    E.doneSig = sig; E.lastPrintAt = at;
+    if (E.data) E.data.key = key;
+    mark = { book_id: book.id, print_at: at, print_changed: false };
+    if (C.resizeNote.pending(E)) { E.remapNote = Object.assign({}, E.remapNote, { seen: true }); renderSizeNote(); E.saver.changed(); }
+    ctx.refresh();
+  }
+  /** My layouts got this book's entry (one per book, replaced): the Layouts panel lists it first. */
+  function myChanged(row) {
+    E.my = [row].concat((E.my || []).filter((m) => m.from_book_id !== row.from_book_id && m.id !== row.id));
+    if (E.panel === 'layouts') renderPanel();
+  }
+
   /* ── Part 9: the size note (design 72) ── */
   function renderSizeNote() {
     const el = E.root.querySelector('[data-sizenote]'); if (!el) return;
@@ -658,6 +714,7 @@
     E.offline = off;
     renderSave();
     if (E.blurb && E.blurb.open) renderBlurb();
+    if (E.ex && E.ex.open) renderExport();
     if (E.panel === 'images') renderPanel();
     if (E.stock && E.stock.open) renderStock();
     if (!off) E.saver.retry();
@@ -1310,12 +1367,15 @@
       const mod = e.metaKey || e.ctrlKey, k = e.key;
       // Part 9: under 900 px the notice covers the editor: its keys rest.
       if (E.width === 'tiny') return;
+      // Part 10: the Export dialog is modal; Escape closes it (while busy: Stop).
+      if (E.ex && E.ex.open) { if (k === 'Escape') { e.preventDefault(); C.exportDialog.escape(E); } return; }
       // Part 8: while the blurb dialog is open the cover's keys rest; Escape closes it.
       if (E.blurb && E.blurb.open) { if (k === 'Escape') { e.preventDefault(); closeBlurb(); } return; }
       // Part 9: Preview final is a modal dialog; Escape closes it.
       if (E.pv.open) { if (k === 'Escape') { e.preventDefault(); closePreview(); } return; }
       if (k === 'Escape') {
         if (C.stock.escape(E)) return;   // Part 7: the wide picker (its preview first)
+        if (E.img.rm && t && t.closest && t.closest('[data-uprm]')) { e.preventDefault(); C.images.cancelRemove(E); return; }   // Part 10: the remove question
         // Part 9: Escape in the Checks drawer (or on its chip) closes the drawer first.
         if (E.checksOpen && t && t.closest && t.closest('[data-ck-host], [data-k="chk"]')) { e.preventDefault(); closeChecks(true); return; }
         if (E.layerMenu) { closeLayerMenu(true); return; }
@@ -1399,6 +1459,9 @@
       // Part 9
       checkItems, closeChecks, showLayer, closePreview, closeSizeNote,
       refreshPreview: renderPreview,
+      // Part 10
+      renderExport, openExport, checkOpt, exported, myChanged,
+      openChecks() { if (!E.checksOpen) toggleChecks(); },
       pickerTo(t, hex) { openPicker(t, hex); },
       refreshPanel: renderPanel,
       refreshStock: renderStock,
@@ -1414,28 +1477,43 @@
 
   /* ── The step module ── */
   const step = {
-    init(b, c) { book = b; ctx = c; },
+    init(b, c) {
+      book = b; ctx = c;
+      // Part 10: the 09 rail mark before 09 opens (a current Print export of the design as saved).
+      root.kdp.listCoverMarks(b.id).then((r) => {
+        if (r.error || mark) return;
+        mark = (r.data || []).find((x) => x.book_id === b.id) || null;
+        if (mark && !ctx.isActive(STEP)) ctx.refresh();
+      }).catch(() => {});
+    },
     render(rootEl) {
       start(rootEl).catch((e) => { if (E) renderError(); if (root.console) console.error(e); });
     },
-    isDone: () => false,   // a current export (Part 10)
+    isDone: () => doneNow(),   // Part 10: a current export of this design
     missing: () => '',
-    /** The header line beside Next (design exportReason; Part 9 adds the size-change words, Part 10 "Done"). */
+    /** The header line beside Next (design exportReason: Done, the size change, Must fix, not done). */
     nextNote() {
+      if (doneNow()) return 'Done: cover files exported.';   // Part 10 (design 71b)
       if (!E || E.status !== 'ready') return 'Not done yet: export the cover files.';
       if (C.resizeNote.pending(E)) return 'The book size changed: export again.';   // Part 9 (design 72)
       const n = C.checks.run(E.cover, checkOpt()).filter((c) => c.sev === 'error').length;
       return n ? `Fix ${n} problem${n === 1 ? '' : 's'} before export.` : 'Not done yet: export the cover files.';
     },
-    /** Next opens 10 only after a current export (Part 10). */
-    nextOff: () => true,
+    /** Next is on only after a current export (Part 10). */
+    nextOff: () => !doneNow(),
     nextTitle: '10 Metadata',
     exportLabel: 'Export cover',
-    exportInert: 10,
+    /** The header's Export cover (Part 10): the dialog, once the editor is open (Loading and Locked: nothing). */
+    openExport(opener) { if (E && E.status === 'ready' && E.width !== 'tiny') openExport(opener); },
     flush() { if (E && E.saver) E.saver.flush(); },
     leave() {
       const me = E;
       dropTiny();
+      // Part 10: an export still running ends here (nothing is recorded); the engine goes. The rail mark keeps what 09 knew.
+      if (me) {
+        C.exportDialog.leave(me);
+        if (me.status === 'ready') mark = { book_id: book.id, print_at: me.lastPrintAt || (mark && mark.print_at) || null, print_changed: !(me.doneSig && sigOf(me.cover) === me.doneSig) };
+      }
       if (!me || !me.saver) { E = null; return Promise.resolve(); }
       if (me.editing != null) me.editing = null;
       // A save that fails here stays in the sidebar's save line with Retry (orphan), as 08's do.

@@ -1,5 +1,5 @@
 // E16 Part 4: 09 in the shell (designs 58, 51b): header, Next, the rail and the sidebar, the first open,
-// the parts drawn inert ("Comes in Part N": Export cover; the Checks drawer and Preview final are live from Part 9), the status bar, no sideways scroll.
+// the parts drawn inert (none since Part 10: Export cover opens its dialog; the Checks drawer and Preview final are live from Part 9), the status bar, no sideways scroll.
 const test = async page => {
   const { log, ok } = CV.log();
   const st = globalThis.__store;
@@ -19,14 +19,17 @@ const test = async page => {
   await CV.open(page);
   ok(st.writes.filter((w) => w.table === 'cover_designs' && w.insert).length === 1, 'a second open makes no second row');
 
-  /* Header (design 58): PACKAGE · STEP 9 OF 11, Cover, Export cover (inert), the reason line, Next off. */
+  /* Header (design 58): PACKAGE · STEP 9 OF 11, Cover, Export cover, the reason line, Next off. */
   ok((await CV.txt(page, '[data-step-label]')) === 'PACKAGE · STEP 9 OF 11', 'PACKAGE · STEP 9 OF 11');
   ok((await CV.txt(page, '[data-step-title]')) === 'Cover', 'the title: Cover');
   ok((await CV.txt(page, '[data-export]')) === 'Export cover', 'header: Export cover');
-  ok(await page.$eval('[data-export]', (b) => b.getAttribute('aria-disabled') === 'true' && b.title === 'Comes in Part 10'), 'Export cover: inert, "Comes in Part 10"');
-  await page.click('[data-export]', { force: true });
-  await page.waitForTimeout(200);
-  ok(!(await page.$('dialog[open]')), 'Export cover opens nothing yet');
+  // Part 10: Export cover is live: it opens the Export dialog (blocked here by the empty cover's Must fixes); Escape closes it.
+  ok(await page.$eval('[data-export]', (b) => !b.hasAttribute('aria-disabled') && !b.title), 'Export cover: live (Part 10)');
+  await page.click('[data-export]');
+  await page.waitForSelector('[data-exdlg] [data-ex-blocked]');
+  ok(true, 'Export cover opens the Export dialog (blocked: Must fix)');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('[data-exdlg]'));
   ok((await CV.txt(page, '[data-next-note]')) === 'Fix 3 problems before export.', `empty cover: "Fix 3 problems before export." (${await CV.txt(page, '[data-next-note]')})`);
   const nx = await page.$eval('[data-next]', (b) => ({ dis: b.disabled, title: b.title, tip: !!b.querySelector('.tip') }));
   ok(nx.dis && nx.title === '10 Metadata' && !nx.tip, `Next: off, "10 Metadata", no tip (${JSON.stringify(nx)})`);

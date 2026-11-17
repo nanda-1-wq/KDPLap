@@ -14,7 +14,8 @@
    - Kindle cover 1600 × 2560: kdpCover.kindle.paint, the painting the
      Kindle JPG uses (kFit for wide trims), with the cut in words;
    - Search result size: the Kindle front at 75 × 120 px.
-   Export cover in its bar is inert until the export dialog lands (Part 10).
+   Export cover in its bar opens the Export dialog (Part 10): Preview final
+   closes first, the dialog's focus goes back to the header's Export cover.
 
    It is a modal dialog: the cover's keys and Paste rest, Tab stays inside,
    Escape and Back to editing close it and the focus goes back to the
@@ -53,7 +54,7 @@
         </span>
         <label class="cv-pv-gray"><input type="checkbox" data-k="pv-gray" data-pv-gray${P.gray ? ' checked' : ''}>Black and white check</label>
         <span class="cv-grow"></span>
-        <button type="button" class="cv-pv-export" data-k="pv-export" aria-disabled="true" title="Comes in Part 10" data-inert="10">${DOWN}Export cover</button>
+        <button type="button" class="cv-pv-export" data-k="pv-export" data-pv-export>${DOWN}Export cover</button>
       </div>
       <div class="cv-pv-body">
         <div class="cv-pv-stage" data-pv-stage>
@@ -115,6 +116,7 @@
     host.addEventListener('click', (e) => {
       if (!E.pv || !E.pv.open) return;
       if (e.target.closest('[data-pv-close]')) { E.closePreview(); return; }
+      if (e.target.closest('[data-pv-export]')) { E.closePreview(); E.openExport(document.querySelector('[data-export]')); return; }
       const c = e.target.closest('[data-pv-cut]');
       if (c) { E.pv.cut = c.getAttribute('data-pv-cut') === '1'; E.refreshPreview(); }
     });

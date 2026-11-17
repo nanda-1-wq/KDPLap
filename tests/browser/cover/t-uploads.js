@@ -219,8 +219,9 @@ const test = async page => {
   { const src = st.assets.find((a) => a.mime === 'image/jpeg' && st.files[a.path]); const nid = '0000000d-0000-4000-8000-00000000000d';
     const extra = { ...src, id: nid, path: `00000000-0000-4000-8000-000000000001/assets/${nid}.jpg`, created_at: new Date(Date.now() + 1000).toISOString() };
     st.files[extra.path] = st.files[src.path]; st.assets.push(extra); }
-  // The Uploads list read fails, then Retry.
-  globalThis.__modes.listFail = 1;
+  // The Uploads list read fails, then Retry. (Part 10: the orphan-file sweep reads the list first when 09 opens,
+  // so two reads fail: the sweep's (it then removes nothing) and the panel's.)
+  globalThis.__modes.listFail = 2;
   await CV.open(page);
   await page.click('[data-tool="images"]');
   await page.waitForSelector('[data-up-retry]');

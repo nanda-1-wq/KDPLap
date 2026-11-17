@@ -29,7 +29,7 @@ const test = async page => {
   const bar = await CV.all(page, '.cv-pv-bar > *');
   ok(bar.filter(Boolean).join(' | ') === 'Back to editing | Preview final | Show | As printed, cut at the trim With bleed | Black and white check | Export cover', `bar: ${bar.filter(Boolean).join(' | ')}`);
   ok(await page.$eval('[data-pv-cut="1"]', (b) => b.getAttribute('aria-pressed') === 'true') && await page.$eval('[data-pv-cut="0"]', (b) => b.getAttribute('aria-pressed') === 'false'), 'As printed is pressed');
-  ok(await page.$eval('.cv-pv-export', (b) => b.getAttribute('aria-disabled') === 'true' && b.title === 'Comes in Part 10'), 'Export cover: inert, Comes in Part 10');
+  ok(await page.$eval('.cv-pv-export', (b) => !b.hasAttribute('aria-disabled') && !b.title), 'Export cover: live (Part 10; t-export opens the dialog from here)');
   const dlg = await page.$eval('[data-pv]', (d) => { const r = d.getBoundingClientRect(), h = document.querySelector('[data-book-head]').getBoundingClientRect(); return { left: r.left, right: Math.round(window.innerWidth - r.right), top: Math.round(r.top - h.bottom), bottom: Math.round(window.innerHeight - r.bottom) }; });
   ok(dlg.left === 0 && dlg.right === 0 && dlg.top === 0 && dlg.bottom === 0, `under the book head, the whole width (the rail too): ${JSON.stringify(dlg)}`);
   const rail = await page.evaluate(() => { const r = document.querySelector('[data-pv]').getBoundingClientRect(); const e = document.elementFromPoint(20, r.top + 200); return !!(e && e.closest('[data-pv]')); });

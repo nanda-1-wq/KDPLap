@@ -339,6 +339,13 @@ tests/browser/run.sh cover t-shots6.js   # STOP 6 compare shot (62) and the Part
 # Part 7
 tests/browser/run.sh cover t-stock.js    # design 63: the Pixabay and Unsplash tabs (Unsplash waits for Search, N10), the wide picker, filters, preview, picks (copy and link), Replace, credits, stock down, errors, More results, keys, Step D
 tests/browser/run.sh cover t-shots7.js   # STOP 7 compare shot (63) and the Part 7 surfaces → docs/reviews/e16-stop7/ (never in a sweep)
+# Part 10 (run.sh also checks the print engine's file cache for this suite: the export builds with the real Typst engine)
+tests/browser/run.sh cover t-export.js   # designs 71, 71b, 73d: ready, blocked (Must fix, offline), steps + Stop (Stop, ×, Escape, leaving 09), done, downloads + zip, Done/Next from data, every failure, My layouts
+tests/browser/run.sh cover t-records.js  # Uploads housekeeping: the orphan-file sweep (safety rules, pages, server clock) and the remove × with its "used on N covers" question
+tests/browser/run.sh cover t-export-real.js  # the sample book exported for real, KDP checks, files to tests/browser/cover/out/stop10/ (never in a sweep)
+tests/browser/run.sh cover t-shots10.js  # STOP 10 compare shots (71, 71b, 73d) and the Part 10 states → docs/reviews/e16-stop10/ (never in a sweep)
+supabase/tests/sql/run.sh t0030_one_insert.sql   # the export's one insert against the real 0030 guard: all rows or none
+COVER_OUT=<scratch> node tests/browser/cover/safari-p10.mjs   # real Safari, the export: real clicks, the real engine (real CDNs), KDP checks, zip read back, Stop
 COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, the editor (text, effects, shapes, images, PDF, crop, undo, save); every Supabase call answered in the page (safari-stub.js), none reaches the host
 ```
 
@@ -351,6 +358,10 @@ COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, 
   Part 7: the function "stock" (search and pick, as the server answers), the providers' picture links and
   cover_assets.name; modes stockFail/stockCode, pickFail/pickCode, stockNet, stockSlow, pickSlow, stockMany,
   picDown. `fixture-stock.js` (STK) holds the design's sample results and draws their pictures in the page.
+  Part 10: cover_key, cover_exports (one insert, 0030's guard codes), cover_marks, the My layouts upsert,
+  cover_assets delete, the "used on" reads (layers cs), the bucket's folder list; modes keyFail, recFail, recCode,
+  myUpFail, useFail, delFail, listFilesFail, recSlow, engineDown, keyHook(n). The Typst files come from
+  `tests/browser/.cache/format`.
 - `fixture-design-book.js` (run.sh puts a suite's `fixture-*.js` before its mock) is the design's book;
   `FIX.band(page)` builds the Band cover with the warm blurb from `js/cover/layouts.js` itself.
 - Fonts come from `tests/browser/.cache/cover-fonts` (the Part 2 cache). The run-code sandbox has no

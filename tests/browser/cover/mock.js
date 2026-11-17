@@ -26,6 +26,15 @@
 // store.ai (a function of the request, or { blurb, words, unsourced }); store.gen = the requests).
 //   __modes: myFail / myDelFail / blurbFail (n calls fail), genFail (n calls answer genCode, default ai_unavailable),
 //   genNet (n calls do not reach the function), genSlow (ms)
+// Part 10: cover_key (32 hex, a hash of the design's layers, bg and fmt, as 0030's md5), cover_exports (one insert of
+// 1 to 3 rows, all or nothing, with 0030's guard: cover_missing, cover_pdf_missing, cover_resized, cover_stale,
+// cover_rights, cover_size and the fields check; store.exports; cover_json's last and cover_marks read them), the
+// My layouts upsert (one per book, replaced; my_layouts_full past 100), cover_assets delete, where a picture is used
+// (cover_designs and cover_my_layouts "layers cs [{asset}]": store.design, store.otherDesigns, store.my), and the
+// bucket's folder list (store.fileTimes: path → created_at; store.removed: the paths the sweep removed).
+//   __modes: keyFail, recFail (n calls fail), recCode (the next insert answers that P0001 code), myUpFail, useFail,
+//   delFail, listFilesFail, recSlow (ms), engineDown (the Typst files do not load); keyHook(n) runs before the n-th
+//   cover_key read (a test changes the design). The print engine's files come from tests/browser/.cache/format.
 // pdf.js 6.4.299 comes from tests/browser/.cache/format (the format suite's checked cache), never the network.
 // Fonts come from tests/browser/.cache/cover-fonts (the Part 2 cache, every file checked against its sha384 there).
 const U = '00000000-0000-4000-8000-000000000001';
@@ -47,11 +56,23 @@ async function setupCover(page) {
     blurb: null,
     assets: [], files: {}, uploads: [], stock: { calls: [], net: [] }, stockFiles: {},
     my: [], blurbs: [], gen: [], ai: null,
+    exports: [], otherDesigns: [], fileTimes: {}, removed: [], keyReads: 0,
     writes: [], calls: [], cdn: [], saves: 0, reads: 0, dialogs: []
   };
   // "Leave site?" (beforeunload while a save is out or failed) must never block the next test: note it, accept it.
   if (!page.__cvDialog) { page.__cvDialog = true; page.on('dialog', (d) => { (globalThis.__store || { dialogs: [] }).dialogs.push(d.type()); d.accept().catch(() => {}); }); }
 
+  // Part 10: cover_key as 0030 (md5 of the design's layers, bg, fmt): here 4 FNV-1a hashes of the JSON, 32 hex.
+  const hash32 = (str) => { let out = ''; for (const seed of [0x811c9dc5, 0x01000193, 0x9e3779b1, 0x85ebca6b]) { let h = seed >>> 0; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } out += h.toString(16).padStart(8, '0'); } return out; };
+  const keyOf = () => (store.design ? hash32(JSON.stringify({ layers: store.design.layers, bg: store.design.bg, fmt: store.design.fmt })) : null);
+  const lastOf = (kind) => {
+    const e = store.exports.filter((x) => x.kind === kind).sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : a.seq < b.seq ? 1 : -1))[0];
+    if (!e) return null;
+    const o = { id: e.id, created_at: e.created_at, settings_key: e.settings_key, snapshot: e.snapshot };
+    if (kind === 'print') Object.assign(o, { page_count: e.page_count, width_in: e.width_in, height_in: e.height_in, spine_in: e.spine_in });
+    if (kind === 'image') Object.assign(o, { page_count: e.page_count, width_px: e.width_px, height_px: e.height_px });
+    return o;
+  };
   const fmtToday = () => ({ trim: store.book.trim, pages: store.pdf && store.pdf.current ? store.pdf.page_count : null, paper: store.book.paper });
   const coverJson = () => ({
     book: { id: FIX.BOOK, title: store.book.title, subtitle: store.book.subtitle, pen_name_id: FIX.PEN, pen_name: store.book.pen_name, bio_text: store.book.bio, trim: store.book.trim, paper: store.book.paper },
@@ -60,8 +81,8 @@ async function setupCover(page) {
     design: store.design ? copy(store.design) : null,
     assets: store.assets.filter((a) => store.design && store.design.layers.some((l) => l.type === 'image' && l.asset === a.id)).map(copy), blurb: store.blurbs.length ? copy(store.blurbs[store.blurbs.length - 1]) : store.blurb ? copy(store.blurb) : null,
     my_layouts: store.my.slice().sort((a, b) => (a.exported_at < b.exported_at ? 1 : -1)).map((m) => { const c = copy(m); delete c.layers; delete c.user_id; return c; }),
-    key: store.design ? 'k' + store.design.rev : null,
-    last: { print: null, image: null, kindle: null },
+    key: keyOf(),
+    last: { print: lastOf('print'), image: lastOf('image'), kindle: lastOf('kindle') },
     now: now()
   });
   const view = () => ({
@@ -288,6 +309,7 @@ async function setupCover(page) {
       const p = body() || {};
       const gone = (p.prefixes || []).filter((n) => store.files[n]);
       for (const n of gone) delete store.files[n];
+      store.removed.push(...(p.prefixes || []));
       return json(r, 200, gone.map((n) => ({ name: n })));
     }
     // Part 7: the Edge Function "stock".
@@ -311,6 +333,11 @@ async function setupCover(page) {
       return json(r, 400, { error: 'bad_request' });
     }
     // Part 8: My layouts, blurb versions, generate cover_blurb v28.
+    if (path === '/rest/v1/cover_my_layouts' && method === 'GET' && param('layers')) {
+      if (take('useFail')) return json(r, 500, { message: 'mock: my layouts down' });
+      const want = JSON.parse(param('layers').replace(/^cs\./, ''))[0].asset;
+      return json(r, 200, store.my.filter((m) => (m.layers || []).some((l) => l.asset === want)).map((m) => ({ id: m.id })));
+    }
     if (path === '/rest/v1/cover_my_layouts' && method === 'GET') {
       if (take('myFail')) return json(r, 500, { message: 'mock: my layouts down' });
       return json(r, 200, store.my.filter((m) => m.id === eq('id')).map((m) => { const c = copy(m); delete c.user_id; return c; }));
@@ -348,6 +375,97 @@ async function setupCover(page) {
       const blurb = out.blurb;
       return json(r, 200, { stage: 'cover_blurb', blurb, words: (blurb.match(/\S+/g) || []).length, unsourced: out.unsourced || [] });
     }
+    // Part 10: the export's records, My layouts on export, the remove ×, the sweep.
+    if (path === '/rest/v1/rpc/cover_key') {
+      store.keyReads++;
+      const hook = mode('keyHook'); if (typeof hook === 'function') hook(store.keyReads);
+      if (take('keyFail')) return json(r, 500, { message: 'mock: key down' });
+      return json(r, 200, body().p_book_id === FIX.BOOK ? keyOf() : null);
+    }
+    if (path === '/rest/v1/rpc/cover_marks') {
+      const p = lastOf('print'), im = lastOf('image'), k = lastOf('kindle');
+      if (!p && !im && !k && !store.pdf) return json(r, 200, []);
+      const resized = !store.design || JSON.stringify(store.design.fmt) !== JSON.stringify(fmtToday());
+      const ch = (e) => (e ? e.settings_key !== keyOf() || resized : null);
+      return json(r, 200, [{ book_id: FIX.BOOK, pdf_current: !!(store.pdf && store.pdf.current), print_at: p && p.created_at, print_changed: ch(p), image_at: im && im.created_at, image_changed: ch(im), kindle_at: k && k.created_at, kindle_changed: ch(k), thumb: null }]);
+    }
+    if (path === '/rest/v1/cover_exports' && method === 'POST') {
+      const list = [].concat(body());
+      store.writes.push({ table: 'cover_exports', insert: copy(list) });
+      if (mode('recSlow')) await wait(mode('recSlow'));
+      if (take('recFail')) return json(r, 500, { message: 'mock: records down' });
+      const forced = mode('recCode'); if (forced) { globalThis.__modes.recCode = null; return fail(r, 400, 'P0001', forced); }
+      const p0001 = (c) => fail(r, 400, 'P0001', c);
+      // 0030 cover_exports_guard, row by row; one refused row refuses the statement (nothing is kept).
+      const fmt = fmtToday(), [tw, th] = String(store.book.trim).split('x').map(Number);
+      const kk = store.book.paper === 'cream' ? 0.0025 : 0.002252;
+      const round4 = (v) => Math.round(v * 10000) / 10000;
+      const rows = [];
+      for (const p of list) {
+        const extra = Object.keys(p).filter((k) => !['book_id', 'kind', 'settings_key', 'engine', 'width_in', 'height_in', 'spine_in', 'width_px', 'height_px', 'thumb'].includes(k));
+        if (extra.length) return fail(r, 400, 'PGRST204', `mock: unknown columns ${extra}`);
+        if (p.book_id !== FIX.BOOK) return fail(r, 403, '42501', 'new row violates row-level security policy');
+        if (!['print', 'image', 'kindle'].includes(p.kind) || !/^[0-9a-f]{32}$/.test(p.settings_key || '') || !p.engine || String(p.engine).length > 40) return fail(r, 400, '23514', 'mock: cover_exports check');
+        if (p.thumb != null && !(String(p.thumb).length <= 20000 && String(p.thumb).startsWith('data:image/jpeg;base64,'))) return fail(r, 400, '23514', 'mock: cover_exports_thumb_check');
+        if (!store.design) return p0001('cover_missing');
+        if (!store.pdf || !store.pdf.current) return p0001('cover_pdf_missing');
+        if (JSON.stringify(store.design.fmt) !== JSON.stringify(fmt)) return p0001('cover_resized');
+        if (p.settings_key !== keyOf()) return p0001('cover_stale');
+        const bad = store.design.layers.some((l) => l.type === 'image' && !l.hidden && !l.noExport && l.asset
+          && !store.assets.some((a) => a.id === l.asset && (a.rights_at || a.source === 'pixabay' || a.source === 'unsplash')));
+        if (bad) return p0001('cover_rights');
+        const W = 0.25 + 2 * tw + fmt.pages * kk, H = th + 0.25;
+        if (p.kind === 'print') {
+          if (p.width_px != null || p.height_px != null) return fail(r, 400, '23514', 'mock: cover_exports_fields_check');
+          if (!(Math.abs(p.spine_in - round4(fmt.pages * kk)) <= 0.0001 && Math.abs(p.width_in - round4(W)) <= 0.0001 && Math.abs(p.height_in - round4(H)) <= 0.0001)) return p0001('cover_size');
+        } else if (p.kind === 'image') {
+          if (p.width_in != null || p.thumb != null) return fail(r, 400, '23514', 'mock: cover_exports_fields_check');
+          if (p.width_px !== Math.ceil(W * 300 - 1e-9) || p.height_px !== Math.ceil(H * 300 - 1e-9)) return p0001('cover_size');
+        } else if (!(p.width_px === 1600 && p.height_px === 2560 && p.width_in == null && p.thumb == null)) return fail(r, 400, '23514', 'mock: cover_exports_fields_check');
+        rows.push({ id: id('x'), seq: ++seq, book_id: p.book_id, kind: p.kind, settings_key: p.settings_key, engine: p.engine, width_in: p.width_in == null ? null : p.width_in, height_in: p.height_in == null ? null : p.height_in,
+          spine_in: p.spine_in == null ? null : p.spine_in, width_px: p.width_px == null ? null : p.width_px, height_px: p.height_px == null ? null : p.height_px, thumb: p.thumb || null,
+          page_count: p.kind === 'kindle' ? null : fmt.pages, created_at: now(), snapshot: { title: store.book.title, trim: fmt.trim, paper: fmt.paper, page_count: fmt.pages, layout: store.design.layout, rev: store.design.rev } });
+      }
+      store.exports.push(...rows);
+      return json(r, 201, rows.map((x) => ({ id: x.id, kind: x.kind, created_at: x.created_at })));
+    }
+    if (path === '/rest/v1/cover_my_layouts' && method === 'POST') {
+      const p = body();
+      store.writes.push({ table: 'cover_my_layouts', upsert: copy(p), onConflict: param('on_conflict'), prefer: req.headers()['prefer'] || '' });
+      if (take('myUpFail')) return json(r, 500, { message: 'mock: my layouts down' });
+      if (!p.from_book_id) return fail(r, 400, 'P0001', 'my_layout_book');
+      if (!(typeof p.name === 'string' && p.name.length >= 1 && p.name.length <= 80 && p.name === p.name.trim())) return fail(r, 400, '23514', 'mock: cover_my_layouts_name_check');
+      if (p.thumb != null && !(String(p.thumb).length <= 20000 && String(p.thumb).startsWith('data:image/jpeg;base64,'))) return fail(r, 400, '23514', 'mock: cover_my_layouts_thumb_check');
+      const bad = badDesign({ layers: p.layers, bg: p.bg, fmt: p.fmt });
+      if (bad) return fail(r, 400, '23514', `mock: bad layout: ${bad}`);
+      const old = store.my.find((m) => m.from_book_id === p.from_book_id);
+      if (!old && store.my.length >= 100) return fail(r, 400, 'P0001', 'my_layouts_full');
+      const row = Object.assign(old || { id: id('m'), created_at: now() }, copy(p), { exported_at: now() });
+      if (!old) store.my.push(row);
+      return json(r, 201, [{ id: row.id, exported_at: row.exported_at }]);
+    }
+    if (path === '/rest/v1/cover_designs' && method === 'GET' && param('layers')) {
+      if (take('useFail')) return json(r, 500, { message: 'mock: designs down' });
+      const want = JSON.parse(param('layers').replace(/^cs\./, ''))[0].asset;
+      const all = (store.design ? [{ book_id: FIX.BOOK, layers: store.design.layers }] : []).concat(store.otherDesigns);
+      return json(r, 200, all.filter((d) => d.layers.some((l) => l.asset === want)).map((d) => ({ book_id: d.book_id })));
+    }
+    if (path === '/rest/v1/cover_assets' && method === 'DELETE') {
+      store.writes.push({ table: 'cover_assets', del: eq('id') });
+      if (take('delFail')) return json(r, 500, { message: 'mock: assets down' });
+      const gone = store.assets.filter((a) => a.id === eq('id'));
+      store.assets = store.assets.filter((a) => a.id !== eq('id'));
+      return json(r, 200, gone.map((a) => ({ path: a.path })));
+    }
+    if (path === '/storage/v1/object/list/covers' && method === 'POST') {
+      const p = body() || {};
+      store.writes.push({ table: 'storage.list', body: copy(p) });
+      if (take('listFilesFail')) return json(r, 500, { statusCode: '500', error: 'mock', message: 'mock: storage down' });
+      const pre = String(p.prefix || '').replace(/\/$/, '') + '/';
+      const names = Object.keys(store.files).filter((n) => n.startsWith(pre) && !n.slice(pre.length).includes('/')).sort();
+      const off = p.offset || 0, lim = p.limit || 100;
+      return json(r, 200, names.slice(off, off + lim).map((n) => ({ name: n.slice(pre.length), id: 'f-' + n.slice(pre.length), created_at: store.fileTimes[n] || now(), updated_at: now(), metadata: { size: store.files[n].size } })));
+    }
     // The rail's 07 and 08 marks (design 58 shows them done): a current run, and a current Print PDF when there is one.
     if (path === '/rest/v1/rpc/qc_mark') return json(r, 200, [{ checked_at: ago(1), current: true }]);
     if (path === '/rest/v1/rpc/pdf_marks') return json(r, 200, store.pdf ? [{ book_id: FIX.BOOK, exported_at: store.pdf.created_at, page_count: store.pdf.page_count, changed: !store.pdf.current }] : []);
@@ -360,6 +478,14 @@ async function setupCover(page) {
   const fontFile = /^https:\/\/(cdn\.jsdelivr\.net\/npm|unpkg\.com)\/(@expo-google-fonts\/[^/]+)\/(.+\.ttf)$/;
   const pdfFile = /^https:\/\/(cdn\.jsdelivr\.net\/npm|unpkg\.com)\/(pdfjs-dist@6\.4\.299)\/(build\/pdf(?:\.worker)?\.min\.mjs)$/;
   await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com)\//, async (r) => {
+    // Part 10: the print engine's pinned files (Typst) from tests/browser/.cache/format (run.sh checks each sha384).
+    const em = r.request().url().match(/^https:\/\/(cdn\.jsdelivr\.net\/npm|unpkg\.com)\/(@myriaddreamin\/[^/]+)\/(.+)$/);
+    if (em) {
+      store.cdn.push(`${em[2]}/${em[3]}`);
+      if (mode('engineDown')) return r.abort();
+      const ext = (em[3].match(/\.([a-z0-9]+)$/) || [])[1];
+      return r.fulfill({ path: `${CACHE}/format/${em[2]}/${em[3]}`, contentType: { js: 'text/javascript', mjs: 'text/javascript', wasm: 'application/wasm' }[ext] || 'application/octet-stream', headers: { 'access-control-allow-origin': '*' } });
+    }
     const pm = r.request().url().match(pdfFile);
     if (pm) {
       store.cdn.push(`${pm[2]}/${pm[3]}`);

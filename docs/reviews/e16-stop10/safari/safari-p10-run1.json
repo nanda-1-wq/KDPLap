@@ -1,0 +1,25 @@
+{
+ "date": "2026-11-17T09:58:58.426Z",
+ "steps": {
+  "viewport": [
+   1440,
+   900
+  ],
+  "band": {
+   "layers": 5,
+   "chip": "Ready"
+  },
+  "probe": {
+   "drawer": false,
+   "focused": false,
+   "events": [],
+   "vis": "hidden"
+  }
+ },
+ "safari": "27.0.1",
+ "pass": 2,
+ "fails": [
+  "ERR Safari takes no real input (window focus false): a click on the Checks chip gave no event. Bring the Safari window to the front and run again."
+ ],
+ "clickErrs": []
+}

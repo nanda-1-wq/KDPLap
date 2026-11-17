@@ -46,7 +46,8 @@
    (07 "How to add one" → 08 at the Copyright row).
    E16 Part 4 (designs 58, 73): 09 Cover is js/cover/editor.js, a wide step
    (the rail) and the last step with a screen. A step may set its own Next:
-   nextOff() (09: off until a current export, Part 10), nextTitle, and
+   nextOff() (09: off until a current export, Part 10), nextTitle (09: the tip
+   "10 Metadata comes in v3" once Next is on), and
    nextNote() (09: "Fix 3 problems before export."). exportLabel names the
    header button; exportInert = N draws it inert ("Comes in Part N").
    STOP 4 (owner, F3): the rail adds 10 (open) and 11 (locked), not links.
@@ -361,17 +362,19 @@
     nextBtn.disabled = own ? !!m.nextOff() : (!last && left > 0);
     if (m && m.nextTitle) nextBtn.title = m.nextTitle; else nextBtn.removeAttribute('title');
     // The last step: Next stays focusable with the "Coming next" tip (shell pattern), and does nothing.
-    nextBtn.classList.toggle('has-tip', last);
+    // E16 Part 10: 09 done turns Next on (design 71b); 10 is a v3 step, so its tip says so and a click stays here.
+    const future = own && step === LAST_STEP && !nextBtn.disabled;
+    nextBtn.classList.toggle('has-tip', last || future);
     if (last) nextBtn.setAttribute('aria-disabled', 'true'); else nextBtn.removeAttribute('aria-disabled');
     let tip = nextBtn.querySelector('.tip');
-    if (last && !tip) {
+    if ((last || future) && !tip) {
       tip = document.createElement('span');
       tip.className = 'tip';
       tip.id = 'nextTip';
       tip.setAttribute('role', 'tooltip');
-      tip.textContent = 'Coming next';
       nextBtn.append(tip);
-    } else if (!last && tip) tip.remove();
+    } else if (!(last || future) && tip) { tip.remove(); tip = null; }
+    if (tip) tip.textContent = future ? `${m.nextTitle || 'The next step'} comes in v3` : 'Coming next';
     const need = m && m.missing ? m.missing() : '';
     let note = '';
     if (m && m.nextNote) note = m.nextNote();
@@ -380,7 +383,7 @@
     else if (last) note = 'Coming next';
     nextNote.textContent = note;
     nextNote.hidden = !note;
-    nextBtn.setAttribute('aria-describedby', last ? 'nextNote nextTip' : 'nextNote');
+    nextBtn.setAttribute('aria-describedby', last || future ? 'nextNote nextTip' : 'nextNote');
   }
 
   const ctx = {
@@ -430,7 +433,7 @@
     const exportLabel = document.querySelector('[data-export-label]');
     const mod = MODULES[step];
     if (exportLabel) exportLabel.textContent = mod && mod.exportLabel ? mod.exportLabel : step === FORMAT_STEP ? 'Export files' : 'Export';
-    // E16 Part 4: 09's Export cover is drawn inert until its dialog lands (Part 10).
+    // E16 Part 4: a step can draw Export inert (exportInert = N: "Comes in Part N"). 09's is live since Part 10.
     const exportBtnEl = document.querySelector('[data-export]');
     if (exportBtnEl) {
       if (mod && mod.exportInert) { exportBtnEl.setAttribute('aria-disabled', 'true'); exportBtnEl.title = `Comes in Part ${mod.exportInert}`; }
@@ -535,6 +538,9 @@
   nextBtn.addEventListener('click', () => {
     if (nextBtn.disabled || nextBtn.getAttribute('aria-disabled') === 'true') return;
     const n = step + 1;
+    // E16 Part 10: past the last step with a screen (10 is v3) Next stays here, and current_step is not moved
+    // (the Books page would open a step it has no screen for).
+    if (n > LAST_STEP) return;
     // Edits keep saving in the background; an error shows in the sidebar with Retry.
     if (MODULES[step] && MODULES[step].flush) MODULES[step].flush();
     go(n);

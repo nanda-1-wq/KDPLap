@@ -54,6 +54,7 @@
     del: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
     warn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v4M12 17v.5"/></svg>',
     ok: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg>'
   };
   // The design's sample photo (imageLayer bg): a layout's picture before the writer picks one.
@@ -224,7 +225,7 @@
     return row.name || (row.source === 'pdf' ? 'PDF page' : row.source === 'unsplash' ? 'Unsplash photo' : row.source === 'pixabay' ? 'Pixabay picture' : 'Picture');
   }
 
-  function setErr(E, k) { E.img.err = k ? T(k) : ''; E.img.busy = ''; E.refreshPanel(); }
+  function setErr(E, k) { E.img.err = k ? T(k) : ''; E.img.busy = ''; E.img.note = ''; E.refreshPanel(); }
 
   /** Design takeImageFile: the rights tick first, then the checks, then the upload, then add or replace. */
   async function takeFile(E, file, fallbackName) {
@@ -339,6 +340,122 @@
     setErr(E, 'pasteNone');
   }
 
+  /**
+   * E16 Part 10: the pictures of an export at full size (the screen keeps 4,096 px copies): each stored file
+   * read again, an Unsplash photo at its own size. A picture with no row, or one that does not load, stops the
+   * export (it never prints a placeholder). check(): throws when the export was stopped.
+   * → { get(layer) → the picture to draw, close() } (close lets the big pictures go).
+   */
+  async function full(E, layers, check) {
+    const out = new Map();
+    const close = () => { for (const b of out.values()) if (b && b.close) b.close(); out.clear(); };
+    try {
+      for (const l of C.flatten.printable(layers)) {
+        if (l.type !== 'image' || l.asset == null || out.has(l.asset)) continue;
+        const row = rowOf(E, l.asset);
+        const bad = () => Object.assign(new Error('picture'), { exKind: 'picture', name: l.name || (row ? nameOf(row) : 'Picture') });
+        if (!row) throw bad();
+        let blob;
+        try {
+          if (row.path) {
+            const res = await root.kdp.downloadCoverAsset(row.path);
+            if (res.error || !res.data) throw res.error || new Error('no file');
+            blob = res.data;
+          } else {
+            const url = C.stock.remoteUrl(row, Math.max(Number(row.width) || 0, Number(row.height) || 0) || 4096);
+            if (!url) throw new Error('no link');
+            const res = await root.fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            blob = await res.blob();
+          }
+        } catch (e) { if (check) check(); throw bad(); }
+        if (check) check();
+        let bmp;
+        try { bmp = await P().decode(blob); } catch (e) { throw bad(); }
+        out.set(l.asset, bmp);
+        if (check) check();
+      }
+    } catch (e) { close(); throw e; }
+    return { get: (l) => (l.asset == null ? sample() : out.get(l.asset) || null), close, size: () => out.size };
+  }
+
+  /*
+   * E16 Part 10 (owner, STOP 6 N6): the × on an Uploads tile. It first asks, with how many covers use the
+   * picture (the user's saved designs, this cover as it is now, and My layouts). Remove deletes the row,
+   * then the file (a file left behind goes in the next sweep). A cover that used it shows "Picture missing"
+   * (C15, a Must fix) until it gets a new picture.
+   */
+  async function askRemove(E, id) {
+    const row = Array.isArray(E.uploads) && E.uploads.find((r) => r.id === id);
+    if (!row) return;
+    const me = E;
+    E.img.note = '';
+    E.img.rm = { id, name: nameOf(row), st: 'counting', books: 0, layouts: 0, err: '' };
+    E.refreshPanel(); focusRm(E);
+    let res;
+    try { res = await root.kdp.coverAssetUse(id); } catch (e) { res = { error: e }; }
+    if (!me.live() || !E.img.rm || E.img.rm.id !== id) return;
+    if (res.error || !res.data) { E.img.rm.st = 'ask'; E.img.rm.err = 'We couldn’t check which covers use it. Check your connection, then try again.'; E.img.rm.unknown = true; }
+    else {
+      const books = new Set(res.data.books || []);
+      books.delete(E.bookId);
+      if (E.cover.layers.some((l) => l.type === 'image' && l.asset === id)) books.add(E.bookId);
+      Object.assign(E.img.rm, { st: 'ask', books: books.size, here: books.has(E.bookId), layouts: res.data.layouts || 0, unknown: false });
+    }
+    E.refreshPanel(); focusRm(E);
+  }
+  function rmText(rm) {
+    if (rm.unknown) return 'We couldn’t check which covers use this picture. If one does, it will show “Picture missing”.';
+    const n = rm.books, m = rm.layouts;
+    if (!n && !m) return 'It is not used on any cover.';
+    const a = n ? `Used on ${n} cover${n === 1 ? '' : 's'}${rm.here ? (n === 1 ? ' (this one)' : ', this one too') : ''}.` : '';
+    const b = m ? `${n ? 'Also in' : 'In'} ${m} of My layouts.` : '';
+    const c = n ? 'Those covers will show “Picture missing” and need a new picture before you export.' : 'Those layouts will show “Picture missing” when you use them.';
+    return [a, b, c].filter(Boolean).join(' ');
+  }
+  function rmHtml(E) {
+    const rm = E.img.rm;
+    if (!rm) return '';
+    if (rm.st === 'counting') return `<div class="cv-uprm" role="status" data-uprm><p class="cv-uprm-t">Remove ${esc(rm.name)} from Uploads?</p><p class="cv-help">Checking which covers use it…</p><div class="cv-uprm-btns"><button type="button" class="cv-sbtn" data-k="uprm-cancel" data-uprm-cancel>Cancel</button></div></div>`;
+    return `<div class="cv-uprm" role="alertdialog" aria-labelledby="cv-uprm-t" aria-describedby="cv-uprm-p" data-uprm>
+      <p class="cv-uprm-t" id="cv-uprm-t">Remove ${esc(rm.name)} from Uploads?</p>
+      <p class="cv-uprm-p" id="cv-uprm-p">${rm.books || rm.layouts ? `<span class="cv-uprm-w">${I.warn}<span>${esc(rmText(rm))}</span></span>` : esc(rmText(rm))} The file is deleted. This cannot be undone.</p>
+      ${rm.err ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(rm.err)}</span></p>` : ''}
+      <div class="cv-uprm-btns"><button type="button" class="cv-uprm-go" data-k="uprm-go" data-uprm-go${rm.st === 'removing' ? ' aria-disabled="true"' : ''}>${rm.st === 'removing' ? 'Removing…' : 'Remove'}</button><button type="button" class="cv-sbtn" data-k="uprm-cancel" data-uprm-cancel>Cancel</button></div>
+    </div>`;
+  }
+  function focusRm(E) {
+    const b = E.root.querySelector('[data-panel] [data-uprm-go]') || E.root.querySelector('[data-panel] [data-uprm-cancel]');
+    if (b) b.focus({ preventScroll: true });
+  }
+  async function doRemove(E) {
+    const rm = E.img.rm; if (!rm || rm.st !== 'ask') return;
+    const me = E, id = rm.id;
+    rm.st = 'removing'; rm.err = ''; E.refreshPanel(); focusRm(E);
+    let res;
+    try { res = await root.kdp.deleteCoverAsset(id); } catch (e) { res = { error: e }; }
+    if (!me.live() || E.img.rm !== rm) return;
+    if (res.error && !res.error.notFound) { rm.st = 'ask'; rm.err = 'We couldn’t remove the picture. Check your connection, then try again.'; E.refreshPanel(); focusRm(E); return; }
+    const i = Array.isArray(E.uploads) ? E.uploads.findIndex((r) => r.id === id) : -1;
+    if (Array.isArray(E.uploads)) E.uploads = E.uploads.filter((r) => r.id !== id);
+    E.img.rm = null;
+    // A layer that uses it: the picture is gone now (C15). Otherwise the store forgets it.
+    if (E.cover.layers.some((l) => l.type === 'image' && l.asset === id)) store(E).set(id, { st: 'missing', src: null, thumb: null, row: null });
+    else store(E).delete(id);
+    E.img.note = `${rm.name} was removed from Uploads.`;
+    changed(E);
+    E.refreshPanel();
+    const p = E.root.querySelector('[data-panel]');
+    const xs = p ? p.querySelectorAll('[data-up-x]') : [];
+    const n = xs[Math.min(Math.max(0, i), xs.length - 1)] || (p && p.querySelector('[data-up-file]')) || null;
+    if (n) n.focus({ preventScroll: true });
+  }
+  function cancelRemove(E) {
+    const rm = E.img.rm; if (!rm || rm.st === 'removing') return;
+    E.img.rm = null; E.refreshPanel();
+    const x = E.root.querySelector(`[data-panel] [data-up-x="${CSS.escape(rm.id)}"]`); if (x) x.focus({ preventScroll: true });
+  }
+
   /* ── Panel (design 62's Images panel, Uploads tab) ── */
   function sizeText(r) { return `${Number(r.width).toLocaleString('en-US')} × ${Number(r.height).toLocaleString('en-US')}`; }
   function tile(E, r) {
@@ -348,7 +465,9 @@
     const what = E.replaceId != null ? 'Replace with' : 'Add';
     const stock = r.source === 'pixabay' ? 'Pixabay' : r.source === 'unsplash' ? 'Unsplash' : '';
     const label = `${what} ${nameOf(r)}${stock ? ` (${stock})` : ''}, ${sizeText(r)} px${r.transparent ? ', see-through' : ''}`;
-    return `<button type="button" class="cv-uptile" data-k="up-${esc(r.id)}" data-add-asset="${esc(r.id)}" aria-label="${esc(label)}">${thumb}<span class="cv-uptile-s cv-mono">${sizeText(r)}</span>${stock ? `<span class="cv-uptile-src">${stock}</span>` : ''}</button>`;
+    // Part 10 (N6): the × beside the tile (a button cannot hold a button), over its top right corner.
+    return `<div class="cv-uptile-w"><button type="button" class="cv-uptile" data-k="up-${esc(r.id)}" data-add-asset="${esc(r.id)}" aria-label="${esc(label)}">${thumb}<span class="cv-uptile-s cv-mono">${sizeText(r)}</span>${stock ? `<span class="cv-uptile-src">${stock}</span>` : ''}</button>`
+      + `<button type="button" class="cv-uptile-x" data-k="upx-${esc(r.id)}" data-up-x="${esc(r.id)}" aria-label="Remove ${esc(nameOf(r))} from Uploads" title="Remove from Uploads"${E.img.rm ? ' aria-disabled="true"' : ''}>${I.x}</button></div>`;
   }
   /**
    * The Uploads help line (owner, STOP 6): the full-cover size in px comes from this book's size at 300 DPI,
@@ -379,6 +498,7 @@
       <p class="cv-help cv-help-sm" data-up-help>${esc(helpText(E.cover.fmt))}</p>
       ${im.err ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(im.err)}</span></p>` : ''}
       ${im.busy ? `<p class="cv-help" role="status" data-up-busy>${esc(im.busy)}</p>` : ''}
+      ${im.note ? `<p class="cv-help" role="status" data-up-note>${esc(im.note)}</p>` : ''}
       ${im.pdf ? `<div class="cv-pdfbox" data-pdfbox>
           <div class="cv-pdf-name">${esc(im.pdf.name)}</div>
           <div class="cv-mono cv-pdf-pages">${im.pdf.pages} ${im.pdf.pages === 1 ? 'page' : 'pages'}</div>
@@ -390,12 +510,18 @@
       ${list === 'loading' || list == null ? '<p class="cv-help" role="status">Loading your uploads…</p>' : ''}
       ${list === 'error' ? `<div class="cv-iconerr" role="alert"><p>We couldn’t load your uploads. Check your connection, then try again.</p><button type="button" class="cv-sbtn" data-k="up-retry" data-up-retry>Retry</button></div>` : ''}
       ${Array.isArray(list) && !list.length ? '<p class="cv-help">No pictures yet. Tick the box, then upload a picture or a PDF page.</p>' : ''}
+      ${rmHtml(E)}
       ${Array.isArray(list) && list.length ? `<div class="cv-uptiles" data-uptiles>${list.map((r) => tile(E, r)).join('')}</div>` : ''}`;
   }
 
   function bindPanel(el, E) {
     el.addEventListener('click', (e) => {
       if (E.panel !== 'images') return;
+      // Part 10 (N6): the remove × and its question.
+      const ux = e.target.closest('[data-up-x]');
+      if (ux) { if (ux.getAttribute('aria-disabled') !== 'true') askRemove(E, ux.dataset.upX); return; }
+      if (e.target.closest('[data-uprm-go]')) { doRemove(E); return; }
+      if (e.target.closest('[data-uprm-cancel]')) { cancelRemove(E); return; }
       const t = e.target.closest('[data-add-asset]');
       if (t) {
         const row = Array.isArray(E.uploads) && E.uploads.find((r) => r.id === t.dataset.addAsset);
@@ -597,5 +723,7 @@
   function focusBar(E, k) { E.refreshBars(); const b = E.root.querySelector(`.cv-textbar [data-k="${k}"]`); if (b) b.focus({ preventScroll: true }); }
 
   C.images = { SAMPLE, panelHtml, bindPanel, barHtml, bindBar, state, source, missing, sample, loadUsed, loadUploads, ensure, takeFile, takePdf, placePdf,
-    onPaste, pasteNow, dpiBadge, helpText, fillPatch, zoomPatch, cropPct, rowOf, adopt, nameOf };
+    onPaste, pasteNow, dpiBadge, helpText, fillPatch, zoomPatch, cropPct, rowOf, adopt, nameOf,
+    // Part 10
+    full, askRemove, doRemove, cancelRemove, rmText };
 })(globalThis);

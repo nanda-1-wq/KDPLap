@@ -46,7 +46,7 @@ GOT="sha384-$(openssl dgst -sha384 -binary "$DX" | base64)"
 [[ $GOT == "$WANT" ]] || { rm -f "$DX"; echo "run.sh: docx hash mismatch"; exit 1; }
 
 # E13.2: the format suite serves the print engine's pinned files from the cache (each checked against its sha384).
-if [[ $SUITE == format ]]; then
+if [[ $SUITE == format || $SUITE == cover ]]; then   # E16 Part 10: the cover export builds with the same engine
   node "$HERE/format/cache-files.mjs" >/dev/null || { echo "run.sh: format engine cache failed"; exit 1; }
 fi
 

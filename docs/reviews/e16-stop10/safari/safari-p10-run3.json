@@ -1,0 +1,241 @@
+{
+ "date": "2026-11-17T09:59:20.746Z",
+ "steps": {
+  "viewport": [
+   1440,
+   900
+  ],
+  "band": {
+   "layers": 5,
+   "chip": "Ready"
+  },
+  "probe": {
+   "drawer": true,
+   "focused": true,
+   "events": [
+    "pointerdown cv-chip-chk is-ok 1250,106",
+    "mousedown cv-chip-chk is-ok 1250,106",
+    "pointerup cv-chip-chk is-ok 1250,106",
+    "mouseup cv-chip-chk is-ok 1250,106",
+    "click cv-chip-chk is-ok 1250,106"
+   ],
+   "vis": "visible"
+  },
+  "pre": {
+   "status": "ready",
+   "mode": "wide",
+   "h": 900,
+   "dis": null,
+   "at": "<span data-export-label=\"\">Export cover</span>",
+   "w": 1440,
+   "btn": [
+    924,
+    18,
+    150
+   ]
+  },
+  "after": {
+   "status": "ready",
+   "dlg": true,
+   "ex": {
+    "phase": "ready",
+    "open": true
+   },
+   "active": "<input type=\"checkbox\" data-k=\"ex-img\" data-ex-img=\"\" checked=\"\" aria-label=\"Ful",
+   "width": "wide",
+   "clicks": [
+    "pointerdown export SPAN 999,39",
+    "mousedown export SPAN 999,39",
+    "pointerup export SPAN 999,39",
+    "mouseup export SPAN 999,39",
+    "click export SPAN 999,39"
+   ]
+  },
+  "ready": {
+   "kindle": true,
+   "img": true,
+   "focus": "ex-img",
+   "sub": "6 × 9 in · 54 pages · white paper · spine 0.122 in"
+  },
+  "phase1": "done",
+  "ms1": 3300,
+  "real": {
+   "print": {
+    "bytes": 23809,
+    "ms": 2928,
+    "ok": true,
+    "checks": [
+     {
+      "name": "Cover size",
+      "pass": true,
+      "detail": "12.372 x 9.25 in"
+     },
+     {
+      "name": "One page",
+      "pass": true,
+      "detail": "file 1/1/1"
+     },
+     {
+      "name": "Fonts embedded",
+      "pass": true,
+      "detail": "3 fonts embedded"
+     },
+     {
+      "name": "One color space (sRGB)",
+      "pass": true,
+      "detail": "ICC sRGB (N 3)"
+     },
+     {
+      "name": "One sRGB profile",
+      "pass": true,
+      "detail": "1 ICC (ICC sRGB (N 3))"
+     },
+     {
+      "name": "No transparency",
+      "pass": true,
+      "detail": "none"
+     },
+     {
+      "name": "No security",
+      "pass": true,
+      "detail": "none"
+     },
+     {
+      "name": "Every letter in its font",
+      "pass": true,
+      "detail": "3 faces"
+     },
+     {
+      "name": "Line widths match the screen",
+      "pass": true,
+      "detail": "9 lines, worst 0.000% (layer 3 line 1: Typst 339.28 pt, screen 339.28 pt)"
+     },
+     {
+      "name": "Fonts are the ones chosen",
+      "pass": true,
+      "detail": "3 fonts"
+     },
+     {
+      "name": "No font warnings",
+      "pass": true,
+      "detail": "none"
+     }
+    ]
+   },
+   "image": {
+    "w": 3712,
+    "bytes": 180043,
+    "ms": 109,
+    "type": "image/png",
+    "h": 2775,
+    "sniff": {
+     "w": 3712,
+     "alpha": false,
+     "type": "image/png",
+     "h": 2775
+    }
+   },
+   "kindle": {
+    "color": {
+     "why": null,
+     "channels": 3,
+     "ok": true,
+     "adobe": false,
+     "icc": null
+    },
+    "mode": "cut",
+    "h": 2560,
+    "ms": 37,
+    "size": {
+     "w": 1600,
+     "alpha": false,
+     "type": "image/jpeg",
+     "h": 2560
+    },
+    "bytes": 236867,
+    "w": 1600
+   }
+  },
+  "done": {
+   "rows": [
+    "print",
+    "image",
+    "kindle"
+   ],
+   "files": [
+    "micro-study-habits-for-busy-adult-learners_6x9_54p_white_cover.pdf · 23 KB",
+    "micro-study-habits-for-busy-adult-learners_6x9_54p_white_cover.png · 176 KB",
+    "micro-study-habits-for-busy-adult-learners_6x9_54p_white_kindle.jpg · 231 KB"
+   ],
+   "my": 1,
+   "note": "Done: cover files exported.",
+   "next": true
+  },
+  "zip": {
+   "names": [
+    "micro-study-habits-for-busy-adult-learners_6x9_54p_white_cover.pdf",
+    "micro-study-habits-for-busy-adult-learners_6x9_54p_white_cover_files.zip"
+   ],
+   "eocd": true,
+   "entries": [
+    {
+     "size": 23809,
+     "same": true,
+     "name": "micro-study-habits-for-busy-adult-learners_6x9_54p_white_cover.pdf",
+     "crcOk": true,
+     "local": true
+    },
+    {
+     "size": 180043,
+     "same": true,
+     "name": "micro-study-habits-for-busy-adult-learners_6x9_54p_white_cover.png",
+     "crcOk": true,
+     "local": true
+    },
+    {
+     "size": 236867,
+     "same": true,
+     "name": "micro-study-habits-for-busy-adult-learners_6x9_54p_white_kindle.jpg",
+     "crcOk": true,
+     "local": true
+    }
+   ]
+  },
+  "phase2": "done",
+  "jpg": {
+   "image": {
+    "w": 3712,
+    "bytes": 417400,
+    "ms": 64,
+    "type": "image/jpeg",
+    "h": 2775,
+    "sniff": {
+     "w": 3712,
+     "alpha": false,
+     "type": "image/jpeg",
+     "h": 2775
+    }
+   },
+   "kindle": false,
+   "rows": [
+    "print",
+    "image"
+   ]
+  },
+  "stop": {
+   "rows": 5,
+   "next": false,
+   "open": false,
+   "note": "Not done yet: export the cover files."
+  }
+ },
+ "safari": "27.0.1",
+ "network": {
+  "unknown": [],
+  "calls": 29,
+  "resources": []
+ },
+ "pass": 25,
+ "fails": [],
+ "clickErrs": []
+}
