@@ -1,5 +1,6 @@
 // E16 Part 7: stock pictures (plan §7, design 63). The Pixabay and Unsplash tabs of the Images panel (search, Go,
-// No background only, 6 results with the source in each line, Open large view, the licence note); the wide picker
+// No background only, every Pixabay result and 6 Unsplash results with the source in each line, Open large view,
+// the licence note; E16.1: here the book has no seed words, t-stock-browse.js checks the topic search); the wide picker
 // (tabs, licence link, filters, results, PREVIEW, Add to cover, Back to results, More results, the source line);
 // picks (Pixabay: a copy in Uploads; Unsplash: a linked picture, loaded from images.unsplash.com), Replace from a
 // stock tab, the credits (picker, panel, the picture's More menu, utm links), stock down and the other errors,
@@ -30,6 +31,8 @@ const test = async page => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await CV.open(page, { design: 'band' });
   ok((await STK.ready(page)) === STK.PIXABAY.length + STK.UNSPLASH.length, 'the fixture pictures are drawn and kept by the mock');
+  // E16.1: a book with no topic and no title: Pixabay opens empty, as before (t-stock-browse.js: the seeded search).
+  await page.evaluate(() => { window.kdpBookSteps[9]._debug().seed = ''; });
   const n0 = (await CV.state(page)).layers.length;
 
   /* ── The panel's Pixabay tab ── */
@@ -50,11 +53,11 @@ const test = async page => {
   ok(JSON.stringify(last()) === JSON.stringify({ action: 'search', source: 'pixabay', q: 'green leaf', page: 1, filters: { type: 'all', color: 'any', editors: false, safe: true } }),
     `the call: ${JSON.stringify(last())} (words folded, safe search on)`);
   let caps = await CV.all(page, '[data-stock-tiles] .cv-stock-cap');
-  ok(caps.length === 6 && caps[0] === 'green leaf · vector' && caps[1] === 'coffee cup · illustration', `6 results in the panel, "name · type": ${caps.slice(0, 2)}`);
+  ok(caps.length === STK.PIXABAY.length && caps[0] === 'green leaf · vector' && caps[1] === 'coffee cup · illustration', `E16.1: every Pixabay result in the panel (${caps.length}), "name · type": ${caps.slice(0, 2)}`);
   ok(await page.$eval('[data-stock-add="1000"]', (b) => b.getAttribute('aria-label') === 'Add green leaf, Pixabay, no background' && !!b.querySelector('img.is-clear')), 'a tile: "Add green leaf, Pixabay, no background", on the checkerboard');
   ok(await page.$eval('[data-stock-add="1000"] img', (i) => i.src === 'https://pixabay.com/get/g1000_640.png' && i.referrerPolicy === 'no-referrer'), 'the thumbnail is Pixabay\'s own search-result link (no referrer)');
   await page.waitForFunction(() => [...document.querySelectorAll('[data-stock-tiles] img')].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 10000 });
-  ok(true, 'the 6 thumbnails load');
+  ok(true, 'the thumbnails load');
   await page.click('[data-stock-nobg]');
   await settle();
   ok(last().filters.color === 'transparent' && await page.$eval('[data-stock-nobg]', (b) => b.getAttribute('aria-pressed') === 'true' && b.classList.contains('is-on')), 'No background only: pressed, searches with color "transparent"');
@@ -74,7 +77,7 @@ const test = async page => {
   ok(caps.length === 6 && caps[0] === 'Photo by Mara Lind · Unsplash', `Unsplash lines name the photographer: ${caps[0]}`);
   ok((await CV.txt(page, '[data-stock-note]')) === 'Free to use on covers you sell (Unsplash License). The app shows the photographer and a link. No logos, brands or famous people.', 'the Unsplash note is the design\'s');
   await page.click('[data-srctab="pixabay"]');
-  ok(calls().length === nCalls + 1 && (await CV.all(page, '[data-stock-tiles] .cv-stock-cap')).length === 6, 'back to Pixabay: the answer it had, no new call');
+  ok(calls().length === nCalls + 1 && (await CV.all(page, '[data-stock-tiles] .cv-stock-cap')).length === (await page.evaluate(() => window.kdpBookSteps[9]._debug().stock.res.pixabay.list.length)), 'back to Pixabay: the answer it had, no new call');
 
   /* ── The wide picker ── */
   await page.click('[data-stock-open]');
@@ -243,11 +246,11 @@ const test = async page => {
   await page.click('[data-stock-open]');
   await page.selectOption('[data-sd-f="color"]', 'any'); await settle();
   await search('[data-sd-q]', 'study desk');
-  ok(await page.$$eval('[data-sd-grid] .cv-sd-tile', (a) => a.length) === 24 && (await CV.txt(page, '[data-sd-more]')) === 'More results' && (await CV.txt(page, '[data-sd-count]')) === '30 results', 'page 1: 24 of 30, "More results"');
-  await page.click('[data-sd-more]'); await settle();
-  ok(last().page === 2 && await page.$$eval('[data-sd-grid] .cv-sd-tile', (a) => a.length) === 30 && !(await CV.has(page, '[data-sd-more]')), 'page 2 added: 30, no more button');
-  await page.waitForFunction(() => document.activeElement && document.activeElement.matches('[data-stock-add]'), null, { timeout: 3000 }).catch(() => {});
-  ok(await page.evaluate(() => [...document.querySelectorAll('[data-sd-grid] [data-stock-add]')].indexOf(document.activeElement) === 24), 'the first new result takes the focus (the More button is gone)');
+  // E16.1: the end of the 24 is near in the large view, so page 2 loads by itself (t-stock-browse.js: the details).
+  await page.$eval('[data-sd-body]', (b) => { b.scrollTop = b.scrollHeight; });
+  await page.waitForFunction(() => document.querySelectorAll('[data-sd-grid] .cv-sd-tile').length === 30, null, { timeout: 8000 }).catch(() => {});
+  await settle();
+  ok(last().page === 2 && await page.$$eval('[data-sd-grid] .cv-sd-tile', (a) => a.length) === 30 && !(await CV.has(page, '[data-sd-more]')) && (await CV.txt(page, '[data-sd-count]')) === '30 results', 'page 2 loads at the end: 30 of 30, no More button');
   ok(await page.$eval('[data-sd-body]', (b) => b.scrollTop > 0), 'the grid kept its scroll place over the redraw');
   await page.$eval('[data-stockdlg] [data-stock-look="2028"]', (b) => b.scrollIntoView({ block: 'center' }));
   const top0 = await page.$eval('[data-sd-body]', (b) => b.scrollTop);
@@ -277,7 +280,7 @@ const test = async page => {
     ok((await CV.txt(page, '[data-stock-down]')) === words && await page.$eval('[data-stock-down]', (n) => n.getAttribute('role') === 'alert' && !!n.querySelector('svg')), `${code} (panel): "${words}", an alert with an icon`);
   }
   await page.click('[data-stock-retry]'); await settle();
-  ok((await CV.all(page, '[data-stock-tiles] .cv-stock-cap')).length === 6 && !(await CV.has(page, '[data-stock-down]')), 'Try again: the results come back');
+  ok((await CV.all(page, '[data-stock-tiles] .cv-stock-cap')).length === (await page.evaluate(() => window.kdpBookSteps[9]._debug().stock.res.pixabay.list.length)) && !(await CV.has(page, '[data-stock-down]')), 'Try again: the results come back');
   globalThis.__modes.stockNet = 1;
   await search('[data-stock-q]', 'leaf net');
   ok((await CV.txt(page, '[data-stock-down]')) === 'Pixabay is not answering right now. Try again in a minute, or use your own uploads.', 'the function out of reach: the stock-down words');

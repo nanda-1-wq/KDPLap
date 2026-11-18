@@ -114,10 +114,24 @@
     return !!(mark && mark.print_at && !mark.print_changed);
   }
 
+  /**
+   * E16.1 (owner, Nov 18): the words Pixabay searches when its tab opens: the Brief's topic, else the Topic Lab
+   * topic, else the book title (from the book the page already loaded; cover_json has no topic).
+   */
+  function seedWords(b) {
+    const one = (rel) => (Array.isArray(rel) ? rel[0] : rel) || null;
+    const brief = b ? one(b.book_briefs) : null, topic = b ? one(b.topics) : null;
+    for (const v of [brief && brief.topic_text, topic && topic.name, b && b.title]) {
+      const w = String(v || '').replace(/\s+/g, ' ').trim();
+      if (w) return w;
+    }
+    return '';
+  }
+
   /* ── The editor object ── */
   function newEditor(rootEl) {
     const ed = {
-      root: rootEl, status: 'loading', data: null, cover: null, rev: 1,
+      root: rootEl, status: 'loading', data: null, cover: null, rev: 1, seed: seedWords(book),
       sel: null, multi: [], editing: null, act: null, menu: null,
       panel: 'text', layerMenu: null, renaming: null, rowDrag: null, fxSnap: null, alignTo: 'sel',
       iconQ: '', iconN: 48, icons: 'idle',
@@ -409,6 +423,7 @@
     });
     if (E.panel === 'layouts') C.layoutsPanel.paint(p, E);
     p.scrollTop = top;
+    if (E.panel === 'images') C.stock.drawn(E);   // E16.1: the results box keeps its scroll; load more on scroll
   }
   /** The tool rail: Text, Shapes or Layers (the design's showPanel). 900 to 1199 px: the panel opens over the cover;
    *  the same tool pressed again closes it (fromTool; the design's line 1628). */
@@ -447,6 +462,7 @@
     keepFocus(host, () => { host.innerHTML = C.stock.hostHtml(E); });
     const nb = host.querySelector('[data-sd-body]');
     if (nb && body) nb.scrollTop = top;
+    C.stock.drawn(E);   // E16.1: load more on scroll
   }
   /** The Layers panel's ⋮ menu, to the right of the panel (design 66). */
   function renderMenu() {

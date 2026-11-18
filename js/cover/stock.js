@@ -10,6 +10,12 @@
    (Pixabay allows that for search results; Unsplash requires its links).
    Unsplash searches only on Search, Go or Enter until Unsplash production (owner, STOP 7, N10): a new tab or
    filter shows "Press Search to look" ("Press Go to look" in the panel). Pixabay searches by itself.
+   E16.1 (owner, Nov 18; designs 76, 76b): the Pixabay tab opens with the book's topic (else its title) already
+   searched, once per visit (E.seed, editor.js seedWords). The panel shows every Pixabay result in its own scroll
+   box; the panel and the large view load the next page when their end comes near (an IntersectionObserver on
+   [data-stock-end]): one page at a time, at least AUTO_GAP ms apart (20 a minute at most, under the function's 30
+   searches a minute), never after an error (More results retries), to the total or page 20. Unsplash: unchanged
+   (6 in the panel, More results by button only).
 
    A pick:
    - Pixabay: the server finds the picture by its id, stores a copy in your
@@ -46,7 +52,7 @@
   const UN_COLORS = [['any', 'Any color'], ['black_and_white', 'Black and white'], ['black', 'Black'], ['white', 'White'], ['yellow', 'Yellow'],
     ['orange', 'Orange'], ['red', 'Red'], ['purple', 'Purple'], ['magenta', 'Magenta'], ['green', 'Green'], ['teal', 'Teal'], ['blue', 'Blue']];
   const UTM = 'utm_source=nicheink&utm_medium=referral';
-  const Q_MAX = 100, MAX_PAGE = 20, SMALL = 6;
+  const Q_MAX = 100, MAX_PAGE = 20, SMALL = 6, AUTO_GAP = 3000;
   // Which sources search by themselves when a tab opens or a filter changes. Unsplash: only on Search or Enter
   // until Unsplash production (owner, STOP 7, N10: the demo allows 50 calls an hour). Pixabay's cache answers are free.
   const AUTO = { pixabay: true, unsplash: false };
@@ -72,7 +78,8 @@
         src: 'pixabay', draft: '', q: '', hint: false,
         px: { type: 'all', color: 'any', editors: false, safe: true }, un: { color: 'any' },
         res: { pixabay: null, unsplash: null },   // { key, st: 'loading' | 'ok' | 'error', code, list, total, page, more, moreCode }
-        open: false, prev: null, busy: null, err: ''
+        open: false, prev: null, busy: null, err: '',
+        seeded: false, lastAuto: 0, autoT: null, io: null, panelTop: 0   // E16.1
       };
     }
     return E.stock;
@@ -169,7 +176,7 @@
     const q = clean(S.draft);
     S.prev = null; S.err = '';
     if (!q) { S.hint = true; refresh(E); return; }
-    S.hint = false; S.q = q; S.draft = q;
+    S.hint = false; S.q = q; S.draft = q; S.panelTop = 0;
     search(E, src);
   }
   /** A filter changed: search again when there are words (Unsplash waits for Search, N10). */
@@ -182,8 +189,45 @@
   function show(E, src) {
     const S = state(E);
     S.src = src; S.prev = null; S.err = '';
+    seed(E, src);
     const r = S.res[src];
     if (AUTO[src] && S.q && (!r || r.key !== keyOf(S, src) || r.st === 'error')) search(E, src); else refresh(E);
+  }
+  /** E16.1: the first time Pixabay shows with an empty box, the book's topic (or title) goes in and is searched. */
+  function seed(E, src) {
+    const S = state(E);
+    if (src !== 'pixabay' || S.seeded || S.q || clean(S.draft)) return;
+    S.seeded = true;
+    const q = clean(E.seed);
+    if (q) { S.q = q; S.draft = q; }
+  }
+  /** The source on screen: the large view's tab while it is open, else the panel's. */
+  const shown = (E) => (state(E).open ? state(E).src : E.img && E.img.tab);
+  /** E16.1: the end of the results is near: the next page, at most one every AUTO_GAP ms (Pixabay only). */
+  function autoMore(E) {
+    const S = state(E), src = shown(E), r = S.res[src];
+    if (!AUTO[src] || !r || r.st !== 'ok' || r.key !== keyOf(S, src) || r.more || r.moreCode || r.list.length >= r.total || r.page >= MAX_PAGE || S.prev || E.offline) return;
+    const wait = S.lastAuto + AUTO_GAP - Date.now();
+    if (wait > 0) {
+      if (!S.autoT) S.autoT = root.setTimeout(() => { S.autoT = null; if (E.live()) autoMore(E); }, wait);
+      return;
+    }
+    S.lastAuto = Date.now();
+    search(E, src, true);
+  }
+  /** After the panel or the large view is drawn: the panel box keeps its scroll; the end is watched again. */
+  function drawn(E) {
+    const S = state(E);
+    const box = E.root.querySelector('[data-panel] [data-stock-scroll]');
+    if (box) {
+      box.scrollTop = S.panelTop;
+      box.addEventListener('scroll', () => { S.panelTop = box.scrollTop; }, { passive: true });
+    }
+    if (S.io) { S.io.disconnect(); S.io = null; }
+    const ends = [...E.root.querySelectorAll('[data-stock-end]')];
+    if (!ends.length || !root.IntersectionObserver) return;
+    S.io = new root.IntersectionObserver((list) => { if (list.some((x) => x.isIntersecting)) autoMore(E); }, { rootMargin: '0px 0px 160px 0px' });
+    ends.forEach((n) => S.io.observe(n));
   }
   /** Words in the box but no answer yet for them and these filters, on a source that waits for Search. */
   const waiting = (S, src) => !!S.q && !AUTO[src] && (!S.res[src] || S.res[src].key !== keyOf(S, src));
@@ -259,11 +303,27 @@
     return `${E.replaceId != null ? 'Replace with' : 'Add'} ${r.name}, ${LABEL[r.source]}${r.transparent ? ', no background' : ''}`;
   }
 
+  /**
+   * E16.1 (designs 76, 76b): the end of Pixabay results. While a page loads: "Loading more…". Otherwise, when more
+   * are left: the watched end and More results (the keyboard's way, and the retry after an error). The end of the
+   * list: nothing. at: 'stk' (the panel) or 'sd' (the large view).
+   */
+  function endHtml(r, src, at) {
+    const left = r.list.length < r.total && r.page < MAX_PAGE;
+    if (!left && !r.more) return '';
+    const err = r.moreCode ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(errText(r.moreCode, src))}</span></p>` : '';
+    const inner = r.more ? '<p class="cv-help" role="status" data-stock-loadmore>Loading more…</p>'
+      : `${err}<button type="button" class="cv-sbtn" data-k="${at}-more" ${at === 'sd' ? 'data-sd-more' : 'data-stock-more'}>More results</button>`;
+    return `<div class="${at === 'sd' ? 'cv-sd-more' : 'cv-stock-more'}" data-stock-end>${inner}</div>`;
+  }
+
   /** The small view in the Images panel (design 63's panel under the Pixabay or Unsplash tab). */
   function panelHtml(E) {
     const S = state(E), src = E.img.tab, r = S.res[src];
     const fresh = r && r.key === keyOf(S, src);
-    const list = fresh && r.st === 'ok' ? r.list.slice(0, SMALL) : [];
+    // E16.1: Pixabay shows every loaded result (its box scrolls and loads more); Unsplash keeps 6 (N10).
+    const all = AUTO[src];
+    const list = fresh && r.st === 'ok' ? (all ? r.list : r.list.slice(0, SMALL)) : [];
     const busy = S.busy != null;
     let body = '';
     if (waiting(S, src)) body = `<p class="cv-help" role="status" data-stock-press>Press Go to look</p>`;   // the panel's button is Go
@@ -272,12 +332,18 @@
     else if (r.st === 'error') body = `<div class="cv-stockerr" role="alert" data-stock-down>${I.warn}<span>${esc(errText(r.code, src))}</span></div>
         <button type="button" class="cv-sbtn" data-k="stk-retry" data-stock-retry>Try again</button>`;
     else if (!list.length) body = '<p class="cv-help" data-stock-none>No pictures match. Try other words or remove a filter.</p>';
-    else body = `<div class="cv-uptiles" data-stock-tiles>${list.map((x) => `<button type="button" class="cv-uptile cv-stocktile" data-k="stk-${esc(x.id)}" data-stock-add="${esc(x.id)}" aria-label="${esc(tileLabel(E, x))}"${busy ? ' aria-disabled="true"' : ''}>${thumbImg(x, 'cv-uptile-img')}<span class="cv-uptile-s cv-stock-cap">${esc(caption(x))}</span></button>`).join('')}</div>`;
+    else {
+      const tiles = list.map((x) => `<button type="button" class="cv-uptile cv-stocktile" data-k="stk-${esc(x.id)}" data-stock-add="${esc(x.id)}" aria-label="${esc(tileLabel(E, x))}"${busy ? ' aria-disabled="true"' : ''}>${thumbImg(x, 'cv-uptile-img')}<span class="cv-uptile-s cv-stock-cap">${esc(caption(x))}</span></button>`).join('');
+      body = all ? `<div class="cv-uptiles cv-stock-scroll" data-stock-tiles data-stock-scroll>${tiles}${endHtml(r, src, 'stk')}</div>` : `<div class="cv-uptiles" data-stock-tiles>${tiles}</div>`;
+    }
+    const topic = all && S.seeded && S.q && S.q === clean(E.seed) && fresh && r.st === 'ok'
+      ? '<p class="cv-help cv-help-sm" data-stock-topic>Pictures for your topic. Change the words to look for something else.</p>' : '';
     return `
       <form class="cv-stocksearch" data-stock-form role="search">
         <input type="search" class="cv-stock-q" maxlength="${Q_MAX}" aria-label="Search ${LABEL[src]}" placeholder="Search ${LABEL[src]}" value="${esc(S.draft)}" data-k="stk-q" data-stock-q>
         <button type="submit" class="cv-sbtn cv-sbtn-ink" data-k="stk-go">Go</button>
       </form>
+      ${topic}
       ${src === 'pixabay' ? `<button type="button" class="cv-nobg${S.px.color === 'transparent' ? ' is-on' : ''}" aria-pressed="${S.px.color === 'transparent'}" data-k="stk-nobg" data-stock-nobg><span class="cv-nobg-s" aria-hidden="true"></span>No background only</button>` : ''}
       ${S.err && !S.open ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
       ${busy && !S.open ? '<p class="cv-help" role="status" data-stock-busy>Adding the picture to your uploads…</p>' : ''}
@@ -327,7 +393,7 @@
       else if (r.st === 'error') inner = `<div class="cv-sd-down" role="alert" data-stock-down>${I.warn}<p>${esc(errText(r.code, src))}</p><button type="button" class="cv-sbtn" data-k="sd-retry" data-stock-retry>Try again</button></div>`;
       else if (!r.list.length) { inner = '<p class="cv-sd-msg" data-stock-none>No pictures match. Try other words or remove a filter.</p>'; count = '0 results'; }
       else {
-        const moreBtn = r.list.length < r.total && r.page < MAX_PAGE
+        const moreBtn = AUTO[src] ? endHtml(r, src, 'sd') : r.list.length < r.total && r.page < MAX_PAGE
           ? `<div class="cv-sd-more">${r.moreCode ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(errText(r.moreCode, src))}</span></p>` : ''}<button type="button" class="cv-sbtn" data-k="sd-more" data-sd-more${r.more ? ' aria-disabled="true"' : ''}>${r.more ? 'Loading more…' : 'More results'}</button></div>` : '';
         inner = `${S.err ? `<p class="cv-uperr cv-sd-err" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
           <div class="cv-sd-grid" data-sd-grid>${r.list.map((x) => `<div class="cv-sd-tile${S.busy === x.id ? ' is-busy' : ''}">
@@ -364,6 +430,7 @@
       if (add) { if (add.getAttribute('aria-disabled') !== 'true') pick(E, findItem(E, src, add.dataset.stockAdd)); return; }
       if (e.target.closest('[data-stock-nobg]')) { S.px.color = S.px.color === 'transparent' ? 'any' : 'transparent'; again(E, 'pixabay'); return; }
       if (e.target.closest('[data-stock-retry]')) { search(E, src); return; }
+      if (e.target.closest('[data-stock-more]')) { search(E, src, true); return; }   // E16.1: the panel's More results
       if (e.target.closest('[data-stock-open]')) { open(E, src); }
     });
     el.addEventListener('submit', (e) => {
@@ -431,5 +498,5 @@
     });
   }
 
-  C.stock = { panelHtml, bindPanel, hostHtml, bindHost, open, close, escape, show, creditHtml, creditText, remoteUrl, errText, caption, state, clean, UTM };
+  C.stock = { panelHtml, bindPanel, hostHtml, bindHost, open, close, escape, show, drawn, creditHtml, creditText, remoteUrl, errText, caption, state, clean, UTM };
 })(globalThis);

@@ -88,8 +88,9 @@ async function setupCover(page) {
   const view = () => ({
     id: FIX.BOOK, title: store.book.title, subtitle: store.book.subtitle, status: store.book.status, completed_at: null, current_step: store.book.current_step, updated_at: store.book.updated_at, topic_id: null,
     pen_name_id: FIX.PEN, series_name: null, series_number: null, title_needs_review: false, title_examples: [], outline_approved_at: ago(2),
-    pen_names: { id: FIX.PEN, name: store.book.pen_name, voice: {} }, topics: null,
-    book_briefs: { topic_text: 'Study habits for adults', target_reader: 'Busy adult learners', reader_problem: 'No time to study', promise_draft: 'Study in ten minutes a day', book_type: 'how_to', book_type_label: null, trim_size: store.book.trim, length_range: '8-12k', target_words: null, chapter_count: 5, options: {}, updated_at: ago(2) },
+    // E16.1: topic_text and topics come from the store (t-stock-browse.js drives the Pixabay seed words with them).
+    pen_names: { id: FIX.PEN, name: store.book.pen_name, voice: {} }, topics: store.book.topicName ? { id: id('t'), name: store.book.topicName, checks_passed: 0 } : null,
+    book_briefs: { topic_text: store.book.topicText === undefined ? 'Study habits for adults' : store.book.topicText, target_reader: 'Busy adult learners', reader_problem: 'No time to study', promise_draft: 'Study in ten minutes a day', book_type: 'how_to', book_type_label: null, trim_size: store.book.trim, length_range: '8-12k', target_words: null, chapter_count: 5, options: {}, updated_at: ago(2) },
     competitors: [{ count: 3 }], real_sources: [{ count: 1 }], chapters: [{ count: 7 }], review_chapters: [{ count: 0 }],
     positioning: { locked_at: ago(2), one_sentence: 'x', reader_promise: 'y', approach: null, lacks: null, selling_points: [], focus_tags: [], drift_flags: [], drift_checked_at: null, updated_at: ago(2) }
   });
@@ -147,7 +148,7 @@ async function setupCover(page) {
   function stockList(p) {
     let list = STK.results(p.source);
     if (p.source === 'pixabay' && mode('stockMany')) {
-      list = Array.from({ length: 30 }, (_, j) => { const b = list[j % list.length]; const nid = String(2000 + j); return { ...b, id: nid, thumb: b.thumb.replace(/g\d+_/, `g${nid}_`), preview: b.preview.replace(/g\d+_/, `g${nid}_`) }; });
+      list = Array.from({ length: mode('stockMany') > 1 ? mode('stockMany') : 30 }, (_, j) => { const b = list[j % list.length]; const nid = String(2000 + j); return { ...b, id: nid, thumb: b.thumb.replace(/g\d+_/, `g${nid}_`), preview: b.preview.replace(/g\d+_/, `g${nid}_`) }; });
     }
     if (/nothing/i.test(p.q || '')) return [];
     const f = p.filters || {};
