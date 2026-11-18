@@ -1212,27 +1212,6 @@ div.delete-text p { margin: 0; }
   font-size: var(--text-2xl);
   font-weight: 600;
 }
-/* E12 fix batch 3 (design 22f, 13): a completed book, above every step */
-.book-strip {
-  margin: var(--space-4) var(--space-10) 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  background: var(--surface-2);
-  border: 1px solid var(--stone);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-md);
-}
-.book-strip[hidden] { display: none; }
-.book-strip-text { flex: 1 1 280px; min-width: 0; display: flex; align-items: center; gap: var(--space-2); line-height: 1.4; color: var(--graphite); }
-.book-strip-text svg { flex-shrink: 0; color: var(--success); }
-.book-strip-text strong { color: var(--ink); font-weight: 600; }
-.book-strip.is-error { border-color: var(--danger); background: var(--danger-bg); }
-.book-strip.is-error .book-strip-text, .book-strip.is-error .book-strip-text svg { color: var(--danger); }
-.book-strip .btn { color: var(--ink); }
-
 .book-content {
   flex-grow: 1;
   padding: var(--space-10);

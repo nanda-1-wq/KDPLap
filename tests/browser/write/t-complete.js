@@ -1,10 +1,11 @@
 // Step 06 Write and the book shell, E12 fix batch 3, item 3 (design 22f, B): "Mark book as
 // completed" at the end of the manuscript. Not ready: off, with only the lines that apply
 // (not Final, needs review, no text, the outline). Ready: on, no confirm, Saving…, done
-// ("Completed", "Marked <date>. You can still edit it.", Reopen book with focus, the strip
-// on every step). Errors: a network error with Retry; the server's refusal (another tab)
-// with its reason and Reload. Reopen from the manuscript and from the strip (an error with
-// Retry). A status change that breaks the rule: the note says why, the strip goes.
+// ("Completed", "Marked <date>. You can still edit it.", Reopen book with focus). E16.1
+// (owner, Nov 18): no step shows the "marked completed" strip (design 22f, 13 replaced).
+// Errors: a network error with Retry; the server's refusal (another tab) with its reason
+// and Reload. Reopen from the manuscript (an error with Retry). A status change that breaks
+// the rule: the note says why.
 // Screenshots at 1440 and 900 px.
 // Run: tests/browser/run.sh write t-complete.js
 const test = async page => {
@@ -94,29 +95,33 @@ const test = async page => {
   ok((await txt('.wr-ms-done')) === `Completed Marked ${day}. You can still edit it.`, '12 "Completed", "Marked <date>. You can still edit it." (completed_at, R3)', await txt('.wr-ms-done'));
   ok((await focusedAttr()) === 'data-reopen', '12 focus on Reopen book', await focusedAttr());
   ok((await txt('[data-live]')) === 'The book is marked completed.', '12 screen readers hear it');
-  ok((await txt('[data-book-strip]')) === 'This book is marked completed. You can still edit it. A new version keeps it completed. Reopen book', '13 the strip shows above the step', await txt('[data-book-strip]'));
-  ok((await page.$eval('[data-book-strip]', (e) => e.getAttribute('role'))) === 'note', '13 the strip is a note');
+  ok(!(await has('[data-book-strip]')), '13 E16.1: no strip element on the page');
   ok(await shots('12-done') === false, '12 900: no sideways scroll');
   await shots('12-foot', '[data-fin]');
 
-  // ── 13. The strip on another step; Reopen from the strip (an error, then Retry) ──
-  await page.click('.step-link[data-step="1"]');
-  await page.waitForTimeout(600);
-  ok(await has('[data-book-strip]:not([hidden])'), '13 the strip is on 01 Brief too');
-  ok(st.calls.some((c) => c.startsWith('GET /rest/v1/books?select=status')), '13 a step of a completed book reads the status again');
-  await shots('13-strip-brief');
-  globalThis.__modes.reopenError = 1;
-  await page.click('[data-strip-reopen]');
-  await page.waitForSelector('[data-book-strip].is-error', { timeout: 5000 });
-  ok((await txt('[data-book-strip]')) === 'We couldn’t reopen the book. Try again. Retry' && (await page.$eval('[data-book-strip]', (e) => e.getAttribute('role'))) === 'alert', '13 strip error with Retry, as an alert', await txt('[data-book-strip]'));
-  await shots('13-strip-error');
-  await page.click('[data-strip-reopen]');
-  await page.waitForSelector('[data-book-strip][hidden]', { state: 'attached', timeout: 5000 });
-  ok(st.books[W1].status === 'in_progress' && JSON.stringify(calls('books').slice(-1)[0].body) === '{"status":"in_progress"}', '13 Retry reopens the book (status in_progress)');
-  ok(await page.evaluate(() => document.activeElement.hasAttribute('data-step-title')), '13 focus on the step title');
+  // ── 13. E16.1: no "marked completed" strip on any step; Reopen from 06 (an error, then Retry) ──
+  const MARKED = 'This book is marked completed';
+  for (const n of [1, 2, 3, 4, 5, 7, 8, 9]) {
+    await page.click(`.step-link[data-step="${n}"]`);
+    await page.waitForTimeout(500);
+    const t = await page.evaluate(() => document.body.innerText);
+    ok(!t.includes(MARKED) && !(await has('[data-book-strip]')) && !(await has('[data-strip-reopen]')), `13 no strip on ${String(n).padStart(2, '0')}`);
+    if (n === 1) {
+      ok(st.calls.some((c) => c.startsWith('GET /rest/v1/books?select=status')), '13 a step of a completed book still reads the status again');
+      await shots('13-no-strip-brief');
+    }
+  }
   await page.click('.step-link[data-step="6"]');
-  await page.waitForSelector('[data-complete]', { timeout: 10000 });
-  ok(!(await off('[data-complete]')), '13 back in 06: Mark book as completed again');
+  await page.waitForSelector('[data-reopen]', { timeout: 10000 });
+  ok((await txt('.wr-ms-done')) === `Completed Marked ${day}. You can still edit it.`, '13 back in 06: Completed and Reopen book stay in the foot');
+  globalThis.__modes.reopenError = 1;
+  await page.click('[data-reopen]');
+  await page.waitForSelector('[data-fin-retry]', { timeout: 5000 });
+  ok((await txt('[data-fin] .alert-error .alert-text')) === 'We couldn’t reopen the book. Try again.', '13 Reopen error in the 06 foot, with Retry', await txt('[data-fin] .alert-error'));
+  await page.click('[data-fin-retry]');
+  await page.waitForSelector('[data-complete]', { timeout: 5000 });
+  ok(st.books[W1].status === 'in_progress' && JSON.stringify(calls('books').slice(-1)[0].body) === '{"status":"in_progress"}', '13 Retry reopens the book (status in_progress)');
+  ok(!(await off('[data-complete]')), '13 in 06: Mark book as completed again');
 
   // ── 11. The server says no (another tab) ──
   globalThis.__modes.completeRefuse = true;
@@ -135,7 +140,7 @@ const test = async page => {
   await page.waitForSelector('[data-reopen]', { timeout: 5000 });
   await page.click('[data-reopen]');
   await page.waitForSelector('[data-complete]', { timeout: 5000 });
-  ok(st.books[W1].status === 'in_progress' && !(await has('[data-book-strip]:not([hidden])')), '12 Reopen book: in progress, the strip goes');
+  ok(st.books[W1].status === 'in_progress', '12 Reopen book: in progress');
   ok((await focusedAttr()) === 'data-complete', '12 focus on Mark book as completed', await focusedAttr());
   ok((await txt('[data-live]')) === 'The book is in progress again.', '12 screen readers hear it');
 
@@ -146,7 +151,7 @@ const test = async page => {
   await page.waitForTimeout(500);
   const note = await txt('[data-notes] .help-note');
   ok(/^Status saved\. The book is no longer marked completed, because (Introduction|\d+\.\d+) is not Final\.$/.test(note || ''), '14 the note says why, once, with no button', note);
-  ok(!(await has('[data-book-strip]:not([hidden])')) && (await has('[data-complete]')), '14 the strip goes; the foot shows Mark book as completed');
+  ok(await has('[data-complete]'), '14 the foot shows Mark book as completed');
   ok(await off('[data-complete]') && (await txt('.wr-ms-left')) === '1 section is not Final yet', '14 and it is off: "1 section is not Final yet"', await txt('.wr-ms-left'));
   await shots('14-reopened');
 

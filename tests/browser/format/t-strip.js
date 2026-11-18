@@ -1,4 +1,5 @@
-// Owner, Nov 17: 09 Cover drops the "marked completed" strip; 08 Format keeps it (design 22f, 13).
+// E16.1 (owner, Nov 18): no step shows the "This book is marked completed" strip, 08 Format included
+// (design 22f, 13 replaced). Reopen book stays in the 06 Write foot and the Books card menu.
 const test = async page => {
   const { log, ok } = FM.log();
   const st = globalThis.__store;
@@ -6,14 +7,12 @@ const test = async page => {
 
   st.book.status = 'completed';
   await FM.open(page);
-  await page.waitForSelector('[data-book-strip]:not([hidden])', { timeout: 5000 });
-  ok((await FM.txt(page, '[data-book-strip]')) === 'This book is marked completed. You can still edit it. A new version keeps it completed. Reopen book', '08: the strip and its words');
-  const btn = await page.$eval('[data-strip-reopen]', (b) => ({ t: b.textContent.trim(), dis: b.disabled, h: Math.round(b.getBoundingClientRect().height) }));
-  ok(btn.t === 'Reopen book' && !btn.dis, `08: Reopen book is there and on (${JSON.stringify(btn)})`);
-  ok(await page.$eval('[data-book-strip]', (e) => e.getAttribute('role') === 'note'), '08: the strip is a note');
+  await page.waitForTimeout(400);   // readStatus() runs after a completed book opens
+  const none = () => page.evaluate(() => !document.querySelector('[data-book-strip], [data-strip-reopen]') && !document.body.innerText.includes('This book is marked completed'));
+  ok(await none(), '08 completed: no strip, no strip Reopen');
 
   st.book.status = 'in_progress';
   await FM.open(page);
-  ok(await page.$eval('[data-book-strip]', (e) => e.hidden), '08 in progress: no strip');
+  ok(await none(), '08 in progress: no strip');
   return log.join('\n');
 };

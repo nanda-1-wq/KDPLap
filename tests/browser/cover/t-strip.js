@@ -1,12 +1,15 @@
 // Owner, Nov 17: on 09 Cover a completed book shows no "This book is marked completed" strip (design 22f, 13).
-// The strip pushed the editor down; designs 58 to 74b have none. 01 to 08 keep it (here: 08; format/t-strip.js too).
+// The strip pushed the editor down; designs 58 to 74b have none. E16.1 (owner, Nov 18): no step has the strip now
+// (01 to 08 too; write/t-complete.js walks them), so the element is gone from the page.
 // The editor of a completed book must sit exactly where an in-progress book's does, at 1440, 1200 and 900 wide.
 // Under 900 px the notice (design 74b) still shows. Shots (git-ignored) at 1440 and 900 for the design 58 compare.
 globalThis.__withFonts = true;
 const test = async page => {
   const { log, ok } = CV.log();
   const st = globalThis.__store;
-  const strip = () => page.$eval('[data-book-strip]', (e) => ({ hidden: e.hidden, html: e.innerHTML.trim(), h: Math.round(e.getBoundingClientRect().height) }));
+  // E16.1: the strip element is gone from app/book.html; no step shows the words.
+  const strip = () => page.evaluate(() => ({ el: !!document.querySelector('[data-book-strip]'), words: document.body.innerText.includes('This book is marked completed') }));
+  const none = (s) => !s.el && !s.words;
   /** The editor's boxes: the root, the tools, the left panel, the view toolbar, the canvas area. */
   const boxes = () => page.evaluate(() => {
     const r = (sel) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return b.width || b.height ? [Math.round(b.top), Math.round(b.height)] : 'none'; };
@@ -32,7 +35,7 @@ const test = async page => {
     await CV.open(page, { design: 'band' });
     await page.waitForTimeout(300);                       // readStatus() runs after a completed book opens
     const s = await strip();
-    ok(s.hidden && s.html === '' && s.h === 0, `${w}: no strip on 09 (${JSON.stringify(s)})`);
+    ok(none(s), `${w}: no strip on 09 (${JSON.stringify(s)})`);
     const b = await boxes();
     ok(JSON.stringify(b) === JSON.stringify(ref[w]), `${w}: root, tools, panel, toolbar and canvas match the in-progress book ${JSON.stringify(b)}`);
     ok(b.bottom === b.win && b.scroll, `${w}: the editor ends at the window bottom (${b.bottom} of ${b.win}), no page scroll`);
@@ -45,19 +48,18 @@ const test = async page => {
   await page.setViewportSize({ width: 899, height: 900 });
   await page.waitForSelector('[data-tiny]', { timeout: 5000 });
   ok((await CV.txt(page, '.cv-tiny-h')) === 'This window is too narrow for the cover editor', '899: the too-narrow notice');
-  ok((await strip()).hidden, '899: no strip');
+  ok(none(await strip()), '899: no strip');
 
-  /* 08 keeps the strip; back on 09 it goes again (renderStrip runs on each step change). */
+  /* E16.1: 08 has no strip either; back on 09 still none. */
   await page.setViewportSize({ width: 1440, height: 900 });
   await CV.ready(page);
   await page.click('[data-step="8"]');
   await page.waitForFunction(() => document.querySelector('[data-step-title]').textContent === 'Format', null, { timeout: 10000 });
-  const s8 = await strip();
-  ok(!s8.hidden && s8.h > 0, `08: the strip shows (${s8.h} px)`);
-  ok((await CV.txt(page, '[data-book-strip]')) === 'This book is marked completed. You can still edit it. A new version keeps it completed. Reopen book', '08: the strip words and Reopen book');
+  await page.waitForTimeout(300);
+  ok(none(await strip()), '08: no strip (E16.1)');
   await page.click('[data-step="9"]');
   await CV.ready(page);
-  ok((await strip()).hidden, '08 → 09: the strip hides again');
+  ok(none(await strip()), '08 → 09: still no strip');
 
   st.book.status = 'in_progress';
   ok(CV.mockErrors().length === 0, 'no mock errors');
