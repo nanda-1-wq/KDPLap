@@ -14,6 +14,12 @@ const test = async page => {
   let st = globalThis.__store;
   const W1 = 'e1e1e1e1-0000-4000-8000-000000000001';
   const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => null);
+  // The 06 foot's "Completed" line, read as its two parts: innerText puts the space between them only once the
+  // line is laid out, so a whole-line read can give "CompletedMarked …" (the t-complete flake, E16 Part 11 D).
+  const doneLine = () => page.$eval('.wr-ms-done', (e) => {
+    const t = (n) => (n ? n.textContent.replace(/\s+/g, ' ').trim() : '');
+    return `${t(e.querySelector('strong'))} ${t(e.querySelector('.wr-ms-sub'))}`;
+  }).catch(() => null);
   const has = (sel) => page.$(sel).then((x) => !!x);
   const off = (sel) => page.$eval(sel, (b) => b.disabled);
   const focusedAttr = () => page.evaluate(() => { const a = document.activeElement; return a ? [...a.attributes].map((x) => x.name).filter((n) => n.startsWith('data-')).join(',') : null; });
@@ -92,7 +98,7 @@ const test = async page => {
   await page.waitForSelector('[data-reopen]', { timeout: 5000 });
   const day = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   ok(calls('complete_book').length === 2 && calls('complete_book').every((w) => w.id === W1), '12 two complete_book calls for this book');
-  ok((await txt('.wr-ms-done')) === `Completed Marked ${day}. You can still edit it.`, '12 "Completed", "Marked <date>. You can still edit it." (completed_at, R3)', await txt('.wr-ms-done'));
+  ok((await doneLine()) === `Completed Marked ${day}. You can still edit it.`, '12 "Completed", "Marked <date>. You can still edit it." (completed_at, R3)', await doneLine());
   ok((await focusedAttr()) === 'data-reopen', '12 focus on Reopen book', await focusedAttr());
   ok((await txt('[data-live]')) === 'The book is marked completed.', '12 screen readers hear it');
   ok(!(await has('[data-book-strip]')), '13 E16.1: no strip element on the page');
@@ -113,7 +119,7 @@ const test = async page => {
   }
   await page.click('.step-link[data-step="6"]');
   await page.waitForSelector('[data-reopen]', { timeout: 10000 });
-  ok((await txt('.wr-ms-done')) === `Completed Marked ${day}. You can still edit it.`, '13 back in 06: Completed and Reopen book stay in the foot');
+  ok((await doneLine()) === `Completed Marked ${day}. You can still edit it.`, '13 back in 06: Completed and Reopen book stay in the foot', await doneLine());
   globalThis.__modes.reopenError = 1;
   await page.click('[data-reopen]');
   await page.waitForSelector('[data-fin-retry]', { timeout: 5000 });
