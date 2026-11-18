@@ -59,6 +59,7 @@
   const WIDE_STEPS = new Set([6, 8, 9]);   // these fold the sidebar to the rail
   const FORMAT_STEP = 8;
   const QC_STEP = 7;
+  const COVER_STEP = 9;
   const MARK_DELAY = 2000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -145,10 +146,13 @@
 
   let reopening = false, reopenErr = false;
 
-  /** Design 22f, 13: the strip on every step of a completed book. */
+  /**
+   * Design 22f, 13: the strip on every step of a completed book, except 09 Cover (owner, Nov 17:
+   * it pushed the editor down; designs 58 to 74b have no strip). Reopen stays on 01 to 08, 06 and Books.
+   */
   function renderStrip() {
     if (!strip) return;
-    const done = !!book && book.status === 'completed';
+    const done = !!book && book.status === 'completed' && step !== COVER_STEP;
     strip.hidden = !done;
     if (!done) { strip.innerHTML = ''; return; }
     strip.classList.toggle('is-error', reopenErr);
