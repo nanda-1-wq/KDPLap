@@ -68,7 +68,7 @@ Status: ✅ done (E1 to E12, both review gates)
 - [x] Live check on nicheink.com, steps 1 to 5 and 8 (`docs/reviews/rename-live/`)
 - Pending:
   - the Google OAuth consent-screen app name (NicheInk);
-  - drop the github.io origin (generate CORS, Supabase redirect URLs, Google origins) in generate v27, no earlier than Nov 12, 2026 (14 days after Oct 29), and only if the Edge logs show no github.io calls for 7 days.
+  - drop the github.io origin (generate and stock CORS, Supabase redirect URLs, Google origins) in generate v29 (v27 and v28 kept it), no earlier than Nov 12, 2026 (14 days after Oct 29), and only if the Edge logs show no github.io calls for 7 days.
 
 ## E14 · 07 Quality Control · ✅ done (Nov 6)
 - [x] Migration 0028 live Nov 5
@@ -91,15 +91,33 @@ Status: ✅ done (E1 to E12, both review gates)
   - EPUB and the Kindle preview come in E13.3;
   - Notes and references come in v2b.
 
+## E16 · 09 Cover · ✅ done (Nov 18; merges to main on the owner's word)
+- [x] Migrations 0029 (Nov 11), 0030 (Nov 15) and 0031 (Nov 16, "stock") live; generate v28 (`cover_blurb` v2) live; Edge Function `stock` v1 live (Nov 16)
+- [x] 09 Cover editor (designs 58 to 74b): text, effects, shapes and icons, layers, uploads and PDF pages, crop and picture tools, Pixabay and Unsplash, ready layouts, My layouts, series colors, Book data, the AI back blurb, KDP checks, Preview final, size changes, offline, narrow windows, export (print wrap PDF, PNG, Kindle JPG) with one insert of its records
+- [x] E13.2b trims 8 × 10 and 8.5 × 11 (01 Brief, 08 Format)
+- [x] E16.1 (owner, Nov 18; designs 75 to 77b): the KDP template on top with lines only, Pixabay searches the topic on open and loads more on scroll, snap with a lit guide and a magnet (trim and bleed edges too), Replace takes the new picture's name, no "marked completed" note on any step
+- [x] Live check on the test account (Part 11 A, E16.1 E3) and the owner's real book (B): the KDP Print Previewer passed the 120-page spine sheet and the real book's cover (6 × 9, 50 pages); every live row is the test user's (Claude chat's row checks)
+- Plan: `docs/reviews/2026-11-13-e16-plan.md`; reports: `docs/reviews/2026-11-13-e16-stop0.md` to `2026-11-16-e16-stop10.md`, `2026-11-18-e16-stop11.md`, `2026-11-18-e16-1.md`; numbers `docs/reviews/e16-live/results.md`
+- Open items:
+  - **E16.2 (after the merge):** the Pixabay picture download can answer HTTP 429 ("stock: pixabay download HTTP 429"; the first pick in A3 and in E3 failed with `stock_busy`). A server retry with backoff that reads Retry-After; stock v2 deploys on the owner's word;
+  - Unsplash production approval (until then it searches only on Search, N10; 45 calls an hour for the whole app);
+  - Pixabay full API access (pictures are 1,280 px on the long side without it);
+  - iPad memory for large covers (N6);
+  - Safari: the window focus note (STOP 10);
+  - the cold first open of 09 on the CDN (184 s seen in A3; a reload 4.8 s), as 08;
+  - a "Type my own" choice in the blurb dialog (owner: a later idea; typing on the cover works today);
+  - phone layout: after v2 (the editor needs 900 px).
+
 ## Next
-09 Cover (E15). Then EPUB and the Kindle preview (E13.3).
+Merge E16 to main (Part 11 D, on the owner's word). Then E16.2 (the Pixabay download retry, stock v2), then EPUB and the
+Kindle preview (E13.3, migration 0032), then the owner publishes the real book.
 
 ## v2 · KDP-ready files
 Scope: owner decisions, v2 step A (Oct 31).
 
 **v2a · publish path**
 1. 08 Format + Print PDF + EPUB (4 styles, book parts on/off, paper type). Print PDF ✅ done Nov 10 (E13.2); EPUB in E13.3
-2. 09 Cover (4 templates + upload + blurb; print wrap PDF + Kindle JPG)
+2. 09 Cover (4 templates + upload + blurb; print wrap PDF + Kindle JPG) ✅ done Nov 18 (E16, E16.1)
 3. Owner publishes the real book "Micro Study Habits for Busy Adult Learners"
 
 **v2b · complete**

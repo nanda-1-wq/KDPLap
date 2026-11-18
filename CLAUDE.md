@@ -37,6 +37,7 @@ Keep them working. Do not change them unless asked.
 - Prompt templates live server-side. The browser sends `{ stage, bookId, ... }`, never raw prompts.
 - Validate and limit every Edge Function input. Return clear errors.
 - Log input and output tokens for every AI call in an `ai_usage` table.
+- The Pixabay and Unsplash keys live only in the Edge Function secrets of `stock`. The browser never calls a picture provider's API.
 - Never run the Supabase CLI. Claude chat deploys after the owner says deploy.
 
 ## 5. AI rules
@@ -64,8 +65,14 @@ Keep them working. Do not change them unless asked.
 - Minimum 44 px for anything clickable. Visible focus ring: 2 px ink outline, 2 px offset.
   Accepted exception: the Write editor (4 px) and the Improve menu items (2 px) draw the ring inside, because the scrolling card clips an outside ring.
   Accepted exception: the 08 Format setting rows are 32 px high, and the whole row (label and box) is the click area (design 51b, owner Q2, Nov 8). 32 px is above the WCAG 2.2 minimum of 24 px.
+  Accepted exception: the 09 Layers row buttons are 44 px high but narrower, so they never overlap: grip 22 px, eye, lock and ⋮ 34 px. The whole row also selects, and the grip has arrow keys (design 66, E16 STOP 5 N1).
+- 09 Cover canvas (E16): the cover itself is content, not UI. Its fonts (300 families) and colors are the user's.
+  The canvas marks use `--cv-*` tokens defined once at the top of `css/cover.css`: selection blue, fold blue,
+  guide green, the magenta lit snap guide, the KDP barcode yellow (plan §3, design D audit point 6). They are
+  never used outside the canvas. The barcode box label stays 10 px, because it is drawing on the cover.
 - Every screen designs its states: empty, loading or generating, error with retry, locked, needs review.
 - Reference screens: `design/screens/*.html` (open in a browser) and `*.png`. Match them.
+  Accepted exception: designs 75 to 77b (E16.1) are PNG only, because they were drawn on the real editor (owner, STOP E1, Nov 18).
 - Logo files: `design/logo/`. Wordmark (design 40, 40b, 40c): "Niche" in navy + "Ink" in blue, with a
   `--wordmark-gap` margin before "Ink" (never a space), 22 px (21 px on the landing at 900 px and below),
   weight 700. The mark never shrinks (30 px, 28 px on the landing at 900 px and below). If the row has
@@ -78,8 +85,10 @@ Keep them working. Do not change them unless asked.
 Books (dashboard) · New Book dialog · Delete dialog · Topic Lab · Topic detail · Add topic ·
 Pen Names · Pen name detail · Book wizard shell · 01 Brief · 02 Research · 03 Positioning ·
 04 Title · 05 Outline · 06 Write · Export dialog · Settings.
-v2 screens built so far: 07 Quality Control (E14) and 08 Format with its Export files panel (E13.2).
-09 Cover shows "Coming next" until E15. Steps 10 and 11 show "Coming in v3".
+v2 screens built so far: 07 Quality Control (E14), 08 Format with its Export files panel (E13.2), and
+09 Cover (E16): the cover editor with ready layouts and My layouts, uploads and Pixabay and Unsplash pictures,
+the AI back blurb, the KDP checks, and the export (print wrap PDF, PNG, Kindle JPG).
+Steps 10 and 11 show "Coming in v3".
 
 ## 9. Repository map
 | Path | Contents |
@@ -88,6 +97,10 @@ v2 screens built so far: 07 Quality Control (E14) and 08 Format with its Export 
 | `app/` | Signed-in app pages |
 | `app/generators/` | Parked low-content generators |
 | `js/supabase.js` | Single Supabase client. All data access goes through it (`window.kdp`). |
+| `js/cover/`, `css/cover.css` | 09 Cover editor (E16): model, canvas view, panels, checks, export with the Typst engine |
+| `supabase/functions/` | Edge Functions: `generate` (AI) and `stock` (Pixabay and Unsplash search and pick, E16) |
+| `tools/cover-*.mjs`, `tools/check-cover-fonts.mjs` | 09 font catalog and sprite, icon set, golden files |
+| `THIRD-PARTY-NOTICES.md` | Licenses of the fonts, icons and libraries the app ships |
 | `landing/` | Current landing page (the owner redesigns it after v2) |
 | `design/` | Approved design: tokens, screens (40 = the NicheInk wordmark), logo |
 | `kdplapRoadMap/` | Roadmap. `kdp_roadmap_md.md` is the current plan. |

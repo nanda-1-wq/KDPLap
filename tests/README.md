@@ -309,7 +309,7 @@ node tests/browser/cover/qa-files.mjs <folder outside git> [--no-safari]   # the
   (coverChecks, glyphs, widths within 0.5%, chosen faces only, no font warning).
 - QA files and results go to a scratch or private folder, never into git.
 
-## 09 Cover editor, mocked (E16 Part 4)
+## 09 Cover editor, mocked (E16 Parts 4 to 10, E16.1)
 
 ```sh
 tests/browser/run.sh cover t-shell.js    # 09 in the shell: header, Next, rail, first open, the inert parts, status bar, 1024
@@ -339,12 +339,35 @@ tests/browser/run.sh cover t-shots6.js   # STOP 6 compare shot (62) and the Part
 # Part 7
 tests/browser/run.sh cover t-stock.js    # design 63: the Pixabay and Unsplash tabs (Unsplash waits for Search, N10), the wide picker, filters, preview, picks (copy and link), Replace, credits, stock down, errors, More results, keys, Step D
 tests/browser/run.sh cover t-shots7.js   # STOP 7 compare shot (63) and the Part 7 surfaces → docs/reviews/e16-stop7/ (never in a sweep)
+# Part 8
+tests/browser/run.sh cover t-layouts.js  # design 67: 13 ready layouts with small covers, apply at once, the 6 s note with Undo (one step), Blank, Stack (D15), another size
+tests/browser/run.sh cover t-my.js       # My layouts (Q-3, D2): the list, thumbnail, name, From, date; apply with this book's words and size; the ×; failures
+tests/browser/run.sh cover t-palettes.js # series colors: 6 palettes, the color map (swapPalette), one Undo step, keyboard and Step D
+tests/browser/run.sh cover t-bookdata.js # design 68: Book data, Add all, On the cover, no subtitle, the Back blurb card, spine text (off under 86 pages on white), Author line
+tests/browser/run.sh cover t-blurb.js    # the back blurb dialog: Length, Tone, author line, generate v28 cover_blurb { stage, bookId, length, tone, authorLine }, the fit note, Verify, failures
+tests/browser/run.sh cover t-shots8.js   # STOP 8 compare shots (67, 68) and the Part 8 surfaces → docs/reviews/e16-stop8/ (never in a sweep)
+# Part 9
+tests/browser/run.sh cover t-checks.js   # design 70: the Checks chip and drawer, Must fix / Check / Tip with icon and word, Show me, C1 Add it, C14, Ready, it follows changes
+tests/browser/run.sh cover t-preview.js  # design 69: Preview final, As printed / With bleed, black and white, the files' painting (no template), Kindle and search size
+tests/browser/run.sh cover t-size.js     # design 72: the book size changed in 08: the remap in one update, the history snapshot, the amber note, Show what moved, Next off
+tests/browser/run.sh cover t-offline.js  # design 73b: offline bar and footer, changes kept on this device, AI and Pixabay blocked with no call, saved when back online
+tests/browser/run.sh cover t-narrow.js   # designs 74, 74b: 1200 px and up, 900 to 1199 px (panel over the cover), under 900 px the notice
+tests/browser/run.sh cover t-shots9.js   # STOP 9 compare shots (69, 70, 72, 73b, 74, 74b) → docs/reviews/e16-stop9/ (never in a sweep)
+COVER_OUT=<scratch> node tests/browser/cover/safari-p9.mjs   # real Safari: the Checks drawer, Preview final, 1024 px and 800 px
 # Part 10 (run.sh also checks the print engine's file cache for this suite: the export builds with the real Typst engine)
 tests/browser/run.sh cover t-export.js   # designs 71, 71b, 73d: ready, blocked (Must fix, offline), steps + Stop (Stop, ×, Escape, leaving 09), done, downloads + zip, Done/Next from data, every failure, My layouts
 tests/browser/run.sh cover t-records.js  # Uploads housekeeping: the orphan-file sweep (safety rules, pages, server clock) and the remove × with its "used on N covers" question
 tests/browser/run.sh cover t-export-real.js  # the sample book exported for real, KDP checks, files to tests/browser/cover/out/stop10/ (never in a sweep)
 tests/browser/run.sh cover t-shots10.js  # STOP 10 compare shots (71, 71b, 73d) and the Part 10 states → docs/reviews/e16-stop10/ (never in a sweep)
 supabase/tests/sql/run.sh t0030_one_insert.sql   # the export's one insert against the real 0030 guard: all rows or none
+# Nov 17 and E16.1 (owner, Nov 18; designs 75 to 77b, PNG only)
+tests/browser/run.sh cover t-strip.js    # no "marked completed" strip on 09 or 08 of a completed book; the editor sits where an in-progress book's does
+tests/browser/run.sh cover t-tpl.js      # design 75: the template above the layers, lines and the see-through barcode box only, the notes in the popover (75b), clicks go through
+tests/browser/run.sh cover t-snap.js     # design 77: 13 targets across and 7 down, exact, the lit guide, the magnet (holds 16 px), a nearer target takes over, photo resize corners
+tests/browser/run.sh cover t-replace-name.js  # Replace takes the new picture's name on every path (upload, tile, PDF, Pixabay, Unsplash), a typed name goes, one Undo step
+tests/browser/run.sh cover t-stock-browse.js  # designs 76, 76b: Pixabay searches the topic (else title) on open, once a visit; the end loads more, 3 s apart; errors stop it; Unsplash unchanged
+tests/browser/run.sh cover t-shots11.js  # E16.1 after shots → docs/reviews/e16-1/, design/screens/75 and 75b (never in a sweep)
+tests/browser/run.sh write t-complete.js # (also) no strip on 01 to 09; Reopen from the 06 foot
 COVER_OUT=<scratch> node tests/browser/cover/safari-p10.mjs   # real Safari, the export: real clicks, the real engine (real CDNs), KDP checks, zip read back, Stop
 COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, the editor (text, effects, shapes, images, PDF, crop, undo, save); every Supabase call answered in the page (safari-stub.js), none reaches the host
 ```
@@ -356,8 +379,9 @@ COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, 
   modes uploadFail, rowFail, listFail, downloadFail, uploadSlow, pdfDown. `fixture-pictures.js` (PIC) makes
   pictures and PDFs in the page and hands them to the real file field or a paste event.
   Part 7: the function "stock" (search and pick, as the server answers), the providers' picture links and
-  cover_assets.name; modes stockFail/stockCode, pickFail/pickCode, stockNet, stockSlow, pickSlow, stockMany,
-  picDown. `fixture-stock.js` (STK) holds the design's sample results and draws their pictures in the page.
+  cover_assets.name; modes stockFail/stockCode, pickFail/pickCode, stockNet, stockSlow, pickSlow, stockMany
+  (1: 30 results; a number: that many), picDown. E16.1: the book's Brief topic and Topic Lab topic come from
+  `store.book.topicText` and `store.book.topicName`. `fixture-stock.js` (STK) holds the design's sample results and draws their pictures in the page.
   Part 10: cover_key, cover_exports (one insert, 0030's guard codes), cover_marks, the My layouts upsert,
   cover_assets delete, the "used on" reads (layers cs), the bucket's folder list; modes keyFail, recFail, recCode,
   myUpFail, useFail, delFail, listFilesFail, recSlow, engineDown, keyHook(n). The Typst files come from

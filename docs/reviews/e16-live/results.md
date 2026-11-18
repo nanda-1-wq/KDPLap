@@ -114,3 +114,30 @@ Files for the owner (outside git): `~/Documents/nicheink-private/e16-live/a3/` a
 | PNG | 3709 × 2775 at 300 DPI |
 | Kindle JPG | 1600 × 2560, RGB; not uploaded to KDP (no EPUB yet) |
 | KDP Print Previewer | PASS on the real draft (6 × 9, white, 50 pages): no issue, barcode in our box; draft only |
+
+## E3. E16.1 live check (Nov 18, 2026, Chrome headless via playwright-cli, user 1e117c74, branch at 9fef68b)
+
+Live window: **13:06:42Z to 13:11:03Z**. CORS first: `http://127.0.0.1:5500` is in both allow-lists, and E16.1 changed nothing under `supabase/`. The page's user id was checked before any write. The password is in 0 of the browser tool's log files. No AI call.
+
+| What | Result |
+|---|---|
+| 09 opens (a5224e83, 8 × 10) | ready in 1.9 s (warm CDN) |
+| Seed words | the Brief topic was the placeholder "E13.2 Live Test Book" (20 characters), which would find no pictures, so the test book's Brief topic was set to "study habits" (test account only; put back on request). Reload: seed "study habits" |
+| Template | on the cover only "Barcode area 2.0 × 1.2 in"; one fill, the barcode wash rgba(255, 243, 92, 0.45); popover: 5 notes |
+| Pixabay open | **1 call**, 3.9 s to the tiles, 200, page 1, 24 of 480, `cached: false`, CORS `http://127.0.0.1:5500`; the box reads "study habits"; the topic line shows; the end of the box is watched |
+| 2 scroll pages | **2 calls** (pages 2 and 3), 70 pictures (Pixabay sent 2 pictures twice across pages; they show once). Server log times 13:07:48.18 and 13:07:51.05: 2.87 s apart on the server clock. The app waits 3 s between its own starts; the server writes its time after its own checks, so a slower first request makes the gap look shorter there |
+| Snap, title | the center lands exactly on the front center; lit guide 2 px; the magnet holds at +10 px and lets go at +22 px; one Undo puts it back |
+| Snap, picture | the back Pixabay picture lands exactly on the back live-area corner, both guides lit; one Undo puts it back |
+| Replace on a Pixabay picture | the layer "computer" given a typed name "man", then Replace with the Pixabay result "woman": 1st pick **503 `stock_busy`** (Pixabay answered 429, as in A3); retry after 65 s: 200, 1,280 px, a stored copy. The layer reads "woman", the typed name is gone, the Layers row "woman". Undo: "man" and the old picture; Undo again: "computer". The cover ends as it began |
+
+### Stock calls (test user's stock_calls rows; purged 2 h after each call)
+| At (UTC) | Source | Action | Provider calls |
+|---|---|---|---|
+| 13:07:32 | pixabay | search | 1 (open, the topic) |
+| 13:07:48 | pixabay | search | 1 (page 2) |
+| 13:07:51 | pixabay | search | 1 (page 3) |
+| 13:09:23 | pixabay | pick | 1 (503 `stock_busy`) |
+| 13:10:47 | pixabay | pick | 1 (the retry, 200) |
+
+Changed on the test account: a5224e83's Brief topic is "study habits" (it was "E13.2 Live Test Book"), and 1 new cover_assets row ("woman", Pixabay, with its file in `covers/<test user>/assets/`). The cover design is as before.
+Row check: `docs/reviews/e16-live/rows-e3.sql` (read-only) for Claude chat.
