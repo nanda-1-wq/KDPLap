@@ -63,8 +63,8 @@ const test = async page => {
     return out;
   });
   ok(small.length === 0, `UI text is 12 px or more${small.length ? ': ' + small.join(', ') : ''}`);
-  const notes = await page.$$eval('.cv-tpl-notes > div, .cv-tpl-barcode, .cv-tpl-label', (a) => a.length);
-  ok(notes === 8, `the template drawing (5 notes, barcode, 2 labels) is the only small text (${notes})`);
+  const notes = await page.$$eval('[data-tpl] *', (a) => a.filter((e) => e.textContent.trim() && !e.children.length).length);
+  ok(notes === 1, `the template drawing (E16.1: the barcode label only) is the only small text (${notes})`);
 
   /* No blue info color: UI text and borders outside the cover stay ink, gray and the functional colors. */
   const blue = await page.evaluate(() => {

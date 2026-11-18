@@ -8,12 +8,14 @@
    startAct/onAct/endAct, onWheel, fitView and zoomAt.
 
    Layers back to front:
-     1. the paper (the background color) and the KDP template layer: DOM in
-        board px under a scale(z) transform, as the design draws them; the
-        template is never exported, its words stay as drawn (Nov 13 19:42);
+     1. the paper (the background color): DOM in board px under a scale(z)
+        transform;
      2. the cover's layers: one canvas the size of the workspace, painted by
         kdpCover.render.paint (plan Q-2: our renderer, D10), without the
-        background (it is the paper below the template, as in the design);
+        background (it is the paper below);
+     2b. the KDP template layer (E16.1, design 75): lines and the barcode box
+        only, ABOVE the layers, in board px, pointer-events none; never
+        exported. Its notes are in the template popover;
      3. a DOM overlay in board px: one focusable box per layer (front first,
         so Tab goes front to back), the selection frame with real handle
         buttons, and the in-place text box while typing;
@@ -53,37 +55,31 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const X = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
-  /** The design's tpl: KDP template layer words and numbers from the size. */
+  /**
+   * The KDP template layer from the size (design 75, E16.1, owner Nov 18): lines only, drawn ABOVE the layers.
+   * No pink bleed band and no white live area (they hid the background). The trim line, the 2 spine folds, a
+   * dotted live-area line, and the see-through barcode box with its short label are the only marks; the line notes
+   * live in the "KDP template layer" popover (NOTES), the sizes in the status bar.
+   */
   function templateHtml(g) {
-    const lf = g.liveFront, lb = g.liveBack, mm = (x) => (x * 25.4).toFixed(2);
+    const lf = g.liveFront, lb = g.liveBack;
     const box = (cls, x, y, w, h) => `<div class="${cls}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"></div>`;
-    const trim = `${g.tw} × ${g.th} in`;
     return `
-      ${box('cv-tpl-bleed', 0, 0, g.W, g.H)}
       ${box('cv-tpl-live', lb.x0, lb.y0, lb.x1 - lb.x0, lb.y1 - lb.y0)}
       ${box('cv-tpl-live', lf.x0, lf.y0, lf.x1 - lf.x0, lf.y1 - lf.y0)}
       ${box('cv-tpl-trim', g.b, g.b, g.W - 2 * g.b, g.trimH)}
       <div class="cv-tpl-fold" style="left:${g.foldL}px;height:${g.H}px"></div>
       <div class="cv-tpl-fold" style="left:${g.foldR}px;height:${g.H}px"></div>
-      <div class="cv-tpl-notes" style="width:${Math.max(200, g.foldL - 60)}px">
-        <div><strong>Solid black line = trim</strong><br>KDP cuts the book here.</div>
-        <div><strong>Blue dashed line = spine fold</strong><br>The fold can move a little in print.</div>
-        <div><strong>White = live area</strong><br>Keep text, logos and key pictures here.</div>
-        <div><strong>Pink = bleed</strong><br>Fill it with your background. No text or logos here.</div>
-        <div><strong>This layer never prints.</strong><br>NicheInk leaves it out of every file you export.</div>
-      </div>
-      <div class="cv-tpl-barcode" style="left:${g.barcode.x}px;top:${g.barcode.y}px"><strong>Barcode area</strong>2.0 × 1.2 in<br>KDP prints it here</div>
-      <div class="cv-tpl-label" style="left:30px;top:${g.H - 52}px">Back cover<br>${trim}</div>
-      <div class="cv-tpl-info" style="left:${lf.x0}px;top:${Math.round(g.H * 0.23)}px;width:${lf.x1 - lf.x0}px">
-        <div><strong class="cv-tpl-big">Paperback cover</strong><br>Left to right</div>
-        <div><strong class="cv-tpl-big">${g.tw} × ${g.th} in book</strong><br>${mm(g.tw)} × ${mm(g.th)} mm</div>
-        <div><strong>Full cover ${(g.W / 70).toFixed(3)} × ${(g.H / 70).toFixed(2)} in</strong><br>${mm(g.W / 70)} × ${mm(g.H / 70)} mm</div>
-        <div><strong>Spine ${g.sp.toFixed(3)} in</strong><br>${(g.sp * 25.4).toFixed(2)} mm</div>
-        <div>Black and white interior<br>${g.f.pages} pages · ${g.f.paper} paper</div>
-      </div>
-      <div class="cv-tpl-label cv-tpl-right" style="left:${g.W - 76}px;top:${g.H - 52}px">Front cover<br>${trim}</div>
-      <div class="cv-tpl-spine" style="left:${g.foldL - 1.75}px;top:${Math.round(g.H * 0.65)}px">SPINE ${g.sp.toFixed(3)} in</div>`;
+      <div class="cv-tpl-barcode" style="left:${g.barcode.x}px;top:${g.barcode.y}px"><strong>Barcode area</strong>2.0 × 1.2 in</div>`;
   }
+  /** The line notes, in the popover under "Hide template layer" (E16.1): [line class, title, words]. */
+  const NOTES = [
+    ['is-trim', 'Solid black line = trim', 'KDP cuts the book here.'],
+    ['is-bleed', 'Outside the black line = bleed', 'Fill it with your background. No text or logos here.'],
+    ['is-fold', 'Blue dashed line = spine fold', 'The fold can move a little in print.'],
+    ['is-live', 'Green dotted line = live area', 'Keep text, logos and key pictures inside.'],
+    ['is-never', 'This layer never prints.', 'NicheInk leaves it out of every file you export. It is drawn from your trim, page count and paper, so it changes when they change.']
+  ];
 
   // Handles (the design's H factory): text = 4 corner marks + width; image = 4 corners; shape = 8 (a line: 2 ends).
   const LABEL = { rot: 'Drag to rotate', width: 'Drag to change the width', scale: 'Drag to resize', box: 'Drag to resize', crop: 'Drag to crop' };
@@ -113,14 +109,15 @@
     ws.className = 'cv-ws';
     ws.setAttribute('data-ws', '');
     ws.innerHTML = `
-      <div class="cv-board" data-back><div class="cv-paper" data-paper></div><div class="cv-tpl" data-tpl aria-hidden="true"></div></div>
+      <div class="cv-board" data-back><div class="cv-paper" data-paper></div></div>
       <canvas class="cv-canvas" data-canvas role="img"></canvas>
+      <div class="cv-board" data-tplboard><div class="cv-tpl" data-tpl aria-hidden="true"></div></div>
       <div class="cv-board cv-front" data-front></div>
       <div class="cv-guides" data-guides aria-hidden="true"></div>
       <div class="cv-snapline" data-snapline aria-hidden="true" hidden></div>
       <div class="cv-marquee" data-marquee aria-hidden="true" hidden></div>
       <div class="cv-pop cv-tplpop" role="dialog" aria-label="KDP template layer" data-tplpop hidden></div>`;
-    const back = ws.querySelector('[data-back]'), front = ws.querySelector('[data-front]');
+    const back = ws.querySelector('[data-back]'), front = ws.querySelector('[data-front]'), tplBoard = ws.querySelector('[data-tplboard]');
     const paper = ws.querySelector('[data-paper]'), tpl = ws.querySelector('[data-tpl]');
     const canvas = ws.querySelector('[data-canvas]'), guides = ws.querySelector('[data-guides]');
     const snapEl = ws.querySelector('[data-snapline]'), tplPop = ws.querySelector('[data-tplpop]'), mqEl = ws.querySelector('[data-marquee]');
@@ -178,7 +175,7 @@
     function boardStyle() {
       const { z, px, py } = E.view, G = g();
       const t = `translate(${px}px, ${py}px) scale(${z})`;
-      for (const b of [back, front]) { b.style.transform = t; b.style.width = G.W + 'px'; b.style.height = G.H + 'px'; b.style.setProperty('--z', z); }
+      for (const b of [back, tplBoard, front]) { b.style.transform = t; b.style.width = G.W + 'px'; b.style.height = G.H + 'px'; b.style.setProperty('--z', z); }
       paper.style.background = E.cover.bg;
       const key = JSON.stringify(G.f);
       if (key !== tplKey) { tpl.innerHTML = templateHtml(G); tplKey = key; }
@@ -299,7 +296,7 @@
         <label class="cv-range"><span class="cv-range-row"><span>Transparency</span><span class="cv-mono">${E.tpl.hide ? 'hidden' : E.tpl.op + '%'}</span></span>
           <input type="range" min="0" max="100" step="1" value="${E.tpl.op}" data-tpl-op></label>
         <label class="cv-check"><input type="checkbox" data-tpl-hide${E.tpl.hide ? ' checked' : ''}>Hide template layer</label>
-        <p class="cv-pop-p">The template is never in your exported files. It is drawn from your trim, page count and paper, so it changes when they change.</p>`;
+        <ul class="cv-tplnotes" aria-label="What the lines mean">${NOTES.map(([k, t, w]) => `<li class="cv-tplnote"><span class="cv-tplkey ${k}" aria-hidden="true"></span><span><strong>${t}</strong> ${w}</span></li>`).join('')}</ul>`;
     }
     function syncTplPop() {
       tplPop.hidden = !E.tpl.pop;

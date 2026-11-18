@@ -6,10 +6,13 @@ const test = async page => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await CV.open(page, { design: null });
 
-  /* The KDP template layer: drawn from trim, pages and paper; never painted on the layer canvas. */
+  /* The KDP template layer (E16.1, design 75): lines and the barcode box only, above the layers; never painted on
+     the layer canvas. Its line notes are in the popover (t-tpl.js checks the rest). */
   const tpl = await page.$eval('[data-tpl]', (t) => t.innerText.replace(/\s+/g, ' ').trim());
-  for (const w of ['Solid black line = trim', 'Blue dashed line = spine fold', 'White = live area', 'Pink = bleed', 'This layer never prints.', 'Barcode area', '2.0 × 1.2 in', 'Paperback cover', '6 × 9 in book', '152.40 × 228.60 mm', 'Full cover 12.372 × 9.25 in', '314.24 × 234.95 mm', 'Spine 0.122 in', '3.09 mm', '54 pages · white paper', 'SPINE 0.122 in']) {
-    ok(tpl.includes(w), `template: "${w}"`);
+  ok(tpl === 'Barcode area 2.0 × 1.2 in', `template: only the barcode label on the cover ("${tpl}")`);
+  const pop = await page.$eval('[data-tplpop]', (t) => t.innerText.replace(/\s+/g, ' ').trim());
+  for (const w of ['Solid black line = trim', 'Outside the black line = bleed', 'Blue dashed line = spine fold', 'Green dotted line = live area', 'This layer never prints.']) {
+    ok(pop.includes(w), `popover note: "${w}"`);
   }
   ok(await page.$eval('[data-tpl]', (t) => t.getAttribute('aria-hidden') === 'true'), 'the template is drawing (aria-hidden)');
   const blank = await CV.px(page, ...(await CV.pt(page, 4, 4)));

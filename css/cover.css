@@ -13,8 +13,8 @@
   --cv-fold: #2E6AE6;           /* spine fold lines and the spine label (canvas only) */
   --cv-guide: #1E9E57;          /* live-area guide lines (canvas only) */
   --cv-snap: #D6249F;           /* the front-center snap line (canvas only) */
-  --cv-kdp-pink: #F2B8B5;       /* KDP template: bleed */
-  --cv-kdp-yellow: #FFF35C;     /* KDP template: barcode area */
+  --cv-kdp-yellow-wash: rgba(255, 243, 92, 0.45);   /* KDP template: the see-through barcode box (E16.1 design 75) */
+  --cv-kdp-yellow-line: #D9C400;   /* KDP template: its outline */
   --cv-danger-line: #F5C2BC;    /* border of a danger bar, chip or button */
   --cv-danger-ink: #7A1A12;     /* text on --danger-bg */
   --cv-warning-line: #F0D8A8;
@@ -26,7 +26,7 @@
   --cv-pv-bg: #ECECE8;          /* Preview final's backdrop (design 69) */
   --cv-ck-w: 380px;             /* the Checks drawer's width (design 70) */
   --cv-success-line: #BFE3CC;
-  --cv-white: #FFFFFF;          /* picker gradient stop, dot ring, the paper under the template */
+  --cv-white: #FFFFFF;          /* picker gradient stop, dot ring, handle fill */
   --cv-black: #000000;          /* picker gradient stop */
   --cv-black-0: rgba(0, 0, 0, 0);
   --cv-dot-ring: rgba(0, 0, 0, 0.5);
@@ -229,19 +229,11 @@
 .cv-tpl { position: absolute; inset: 0; pointer-events: none; color: var(--ink); }
 .cv-tpl > div { position: absolute; }
 .cv-tpl[hidden] { display: none; }
-.cv-tpl-bleed { background: var(--cv-kdp-pink); }
-.cv-tpl-live { background: var(--cv-white); }
+.cv-tpl-live { box-sizing: border-box; border: 1px dotted var(--cv-guide); }
 .cv-tpl-trim { box-sizing: border-box; border: 1px solid var(--ink); }
 .cv-tpl-fold { top: 0; width: 0; border-left: 1px dashed var(--cv-fold); }
-/* The 5 template notes stay 10 to 11 px: they are drawing on the cover, not UI text (plan §3 Step D). */
-.cv-tpl-notes { left: 30px; top: 30px; display: flex; flex-direction: column; gap: var(--space-3); font-size: 10px; line-height: 1.35; }
-.cv-tpl-notes strong { font-size: 11px; }
-.cv-tpl-barcode { width: 140px; height: 84px; box-sizing: border-box; background: var(--cv-kdp-yellow); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; line-height: 1.35; }
-.cv-tpl-label { font-size: 9px; line-height: 1.3; color: var(--graphite); }
-.cv-tpl-right { width: 50px; text-align: right; }
-.cv-tpl-info { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; font-size: 13px; line-height: 1.35; }
-.cv-tpl-info .cv-tpl-big { font-size: 15px; }
-.cv-tpl-spine { transform: rotate(90deg); transform-origin: 0 0; font-size: 6px; letter-spacing: 0.06em; color: var(--cv-fold); white-space: nowrap; }
+/* E16.1 (design 75): the barcode box is see-through over the design; its label stays 10 px (drawing, not UI text). */
+.cv-tpl-barcode { width: 140px; height: 84px; box-sizing: border-box; background: var(--cv-kdp-yellow-wash); border: 1.5px solid var(--cv-kdp-yellow-line); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; line-height: 1.35; }
 .cv-canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
 .cv-front { pointer-events: none; }
 
@@ -287,6 +279,16 @@
 .cv-snapline { position: absolute; top: 0; height: 100%; width: 0; border-left: 1px solid var(--cv-snap); pointer-events: none; }
 .cv-snapline[hidden] { display: none; }
 .cv-pop.cv-tplpop { left: var(--space-3); top: var(--space-3); width: 320px; padding: 18px var(--space-5); gap: 14px; z-index: 4; }
+/* E16.1: the template's line notes, moved from the cover into the popover (design 75). */
+.cv-tplnotes { margin: 0; padding: var(--space-3) 0 0; list-style: none; border-top: 1px solid var(--stone); display: flex; flex-direction: column; gap: 10px; }
+.cv-tplnote { display: flex; align-items: flex-start; gap: 10px; font-size: var(--text-xs); line-height: 1.45; color: var(--graphite); }
+.cv-tplnote strong { color: var(--ink); font-weight: 600; }
+.cv-tplkey { flex-shrink: 0; width: 22px; height: 14px; margin-top: 2px; box-sizing: border-box; }
+.cv-tplkey.is-trim { border: 1px solid var(--ink); }
+.cv-tplkey.is-bleed { border: 1px solid var(--ink); box-shadow: inset 0 0 0 3px var(--cv-white), 0 0 0 3px var(--stone); }
+.cv-tplkey.is-fold { width: 22px; border-left: 1px dashed var(--cv-fold); border-right: 1px dashed var(--cv-fold); }
+.cv-tplkey.is-live { border: 1px dotted var(--cv-guide); }
+.cv-tplkey.is-never { visibility: hidden; }   /* no line: it keeps the words in line with the others */
 
 /* ── Status bar ── */
 .cv-foot {
