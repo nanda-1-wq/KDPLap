@@ -200,16 +200,23 @@
   }
 
   /* ── Adding ── */
-  /** Design addImage: a new layer, or the picture of the layer being replaced (its box kept). */
+  /**
+   * Design addImage: a new layer, or the picture of the layer being replaced (its box kept).
+   * E16.1 (owner, Nov 18: Replace kept the old name "man"): Replace takes the new picture's name, so a name typed
+   * in Layers (label, which wins in names.layerName) goes too; and Replace is one Undo step of its own.
+   */
   function place(E, img) {
     if (E.replaceId != null) {
       const old = E.cover.layers.find((l) => l.id === E.replaceId);
       E.replaceId = null;
       if (old) {
         const next = Object.assign({}, old, { asset: img.asset, natW: img.natW, natH: img.natH, name: img.name, transparent: !!img.transparent });
+        delete next.label;
         Object.assign(next, C.model.coverFit(next, {}));
         ensure(E, next);
-        E.patchLayer(old.id, { asset: next.asset, natW: next.natW, natH: next.natH, name: next.name, transparent: next.transparent, px: next.px, py: next.py, pw: next.pw, ph: next.ph });
+        E.hist.step();
+        E.commitLayers(E.cover.layers.map((l) => (l.id === old.id ? next : l)));
+        E.hist.step();
         E.select(old.id);
         E.refreshPanel();
         return;
