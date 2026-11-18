@@ -20,9 +20,12 @@ function planned(c) {
 for (const c of GOLDEN.geo) {
   Deno.test(`geo ${fk(c.fmt)}: every board number, label and Kindle line equals the design (D14, D16 applied)`, () => {
     const g = K.geo.geo(c.fmt), want = planned(c);
-    const { f, ...rest } = g;
+    // E16.1 (design 77): the snap targets backCX, spineCX and midY are ours, not the design's: checked here.
+    const { f, backCX, spineCX, midY, ...rest } = g;
     assertEquals(f, c.fmt);
     near(rest, want.g, "geo");
+    near({ backCX, spineCX, midY }, { backCX: g.b + g.trimW / 2, spineCX: (g.foldL + g.foldR) / 2, midY: g.H / 2 }, "geo snap targets");
+    assert(Math.abs((g.frontCX - g.spineCX) - (g.spineCX - g.backCX)) < 1e-9, "the spine center is halfway between the back and front centers");
     const L = K.names.labels(g);
     near({ trim: L.trim, pages: L.pages, paper: L.paper, spine: L.spine, full: L.full, line: L.line, wrap: L.wrap, px: L.px,
       fullText: L.fullText, fullMm: L.fullMm, spineText: L.spineText, spineMm: L.spineMm, spineCaps: L.spineCaps }, want.labels, "labels");

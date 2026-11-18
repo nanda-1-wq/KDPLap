@@ -19,7 +19,7 @@
      3. a DOM overlay in board px: one focusable box per layer (front first,
         so Tab goes front to back), the selection frame with real handle
         buttons, and the in-place text box while typing;
-     4. guide lines and the snap line across the workspace (workspace px).
+     4. guide lines and the lit snap guides (E16.1, one per axis) across the workspace (workspace px).
    Every drag is captured on the workspace element, so the overlay can be
    drawn again while it runs.
 
@@ -115,12 +115,13 @@
       <div class="cv-board cv-front" data-front></div>
       <div class="cv-guides" data-guides aria-hidden="true"></div>
       <div class="cv-snapline" data-snapline aria-hidden="true" hidden></div>
+      <div class="cv-snapline cv-snapline-h" data-snapline-h aria-hidden="true" hidden></div>
       <div class="cv-marquee" data-marquee aria-hidden="true" hidden></div>
       <div class="cv-pop cv-tplpop" role="dialog" aria-label="KDP template layer" data-tplpop hidden></div>`;
     const back = ws.querySelector('[data-back]'), front = ws.querySelector('[data-front]'), tplBoard = ws.querySelector('[data-tplboard]');
     const paper = ws.querySelector('[data-paper]'), tpl = ws.querySelector('[data-tpl]');
     const canvas = ws.querySelector('[data-canvas]'), guides = ws.querySelector('[data-guides]');
-    const snapEl = ws.querySelector('[data-snapline]'), tplPop = ws.querySelector('[data-tplpop]'), mqEl = ws.querySelector('[data-marquee]');
+    const snapEl = ws.querySelector('[data-snapline]'), snapElH = ws.querySelector('[data-snapline-h]'), tplPop = ws.querySelector('[data-tplpop]'), mqEl = ws.querySelector('[data-marquee]');
     let tplKey = '', drag = null, pressed = null;
 
     const g = () => C.geo.geo(E.cover.fmt);
@@ -322,9 +323,12 @@
       paint();
     }
 
-    function snapLine(on) {
-      snapEl.hidden = !on;
-      if (on) snapEl.style.left = (E.view.px + g().frontCX * E.view.z) + 'px';
+    /** E16.1 (design 77): the lit guide of each axis the item is held on. s: { x, y } board px (null: none), or false. */
+    function snapLine(s) {
+      const sx = s && s.x != null ? s.x : null, sy = s && s.y != null ? s.y : null;
+      snapEl.hidden = sx == null; snapElH.hidden = sy == null;
+      if (sx != null) snapEl.style.left = (E.view.px + sx * E.view.z) + 'px';
+      if (sy != null) snapElH.style.top = (E.view.py + sy * E.view.z) + 'px';
     }
 
     /* ── View ── */
@@ -460,7 +464,40 @@
     ws.addEventListener('pointercancel', end);
     ws.addEventListener('lostpointercapture', end);
 
-    /** The design's onAct for one layer: move (front-center snap), width, box, scale, rot. */
+    /**
+     * E16.1 (design 77, owner Nov 18): snap targets of the cover, in board px. Across: both bleed edges, both trim
+     * lines, the 4 live-area lines, both folds, and the back, spine and front centers. Down: both bleed edges, both
+     * trim lines, the live-area top and bottom, and the middle.
+     */
+    function snapTargets(G) {
+      return {
+        x: [0, G.W, G.b, G.W - G.b, G.liveBack.x0, G.liveBack.x1, G.liveFront.x0, G.liveFront.x1, G.foldL, G.foldR, G.backCX, G.spineCX, G.frontCX],
+        y: [0, G.H, G.b, G.H - G.b, G.liveBack.y0, G.liveBack.y1, G.midY]
+      };
+    }
+    /**
+     * One axis of the magnet. start, size: the item's box on that axis where the pointer puts it; its 3 points are
+     * start, middle and end (k = 0, 1, 2). held: the target it is on ({ t, k }) or null. Within IN of a target the
+     * nearest point jumps to it; once held it stays until the free point is more than OUT away.
+     * → { t, k, shift } (move the item by shift) or null.
+     */
+    function snapAxis(start, size, targets, held, IN, OUT) {
+      let best = null;
+      for (let k = 0; k < 3; k++) {
+        const p = start + k * size / 2;
+        for (const t of targets) { const d = Math.abs(p - t); if (d < IN && (!best || d < best.d)) best = { t, k, d, shift: t - p }; }
+      }
+      if (held) {
+        const free = start + held.k * size / 2, d = Math.abs(free - held.t);
+        // Held: stay, unless another target is nearer (the trim line is only 8.75 board px inside the bleed edge:
+        // dragging out past the trim must reach the bleed edge).
+        if (d <= OUT && !(best && best.t !== held.t && best.d < d)) return { t: held.t, k: held.k, shift: held.t - free };
+      }
+      return best && { t: best.t, k: best.k, shift: best.shift };
+    }
+    const upright = (l) => !(l.rot && Math.abs(l.rot % 360) > 0.5);
+
+    /** The design's onAct for one layer: move (snap with a magnet, E16.1), width, box, scale (its edge snaps, E16.1), rot. */
     function actPatch(a, cx, cy) {
       const z = E.view.z, L0 = a.L0;
       const dx = (cx - a.x) / z, dy = (cy - a.y) / z;
@@ -468,9 +505,15 @@
       const lx = dx * Math.cos(r) + dy * Math.sin(r), ly = -dx * Math.sin(r) + dy * Math.cos(r);
       const G = g();
       if (a.kind === 'move') {
-        let x = L0.x + dx, snap = false;
-        if (E.snap && Math.abs(x + L0.w / 2 - G.frontCX) < 6 / z) { x = G.frontCX - L0.w / 2; snap = true; }
-        return { patch: { x, y: L0.y + dy }, snap };
+        let x = L0.x + dx, y = L0.y + dy;
+        if (!E.snap) { a.snapX = a.snapY = null; return { patch: { x, y }, snap: false }; }
+        // The box as drawn (a rotated layer: its upright bounds), moved by the pointer.
+        const B = C.model.bbox(L0, E.textH), T = snapTargets(G), IN = 6 / z, OUT = 16 / z;
+        const sx = snapAxis(B.x + dx, B.w, T.x, a.snapX, IN, OUT), sy = snapAxis(B.y + dy, B.h, T.y, a.snapY, IN, OUT);
+        a.snapX = sx && { t: sx.t, k: sx.k }; a.snapY = sy && { t: sy.t, k: sy.k };
+        if (sx) x += sx.shift;
+        if (sy) y += sy.shift;
+        return { patch: { x, y }, snap: sx || sy ? { x: sx ? sx.t : null, y: sy ? sy.t : null } : false };
       }
       if (a.kind === 'width') return { patch: { w: Math.max(60, L0.w + lx) } };
       if (a.kind === 'pic') {
@@ -480,8 +523,26 @@
       if (a.kind === 'crop') return { patch: cropPatch(L0, a.corner, lx, ly) };
       if (a.kind === 'scale') {
         const c = a.corner, left = c.indexOf('w') >= 0, top = c.indexOf('n') >= 0;
-        const w = Math.max(30, L0.w + (left ? -lx : lx)), f = w / L0.w, h = L0.h * f;
-        return { patch: { w, h, x: left ? L0.x + L0.w - w : L0.x, y: top ? L0.y + L0.h - h : L0.y, px: L0.px * f, py: L0.py * f, pw: L0.pw * f, ph: L0.ph * f } };
+        let w = Math.max(30, L0.w + (left ? -lx : lx)), lit = false;
+        // E16.1 (owner, Nov 18: "a photo stretched to the edge sticks exactly to the bleed edge"): the corner's moving
+        // side or end snaps to the same targets, with the same magnet; the picture keeps its shape. Upright pictures only.
+        if (E.snap && upright(L0)) {
+          const T = snapTargets(G), IN = 6 / z, OUT = 16 / z, r = L0.h / L0.w, h0 = w * r;
+          const ex = left ? L0.x + L0.w - w : L0.x + w, ey = top ? L0.y + L0.h - h0 : L0.y + h0;
+          const held = a.snapS || null;
+          const sx = snapAxis(ex, 0, T.x, held && held.ax === 'x' ? held : null, IN, OUT);
+          const sy = snapAxis(ey, 0, T.y, held && held.ax === 'y' ? held : null, IN, OUT);
+          const pick = sx && sy ? (Math.abs(sx.shift) <= Math.abs(sy.shift) ? ['x', sx] : ['y', sy]) : sx ? ['x', sx] : sy ? ['y', sy] : null;
+          if (pick) {
+            const [ax, sn] = pick;
+            w = ax === 'x' ? w + (left ? -sn.shift : sn.shift) : (h0 + (top ? -sn.shift : sn.shift)) / r;
+            a.snapS = { ax, t: sn.t, k: 0 };
+            lit = ax === 'x' ? { x: sn.t, y: null } : { x: null, y: sn.t };
+          } else a.snapS = null;
+          w = Math.max(30, w);
+        }
+        const f = w / L0.w, h = L0.h * f;
+        return { patch: { w, h, x: left ? L0.x + L0.w - w : L0.x, y: top ? L0.y + L0.h - h : L0.y, px: L0.px * f, py: L0.py * f, pw: L0.pw * f, ph: L0.ph * f }, snap: lit };
       }
       if (a.kind === 'box') {
         const c = a.corner;

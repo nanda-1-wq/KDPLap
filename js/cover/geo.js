@@ -59,6 +59,7 @@
     const spineMin = SPINE_MIN[f.paper];
     return {
       f, tw, th, sp, I, b, trimW, trimH, spine, foldL, foldR, W, H, frontCX: foldR + trimW / 2,
+      backCX: b + trimW / 2, spineCX: (foldL + foldR) / 2, midY: H / 2,   // E16.1: snap targets (design 77)
       liveBack: { x0: 2 * b, x1: foldL - b, y0: 2 * b, y1: H - 2 * b },
       liveFront: { x0: foldR + b, x1: W - 2 * b, y0: 2 * b, y1: H - 2 * b },
       barcode: { x: foldL - 17.5 - 140, y: H - b - 17.5 - 84, w: 140, h: 84 },

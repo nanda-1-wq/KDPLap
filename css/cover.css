@@ -12,7 +12,8 @@
   --cv-sel: #2E6AE6;            /* selection outline and handles (canvas only) */
   --cv-fold: #2E6AE6;           /* spine fold lines and the spine label (canvas only) */
   --cv-guide: #1E9E57;          /* live-area guide lines (canvas only) */
-  --cv-snap: #D6249F;           /* the front-center snap line (canvas only) */
+  --cv-snap: #D6249F;           /* the lit snap guide (canvas only; E16.1 design 77) */
+  --cv-snap-glow: rgba(214, 36, 159, 0.22);   /* its soft glow (E16.1 design 77) */
   --cv-kdp-yellow-wash: rgba(255, 243, 92, 0.45);   /* KDP template: the see-through barcode box (E16.1 design 75) */
   --cv-kdp-yellow-line: #D9C400;   /* KDP template: its outline */
   --cv-danger-line: #F5C2BC;    /* border of a danger bar, chip or button */
@@ -276,7 +277,9 @@
 .cv-gl-h { left: 0; height: 0; width: 100%; border-top: 1px dashed; }
 .cv-gl.is-live { border-color: var(--cv-guide); }
 .cv-gl.is-fold { border-color: var(--cv-fold); }
-.cv-snapline { position: absolute; top: 0; height: 100%; width: 0; border-left: 1px solid var(--cv-snap); pointer-events: none; }
+/* E16.1 (design 77): the lit guide while an item is held on it: 2 px strong magenta with a soft glow, over the guides. */
+.cv-snapline { position: absolute; top: 0; height: 100%; width: 2px; margin-left: -1px; background: var(--cv-snap); box-shadow: 0 0 0 3px var(--cv-snap-glow); pointer-events: none; z-index: 3; }
+.cv-snapline-h { top: auto; left: 0; width: 100%; height: 2px; margin: -1px 0 0; }
 .cv-snapline[hidden] { display: none; }
 .cv-pop.cv-tplpop { left: var(--space-3); top: var(--space-3); width: 320px; padding: 18px var(--space-5); gap: 14px; z-index: 4; }
 /* E16.1: the template's line notes, moved from the cover into the popover (design 75). */
