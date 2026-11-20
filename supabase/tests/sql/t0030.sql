@@ -3,8 +3,9 @@
 -- (F6, F8), what 0030 dropped and kept, the four new tables (shape, RLS,
 -- privileges), cover_designs (rev, stale autosave, checks, fixed fields),
 -- cover_design_history (20 kept), cover_assets (sources, rights clock, path,
--- Unsplash hotlink, credit), cover_my_layouts (one per book, replace on
--- export, 100 cap, set null), cover_key (what moves it and what does not),
+-- Unsplash hotlink, credit), cover_my_layouts ((0032) up to 5 per book, the
+-- old upsert fails, 100 cap, set null; the full 0032 rules are in
+-- t0032.sql), cover_key (what moves it and what does not),
 -- the export guard (every refusal; print size for 6 trims × 2 papers ×
 -- 3 page counts; image px pinned from kdpCover.geo.px300; picture rights),
 -- cover_marks, cover_json, the "covers" bucket and its new insert rule,
@@ -360,23 +361,23 @@ select pg_temp.expect('a picture to remove', $q$insert into public.cover_assets 
 select pg_temp.expect('A removes it', $q$delete from public.cover_assets where id = '1a000000-0000-4000-8000-000000000006'$q$, 'OK 1');
 select pg_temp.chk('A sees only A''s 5 pictures', (select count(*) from public.cover_assets) = 5, (select count(*) from public.cover_assets)::text);
 
--- ── 7. cover_my_layouts ──
+-- ── 7. cover_my_layouts ((0032): the last 5 per book, no upsert; trim, cap and lock rules in t0032.sql) ──
 select pg_temp.expect('a My layout from BOOK1', $q$insert into public.cover_my_layouts (id, name, from_book_id, from_title, fmt, bg, layers, thumb, exported_at)
   values ('2c000000-0000-4000-8000-000000000001', 'Chair Yoga', 'b0000000-0000-4000-8000-000000000001', 'Chair Yoga for Seniors',
           '{"trim": "6x9", "pages": 54, "paper": "white"}', '#1F3A5F', '[{"id": 1, "type": "text", "text": "Chair Yoga"}]', 'data:image/jpeg;base64,/9j/', '2001-01-01')$q$, 'OK 1');
 select pg_temp.chk('exported_at is the server clock', (select exported_at > now() - interval '1 minute' from public.cover_my_layouts where id = '2c000000-0000-4000-8000-000000000001'));
 select (select exported_at from public.cover_my_layouts where id = '2c000000-0000-4000-8000-000000000001') as t \gset my1_
 select pg_temp.expect('a layout without a book refused', $q$insert into public.cover_my_layouts (name, fmt, bg, layers) values ('X', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, 'P0001 my_layout_book%');
-select pg_temp.expect('a second layout from BOOK1 refused (one per book)', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Again', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, '23505%');
-select pg_temp.expect('the export''s upsert replaces it (Q-3b)', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Chair Yoga 2', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 60, "paper": "white"}', '#2F4A3A', '[]')
-  on conflict (user_id, from_book_id) do update set name = excluded.name, fmt = excluded.fmt, bg = excluded.bg, layers = excluded.layers$q$, 'OK 1');
-select pg_temp.chk('…the same entry, new name, layers and time', (select count(*) = 1 and min(id::text) = '2c000000-0000-4000-8000-000000000001' and min(name) = 'Chair Yoga 2'
-  and min(bg) = '#2F4A3A' and min(exported_at) > :'my1_t'::timestamptz from public.cover_my_layouts where from_book_id = :BOOK1));
+select pg_temp.expect('(0032) a second layout from BOOK1 is kept (up to 5 per book; was: refused)', $q$insert into public.cover_my_layouts (id, name, from_book_id, fmt, bg, layers) values ('2c000000-0000-4000-8000-000000000002', 'Again', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, 'OK 1');
+select pg_temp.expect('(0032) the old export upsert fails (42P10: no unique key; was: replaces it, Q-3b)', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Chair Yoga 2', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 60, "paper": "white"}', '#2F4A3A', '[]')
+  on conflict (user_id, from_book_id) do update set name = excluded.name, fmt = excluded.fmt, bg = excluded.bg, layers = excluded.layers$q$, '42P10%');
+select pg_temp.chk('(0032) …BOOK1 has 2 entries; the first is unchanged (name, colour, time)', (select count(*) = 2 from public.cover_my_layouts where from_book_id = :BOOK1)
+  and (select name = 'Chair Yoga' and bg = '#1F3A5F' and exported_at = :'my1_t'::timestamptz from public.cover_my_layouts where id = '2c000000-0000-4000-8000-000000000001'));
 select (select exported_at from public.cover_my_layouts where id = '2c000000-0000-4000-8000-000000000001') as t \gset my2_
 select pg_temp.expect('rename', $q$update public.cover_my_layouts set name = 'Yoga' where id = '2c000000-0000-4000-8000-000000000001'$q$, 'OK 1');
 select pg_temp.chk('…keeps the export time', (select exported_at from public.cover_my_layouts where id = '2c000000-0000-4000-8000-000000000001') = :'my2_t'::timestamptz);
-select pg_temp.expect('the same layout exported again (identical upsert)', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Yoga', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 60, "paper": "white"}', '#2F4A3A', '[]')
-  on conflict (user_id, from_book_id) do update set name = excluded.name, fmt = excluded.fmt, bg = excluded.bg, layers = excluded.layers, thumb = excluded.thumb, from_title = excluded.from_title$q$, 'OK 1');
+select pg_temp.expect('(0032) the same layout written again in place (the UPDATE branch; was: an identical upsert)', $q$update public.cover_my_layouts set name = 'Yoga', fmt = fmt, bg = bg, layers = layers, thumb = thumb, from_title = from_title
+  where id = '2c000000-0000-4000-8000-000000000001'$q$, 'OK 1');
 select pg_temp.chk('…is an export: the time moves', (select exported_at from public.cover_my_layouts where id = '2c000000-0000-4000-8000-000000000001') > :'my2_t'::timestamptz);
 select pg_temp.expect('an empty name refused', $q$update public.cover_my_layouts set name = '' where id = '2c000000-0000-4000-8000-000000000001'$q$, '23514%');
 select pg_temp.expect('a name of 81 characters refused', $q$update public.cover_my_layouts set name = repeat('x', 81) where id = '2c000000-0000-4000-8000-000000000001'$q$, '23514%');
@@ -388,6 +389,8 @@ select pg_temp.expect('a title of 201 characters refused', $q$update public.cove
 select pg_temp.is('201 layers refused', pg_temp.err(format($f$update public.cover_my_layouts set layers = %L where id = '2c000000-0000-4000-8000-000000000001'$f$, pg_temp.shapes(201))), '23514%');
 select pg_temp.expect('a layout cannot move to another book', $q$update public.cover_my_layouts set from_book_id = 'b0000000-0000-4000-8000-000000000002' where id = '2c000000-0000-4000-8000-000000000001'$q$, 'P0001 my_layout_fixed%');
 select pg_temp.expect('a layout from B''s book refused', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('B', 'b0000000-0000-4000-8000-00000000000b', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, '42501%');
+-- (0032) the cap below counts one entry per book: the second BOOK1 entry goes first.
+delete from public.cover_my_layouts where id = '2c000000-0000-4000-8000-000000000002';
 select pg_temp.expect('a layout from BOOK4 (for the delete test)', $q$insert into public.cover_my_layouts (id, name, from_book_id, fmt, bg, layers) values ('2c000000-0000-4000-8000-000000000004', 'Four', 'b0000000-0000-4000-8000-000000000004', '{"trim": "6x9", "pages": 24, "paper": "white"}', '#FFFFFF', '[]')$q$, 'OK 1');
 -- The 100 cap: 98 more books, so A has 100 layouts.
 :OWNER
@@ -398,8 +401,7 @@ select pg_temp.expect('98 more layouts in one statement (100 in all)', $q$insert
   select 'Cap', b.id, '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]' from public.books b where b.title like 'Cap %' and b.title <> 'Cap 99'$q$, 'OK 98');
 select pg_temp.chk('A has 100 layouts', (select count(*) from public.cover_my_layouts) = 100, (select count(*) from public.cover_my_layouts)::text);
 select pg_temp.expect('the 101st refused', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Full', 'c0000000-0000-4000-8000-000000000099', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, 'P0001 my_layouts_full%');
-select pg_temp.expect('at 100, an export of BOOK1 still replaces its entry', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Yoga again', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')
-  on conflict (user_id, from_book_id) do update set name = excluded.name$q$, 'OK 1');
+select pg_temp.expect('(0032) at 100, a 2nd export of BOOK1 is refused (1 entry there; only a book with 5 makes room, t0032)', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Yoga again', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, 'P0001 my_layouts_full%');
 select pg_temp.expect('the × removes one', $q$delete from public.cover_my_layouts where from_book_id = 'c0000000-0000-4000-8000-000000000001'$q$, 'OK 1');
 select pg_temp.expect('then the 100th fits again', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Last', 'c0000000-0000-4000-8000-000000000099', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, 'OK 1');
 :OWNER
