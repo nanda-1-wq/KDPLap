@@ -154,7 +154,7 @@ Deno.test("Pixabay search: logged first, the key in the query, 24 results, cache
   });
   assertEquals(w.reserves, [{ source: "pixabay", action: "search", provider_calls: 1 }]);
   assertEquals(w.calls.length, 1);
-  assertEquals(w.calls[0].init.headers, { "User-Agent": "NicheInk-stock/2 (+https://nicheink.com)", "Accept": "application/json" });
+  assertEquals(w.calls[0].init.headers, { "User-Agent": "NicheInk-stock/3 (+https://nicheink.com)", "Accept": "application/json" });
   const u = new URL(w.calls[0].url);
   assertEquals([u.host, u.searchParams.get("key"), u.searchParams.get("q"), u.searchParams.get("colors"), u.searchParams.get("safesearch")], ["pixabay.com", FAKE_PIXABAY, "green leaf", "transparent", "true"]);
   assertEquals(w.calls[0].init.redirect, "error");
@@ -278,8 +278,8 @@ Deno.test("Pixabay pick: looked up by id, the 1,280 file stored, the row built f
   assertEquals(w.calls[1].init.redirect, "manual");
   assert(!JSON.stringify(w.calls[1].init.headers).includes(FAKE_PIXABAY));
   assertEquals(w.calls.map((c) => c.init.headers), [
-    { "User-Agent": "NicheInk-stock/2 (+https://nicheink.com)", "Accept": "application/json" },
-    { "User-Agent": "NicheInk-stock/2 (+https://nicheink.com)", "Accept": "image/jpeg, image/png" },
+    { "User-Agent": "NicheInk-stock/3 (+https://nicheink.com)", "Accept": "application/json" },
+    { "User-Agent": "NicheInk-stock/3 (+https://nicheink.com)", "Accept": "image/jpeg, image/png" },
   ]);
   assertEquals(w.uploads.map((u) => [u.path, u.mime, u.bytes.length]), [[`${USER}/assets/${NEW_ID}.jpg`, "image/jpeg", bytes.length]]);
   assertEquals(w.inserted, [{
@@ -471,7 +471,7 @@ Deno.test("the search answer for the browser has no provider-only fields", async
 });
 
 /* ── E16.2: the Pixabay pick retry (STOP 1 inputs: 2 retries for the pick, 20 s of waiting, 45 s in all) ── */
-const UA = "NicheInk-stock/2 (+https://nicheink.com)";
+const UA = "NicheInk-stock/3 (+https://nicheink.com)";
 /** A route that answers each call with the next response (the last one repeats). */
 const seq = (...rs: Route[]): Route => { let n = 0; return (u, i) => rs[Math.min(n++, rs.length - 1)](u, i); };
 const okFile: Route = () => file(jpeg(1280, 853));
@@ -574,9 +574,10 @@ Deno.test("(E16.2) the 20 s wait budget: a second Retry-After of 12 s is not wai
 Deno.test("(E16.2) the 45 s deadline cuts a slow try: each try's timeout is the time left", async () => {
   const clock: Clock = { t: 0 };
   const slowLookup: Route = () => { clock.t += 30_000; return reply(lookupOk); };
-  const w = setup({ clock, routes: { "https://pixabay.com/api/?": slowLookup, "https://pixabay.com/get/": seq(r429({ "retry-after": "1" }), okFile) } });
+  const w = setup({ clock, routes: { "https://pixabay.com/api/?": slowLookup, "https://pixabay.com/get/": seq(r429({ "retry-after": "3" }), okFile) } });
   assertEquals((await w.handle(post(pxPick()))).status, 200);
-  assertEquals([w.timeouts, w.slept], [[10_000, 15_000, 14_000], [1000]]);
+  // (E16.3) Retry-After 3 (was 1: under 2 s it is now no header, see the E16.3 tests below)
+  assertEquals([w.timeouts, w.slept], [[10_000, 15_000, 12_000], [3000]]);
 });
 Deno.test("(E16.2) no wait is taken when it leaves no time for a try before the deadline", async () => {
   const clock: Clock = { t: 0 };
@@ -688,4 +689,53 @@ Deno.test("(E16.2) a release that fails or is refused does not change the reply,
   const n = setup({ releaseAnswer: false, routes: pixabayRoutes({ fileRoute: () => reply("x", 403) }) });
   assertEquals((await json(await n.handle(post(pxPick())))).error, "stock_unavailable");
   assertEquals(n.logged.at(-1), "stock: release refused");
+});
+
+/* ── E16.3: a provider wait under 2 s counts as no header (live, Nov 20: Cloudflare's 429 with "Retry-After: 0", 3 times) ── */
+const LIVE_429 = (h: Record<string, string>): Route => () =>
+  new Response("Too Many Requests", { status: 429, headers: { server: "cloudflare", "content-type": "text/plain; charset=UTF-8", ...h } });
+Deno.test("(E16.3) Retry-After \"0\" on every try: the quick backoff (1.5 to 2.5 s, then 4 to 6 s), then stock_busy with retry_after_s 20; the log keeps retry-after 0", async () => {
+  for (const [rand, waits] of [[0, [1500, 4000]], [0.5, [2000, 5000]], [0.9999999, [2499, 5999]]] as const) {
+    const w = setup({ rand, routes: pixabayRoutes({ fileRoute: LIVE_429({ "retry-after": "0" }) }) });
+    const r = await w.handle(post(pxPick()));
+    assertEquals([r.status, await json(r)], [503, { error: "stock_busy", retry_after_s: 20 }]);
+    assertEquals([lookups(w), downloads(w).length, w.slept, w.releases], [1, 3, waits, [1]]);
+    assertEquals(w.logged.length, 3);
+    for (const l of w.logged) assert(l.includes("server cloudflare, cf-mitigated -, type text, bytes 17,") && l.includes("retry-after 0, reset -"), l);
+    clean(w.logged);
+  }
+});
+Deno.test("(E16.3) X-RateLimit-Reset \"0\" (no Retry-After): the same as no header", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: r429({ "x-ratelimit-reset": "0" }) }) });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([await json(r), downloads(w).length, w.slept], [{ error: "stock_busy", retry_after_s: 20 }, 3, [2000, 5000]]);
+  assert(w.logged[0].includes("retry-after 0, reset 0,"), w.logged[0]);
+});
+Deno.test("(E16.3) Retry-After \"1\" and \"1.5\": under 2 s, the same as no header", async () => {
+  for (const ra of ["1", "1.5", " 0 "]) {
+    const w = setup({ routes: pixabayRoutes({ fileRoute: r429({ "retry-after": ra }) }) });
+    const r = await w.handle(post(pxPick()));
+    assertEquals([await json(r), w.slept], [{ error: "stock_busy", retry_after_s: 20 }, [2000, 5000]], ra);
+  }
+});
+Deno.test("(E16.3) a Retry-After HTTP-date 1 s ahead (under 2 s): the same as no header", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: r429({ "retry-after": "Mon, 16 Nov 2026 12:00:01 GMT" }) }) });
+  assertEquals([await json(await w.handle(post(pxPick()))), w.slept], [{ error: "stock_busy", retry_after_s: 20 }, [2000, 5000]]);
+});
+Deno.test("(E16.3) Retry-After \"2\" is a header: waits 2 s and 2 s, then stock_busy with retry_after_s 2", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: r429({ "retry-after": "2" }) }) });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([await json(r), downloads(w).length, w.slept], [{ error: "stock_busy", retry_after_s: 2 }, 3, [2000, 2000]]);
+  assert(w.logged[0].includes("wait 2 s, retry-after 2,"), w.logged[0]);
+});
+Deno.test("(E16.3) Retry-After \"0\" once, then the file: one backoff of 1.5 s or more, the picture stored, not released", async () => {
+  const w = setup({ rand: 0, routes: pixabayRoutes({ fileRoute: seq(LIVE_429({ "retry-after": "0" }), okFile) }) });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([r.status, downloads(w).length, w.slept, w.releases, w.inserted.length], [200, 2, [1500], [], 1]);
+  assertEquals(w.logged, ["stock: pixabay download HTTP 429 (try 1 of 3, hop 0 pixabay.com, server cloudflare, cf-mitigated -, type text, bytes 17, wait 1.5 s, retry-after 0, reset -, remaining -)"]);
+});
+Deno.test("(E16.3) a lookup 429 with Retry-After 0: retried after the backoff, then the download runs once", async () => {
+  const w = setup({ routes: { "https://pixabay.com/api/?": seq(r429({ "retry-after": "0" }), () => reply(lookupOk)), "https://pixabay.com/get/": okFile } });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  assertEquals([lookups(w), downloads(w).length, w.slept], [2, 1, [2000]]);
 });

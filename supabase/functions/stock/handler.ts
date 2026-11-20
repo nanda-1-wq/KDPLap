@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   NicheInk — Edge Function "stock": request flow (E16 Part 7, plan §7; stock v2, E16.2)
+   NicheInk — Edge Function "stock": request flow (E16 Part 7, plan §7; stock v2, E16.2; stock v3, E16.3)
    supabase/functions/stock/handler.ts
 
    POST { action: "search", source, q, page, filters } → { source, q, page, perPage, total, results, cached }
@@ -23,6 +23,11 @@
      A timeout and any other 4xx are not retried. Searches and Unsplash are
      never retried (Q-8).
    - Every Pixabay request sends the NicheInk User-Agent and an Accept header (D1).
+
+   stock v3 (E16.3, plan Item 1): a Retry-After or X-RateLimit-Reset under 2 s
+   (lib.ts HEADER_MIN_S; live: Cloudflare's "Retry-After: 0") counts as no
+   header: the quick backoff (1.5 to 2.5 s, then 4 to 6 s) runs, and a pick
+   that stays busy sends retry_after_s 20. The log line keeps the raw value.
 
    Never logged: a URL (the Pixabay key is in its query), a provider body, an
    error message. Only the source, the step, an HTTP status, an error name, a
@@ -175,10 +180,11 @@ export function makeHandler(deps: Deps) {
         return await run(Math.min(stepMs, left));
       } catch (err) {
         if (!(err instanceof Retryable)) throw err;
-        const headerS = err.info.headers ? L.retryAfterSeconds(err.info.headers, deps.now().getTime()) : null;
-        const wait = headerS !== null ? Math.max(headerS * 1000, L.MIN_WAIT_MS) : L.backoffMs(L.PICK_RETRIES - budget.retriesLeft + 1, rand());
+        const raw = err.info.headers ? L.retryAfterSeconds(err.info.headers, deps.now().getTime()) : null;
+        const headerS = L.usableWait(raw);   // E16.3: under 2 s = no header
+        const wait = headerS !== null ? headerS * 1000 : L.backoffMs(L.PICK_RETRIES - budget.retriesLeft + 1, rand());
         const again = budget.retriesLeft > 0 && budget.waitedMs + wait <= L.PICK_WAIT_MS && clock() + wait + L.MIN_TRY_MS <= budget.deadline;
-        log(L.failLine(step, err.info, tryNo, tryNo + budget.retriesLeft, again ? wait : 0, headerS));
+        log(L.failLine(step, err.info, tryNo, tryNo + budget.retriesLeft, again ? wait : 0, raw));   // the raw value, as Pixabay sent it
         if (!again) throw new Stop(err.code, err.code === "stock_busy" ? L.busyRetryAfter(headerS) : null);
         budget.retriesLeft--;
         budget.waitedMs += wait;

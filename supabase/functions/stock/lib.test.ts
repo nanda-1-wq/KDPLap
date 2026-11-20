@@ -319,7 +319,7 @@ Deno.test("the caps match 0030 and 0031", () => {
 
 /* ── E16.2: Pixabay headers (D1) ── */
 Deno.test("pixabayHeaders: the NicheInk User-Agent (no personal data) and an Accept per kind", () => {
-  assertEquals(L.PIXABAY_UA, "NicheInk-stock/2 (+https://nicheink.com)");
+  assertEquals(L.PIXABAY_UA, "NicheInk-stock/3 (+https://nicheink.com)");   // (E16.3) /3
   assertEquals(L.pixabayHeaders("json"), { "User-Agent": L.PIXABAY_UA, "Accept": "application/json" });
   assertEquals(L.pixabayHeaders("image"), { "User-Agent": L.PIXABAY_UA, "Accept": "image/jpeg, image/png" });
 });
@@ -392,4 +392,18 @@ Deno.test("parseReserve: a slot, a refusal, or null", () => {
 });
 Deno.test("RELEASE_ON: busy, unavailable and server_error only", () => {
   assertEquals(L.RELEASE_ON, ["stock_busy", "stock_unavailable", "server_error"]);
+});
+
+Deno.test("(E16.3) usableWait: under HEADER_MIN_S (2 s) is no header", () => {
+  assertEquals(L.HEADER_MIN_S, 2);
+  assertEquals([null, 0, 0.5, 1, 1.5, 1.99, 2, 2.5, 41, 120].map((s) => L.usableWait(s)), [null, null, null, null, null, null, 2, 2.5, 41, 120]);
+  assert(!("MIN_WAIT_MS" in L), "MIN_WAIT_MS is gone");
+});
+Deno.test("(E16.3) the live answer: Retry-After \"0\" and X-RateLimit-Reset \"0\" read as 0, then usableWait gives null and busyRetryAfter 20", () => {
+  for (const h of [{ "retry-after": "0" }, { "x-ratelimit-reset": "0" }, { "retry-after": "1" }] as Record<string, string>[]) {
+    const raw = L.retryAfterSeconds(H(h), NOW);
+    assertEquals([L.usableWait(raw), L.busyRetryAfter(L.usableWait(raw))], [null, 20], JSON.stringify(h));
+  }
+  const two = L.retryAfterSeconds(H({ "retry-after": "2" }), NOW);
+  assertEquals([L.usableWait(two), L.busyRetryAfter(L.usableWait(two))], [2, 2]);
 });

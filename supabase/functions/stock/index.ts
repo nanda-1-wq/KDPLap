@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   NicheInk — Edge Function "stock" (E16 Part 7, plan §7; stock v2, E16.2)
+   NicheInk — Edge Function "stock" (E16 Part 7, plan §7; stock v2, E16.2; stock v3, E16.3)
    supabase/functions/stock/index.ts
 
    POST { action: "search", source: "pixabay" | "unsplash", q, page, filters }
@@ -9,6 +9,10 @@
    too_large, bad_image, rate_limited, server_error, stock_unavailable,
    not_configured, stock_busy). A Pixabay pick that stays busy after its
    retries also sends retry_after_s (1 to 120).
+   stock v3 (E16.3): a provider wait under 2 s counts as no header, so the
+   quick backoff runs and a busy pick sends retry_after_s 20. Works on 0032
+   and on 0033 (it only uses stock_reserve and stock_release). Rollback: stock v2
+   (c0a0ce0).
 
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secrets (Supabase dashboard, Edge Functions, Secrets; never in code, git or chat):

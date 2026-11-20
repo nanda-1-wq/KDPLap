@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   NicheInk — Edge Function "stock": pure rules (E16 Part 7, plan §7; stock v2, E16.2)
+   NicheInk — Edge Function "stock": pure rules (E16 Part 7, plan §7; stock v2, E16.2; stock v3, E16.3)
    supabase/functions/stock/lib.ts
 
    No network, no database, no env: input checks, provider URLs, the
@@ -443,7 +443,7 @@ export function providerError(status: number, remaining: string | null): ErrorCo
 
 /* ── Pixabay requests: who we are (E16.2, STOP 0 D1) ── */
 /** Sent on every Pixabay request (search, lookup, each download hop). No personal data. */
-export const PIXABAY_UA = "NicheInk-stock/2 (+https://nicheink.com)";
+export const PIXABAY_UA = "NicheInk-stock/3 (+https://nicheink.com)";   // /3: stock v3 (E16.3 Q1)
 export function pixabayHeaders(kind: "json" | "image"): Record<string, string> {
   return { "User-Agent": PIXABAY_UA, "Accept": kind === "json" ? "application/json" : "image/jpeg, image/png" };
 }
@@ -457,8 +457,12 @@ export const PICK_WAIT_MS = 20_000;
 export const PICK_DEADLINE_MS = 45_000;
 /** A try is not started (and no wait is taken for one) with less time than this left. */
 export const MIN_TRY_MS = 2_000;
-/** A Retry-After of 0 still waits this long. */
-export const MIN_WAIT_MS = 1_000;
+/**
+ * E16.3: a provider wait under this many seconds counts as no header (the quick backoff runs, and retry_after_s is
+ * the 20 s default). Live, Nov 20: Cloudflare in front of pixabay.com answered 429 with "Retry-After: 0" three times
+ * in a row; v2 read that as "wait 0 s" and retried after 1 s (MIN_WAIT_MS, now gone).
+ */
+export const HEADER_MIN_S = 2;
 /** retry_after_s when retries run out with no header (STOP 0 D5: the panel counts down 20 s). */
 export const BUSY_RETRY_DEFAULT_S = 20;
 export const RETRY_AFTER_MAX_S = 120;
@@ -485,6 +489,10 @@ export function retryAfterSeconds(h: Headers, nowMs: number): number | null {
   const reset = h.get("x-ratelimit-reset");
   if (reset !== null && NUM_RE.test(reset) && Number(reset) <= 86_400) return Number(reset);
   return null;
+}
+/** E16.3: the provider wait the retry acts on: retryAfterSeconds' answer when it is HEADER_MIN_S or more, else null (no header). */
+export function usableWait(s: number | null): number | null {
+  return s !== null && s >= HEADER_MIN_S ? s : null;
 }
 /** The wait before retry n (1 or 2) when no header came: base plus full jitter. */
 export function backoffMs(n: number, rand: number): number {
