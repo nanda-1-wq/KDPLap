@@ -278,7 +278,7 @@ supabase/tests/sql/run.sh t0031.sql t0031_f8_nofn.sql   # E16 Part 7: stock
 `cover-data.test.js` drives the 09 calls in `js/supabase.js` against a recording stand-in for
 supabase-js: every table, column and function they name exists in 0030 (or 0029 for
 cover_exports, 0031 for cover_assets.name); the stock calls go to the function "stock" with ids and words only; the rev autosave and its `conflict` marker, the first-open insert, the
-row-then-file delete, the per-kind export fields and the My layout upsert. The 09 checks in
+row-then-file delete, the per-kind export fields and the My layout insert (0032: no upsert), and E16.2's retry_after_s (1 to 120 only). The 09 checks in
 `limits-parity.test.js` read 0030 and t0030: the caps, trims, papers, pages, layout keys,
 spine per page, hex rule, the image px (14 sizes pinned in t0030) and the byte measure
 (`kdpCover.model.pgBytes` equals Postgres's `octet_length(layers::text)` for the t0030 fixture).
@@ -368,6 +368,10 @@ tests/browser/run.sh cover t-replace-name.js  # Replace takes the new picture's 
 tests/browser/run.sh cover t-stock-browse.js  # designs 76, 76b: Pixabay searches the topic (else title) on open, once a visit; the end loads more, 3 s apart; errors stop it; Unsplash unchanged
 tests/browser/run.sh cover t-shots11.js  # E16.1 after shots → docs/reviews/e16-1/, design/screens/75 and 75b (never in a sweep)
 tests/browser/run.sh write t-complete.js # (also) no strip on 01 to 09; Reopen from the 06 foot
+# E16.2 Part 3 (plan docs/reviews/2026-11-20-e16-2-plan.md; mock modes pickBusy + pickAfter, the My layouts insert keeps 5 per book)
+tests/browser/run.sh cover t-stock-retry.js  # Q-1: "Pixabay is busy. Trying again in N s." in design 63's error slot (grid, preview, panel), said once, one automatic retry; cancel on pick, close, leaving 09; stock v1 and bad values; Unsplash no wait
+tests/browser/run.sh cover t-my.js       # (also) Q-2: date and local time, the × label with the time, 5 per book, the 6th drops the oldest of that book only, no Storage call
+tests/browser/run.sh cover t-shots-e162.js  # STOP 3 compare shots (63 busy line, 67 with 5 entries, the export line) → docs/reviews/e16-2/ (never in a sweep)
 COVER_OUT=<scratch> node tests/browser/cover/safari-p10.mjs   # real Safari, the export: real clicks, the real engine (real CDNs), KDP checks, zip read back, Stop
 COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, the editor (text, effects, shapes, images, PDF, crop, undo, save); every Supabase call answered in the page (safari-stub.js), none reaches the host
 ```
@@ -380,9 +384,9 @@ COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, 
   pictures and PDFs in the page and hands them to the real file field or a paste event.
   Part 7: the function "stock" (search and pick, as the server answers), the providers' picture links and
   cover_assets.name; modes stockFail/stockCode, pickFail/pickCode, stockNet, stockSlow, pickSlow, stockMany
-  (1: 30 results; a number: that many), picDown. E16.1: the book's Brief topic and Topic Lab topic come from
+  (1: 30 results; a number: that many), picDown, E16.2 pickBusy/pickAfter (stock_busy with retry_after_s sent as it is; no pickAfter = stock v1). E16.1: the book's Brief topic and Topic Lab topic come from
   `store.book.topicText` and `store.book.topicName`. `fixture-stock.js` (STK) holds the design's sample results and draws their pictures in the page.
-  Part 10: cover_key, cover_exports (one insert, 0030's guard codes), cover_marks, the My layouts upsert,
+  Part 10: cover_key, cover_exports (one insert, 0030's guard codes), cover_marks, the My layouts insert (E16.2, 0032: keeps the book's newest 4 + the new one, store.myTrimmed; an on_conflict upsert gets 42P10),
   cover_assets delete, the "used on" reads (layers cs), the bucket's folder list; modes keyFail, recFail, recCode,
   myUpFail, useFail, delFail, listFilesFail, recSlow, engineDown, keyHook(n). The Typst files come from
   `tests/browser/.cache/format`.

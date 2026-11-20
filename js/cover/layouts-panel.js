@@ -3,10 +3,13 @@
    /js/cover/layouts-panel.js   (browser; needs layouts, palettes, geo, render,
                                  images and fonts; driven by js/cover/editor.js)
 
-   MY LAYOUTS: one entry per book, saved on export (Q-3, Q-3b; the save itself
-   comes with the export in Part 10). Each row shows the entry's thumbnail
-   (cover_my_layouts.thumb), its name, the book it came from and the export
-   date; a click applies it (this book's words, plan D2), the × removes it.
+   MY LAYOUTS: every export adds an entry; the last 5 of each book are kept
+   (E16.2, 0032, owner choice B; was one per book, Q-3b). Each row shows the
+   entry's thumbnail (cover_my_layouts.thumb), its name, the book it came from
+   and the export date and time in local time ("Exported Nov 18, 10:09", owner
+   Q-2, so 5 entries of one book can be told apart); a click applies it (this
+   book's words, plan D2), the × removes it (its label names the time too).
+   No Storage call: an entry owns no file (plan F5).
    SERIES COLORS: the 6 palettes; a click maps the cover's colors onto one
    (kdpCover.palettes.swap).
    READY LAYOUTS: 12 + Blank, authored at 6 × 9 and remapped to the book's
@@ -29,7 +32,15 @@
   const FONTS = [['Source Serif 4', 700], ['IBM Plex Sans', 400], ['IBM Plex Sans', 600], ['Bebas Neue', 400], ['Anton', 400]];
   const X = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
-  const dateText = (iso) => { try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch (e) { return ''; } };
+  /** { day: "Nov 18", time: "10:09" } in local time (24 hours), or null for a bad date. */
+  function when(iso) {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return null;
+    const p2 = (n) => String(n).padStart(2, '0');
+    return { day: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time: `${p2(d.getHours())}:${p2(d.getMinutes())}` };
+  }
+  const dateText = (iso) => { const w = when(iso); return w ? `${w.day}, ${w.time}` : ''; };
+  const xLabel = (m) => { const w = when(m.exported_at); return `Remove ${m.name}${w ? `, exported ${w.day} ${w.time},` : ''} from My layouts`; };
 
   /** The book's own words for a layout (layouts.js book = { title, subtitle, pen }). */
   const bookOf = (E) => ({ title: E.bookWords('title'), subtitle: E.bookWords('subtitle'), pen: E.bookWords('pen') });
@@ -48,7 +59,7 @@
             <span class="cv-my-from">From ${esc(m.from_title || 'another book')}</span>
             <span class="cv-my-date cv-mono">Exported ${esc(dateText(m.exported_at))}</span></span>
         </button>
-        <button type="button" class="cv-my-x" data-k="my-x-${esc(m.id)}" data-my-x="${esc(m.id)}" aria-label="Remove ${esc(m.name)} from My layouts" title="Remove from My layouts">${X}</button>
+        <button type="button" class="cv-my-x" data-k="my-x-${esc(m.id)}" data-my-x="${esc(m.id)}" aria-label="${esc(xLabel(m))}" title="Remove from My layouts">${X}</button>
       </div>`;
     }).join('');
     return `<div class="cv-mys">${rows}</div>
@@ -113,5 +124,5 @@
     }
   }
 
-  C.layoutsPanel = { FONTS, MINI_H, html, bind, paint, bookOf };
+  C.layoutsPanel = { FONTS, MINI_H, html, bind, paint, bookOf, dateText, xLabel };
 })(globalThis);

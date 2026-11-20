@@ -48,7 +48,7 @@ const test = async page => {
   ok(opts[0] === 'Print cover PDF (always included) For KDP Paperback. Full wrap 12.372 × 9.25 in with bleed. Fonts embedded, see-through parts flattened, one sRGB color space. No template lines.', `Print PDF words (${opts[0]})`);
   ok(opts[1] === 'Full cover image The same wrap as a picture, 300 DPI (3712 × 2775 px). For your records, ads or a print shop. PNG, best quality JPG, smaller file', `full image words (${opts[1]})`);
   ok(opts[2] === 'Kindle front cover For KDP eBook. JPG, 1600 × 2560 px, made from your print front. Turn it off if this book has no eBook.', 'Kindle words');
-  ok((await CV.txt(page, `${dlg} .cv-ex-my`)) === 'This design is also saved to Layouts, My layouts, so you can reuse it for your next book or a series.', 'the My layouts line');
+  ok((await CV.txt(page, `${dlg} .cv-ex-my`)) === 'This design is also saved to Layouts, My layouts (the last 5 of each book), so you can reuse it for your next book or a series.', 'the My layouts line (0032, Q-10: the last 5 of each book)');
   ok(await page.$eval(`${dlg} .is-fixed input`, (i) => i.checked && i.disabled), 'Print PDF: ticked and fixed');
   ok(await page.$eval('[data-ex-img]', (i) => i.checked) && await page.$eval('[data-ex-kindle]', (i) => i.checked), 'full image and Kindle: on by default');
   ok(await page.$eval('[data-ex-fmt="png"]', (b) => b.getAttribute('aria-pressed') === 'true') && await page.$eval('[data-ex-fmt="jpg"]', (b) => b.getAttribute('aria-pressed') === 'false'), 'PNG pressed by default');
@@ -146,8 +146,8 @@ const test = async page => {
   ok(ir && ir.width_px === 3712 && ir.height_px === 2775 && ir.thumb === undefined && kr && kr.width_px === 1600 && kr.height_px === 2560, 'image row 3712 × 2775, kindle row 1600 × 2560');
   ok(st.exports.length === 3, 'the mock kept 3 rows (the guard passed)');
   ok(st.my.length === 1 && st.my[0].name === 'Band' && st.my[0].from_book_id === FIX.BOOK && st.my[0].from_title === FIX.title && st.my[0].thumb === pr.thumb, `My layouts: one entry "Band" from this book (${st.my.map((m) => m.name)})`);
-  const up = st.writes.find((w) => w.table === 'cover_my_layouts' && w.upsert);
-  ok(up && up.onConflict === 'user_id,from_book_id' && /merge-duplicates/.test(up.prefer), 'saved as an upsert on (user_id, from_book_id)');
+  const up = st.writes.find((w) => w.table === 'cover_my_layouts' && w.insert);
+  ok(up && !up.onConflict && !/merge-duplicates/.test(up.prefer), `(0032) saved as a plain insert, no on_conflict (${up && up.onConflict}, ${up && up.prefer})`);
   ok(JSON.stringify(st.my[0].layers) === await page.evaluate(() => JSON.stringify(window.kdpBookSteps[9]._debug().cover.layers)), 'the entry holds the design as exported');
   ok(st.history.some((h) => h.reason === 'export'), 'a history snapshot, reason export');
   ok((await note()) === 'Done: cover files exported.' && await nextOn(), 'header: "Done: cover files exported.", Next on');
@@ -171,9 +171,11 @@ const test = async page => {
   // The Layouts panel lists the new entry.
   await page.click('[data-tool="layouts"]');
   ok((await CV.all(page, '[data-panel] .cv-my-name')).some((t) => /Band/.test(t)) || (await CV.txt(page, '[data-panel]')).includes('Band'), 'Layouts, My layouts: the new entry is listed');
-  // A second export replaces this book's entry (one per book).
+  // (0032) A second export adds a second entry for this book (up to 5 per book), listed first.
+  const first = st.my[0].id;
   await openEx(); await run(); await waitPhase('done');
-  ok(st.my.length === 1 && recs().length === 2, 'export again: still one My layout for this book (replaced), a second insert');
+  ok(st.my.length === 2 && st.my.some((m) => m.id === first) && recs().length === 2, '(0032) export again: a second My layout for this book (the first kept), a second insert');
+  ok((await page.evaluate(() => window.kdpBookSteps[9]._debug().my.map((m) => m.id))).join() === [st.my[1].id, first].join(), '(0032) the panel list: the new entry first, the first one kept');
   await page.keyboard.press('Escape'); await gone();
 
   /* ── E. Done from the data; any change turns it off; Undo back on ── */
@@ -319,7 +321,7 @@ const test = async page => {
   ok((await CV.txt(page, '[data-ex-done]')) === 'Your cover files are ready.' && (await CV.txt(page, '[data-ex-myerr]')) === 'Your files are ready, but this design was not saved to My layouts. Check your connection, then export again to save it.', 'My layouts down: files ready, the note');
   ok(st.exports.length === 3 && st.my.length === 0 && (await note()) === 'Done: cover files exported.', 'My layouts down: the rows are in, Done');
   await page.keyboard.press('Escape'); await gone();
-  // My layouts full (100): its own words.
+  // My layouts full (100, this book has fewer than 5): its own words.
   await fresh();
   for (let i = 0; i < 100; i++) st.my.push({ id: `m${i}`, name: 'Old', from_book_id: `b${i}`, from_title: 'Old', fmt: { ...FIX.fmt }, bg: '#FFFFFF', layers: [], thumb: null, exported_at: '2026-10-01T00:00:00.000Z' });
   await openEx(); await run(); await waitPhase('done');

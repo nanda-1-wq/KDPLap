@@ -2,6 +2,8 @@
 // first, without layers), each row's thumbnail, name, "From …" and export date; a click reads the layers and applies
 // them with this book's title, subtitle and pen name, this book's blurb and spine words, remapped to this book's size;
 // the note; the × removes the row (and a failure says so); a read failure says so and changes nothing; an empty list.
+// E16.2 (0032, owner Q-2): up to 5 entries per book, the date line with the local time ("Exported Nov 18, 10:09"), the
+// × label with the time, the 6th export drops the book's oldest only (other books and null books stay), no Storage call.
 const test = async page => {
   const { log, ok } = CV.log();
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -9,6 +11,9 @@ const test = async page => {
   const E = (f) => page.evaluate(f);
   const toast = () => page.$eval('[data-toast-host]', (h) => h.innerText.replace(/\s+/g, ' ').trim());
   const my = await FIX.my(page);
+  // The expected date line, from the page's own clock (local time, 24 hours).
+  const when = (iso) => page.evaluate((iso) => { const d = new Date(iso), p = (n) => String(n).padStart(2, '0'); return { day: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time: `${p(d.getHours())}:${p(d.getMinutes())}` }; }, iso);
+  const w1 = await when(my.exported_at), w2 = await when('2026-09-02T10:00:00.000Z');
   const older = Object.assign(JSON.parse(JSON.stringify(my)), { id: 'c6c6c6c6-0000-4000-8000-00000000006c', name: 'Corner, my series', from_title: 'Night Notes', exported_at: '2026-09-02T10:00:00.000Z', thumb: null, from_book_id: 'e5e5e5e5-0000-4000-8000-0000000000e5' });
   older.layers = older.layers.map((l) => (l.src === 'title' ? Object.assign({}, l, { text: 'NIGHT\nNOTES' }) : l));
   await FIX.band(page);
@@ -18,12 +23,13 @@ const test = async page => {
   await CV.open(page, { design: 'band' });
   await page.click('[data-tool="layouts"]');
   const rows = await page.$$eval('[data-my]', (a) => a.map((b) => b.innerText.replace(/\s+/g, ' ').trim()));
-  ok(rows.length === 2 && rows[0] === 'Band, navy From Deep Focus for Night Students (example) Exported Oct 30' && rows[1] === 'No picture Corner, my series From Night Notes Exported Sep 2', `rows: ${rows.join(' | ')}`);
+  ok(rows.length === 2 && rows[0] === `Band, navy From Deep Focus for Night Students (example) Exported ${w1.day}, ${w1.time}` && rows[1] === `No picture Corner, my series From Night Notes Exported ${w2.day}, ${w2.time}`, `rows (E16.2: date and local time): ${rows.join(' | ')}`);
   const img = await page.$eval(`[data-my="${my.id}"] img`, (i) => ({ w: i.getBoundingClientRect().width, h: i.getBoundingClientRect().height, ok: i.complete && i.naturalWidth > 0, src: i.src.slice(0, 22) }));
   ok(img.ok && Math.round(img.h) === 90 && Math.round(img.w) === 60 && img.src === 'data:image/jpeg;base64', `the thumbnail: ${Math.round(img.w)} × ${Math.round(img.h)}, ${img.src}`);
   ok((await CV.txt(page, `[data-my="${older.id}"] .cv-my-none`)) === 'No picture', 'a row with no thumbnail says so');
   ok((await CV.txt(page, '.cv-mys + .cv-help')) === 'Your title, subtitle and pen name replace the old book\'s words. Your own photos come along.', 'the line under the list');
-  ok(await page.$eval(`[data-my-x="${my.id}"]`, (b) => b.getAttribute('aria-label') === 'Remove Band, navy from My layouts' && b.title === 'Remove from My layouts'), 'the × is labelled');
+  const xl = await page.$eval(`[data-my-x="${my.id}"]`, (b) => [b.getAttribute('aria-label'), b.title]);
+  ok(xl[0] === `Remove Band, navy, exported ${w1.day} ${w1.time}, from My layouts` && xl[1] === 'Remove from My layouts', `the × is labelled with the time (E16.2): ${xl[0]}`);
   // cover_json lists them without layers.
   ok((await E(() => window.kdpBookSteps[9]._debug().my.every((m) => !('layers' in m)))), 'the list holds no layers');
 
@@ -137,6 +143,49 @@ const test = async page => {
   const tb = await E(() => { const R = document.querySelector('.cv-root').getBoundingClientRect(); const t = document.querySelector('.cv-toast').getBoundingClientRect(); const u = document.querySelector('[data-toast-undo]').getBoundingClientRect(), x = document.querySelector('[data-toast-x]').getBoundingClientRect(); return t.left >= R.left && t.right <= R.right && u.right <= R.right && x.right <= R.right && x.right <= innerWidth; });
   ok(tb && await CV.noScroll(page), 'a 64-character name at 1024: the note, Undo and × stay inside the editor');
   await page.setViewportSize({ width: 1440, height: 900 });
+
+  /* E16.2 (0032): 5 entries of one book, told apart by time; the 6th export drops that book's oldest only. */
+  const at = (h, m) => page.evaluate(([h, m]) => new Date(2026, 10, 18, h, m).toISOString(), [h, m]);   // Nov 18, local time
+  const five = [];
+  for (const [i, [h, m]] of [[9, 5], [9, 41], [10, 9], [11, 30], [14, 2]].entries()) {
+    five.push(Object.assign(JSON.parse(JSON.stringify(my)), { id: `e${i}e${i}e${i}e${i}-0000-4000-8000-00000000000${i}`, name: 'Picture band', from_book_id: FIX.BOOK, from_title: FIX.title, exported_at: await at(h, m) }));
+  }
+  const other = Object.assign(JSON.parse(JSON.stringify(older)), { exported_at: await at(8, 0) });                          // another book
+  const orphan = Object.assign(JSON.parse(JSON.stringify(my)), { id: 'f9f9f9f9-0000-4000-8000-0000000000f9', name: 'From a deleted book', from_book_id: null, from_title: null, exported_at: await at(7, 0) });
+  st.my = five.concat([other, orphan]); st.myTrimmed = [];
+  await CV.open(page, { design: 'band' });
+  await page.click('[data-tool="layouts"]');
+  const dates = await CV.all(page, '[data-panel] .cv-my-date');
+  ok(dates.slice(0, 5).join(' | ') === 'Exported Nov 18, 14:02 | Exported Nov 18, 11:30 | Exported Nov 18, 10:09 | Exported Nov 18, 09:41 | Exported Nov 18, 09:05', `5 of one book, newest first, each with its time: ${dates.slice(0, 5).join(' | ')}`);
+  const x10 = await page.$eval(`[data-my-x="${five[2].id}"]`, (b) => b.getAttribute('aria-label'));
+  ok(x10 === 'Remove Picture band, exported Nov 18 10:09, from My layouts', `the × names the time: ${x10}`);
+  ok((await page.$$('[data-panel] [data-my]')).length === 7, 'all 7 entries listed (5 + another book + a deleted book)');
+  // The 6th export of this book: the save (a plain insert) and the list update, as the export dialog does them.
+  const c0 = st.calls.length, w0 = st.writes.length;
+  const sixth = await E(async () => {
+    const E = window.kdpBookSteps[9]._debug(), c = E.cover;
+    const res = await kdp.saveMyLayout({ bookId: E.bookId, name: 'Picture band', fromTitle: 'six', fmt: c.fmt, bg: c.bg, layers: c.layers, thumb: null });
+    E.myChanged({ id: res.data.id, name: 'Picture band', from_book_id: E.bookId, from_title: 'six', fmt: c.fmt, bg: c.bg, thumb: null, exported_at: res.data.exported_at });
+    return { id: res.data.id, err: res.error && res.error.message };
+  });
+  ok(!sixth.err && !!sixth.id, `the 6th entry is saved (${sixth.err || sixth.id})`);
+  const mine = st.my.filter((m) => m.from_book_id === FIX.BOOK);
+  ok(mine.length === 5 && !mine.some((m) => m.id === five[0].id) && st.myTrimmed.join() === five[0].id, `the database keeps 5 of this book; the oldest (09:05) went (${st.myTrimmed})`);
+  ok(st.my.some((m) => m.id === other.id) && st.my.some((m) => m.id === orphan.id) && st.my.length === 7, 'another book\'s entry and a deleted book\'s entry stay');
+  const list = await E(() => window.kdpBookSteps[9]._debug().my.map((m) => m.id));
+  ok(list.join() === [sixth.id, five[4].id, five[3].id, five[2].id, five[1].id, other.id, orphan.id].join(), `the panel list in the database's order: the new one first, 09:05 gone, the others kept (${list.length})`);
+  ok((await page.$$('[data-panel] [data-my]')).length === 7 && !(await CV.has(page, `[data-my="${five[0].id}"]`)), 'the panel shows 7 rows, without the oldest');
+  ok(!st.calls.slice(c0).some((c) => /\/storage\/v1\//.test(c)) && !st.writes.slice(w0).some((w) => w.table === 'cover_my_layouts' && w.del), `the trim makes no Storage call and no delete from the browser (${st.calls.slice(c0).join(', ')})`);
+  // The × makes no Storage call either.
+  const c1 = st.calls.length;
+  await page.click(`[data-my-x="${five[2].id}"]`);
+  await page.waitForFunction((id) => !document.querySelector(`[data-my="${id}"]`), five[2].id, { timeout: 10000 });
+  const xc = st.calls.slice(c1);
+  ok(xc.length === 1 && xc[0] === 'DELETE /rest/v1/cover_my_layouts', `the × deletes the row only, no Storage call (${xc.join(', ')})`);
+  // A 6th of a book that has 5, while the list was read before: the local list never shows more than 5 of one book.
+  await E(() => { const E = window.kdpBookSteps[9]._debug(); const b = E.my.find((m) => m.from_book_id === E.bookId); for (let i = 0; i < 3; i++) E.myChanged(Object.assign({}, b, { id: `z${i}z${i}z${i}z${i}-0000-4000-8000-00000000000${i}`, exported_at: new Date(Date.now() + i * 1000).toISOString() })); });
+  const per = await E(() => { const E = window.kdpBookSteps[9]._debug(); return [E.my.filter((m) => m.from_book_id === E.bookId).length, E.my.length]; });
+  ok(per[0] === 5 && per[1] === 7, `myChanged trims the local list to 5 for this book (${per})`);
 
   /* Step D on the rows. */
   st.my = [my];

@@ -163,14 +163,16 @@ Deno.test("assets: list, add (the tick sends a time; the server sets its own), d
   checkNames();
 });
 
-Deno.test("My layouts: get with layers, upsert on (user_id, from_book_id), remove", async () => {
+Deno.test("My layouts: get with layers, (0032) a plain insert (up to 5 per book), remove", async () => {
   const fmt = { trim: "6x9", pages: 54, paper: "white" };
   reset({ data: [{ id: "m1", layers: [] }], error: null }, { data: [{ id: "m1", exported_at: "t" }], error: null }, { data: null, error: null, count: 1 }, { data: null, error: null, count: 0 });
   assertEquals((await kdp.getMyLayout("m1")).data.id, "m1");
   await kdp.saveMyLayout({ bookId: "b1", name: "Chair Yoga", fromTitle: "Chair Yoga for Seniors", fmt, bg: "#FFFFFF", layers: [], thumb: "data:image/jpeg;base64,x" });
-  const up = op(log[1], "upsert");
-  assertEquals(up[1], { from_book_id: "b1", name: "Chair Yoga", from_title: "Chair Yoga for Seniors", fmt, bg: "#FFFFFF", layers: [], thumb: "data:image/jpeg;base64,x" });
-  assertEquals(up[2], { onConflict: "user_id,from_book_id" });
+  assert(!op(log[1], "upsert"), "(0032) no upsert: 0032 drops the unique (user_id, from_book_id)");
+  const ins = op(log[1], "insert");
+  assertEquals(ins[1], { from_book_id: "b1", name: "Chair Yoga", from_title: "Chair Yoga for Seniors", fmt, bg: "#FFFFFF", layers: [], thumb: "data:image/jpeg;base64,x" });
+  assertEquals(ins.length, 2);   // no options: no onConflict
+  assertEquals(op(log[1], "select")[1], "id, exported_at");
   assertEquals((await kdp.removeMyLayout("m1")).error, null);
   assert((await kdp.removeMyLayout("m1")).error.notFound);
   checkNames();
@@ -227,6 +229,25 @@ Deno.test("stock: search and pick call the function \"stock\" with the action; e
   assertEquals((await kdp.stockSearch({ source: "unsplash", q: "a" })).error, { code: "network" });
   // only ids and words go up: never a link
   assert(log.every((q) => !JSON.stringify(q.body).includes("http")));
+  checkNames();
+});
+
+Deno.test("stock (E16.2): a busy pick passes retry_after_s (1 to 120) only when it is a whole number in range", async () => {
+  const http = (body) => ({ data: null, error: { context: { status: 503, json: () => Promise.resolve(body) } } });
+  const cases = [
+    [{ error: "stock_busy", retry_after_s: 20 }, { code: "stock_busy", retry_after_s: 20 }],
+    [{ error: "stock_busy", retry_after_s: 1 }, { code: "stock_busy", retry_after_s: 1 }],
+    [{ error: "stock_busy", retry_after_s: 120 }, { code: "stock_busy", retry_after_s: 120 }],
+    [{ error: "stock_busy" }, { code: "stock_busy" }],                              // stock v1
+    [{ error: "stock_busy", retry_after_s: 0 }, { code: "stock_busy" }],
+    [{ error: "stock_busy", retry_after_s: 121 }, { code: "stock_busy" }],
+    [{ error: "stock_busy", retry_after_s: 2.5 }, { code: "stock_busy" }],
+    [{ error: "stock_busy", retry_after_s: "20" }, { code: "stock_busy" }],
+    [{ error: "stock_busy", retry_after_s: -5 }, { code: "stock_busy" }],
+    [{ error: "stock_busy", retry_after_s: null }, { code: "stock_busy" }],
+  ];
+  reset(...cases.map(([b]) => http(b)));
+  for (const [, want] of cases) assertEquals((await kdp.stockPick({ source: "pixabay", id: "1", bookId: "b1" })).error, want);
   checkNames();
 });
 

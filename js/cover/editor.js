@@ -673,9 +673,18 @@
     if (C.resizeNote.pending(E)) { E.remapNote = Object.assign({}, E.remapNote, { seen: true }); renderSizeNote(); E.saver.changed(); }
     ctx.refresh();
   }
-  /** My layouts got this book's entry (one per book, replaced): the Layouts panel lists it first. */
+  /**
+   * My layouts got a new entry from this book (E16.2, 0032: up to 5 per book). The list keeps the database's order
+   * (exported_at desc, id desc); this book's entries past the newest 5 go, as the database trimmed them. Other books'
+   * entries, and entries whose book was deleted, stay.
+   */
+  const MY_PER_BOOK = 5;
+  const myTime = (m) => { const t = Date.parse(m.exported_at); return Number.isFinite(t) ? t : 0; };
   function myChanged(row) {
-    E.my = [row].concat((E.my || []).filter((m) => m.from_book_id !== row.from_book_id && m.id !== row.id));
+    const all = [row].concat((E.my || []).filter((m) => m.id !== row.id))
+      .sort((a, b) => myTime(b) - myTime(a) || (String(a.id) < String(b.id) ? 1 : String(a.id) > String(b.id) ? -1 : 0));
+    let n = 0;
+    E.my = all.filter((m) => m.from_book_id !== row.from_book_id || ++n <= MY_PER_BOOK);
     if (E.panel === 'layouts') renderPanel();
   }
 

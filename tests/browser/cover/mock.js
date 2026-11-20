@@ -19,6 +19,8 @@
 //   __modes: stockFail / pickFail (n calls answer stockCode / pickCode, default stock_unavailable), stockNet (n calls
 //   do not reach the function), stockSlow / pickSlow (ms), stockMany (Pixabay answers 30 results: 2 pages of 24),
 //   picDown (n picture links fail)
+//   E16.2: pickBusy (n picks answer 503 { error: 'stock_busy', retry_after_s: __modes.pickAfter }, as stock v2 does;
+//   pickAfter undefined = no retry_after_s, as stock v1; any value is sent as it is, so tests can send a bad one)
 // Part 8: cover_my_layouts (store.my: rows with layers; cover_json lists them without layers, newest export first;
 // select one by id; delete one by id), cover_blurbs (insert: 0029's CHECKs, body 1 to 1,500 characters and trimmed,
 // source ai or manual; store.blurbs; the newest is cover_json's blurb) and the Edge Function "generate" (stage
@@ -29,7 +31,9 @@
 // Part 10: cover_key (32 hex, a hash of the design's layers, bg and fmt, as 0030's md5), cover_exports (one insert of
 // 1 to 3 rows, all or nothing, with 0030's guard: cover_missing, cover_pdf_missing, cover_resized, cover_stale,
 // cover_rights, cover_size and the fields check; store.exports; cover_json's last and cover_marks read them), the
-// My layouts upsert (one per book, replaced; my_layouts_full past 100), cover_assets delete, where a picture is used
+// My layouts insert (E16.2, 0032: a plain insert; the guard keeps the book's newest 4 and adds the new one, so 5 per
+// book, in exported_at desc, id desc order; other books and null books untouched; my_layouts_full at 100 only when
+// the book has fewer than 5; store.myTrimmed: the ids the guard deleted), cover_assets delete, where a picture is used
 // (cover_designs and cover_my_layouts "layers cs [{asset}]": store.design, store.otherDesigns, store.my), and the
 // bucket's folder list (store.fileTimes: path → created_at; store.removed: the paths the sweep removed).
 //   __modes: keyFail, recFail (n calls fail), recCode (the next insert answers that P0001 code), myUpFail, useFail,
@@ -80,7 +84,7 @@ async function setupCover(page) {
     pdf: store.pdf ? copy(store.pdf) : null,
     design: store.design ? copy(store.design) : null,
     assets: store.assets.filter((a) => store.design && store.design.layers.some((l) => l.type === 'image' && l.asset === a.id)).map(copy), blurb: store.blurbs.length ? copy(store.blurbs[store.blurbs.length - 1]) : store.blurb ? copy(store.blurb) : null,
-    my_layouts: store.my.slice().sort((a, b) => (a.exported_at < b.exported_at ? 1 : -1)).map((m) => { const c = copy(m); delete c.layers; delete c.user_id; return c; }),
+    my_layouts: store.my.slice().sort((a, b) => (a.exported_at < b.exported_at ? 1 : a.exported_at > b.exported_at ? -1 : a.id < b.id ? 1 : a.id > b.id ? -1 : 0)).map((m) => { const c = copy(m); delete c.layers; delete c.user_id; return c; }),
     key: keyOf(),
     last: { print: lastOf('print'), image: lastOf('image'), kindle: lastOf('kindle') },
     now: now()
@@ -327,6 +331,7 @@ async function setupCover(page) {
       if (p.action === 'pick') {
         if (mode('pickSlow')) await wait(mode('pickSlow'));
         if (take('pickFail')) { const c = mode('pickCode') || 'stock_unavailable'; return json(r, STOCK_STATUS[c], { error: c }); }
+        if (take('pickBusy')) return json(r, 503, mode('pickAfter') === undefined ? { error: 'stock_busy' } : { error: 'stock_busy', retry_after_s: mode('pickAfter') });
         const out = stockPick(p);
         if (out.code) return json(r, STOCK_STATUS[out.code], { error: out.code });
         return json(r, 200, { asset: copy(out.row) });
@@ -432,17 +437,23 @@ async function setupCover(page) {
     }
     if (path === '/rest/v1/cover_my_layouts' && method === 'POST') {
       const p = body();
-      store.writes.push({ table: 'cover_my_layouts', upsert: copy(p), onConflict: param('on_conflict'), prefer: req.headers()['prefer'] || '' });
+      store.writes.push({ table: 'cover_my_layouts', insert: copy(p), onConflict: param('on_conflict'), prefer: req.headers()['prefer'] || '' });
+      // 0032 has no unique (user_id, from_book_id): an upsert on it fails as Postgres does (42P10).
+      if (param('on_conflict')) return fail(r, 400, '42P10', 'there is no unique or exclusion constraint matching the ON CONFLICT specification');
       if (take('myUpFail')) return json(r, 500, { message: 'mock: my layouts down' });
       if (!p.from_book_id) return fail(r, 400, 'P0001', 'my_layout_book');
       if (!(typeof p.name === 'string' && p.name.length >= 1 && p.name.length <= 80 && p.name === p.name.trim())) return fail(r, 400, '23514', 'mock: cover_my_layouts_name_check');
       if (p.thumb != null && !(String(p.thumb).length <= 20000 && String(p.thumb).startsWith('data:image/jpeg;base64,'))) return fail(r, 400, '23514', 'mock: cover_my_layouts_thumb_check');
       const bad = badDesign({ layers: p.layers, bg: p.bg, fmt: p.fmt });
       if (bad) return fail(r, 400, '23514', `mock: bad layout: ${bad}`);
-      const old = store.my.find((m) => m.from_book_id === p.from_book_id);
-      if (!old && store.my.length >= 100) return fail(r, 400, 'P0001', 'my_layouts_full');
-      const row = Object.assign(old || { id: id('m'), created_at: now() }, copy(p), { exported_at: now() });
-      if (!old) store.my.push(row);
+      const order = (a, b) => (a.exported_at < b.exported_at ? 1 : a.exported_at > b.exported_at ? -1 : a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+      const same = store.my.filter((m) => m.from_book_id === p.from_book_id).sort(order);
+      if (store.my.length >= 100 && same.length < 5) return fail(r, 400, 'P0001', 'my_layouts_full');
+      const drop = new Set(same.slice(4).map((m) => m.id));
+      store.myTrimmed = (store.myTrimmed || []).concat([...drop]);
+      store.my = store.my.filter((m) => !drop.has(m.id));
+      const row = Object.assign({ id: id('m'), created_at: now() }, copy(p), { exported_at: now() });
+      store.my.push(row);
       return json(r, 201, [{ id: row.id, exported_at: row.exported_at }]);
     }
     if (path === '/rest/v1/cover_designs' && method === 'GET' && param('layers')) {

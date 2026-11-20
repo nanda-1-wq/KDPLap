@@ -24,6 +24,12 @@
      row (no copy, Unsplash rule 1). The screen loads it from images.unsplash.com.
    Then the picture is added to the cover (or replaces the selected one after
    Replace), as an upload would be.
+   E16.2 (plan v2 Item 1, owner Q-1, a planned difference to design 63): a Pixabay pick that answers stock_busy with
+   retry_after_s (1 to 120, stock v2) shows "Pixabay is busy. Trying again in N s." in design 63's error slot. It
+   counts down (only the number changes, in place), is announced once (role="status", the first wording only), then
+   the same pick runs once more by itself. A second failure shows that code's message (design 63's for stock_busy).
+   Picking any picture, closing the picker or leaving 09 cancels the wait. stock v1 sends no retry_after_s: today's
+   message at once.
 
    Credits: "Photo by [name] on Unsplash", both names linked with
    ?utm_source=nicheink&utm_medium=referral; Pixabay results always say they
@@ -79,6 +85,7 @@
         px: { type: 'all', color: 'any', editors: false, safe: true }, un: { color: 'any' },
         res: { pixabay: null, unsplash: null },   // { key, st: 'loading' | 'ok' | 'error', code, list, total, page, more, moreCode }
         open: false, prev: null, busy: null, err: '',
+        wait: null,   // E16.2: { item, n0, n, t } while a busy pick counts down to its one automatic retry
         seeded: false, lastAuto: 0, autoT: null, io: null, panelTop: 0   // E16.1
       };
     }
@@ -233,16 +240,52 @@
   const waiting = (S, src) => !!S.q && !AUTO[src] && (!S.res[src] || S.res[src].key !== keyOf(S, src));
   const findItem = (E, src, id) => { const r = state(E).res[src]; return r && r.list ? r.list.find((x) => x.id === id) || null : null; };
 
-  async function pick(E, item) {
+  /* ── E16.2: the busy countdown (one automatic retry of the same pick) ── */
+  const WAIT_MAX = 120;
+  const waitText = (n) => `Pixabay is busy. Trying again in ${n} s.`;
+  /** The line in design 63's error slot: the visible words count down (aria-hidden); role="status" keeps the first wording. */
+  function waitHtml(S, cls) {
+    const w = S.wait;
+    return `<p class="cv-uperr${cls ? ' ' + cls : ''}" role="status" data-stock-wait>${I.warn}<span aria-hidden="true">Pixabay is busy. Trying again in <span data-stock-wait-n>${w.n}</span> s.</span><span class="sr-only">${esc(waitText(w.n0))}</span></p>`;
+  }
+  function cancelWait(E) {
+    const S = state(E);
+    if (!S.wait) return;
+    root.clearInterval(S.wait.t);
+    S.wait = null;
+  }
+  function startWait(E, item, n) {
+    const S = state(E);
+    cancelWait(E);
+    const w = S.wait = { item, n0: n, n, t: 0 };
+    w.t = root.setInterval(() => {
+      if (!E.live() || S.wait !== w) { root.clearInterval(w.t); return; }   // left 09, or cancelled
+      w.n -= 1;
+      if (w.n > 0) { for (const el of E.root.querySelectorAll('[data-stock-wait-n]')) el.textContent = String(w.n); return; }
+      root.clearInterval(w.t);
+      S.wait = null;
+      pick(E, item, true);
+    }, 1000);
+  }
+
+  /** auto: the one retry after the countdown (a second stock_busy shows the message, no new wait). */
+  async function pick(E, item, auto) {
     const S = state(E);
     if (!item || S.busy) return;
+    cancelWait(E);   // E16.2: picking a picture (another or the same) ends the wait
     if (E.offline) { S.err = errText('offline', item.source, true); refresh(E); return; }   // E16 Part 9
     S.busy = item.id; S.err = ''; refresh(E);
     let out;
     try { out = await root.kdp.stockPick({ source: item.source, id: item.id, bookId: E.bookId }); } catch (e) { out = { error: { code: 'network' } }; }
     if (!E.live()) return;
     S.busy = null;
-    if (out.error || !out.data || !out.data.asset) { S.err = errText((out.error && out.error.code) || 'server_error', item.source, true); refresh(E); return; }
+    if (out.error || !out.data || !out.data.asset) {
+      const code = (out.error && out.error.code) || 'server_error', after = out.error && out.error.retry_after_s;
+      if (!auto && code === 'stock_busy' && item.source === 'pixabay' && Number.isInteger(after) && after >= 1 && after <= WAIT_MAX) {
+        startWait(E, item, after); refresh(E); return;
+      }
+      S.err = errText(code, item.source, true); refresh(E); return;
+    }
     const wasOpen = S.open;
     S.open = false; S.prev = null;
     refresh(E);
@@ -264,6 +307,7 @@
   function close(E) {
     const S = state(E);
     if (!S.open) return;
+    cancelWait(E);   // E16.2: closing the picker ends the wait
     S.open = false; S.prev = null; S.err = '';
     refresh(E);
     const b = E.root.querySelector('[data-stock-open]');
@@ -345,7 +389,7 @@
       </form>
       ${topic}
       ${src === 'pixabay' ? `<button type="button" class="cv-nobg${S.px.color === 'transparent' ? ' is-on' : ''}" aria-pressed="${S.px.color === 'transparent'}" data-k="stk-nobg" data-stock-nobg><span class="cv-nobg-s" aria-hidden="true"></span>No background only</button>` : ''}
-      ${S.err && !S.open ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
+      ${S.wait && !S.open ? waitHtml(S) : S.err && !S.open ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
       ${busy && !S.open ? '<p class="cv-help" role="status" data-stock-busy>Adding the picture to your uploads…</p>' : ''}
       ${body}
       <button type="button" class="cv-sbtn cv-stock-open" data-k="stk-open" data-stock-open>Open large view</button>
@@ -380,7 +424,7 @@
             <div>Type: ${esc(p.transparent ? `${p.type}, no background` : p.type)}</div>
             <div>Source: ${creditHtml(p)}</div>
             <div class="cv-sd-print ${fills ? 'is-ok' : 'is-warn'}" data-sd-print>${fills ? I.ok : I.warn}<span>Sharp up to ${inW.toFixed(1)} × ${inH.toFixed(1)} in at 300 DPI${fills ? '' : '. Too small to fill the front cover sharply.'}</span></div>
-            ${S.err ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
+            ${S.wait ? waitHtml(S) : S.err ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
             <span class="cv-grow"></span>
             <button type="button" class="cv-sd-big cv-sd-ink" data-k="sd-add" data-sd-add${busy ? ' aria-disabled="true"' : ''}>${busy ? 'Adding…' : E.replaceId != null ? 'Replace picture' : 'Add to cover'}</button>
             <button type="button" class="cv-sd-big" data-k="sd-back" data-sd-back>Back to results</button>
@@ -395,7 +439,7 @@
       else {
         const moreBtn = AUTO[src] ? endHtml(r, src, 'sd') : r.list.length < r.total && r.page < MAX_PAGE
           ? `<div class="cv-sd-more">${r.moreCode ? `<p class="cv-uperr" role="alert">${I.warn}<span>${esc(errText(r.moreCode, src))}</span></p>` : ''}<button type="button" class="cv-sbtn" data-k="sd-more" data-sd-more${r.more ? ' aria-disabled="true"' : ''}>${r.more ? 'Loading more…' : 'More results'}</button></div>` : '';
-        inner = `${S.err ? `<p class="cv-uperr cv-sd-err" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
+        inner = `${S.wait ? waitHtml(S, 'cv-sd-err') : S.err ? `<p class="cv-uperr cv-sd-err" role="alert">${I.warn}<span>${esc(S.err)}</span></p>` : ''}
           <div class="cv-sd-grid" data-sd-grid>${r.list.map((x) => `<div class="cv-sd-tile${S.busy === x.id ? ' is-busy' : ''}">
             <button type="button" class="cv-sd-add" data-k="sd-a-${esc(x.id)}" data-stock-add="${esc(x.id)}" aria-label="${esc(tileLabel(E, x))}"${busy ? ' aria-disabled="true"' : ''}>${thumbImg(x, 'cv-sd-img')}</button>
             <button type="button" class="cv-sd-look" data-k="sd-l-${esc(x.id)}" data-stock-look="${esc(x.id)}" aria-label="Preview ${esc(x.name)}">PREVIEW</button>
@@ -498,5 +542,5 @@
     });
   }
 
-  C.stock = { panelHtml, bindPanel, hostHtml, bindHost, open, close, escape, show, drawn, creditHtml, creditText, remoteUrl, errText, caption, state, clean, UTM };
+  C.stock = { panelHtml, bindPanel, hostHtml, bindHost, open, close, escape, show, drawn, creditHtml, creditText, remoteUrl, errText, waitText, caption, state, clean, UTM };
 })(globalThis);

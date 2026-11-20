@@ -26,7 +26,7 @@
    4. Full image, Kindle JPG (read back: 1600 × 2560, plain sRGB).
    5. Saving: the key read again (another tab changed it: stopped); the
       cover_exports rows in ONE insert (all or nothing); then My layouts
-      (one per book, replaced) and a history snapshot (reason export).
+      (a new entry; the last 5 of each book are kept, E16.2) and a history snapshot (reason export).
       After the rows are in, Stop is off: the files are recorded.
 
    kdpCover.exportDialog.open(E, opener)   kdpCover.exportDialog.close(E, refocus)
@@ -167,7 +167,7 @@
         <label class="cv-ex-opt is-label"><span class="cv-ex-box"><input type="checkbox" data-k="ex-kindle" data-ex-kindle${X.kindle ? ' checked' : ''}></span>
           <span class="cv-ex-ot"><span class="cv-ex-on">Kindle front cover</span><span class="cv-ex-od">For KDP eBook. JPG, 1600 × 2560 px, made from your print front. Turn it off if this book has no eBook.</span></span></label>
         ${warns.length ? `<p class="cv-ex-warn">${I.warn}<span>${warns.length} item(s) in Checks are worth a look. They do not block export.</span></p>` : ''}
-        <p class="cv-ex-my">This design is also saved to Layouts, My layouts, so you can reuse it for your next book or a series.</p></div>`;
+        <p class="cv-ex-my">This design is also saved to Layouts, My layouts (the last 5 of each book), so you can reuse it for your next book or a series.</p></div>`;
       foot = `<button type="button" class="cv-ex-sec" data-k="ex-cancel" data-ex-close>Cancel</button><button type="button" class="cv-ex-go" data-k="ex-go" data-ex-go${blocked ? ' aria-disabled="true"' : ''}>${I.down}Export</button>`;
     } else if (X.phase === 'busy') {
       const steps = stepsFor(E);

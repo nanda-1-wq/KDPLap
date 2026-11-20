@@ -32,6 +32,8 @@ function coverAssetName(v) {
   return s ? [...s].slice(0, 200).join('').trim() : null;
 }
 // The Edge Function "stock": { data } or { error: { code } } (a non-2xx reply carries { error: code }).
+// E16.2: stock v2 adds retry_after_s (a whole number, 1 to 120) to a Pixabay pick that stays busy; it is passed on
+// as error.retry_after_s only when it is in that range. stock v1 never sends it (the error is then { code } only).
 async function invokeStock(body) {
   let res;
   try { res = await window.sb.functions.invoke('stock', { body }); } catch (err) { return { data: null, error: { code: 'network' } }; }
@@ -40,7 +42,10 @@ async function invokeStock(body) {
   if (ctx && typeof ctx.json === 'function') {
     try {
       const b = await ctx.json();
-      if (b && typeof b.error === 'string') return { data: null, error: { code: b.error } };
+      if (b && typeof b.error === 'string') {
+        const r = b.retry_after_s;
+        return { data: null, error: Number.isInteger(r) && r >= 1 && r <= 120 ? { code: b.error, retry_after_s: r } : { code: b.error } };
+      }
     } catch (err) { /* not JSON */ }
     return { data: null, error: { code: ctx.status === 401 ? 'unauthorized' : 'server_error' } };
   }
@@ -1638,6 +1643,7 @@ window.kdp = {
    * stockPick({ source, id, bookId }) → { data: { asset }, error }   (asset: the new cover_assets row)
    * error.code: bad_request, unauthorized, not_found, too_large, bad_image, rate_limited, server_error,
    * stock_unavailable, not_configured, stock_busy, or 'network' when the function could not be reached.
+   * E16.2: a busy Pixabay pick may add error.retry_after_s (1 to 120, stock v2 only).
    */
   async stockSearch({ source, q, page = 1, filters }) {
     return invokeStock({ action: 'search', source, q, page, filters });
@@ -1674,13 +1680,14 @@ window.kdp = {
   },
 
   /**
-   * Saves the book's My layout on export (Q-3b: one per book, replaced).
-   * The database refuses a 101st with "my_layouts_full"; a replace never counts.
+   * Saves this export as a new My layout (E16.2, 0032: a plain insert, up to 5 per book).
+   * The database keeps the book's newest 4 and adds this one (its trim deletes rows only, never a file).
+   * It refuses a 101st with "my_layouts_full" only when the book has fewer than 5.
    */
   async saveMyLayout({ bookId, name, fromTitle = null, fmt, bg, layers, thumb = null }) {
     const { data, error } = await window.sb
       .from('cover_my_layouts')
-      .upsert({ from_book_id: bookId, name, from_title: fromTitle, fmt, bg, layers, thumb }, { onConflict: 'user_id,from_book_id' })
+      .insert({ from_book_id: bookId, name, from_title: fromTitle, fmt, bg, layers, thumb })
       .select('id, exported_at');
     return { data: error ? null : (data && data[0]) || null, error };
   },
