@@ -99,11 +99,8 @@ Status: ✅ done (E1 to E12, both review gates)
 - [x] Live check on the test account (Part 11 A, E16.1 E3) and the owner's real book (B): the KDP Print Previewer passed the 120-page spine sheet and the real book's cover (6 × 9, 50 pages); every live row is the test user's (Claude chat's row checks)
 - Plan: `docs/reviews/2026-11-13-e16-plan.md`; reports: `docs/reviews/2026-11-13-e16-stop0.md` to `2026-11-16-e16-stop10.md`, `2026-11-18-e16-stop11.md`, `2026-11-18-e16-1.md`; numbers `docs/reviews/e16-live/results.md`
 - Open items:
-  - **E16.2 (after the merge, on the owner's word), in this order:**
-    1. the Pixabay picture download can answer HTTP 429 ("stock: pixabay download HTTP 429"; the first pick in A3 and in E3 failed with `stock_busy`): a server retry with backoff that reads Retry-After;
-    2. the stock rate-limit race (the push security review, Nov 18): the per-minute limits and the Unsplash hourly budget are checked, then logged, in two steps, so parallel requests can pass together. Check and count in one locked database step (a migration);
-    3. My layouts keeps every export, up to 5 per book, the oldest dropped, each removable with × (owner's choice B, Nov 18; today one per book, Q-3, kept only the last of the owner's 3 exports);
-    - stock v2 and any migration deploy on the owner's word;
+  - [x] **E16.2 live Nov 20 (0032, stock v2, main c0a0ce0):** the Pixabay pick retry with a countdown, the atomic stock limits (0032 `stock_reserve`, `stock_release`), My layouts up to 5 per book with date and time. Plan and reports `docs/reviews/2026-11-20-e16-2-plan.md`, `-stop0.md` to `-stop4.md`. Live: 7 Pixabay requests (1 over the cap of 6); the busy pick's 3 downloads were 429 "retry-after 0" from Cloudflare
+  - **Next E16.3:** Retry-After 0 = no header; the preview shows webformatURL; B2 cleanup (drop the direct insert on `stock_calls` and `stock_usage()`) in 0033
   - Unsplash production approval (until then it searches only on Search, N10; 45 calls an hour for the whole app);
   - Pixabay full API access (pictures are 1,280 px on the long side without it);
   - iPad memory for large covers (N6);
@@ -113,7 +110,7 @@ Status: ✅ done (E1 to E12, both review gates)
   - phone layout: after v2 (the editor needs 900 px).
 
 ## Next
-E16.2 on the owner's word: the Pixabay download retry, the stock rate-limit race, My layouts up to 5 per book (stock v2).
+E16.2 live Nov 20 (0032, stock v2, main c0a0ce0); next E16.3: Retry-After 0 = no header, preview shows webformatURL; B2 cleanup in 0033.
 Then EPUB and the Kindle preview (E13.3), then the owner publishes the real book.
 
 ## v2 · KDP-ready files
