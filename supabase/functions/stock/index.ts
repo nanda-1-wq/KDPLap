@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   NicheInk — Edge Function "stock" (E16 Part 7, plan §7)
+   NicheInk — Edge Function "stock" (E16 Part 7, plan §7; stock v2, E16.2)
    supabase/functions/stock/index.ts
 
    POST { action: "search", source: "pixabay" | "unsplash", q, page, filters }
@@ -7,18 +7,24 @@
    POST { action: "pick", source, id, bookId? } → { asset }
    or { error: <code> }  (bad_request, unauthorized, not_found, method_not_allowed,
    too_large, bad_image, rate_limited, server_error, stock_unavailable,
-   not_configured, stock_busy).
+   not_configured, stock_busy). A Pixabay pick that stays busy after its
+   retries also sends retry_after_s (1 to 120).
 
    Deploy with verify_jwt ON (the default; never --no-verify-jwt).
    Secrets (Supabase dashboard, Edge Functions, Secrets; never in code, git or chat):
      PIXABAY_API_KEY, UNSPLASH_ACCESS_KEY  — a missing key returns not_configured
      PIXABAY_FULL=1                         — only once Pixabay grants full API access
-     STOCK_UNSPLASH_HOURLY                  — optional, default 45 (demo: 50 an hour)
+   STOCK_UNSPLASH_HOURLY is no longer read (stock v2): the limits and the
+   Unsplash budget are constants in SQL (0032 stock_reserve); a new number
+   needs a migration. The secret can be removed.
    SUPABASE_URL and SUPABASE_ANON_KEY are provided by Supabase.
+   Needs migration 0032 (stock_reserve, stock_release). Deploy order (B3,
+   owner STOP 1): apply 0032, merge the front end, then deploy this.
 
    Every database and storage call uses a client built from the caller's
-   Authorization header, so RLS applies as that user (0031 stock_cache,
-   stock_calls, stock_usage; 0030 cover_assets and the "covers" bucket's
+   Authorization header, so RLS applies as that user (0031 stock_cache;
+   0032 stock_reserve and stock_release, which write and mark only the
+   caller's stock_calls rows; 0030 cover_assets and the "covers" bucket's
    insert rule). No service-role key is used.
 ═══════════════════════════════════════════════════ */
 
@@ -47,15 +53,16 @@ function openStore(authHeader: string): Store {
       const { data, error } = await asUser.auth.getUser(jwt);
       return error || !data.user ? null : data.user.id;
     },
-    async usage() {
-      const { data, error } = await asUser.rpc("stock_usage");
+    async reserve(row) {
+      // p_provider_calls goes as a JSON number; PostgREST types it from the signature (smallint).
+      const { data, error } = await asUser.rpc("stock_reserve", { p_source: row.source, p_action: row.action, p_provider_calls: row.provider_calls });
       if (error) throw error;
-      const u = (data ?? {}) as Record<string, unknown>;
-      return { searches: Number(u.searches) || 0, picks: Number(u.picks) || 0, unsplash_hour: Number(u.unsplash_hour) || 0 };
+      return data;
     },
-    async logCall(row) {
-      const { error } = await asUser.from("stock_calls").insert(row);
+    async release(id) {
+      const { data, error } = await asUser.rpc("stock_release", { p_id: id });
       if (error) throw error;
+      return data === true;
     },
     async readCache(key, sinceIso) {
       const { data, error } = await asUser.from("stock_cache").select("body").eq("key", key).gt("fetched_at", sinceIso).maybeSingle();

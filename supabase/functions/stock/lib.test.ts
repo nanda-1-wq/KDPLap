@@ -1,5 +1,7 @@
 // stock lib tests: input checks, provider URLs, hosts, names, sizes, the normalized results,
-// the cached answer check, the pick helpers, the picture header reader and the error map.
+// the cached answer check, the pick helpers, the picture header reader and the error map;
+// E16.2: the limits are no longer in TypeScript, the Pixabay headers, the retry rules (header
+// waits, backoff, retry_after_s), the D3 log line and the stock_reserve answer.
 // deno test --allow-read=supabase/functions supabase/functions/stock/  (from the repo root)
 import { assert, assertEquals, assertMatch, assertNotEquals } from "jsr:@std/assert@1";
 import * as L from "./lib.ts";
@@ -83,9 +85,8 @@ Deno.test("not JSON, not an object, an unknown action or source is refused", () 
     assertEquals(L.parseInput(raw), null, raw);
   }
 });
-Deno.test("unsplashBudget: 1 to 5,000 from env, else 45", () => {
-  assertEquals([L.unsplashBudget(undefined), L.unsplashBudget(""), L.unsplashBudget("0"), L.unsplashBudget("5001"), L.unsplashBudget("4.5"), L.unsplashBudget("x")], [45, 45, 45, 45, 45, 45]);
-  assertEquals([L.unsplashBudget("1"), L.unsplashBudget("4500")], [1, 4500]);
+Deno.test("(0032) the limits live in SQL only: no limit or budget in lib.ts", () => {
+  for (const name of ["SEARCHES_PER_MINUTE", "PICKS_PER_MINUTE", "UNSPLASH_HOURLY_DEFAULT", "unsplashBudget"]) assert(!(name in L), name);
 });
 
 /* ── Cache key ── */
@@ -314,4 +315,81 @@ Deno.test("the error codes and their statuses", () => {
 });
 Deno.test("the caps match 0030 and 0031", () => {
   assertEquals([L.MAX_FILE_BYTES, L.MAX_SIDE, L.NAME_MAX, L.CREDIT_MAX_BYTES, L.MAX_BODY_BYTES, L.PER_PAGE * L.MAX_PAGE], [10485760, 12000, 200, 2000, 2048, 480]);
+});
+
+/* ── E16.2: Pixabay headers (D1) ── */
+Deno.test("pixabayHeaders: the NicheInk User-Agent (no personal data) and an Accept per kind", () => {
+  assertEquals(L.PIXABAY_UA, "NicheInk-stock/2 (+https://nicheink.com)");
+  assertEquals(L.pixabayHeaders("json"), { "User-Agent": L.PIXABAY_UA, "Accept": "application/json" });
+  assertEquals(L.pixabayHeaders("image"), { "User-Agent": L.PIXABAY_UA, "Accept": "image/jpeg, image/png" });
+});
+
+/* ── E16.2: the retry rules (STOP 1 inputs) ── */
+Deno.test("the pick budget: 2 retries, 20 s of waiting, a 45 s deadline; retried statuses", () => {
+  assertEquals([L.PICK_RETRIES, L.PICK_WAIT_MS, L.PICK_DEADLINE_MS, L.BUSY_RETRY_DEFAULT_S, L.RETRY_AFTER_MAX_S], [2, 20_000, 45_000, 20, 120]);
+  assertEquals(L.RETRY_STATUSES, [429, 502, 503, 504]);
+});
+const H = (o: Record<string, string>) => new Headers(o);
+const NOW = Date.parse("2026-11-16T12:00:00Z");
+Deno.test("retryAfterSeconds: Retry-After in seconds (whole or decimal)", () => {
+  assertEquals([L.retryAfterSeconds(H({ "retry-after": "12" }), NOW), L.retryAfterSeconds(H({ "retry-after": " 0 " }), NOW), L.retryAfterSeconds(H({ "retry-after": "1.5" }), NOW)], [12, 0, 1.5]);
+});
+Deno.test("retryAfterSeconds: Retry-After as an HTTP-date, minus the clock, never below 0", () => {
+  assertEquals(L.retryAfterSeconds(H({ "retry-after": "Mon, 16 Nov 2026 12:00:41 GMT" }), NOW), 41);
+  assertEquals(L.retryAfterSeconds(H({ "retry-after": "Mon, 16 Nov 2026 11:59:00 GMT" }), NOW), 0);
+});
+Deno.test("retryAfterSeconds: X-RateLimit-Reset when there is no Retry-After (0 to 86,400)", () => {
+  assertEquals(L.retryAfterSeconds(H({ "x-ratelimit-reset": "41" }), NOW), 41);
+  assertEquals(L.retryAfterSeconds(H({ "retry-after": "soon", "x-ratelimit-reset": "7" }), NOW), 7);
+  assertEquals(L.retryAfterSeconds(H({ "retry-after": "3", "x-ratelimit-reset": "41" }), NOW), 3);
+  assertEquals(L.retryAfterSeconds(H({ "x-ratelimit-reset": "1800000000" }), NOW), null);
+});
+Deno.test("retryAfterSeconds: anything else is null", () => {
+  for (const h of [{}, { "retry-after": "" }, { "retry-after": "-5" }, { "retry-after": "soon" }, { "x-ratelimit-reset": "x" }, { "x-ratelimit-reset": "-1" }] as Record<string, string>[]) {
+    assertEquals(L.retryAfterSeconds(H(h), NOW), null, JSON.stringify(h));
+  }
+});
+Deno.test("backoffMs: retry 1 waits 1.5 to 2.5 s, retry 2 waits 4 to 6 s (full jitter)", () => {
+  assertEquals([L.backoffMs(1, 0), L.backoffMs(1, 0.5), L.backoffMs(1, 0.9999999)], [1500, 2000, 2499]);
+  assertEquals([L.backoffMs(2, 0), L.backoffMs(2, 0.9999999)], [4000, 5999]);
+  assertEquals([L.backoffMs(0, 0), L.backoffMs(9, 0), L.backoffMs(1, -1), L.backoffMs(1, 7)], [1500, 4000, 1500, 2499]);
+  for (let i = 0; i < 200; i++) { const r = Math.random(); const a = L.backoffMs(1, r), b = L.backoffMs(2, r); assert(a >= 1500 && a < 2500 && b >= 4000 && b < 6000); }
+});
+Deno.test("busyRetryAfter: the header rounded up, 1 to 120; 20 with no header", () => {
+  assertEquals([L.busyRetryAfter(null), L.busyRetryAfter(0), L.busyRetryAfter(3.2), L.busyRetryAfter(41), L.busyRetryAfter(500)], [20, 1, 4, 41, 120]);
+});
+
+/* ── E16.2: the D3 log line ── */
+Deno.test("logValue: at most 40 characters of [A-Za-z0-9 ._/-]; absent or empty is -", () => {
+  assertEquals([L.logValue(null), L.logValue(""), L.logValue("cloudflare"), L.logValue("?&=:"), L.logValue("x".repeat(60)).length], ["-", "-", "cloudflare", "-", 40]);
+  assertEquals(L.logValue("https://pixabay.com/get/a?key=k&x=1"), "https//pixabay.com/get/akeykx1");
+});
+Deno.test("bodyType: html, json, text, other or -", () => {
+  assertEquals(["text/html; charset=utf-8", "application/json", "text/plain", "image/jpeg", null].map(L.bodyType), ["html", "json", "text", "other", "-"]);
+});
+Deno.test("failLine: an HTTP failure, every field, never a URL", () => {
+  const f: L.FailInfo = { status: 429, hop: 1, host: "cdn.pixabay.com", bytes: "5120",
+    headers: H({ server: "cloudflare", "cf-mitigated": "challenge", "content-type": "text/html", "retry-after": "41", "x-ratelimit-reset": "41", "x-ratelimit-remaining": "0" }) };
+  assertEquals(L.failLine("download", f, 1, 3, 0, 41),
+    "stock: pixabay download HTTP 429 (try 1 of 3, hop 1 cdn.pixabay.com, server cloudflare, cf-mitigated challenge, type html, bytes 5120, wait 0 s, retry-after 41, reset 41, remaining 0)");
+  const bare: L.FailInfo = { status: 503, hop: 0, host: "pixabay.com", bytes: "-", headers: H({}) };
+  assertEquals(L.failLine("lookup", bare, 2, 3, 4000, null),
+    "stock: pixabay lookup HTTP 503 (try 2 of 3, hop 0 pixabay.com, server -, cf-mitigated -, type -, bytes -, wait 4 s, retry-after -, reset -, remaining -)");
+  assertEquals(L.failLine("download", f, 1, 3, 1500, 0.4).includes("wait 1.5 s, retry-after 1,"), true);
+});
+Deno.test("failLine: a network error names the error only", () => {
+  assertEquals(L.failLine("download", { status: null, errName: "TypeError", hop: 0, host: "pixabay.com", bytes: "-", headers: null }, 1, 3, 2000, null),
+    "stock: pixabay download failed: TypeError (try 1 of 3, hop 0 pixabay.com, wait 2 s)");
+});
+
+/* ── E16.2: the stock_reserve answer ── */
+Deno.test("parseReserve: a slot, a refusal, or null", () => {
+  assertEquals(L.parseReserve({ ok: true, id: 7 }), { ok: true, id: 7 });
+  assertEquals(L.parseReserve({ ok: false, code: "rate_limited" }), { ok: false, code: "rate_limited" });
+  assertEquals(L.parseReserve({ ok: false, code: "stock_busy" }), { ok: false, code: "stock_busy" });
+  for (const v of [null, undefined, "ok", [], {}, { ok: true }, { ok: true, id: "7" }, { ok: true, id: 0 }, { ok: true, id: -1 }, { ok: true, id: 1.5 },
+    { ok: false }, { ok: false, code: "server_error" }, { ok: "true", id: 1 }]) assertEquals(L.parseReserve(v), null, JSON.stringify(v));
+});
+Deno.test("RELEASE_ON: busy, unavailable and server_error only", () => {
+  assertEquals(L.RELEASE_ON, ["stock_busy", "stock_unavailable", "server_error"]);
 });

@@ -1,10 +1,13 @@
 /* ═══════════════════════════════════════════════════
-   NicheInk — Edge Function "stock": pure rules (E16 Part 7, plan §7)
+   NicheInk — Edge Function "stock": pure rules (E16 Part 7, plan §7; stock v2, E16.2)
    supabase/functions/stock/lib.ts
 
    No network, no database, no env: input checks, provider URLs, the
    normalized result shape, the cache key, the picture header reader, names
-   and credits. handler.ts runs the flow with injected dependencies.
+   and credits, the Pixabay retry rules (E16.2) and the reserve answer.
+   handler.ts runs the flow with injected dependencies.
+   The rate limits and the Unsplash budget live in SQL only (0032
+   stock_reserve, constants there): a new number needs a migration.
    The file stands alone (no import from generate), so it deploys alone;
    lib.test.ts holds ALLOWED_ORIGINS equal to generate's.
 ═══════════════════════════════════════════════════ */
@@ -15,9 +18,6 @@ export const PER_PAGE = 24;
 export const MAX_PAGE = 20;              // Pixabay returns at most 500 hits a query: 20 × 24 = 480
 export const MAX_TOTAL = MAX_PAGE * PER_PAGE;
 export const Q_MAX = 100;
-export const SEARCHES_PER_MINUTE = 30;
-export const PICKS_PER_MINUTE = 10;
-export const UNSPLASH_HOURLY_DEFAULT = 45; // the demo allows 50 an hour for the whole app (plan §7)
 export const CACHE_MS = 24 * 3600_000;   // Pixabay: cache search answers for 24 hours
 export const API_TIMEOUT_MS = 10_000;
 export const DOWNLOAD_TIMEOUT_MS = 20_000;
@@ -146,12 +146,6 @@ export function parseInput(raw: string): StockInput | null {
     return { action: "pick", source: v.source, id, bookId: bookId === null ? null : bookId.toLowerCase() };
   }
   return null;
-}
-
-/** The Unsplash hourly budget from env STOCK_UNSPLASH_HOURLY (1 to 5,000), else 45. */
-export function unsplashBudget(v: string | undefined): number {
-  const n = Number(v);
-  return v && Number.isInteger(n) && n >= 1 && n <= 5000 ? n : UNSPLASH_HOURLY_DEFAULT;
 }
 
 /* ── Cache key ───────────────────────────── */
@@ -446,3 +440,107 @@ export function providerError(status: number, remaining: string | null): ErrorCo
   if (status === 404) return "not_found";
   return "stock_unavailable";
 }
+
+/* ── Pixabay requests: who we are (E16.2, STOP 0 D1) ── */
+/** Sent on every Pixabay request (search, lookup, each download hop). No personal data. */
+export const PIXABAY_UA = "NicheInk-stock/2 (+https://nicheink.com)";
+export function pixabayHeaders(kind: "json" | "image"): Record<string, string> {
+  return { "User-Agent": PIXABAY_UA, "Accept": kind === "json" ? "application/json" : "image/jpeg, image/png" };
+}
+
+/* ── The Pixabay pick retry (E16.2; STOP 1 inputs: 2 retries, 20 s of waiting, 45 s in all) ── */
+/** Retries for one pick, shared by the lookup and the download (each retries only itself, D6). */
+export const PICK_RETRIES = 2;
+/** The most the pick waits between tries, in all. */
+export const PICK_WAIT_MS = 20_000;
+/** The whole pick (lookup, download, retries) ends by then; each try's timeout is cut to the time left. */
+export const PICK_DEADLINE_MS = 45_000;
+/** A try is not started (and no wait is taken for one) with less time than this left. */
+export const MIN_TRY_MS = 2_000;
+/** A Retry-After of 0 still waits this long. */
+export const MIN_WAIT_MS = 1_000;
+/** retry_after_s when retries run out with no header (STOP 0 D5: the panel counts down 20 s). */
+export const BUSY_RETRY_DEFAULT_S = 20;
+export const RETRY_AFTER_MAX_S = 120;
+/** HTTP answers worth another try. A network error (TypeError) is too; a timeout and any other 4xx are not. */
+export const RETRY_STATUSES = [429, 502, 503, 504];
+/** The quick waits with no header: retry n waits base + jitter × rand (rand in [0, 1)). */
+export const BACKOFF: [number, number][] = [[1500, 1000], [4000, 2000]];
+
+const NUM_RE = /^\s*\d+(\.\d+)?\s*$/;
+/** An HTTP-date (IMF-fixdate), e.g. "Mon, 16 Nov 2026 12:00:41 GMT". Date.parse alone takes "-5" as a year. */
+const HTTP_DATE_RE = /^\s*[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT\s*$/;
+/**
+ * The wait a provider asked for, in seconds, or null:
+ * 1. Retry-After as seconds ("12"); 2. Retry-After as an HTTP-date (minus nowMs, never below 0);
+ * 3. X-RateLimit-Reset as seconds (0 to 86,400). Anything else: null.
+ */
+export function retryAfterSeconds(h: Headers, nowMs: number): number | null {
+  const ra = h.get("retry-after");
+  if (ra !== null) {
+    if (NUM_RE.test(ra)) return Number(ra);
+    const t = HTTP_DATE_RE.test(ra) ? Date.parse(ra) : NaN;
+    if (Number.isFinite(t)) return Math.max(0, (t - nowMs) / 1000);
+  }
+  const reset = h.get("x-ratelimit-reset");
+  if (reset !== null && NUM_RE.test(reset) && Number(reset) <= 86_400) return Number(reset);
+  return null;
+}
+/** The wait before retry n (1 or 2) when no header came: base plus full jitter. */
+export function backoffMs(n: number, rand: number): number {
+  const [base, jitter] = BACKOFF[Math.min(Math.max(n, 1), BACKOFF.length) - 1];
+  return base + Math.floor(Math.min(Math.max(rand, 0), 0.999999) * jitter);
+}
+/** retry_after_s for the browser: the header rounded up (1 to 120), or 20 with no header. */
+export function busyRetryAfter(headerS: number | null): number {
+  if (headerS === null) return BUSY_RETRY_DEFAULT_S;
+  return Math.min(RETRY_AFTER_MAX_S, Math.max(1, Math.ceil(headerS)));
+}
+
+/* ── The failure log line (STOP 0 D3): numbers, a host, short types and header values; never a URL ── */
+/** A header value for the log: at most 40 characters of [A-Za-z0-9 ._/-]; absent → "-". */
+export function logValue(v: string | null): string {
+  if (v === null) return "-";
+  const s = v.replace(/[^A-Za-z0-9 ._/-]/g, "").slice(0, 40).trim();
+  return s || "-";
+}
+/** The body's kind from Content-Type: html, text, json, other, or "-" when there is none. */
+export function bodyType(contentType: string | null): string {
+  if (!contentType) return "-";
+  const t = contentType.toLowerCase();
+  if (t.includes("html")) return "html";
+  if (t.includes("json")) return "json";
+  if (t.startsWith("text/")) return "text";
+  return "other";
+}
+export type FailInfo = {
+  status: number | null;      // null = a network error
+  errName?: string;           // its name (TypeError)
+  hop: number;                // 0 to 3 (download redirects); 0 for the lookup
+  host: string;               // the hop's host name only
+  headers: Headers | null;
+  bytes: string;              // the body size ("5120", ">65536", "-"); the body itself is never kept
+};
+const secs = (ms: number) => `${Math.round(ms / 100) / 10} s`;
+/** One line per failed try. */
+export function failLine(step: string, f: FailInfo, tryNo: number, maxTries: number, waitMs: number, retryAfterS: number | null): string {
+  const where = `try ${tryNo} of ${maxTries}, hop ${f.hop} ${logValue(f.host)}`;
+  if (f.status === null) return `stock: pixabay ${step} failed: ${logValue(f.errName ?? "Error")} (${where}, wait ${secs(waitMs)})`;
+  const h = f.headers ?? new Headers();
+  return `stock: pixabay ${step} HTTP ${f.status} (${where}, server ${logValue(h.get("server"))}, cf-mitigated ${logValue(h.get("cf-mitigated"))}, ` +
+    `type ${bodyType(h.get("content-type"))}, bytes ${f.bytes}, wait ${secs(waitMs)}, ` +
+    `retry-after ${retryAfterS === null ? "-" : String(Math.ceil(retryAfterS))}, reset ${logValue(h.get("x-ratelimit-reset"))}, ` +
+    `remaining ${logValue(h.get("x-ratelimit-remaining"))})`;
+}
+
+/* ── The limits (0032 stock_reserve and stock_release) ── */
+export type Reserved = { ok: true; id: number } | { ok: false; code: "rate_limited" | "stock_busy" };
+/** stock_reserve's answer → a slot or a refusal; null = not understood (the function then fails closed). */
+export function parseReserve(v: unknown): Reserved | null {
+  if (!isObj(v)) return null;
+  if (v.ok === true && typeof v.id === "number" && Number.isSafeInteger(v.id) && v.id > 0) return { ok: true, id: v.id };
+  if (v.ok === false && (v.code === "rate_limited" || v.code === "stock_busy")) return { ok: false, code: v.code };
+  return null;
+}
+/** After a reserved request fails with one of these, its minute slot is given back (stock_release). */
+export const RELEASE_ON: ErrorCode[] = ["stock_busy", "stock_unavailable", "server_error"];

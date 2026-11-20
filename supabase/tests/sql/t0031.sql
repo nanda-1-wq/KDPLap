@@ -39,9 +39,10 @@ select pg_temp.chk('stock_usage: authenticated yes, anon no', has_function_privi
   and not has_function_privilege('anon', 'public.stock_usage()', 'execute'));
 select pg_temp.chk(g || ': no one runs the trigger function', not has_function_privilege('authenticated', g, 'execute') and not has_function_privilege('anon', g, 'execute'))
   from unnest(array['public.cover_assets_guard()', 'public.stock_cache_guard()', 'public.stock_cache_purge()', 'public.stock_calls_guard()', 'public.stock_calls_purge()']) g order by g;
-select pg_temp.chk('only stock_calls_purge is a definer, and every new function has search_path empty',
+-- (0032, STOP 2 fix A) stock_calls_guard became a definer: it sums every user's Unsplash calls.
+select pg_temp.chk('only stock_calls_purge (and since 0032 stock_calls_guard) are definers, and every new function has search_path empty',
   (select array_agg(proname::text order by proname) from pg_proc where pronamespace = 'public'::regnamespace and prosecdef
-     and proname in ('stock_cache_guard', 'stock_cache_purge', 'stock_calls_guard', 'stock_calls_purge', 'stock_usage', 'cover_assets_guard')) = array['stock_calls_purge']
+     and proname in ('stock_cache_guard', 'stock_cache_purge', 'stock_calls_guard', 'stock_calls_purge', 'stock_usage', 'cover_assets_guard')) = array['stock_calls_guard', 'stock_calls_purge']
   and (select bool_and(proconfig = array['search_path=""']) from pg_proc where pronamespace = 'public'::regnamespace
      and proname in ('stock_cache_guard', 'stock_cache_purge', 'stock_calls_guard', 'stock_calls_purge', 'stock_usage', 'cover_assets_guard')));
 

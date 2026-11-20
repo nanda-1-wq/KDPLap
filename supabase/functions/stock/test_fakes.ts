@@ -1,7 +1,7 @@
 // deno-lint-ignore-file require-await
 // Fakes for the stock tests: a store, a provider fetch, sample answers and tiny picture files.
 // No network, no database. FAKE keys only (never real secrets).
-import { makeHandler, type AssetRow, type NewAsset, type Usage } from "./handler.ts";
+import { makeHandler, type AssetRow, type NewAsset, type ReserveRow } from "./handler.ts";
 
 export const FAKE_PIXABAY = "fake-pixabay-key-0000";
 export const FAKE_UNSPLASH = "fake-unsplash-key-1111";
@@ -63,15 +63,26 @@ export const unSearch = (over: Record<string, unknown> = {}) => ({ action: "sear
 
 /* ── The fake world ── */
 export type Route = (url: string, init: RequestInit) => Response | Promise<Response>;
+/** What the fake stock_calls table already holds (this user's minute counts; the Unsplash calls this hour). */
+export type Usage = { searches: number; picks: number; unsplash_hour: number; unsplash_all: number };
+/** A clock the routes can move (a slow provider) and the fake sleep moves (the waits). */
+export type Clock = { t: number };
 export type Setup = {
   userId?: string | null;
   usage?: Partial<Usage>;
   env?: Record<string, string | undefined>;
   cache?: Map<string, unknown>;
   routes?: Record<string, Route>;   // key: a URL prefix (longest wins)
-  failLog?: boolean; failCacheRead?: boolean; failCacheWrite?: boolean;
+  failReserve?: boolean;            // the rpc fails (42501): fail closed
+  reserveAnswer?: unknown;          // the rpc answers this instead
+  naive?: boolean;                  // the control: check, wait a tick, then write (not atomic)
+  failRelease?: boolean; releaseAnswer?: boolean;
+  failCacheRead?: boolean; failCacheWrite?: boolean;
   failUpload?: boolean; failInsert?: boolean; failUser?: boolean;
+  clock?: Clock; rand?: number;
 };
+/** 0032's constants, for the fake (the real ones live only in SQL). */
+export const FAKE_LIMITS = { search: 30, pick: 10, unsplashUser: 30, unsplashAll: 45 };
 
 export function reply(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -83,7 +94,27 @@ export function file(bytes: Uint8Array, headers: Record<string, string> = {}): R
 export function setup(s: Setup = {}) {
   const calls: { url: string; init: RequestInit }[] = [];
   const logged: string[] = [];
-  const logCalls: { source: string; action: string; provider_calls: number }[] = [];
+  const reserves: ReserveRow[] = [];
+  const releases: number[] = [];
+  const slept: number[] = [];
+  const timeouts: number[] = [];
+  const clock = s.clock ?? { t: 0 };
+  // The fake stock_calls: 0032's rules, checked and written in one synchronous step (like the advisory lock).
+  const u = { searches: 0, picks: 0, unsplash_hour: 0, ...(s.usage ?? {}) };
+  const db = { search: u.searches, pick: u.picks, unUser: u.unsplash_hour, unAll: s.usage?.unsplash_all ?? u.unsplash_hour,
+    nextId: 1, rows: new Map<number, { action: "search" | "pick"; released: boolean }>() };
+  const decide = (row: ReserveRow, counts: { n: number; unUser: number; unAll: number }) => {
+    if (counts.n >= FAKE_LIMITS[row.action]) return { ok: false, code: "rate_limited" };
+    if (row.source === "unsplash" && row.provider_calls > 0
+        && (counts.unUser + row.provider_calls > FAKE_LIMITS.unsplashUser || counts.unAll + row.provider_calls > FAKE_LIMITS.unsplashAll)) {
+      return { ok: false, code: "stock_busy" };
+    }
+    const id = db.nextId++;
+    db[row.action]++;
+    if (row.source === "unsplash") { db.unUser += row.provider_calls; db.unAll += row.provider_calls; }
+    db.rows.set(id, { action: row.action, released: false });
+    return { ok: true, id };
+  };
   const cacheWrites: { key: string; body: unknown }[] = [];
   const cacheReads: { key: string; since: string }[] = [];
   const uploads: { path: string; bytes: Uint8Array; mime: string }[] = [];
@@ -107,10 +138,32 @@ export function setup(s: Setup = {}) {
     uuid: () => NEW_ID,
     fetchFn,
     log: (line) => logged.push(line),
+    sleep: async (ms) => { slept.push(ms); clock.t += ms; },
+    clock: () => clock.t,
+    rand: () => s.rand ?? 0.5,
+    timeout: (ms) => { timeouts.push(ms); return new AbortController().signal; },
     openStore: () => ({
       getUserId: async () => { if (s.failUser) throw new Error(`db down ${FAKE_PIXABAY}`); return s.userId === undefined ? USER : s.userId; },
-      usage: async () => ({ searches: 0, picks: 0, unsplash_hour: 0, ...(s.usage ?? {}) }),
-      logCall: async (row) => { if (s.failLog) throw Object.assign(new Error("denied"), { code: "42501" }); logCalls.push(row); },
+      reserve: async (row) => {
+        reserves.push(row);
+        if (s.failReserve) throw Object.assign(new Error("denied"), { code: "42501" });
+        if ("reserveAnswer" in s) return s.reserveAnswer;
+        if (!s.naive) return decide(row, { n: db[row.action], unUser: db.unUser, unAll: db.unAll });
+        // The control: read the counts, let the other requests run, then write with the old counts.
+        const seen = { n: db[row.action], unUser: db.unUser, unAll: db.unAll };
+        await new Promise((r) => setTimeout(r, 0));
+        return decide(row, seen);
+      },
+      release: async (id) => {
+        releases.push(id);
+        if (s.failRelease) throw Object.assign(new Error("down"), { code: "PGRST301" });
+        if (s.releaseAnswer !== undefined) return s.releaseAnswer;
+        const r = db.rows.get(id);
+        if (!r || r.released) return false;
+        r.released = true;
+        db[r.action]--;          // the minute slot comes back; the Unsplash calls stay counted
+        return true;
+      },
       readCache: async (key, since) => { cacheReads.push({ key, since }); if (s.failCacheRead) throw new Error("read"); return cache.has(key) ? cache.get(key) : null; },
       writeCache: async (key, body) => { if (s.failCacheWrite) throw new Error("write"); cacheWrites.push({ key, body }); cache.set(key, body); },
       upload: async (path, bytes, mime) => { if (s.failUpload) throw new Error("upload"); uploads.push({ path, bytes, mime }); },
@@ -122,7 +175,7 @@ export function setup(s: Setup = {}) {
       },
     }),
   });
-  return { handle, calls, logged, logCalls, cacheWrites, cacheReads, uploads, removed, inserted, cache, env };
+  return { handle, calls, logged, reserves, releases, slept, timeouts, clock, db, cacheWrites, cacheReads, uploads, removed, inserted, cache, env };
 }
 
 /** Pixabay routes: search, lookup by id and the file. */

@@ -10,12 +10,18 @@
 #   S2  30 as A + 30 as B: stock_reserve('unsplash', 'search', 1)   → 45 ok in all, A ≤ 30, B ≤ 30,
 #                                                                     45 Unsplash calls in the rows
 #   S3  2 sessions as A: a My layouts export of a book that has 5  → both saved, exactly 5 after
+#   S4  (STOP 2 fix A) 40 sessions as A: a direct insert of an Unsplash search (1 call) into
+#       stock_calls, the v1 path that skips stock_reserve        → exactly 30 saved, 10 refused by
+#                                                                     the guard (stock_busy), 30 calls
 #   C   the control: 20 sessions as A call a test-only naive function (count, pg_sleep(0.05),
 #       insert; created here, in the scratch database only, never in a migration). It must let
 #       more than 10 through in at least one round, which shows the harness can see a race.
 #   C3  the control for S3: the same 2 exports after the guard is swapped (in the scratch database
 #       only, at the very end) for a copy of 0032's trim without its advisory lock and with
 #       pg_sleep(0.05). It must end with 6 entries at least once, which shows S3 can see a race.
+#   C4  the control for S4: the same 40 inserts after stock_calls_guard is swapped (scratch database
+#       only, at the very end) for a copy of its per-user count without the advisory locks and with
+#       pg_sleep(0.05). It must save more than 30 at least once, which shows S4 can see a race.
 #   supabase/tests/sql/race_0032.sh            10 rounds of each
 #   ROUNDS=3 supabase/tests/sql/race_0032.sh   fewer rounds
 #   KEEP=1 supabase/tests/sql/race_0032.sh     keep the worker outputs (the path is printed)
@@ -140,6 +146,18 @@ for r in {1..$ROUNDS}; do
   report "S3 round $r" $(( w == 2 && saved == 2 && left == 5 && news == 2 && er == 0 )) "waiting $w/2, saved $saved, entries after $left (new $news; kept $olds), errors $er"
 done
 
+# ── S4: (fix A) 40 parallel direct inserts as A, Unsplash, 1 call each ──
+s4ins="insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'search', 1) returning 'saved'"
+for r in {1..$ROUNDS}; do
+  q "delete from public.stock_calls" || exit 1
+  args=(); for i in {1..40}; do args+=("${A}:$s4ins"); done
+  w=$(fire "$TMP/s4" $args)
+  saved=$(count "$TMP/s4" 'saved'); busy=$(count "$TMP/s4" 'ERROR:  stock_busy'); er=$(errors "$TMP/s4")
+  calls=$(q "select coalesce(sum(provider_calls), 0) from public.stock_calls where user_id = '$A' and source = 'unsplash'")
+  report "S4 round $r" $(( w == 40 && saved == 30 && busy == 10 && er == 10 && calls == 30 )) \
+    "waiting $w/40, saved $saved, refused stock_busy $busy, errors $er (all stock_busy), Unsplash calls $calls"
+done
+
 # ── C: the naive control ──
 max=0; seen=0
 for r in {1..$ROUNDS}; do
@@ -180,6 +198,33 @@ for r in {1..$ROUNDS}; do
   (( left > 5 )) && seen=$((seen + 1))
 done
 report "C3 control" $(( seen > 0 )) "the guard without the lock ended with more than 5 in $seen of $ROUNDS rounds (most: $max)"
+
+# ── C4: the S4 control (last: it swaps stock_calls_guard in this scratch database) ──
+q "create or replace function public.stock_calls_guard()
+   returns trigger language plpgsql security definer set search_path = '' as \$\$
+   declare n int;
+   begin
+     new.at := now(); new.released_at := null;
+     if new.source = 'unsplash' and new.provider_calls > 0 then
+       select coalesce(sum(c.provider_calls), 0) into n from public.stock_calls c
+        where c.user_id = new.user_id and c.source = 'unsplash' and c.at > now() - interval '1 hour';
+       perform pg_sleep(0.05);  -- 0032's per-user cap, without its advisory locks
+       if n + new.provider_calls > 30 then raise exception 'stock_busy' using errcode = 'P0001'; end if;
+     end if;
+     return new;
+   end \$\$" || exit 1
+max=0; seen=0
+for r in {1..$ROUNDS}; do
+  q "delete from public.stock_calls" || exit 1
+  args=(); for i in {1..40}; do args+=("${A}:$s4ins"); done
+  w=$(fire "$TMP/c4" $args)
+  saved=$(count "$TMP/c4" 'saved')
+  calls=$(q "select coalesce(sum(provider_calls), 0) from public.stock_calls where user_id = '$A' and source = 'unsplash'")
+  print -r -- "     C4 round $r  waiting $w/40, saved $saved, Unsplash calls $calls"
+  (( calls > max )) && max=$calls
+  (( calls > 30 )) && seen=$((seen + 1))
+done
+report "C4 control" $(( seen > 0 )) "the guard without the locks let more than 30 through in $seen of $ROUNDS rounds (most: $max)"
 
 print -r -- "race_0032: $fail failed"
 (( fail == 0 ))

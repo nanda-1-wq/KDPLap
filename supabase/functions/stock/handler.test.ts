@@ -1,13 +1,17 @@
 // stock handler tests: the whole flow with fakes (no network, no database, fake keys only).
-// CORS, method, auth, input, not_configured per source, the per-user limits, the cache (hit, miss,
-// poisoned, errors), provider errors, the Unsplash budget, the Pixabay pick (lookup by id, file
-// choice, 10 MB cap, magic bytes, redirects, storage and row), the Unsplash pick (hotlink, ping),
-// and the keys never leaving: not in a log line, not in a reply.
+// CORS, method, auth, input, not_configured per source, the limits through stock_reserve (refusals,
+// errors, answers not understood, 15 parallel picks against an atomic fake and a naive control), the
+// cache (hit, miss, poisoned, errors), provider errors, the Unsplash budget, the Pixabay pick (lookup
+// by id, file choice, 10 MB cap, magic bytes, redirects, storage and row), the Pixabay retry (E16.2:
+// header waits, backoff, the shared 2 retries, the 20 s wait budget, the 45 s deadline, the step that
+// failed only), stock_release (when and when not), the User-Agent and Accept on every Pixabay request,
+// the D3 log line, the Unsplash pick (hotlink, ping), and the keys never leaving: not in a log line,
+// not in a reply.
 // deno test --allow-read=supabase/functions supabase/functions/stock/  (from the repo root)
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
 import {
-  BOOK, FAKE_PIXABAY, FAKE_UNSPLASH, file, jpeg, json, NEW_ID, ORIGIN, pixabayAnswer, pixabayHit, pixabayRoutes, png, post, pxSearch,
-  reply, setup, unSearch, unsplashAnswer, unsplashPhoto, unsplashRoutes, USER,
+  BOOK, type Clock, FAKE_PIXABAY, FAKE_UNSPLASH, file, jpeg, json, NEW_ID, ORIGIN, pixabayAnswer, pixabayHit, pixabayRoutes, png, post, pxSearch,
+  reply, type Route, setup, unSearch, unsplashAnswer, unsplashPhoto, unsplashRoutes, USER,
 } from "./test_fakes.ts";
 import { cacheKey, normalizeSearch, parseInput, type SearchInput } from "./lib.ts";
 
@@ -35,7 +39,7 @@ Deno.test("no or bad auth is 401, and nothing is called", async () => {
     const w = setup({ userId, routes: pixabayRoutes() });
     const r = await w.handle(post(pxSearch(), headers as Record<string, string>));
     assertEquals([r.status, (await json(r)).error], [401, "unauthorized"]);
-    assertEquals([w.calls.length, w.logCalls.length], [0, 0]);
+    assertEquals([w.calls.length, w.reserves.length], [0, 0]);
   }
 });
 Deno.test("bad input is 400, and nothing is called", async () => {
@@ -43,7 +47,7 @@ Deno.test("bad input is 400, and nothing is called", async () => {
     const w = setup({ routes: pixabayRoutes() });
     const r = await w.handle(post(b));
     assertEquals([r.status, (await json(r)).error], [400, "bad_request"], JSON.stringify(b));
-    assertEquals([w.calls.length, w.logCalls.length], [0, 0]);
+    assertEquals([w.calls.length, w.reserves.length], [0, 0]);
   }
 });
 Deno.test("a body over 2 KB is 400 (declared or streamed)", async () => {
@@ -74,34 +78,66 @@ Deno.test("a missing key is 503 not_configured for that source only, after auth"
   assertEquals((await json(await anon.handle(post(pxSearch())))).error, "unauthorized");
 });
 
-/* ── Limits ── */
-Deno.test("30 searches in the last minute is 429 rate_limited, nothing called", async () => {
+/* ── Limits: stock_reserve (0032) decides; the function only asks, before any provider call ── */
+Deno.test("(0032) a refused search (rate_limited) is 429, nothing called, the reserve asked for 1 call", async () => {
   const w = setup({ usage: { searches: 30 }, routes: pixabayRoutes() });
   const r = await w.handle(post(pxSearch()));
-  assertEquals([r.status, (await json(r)).error], [429, "rate_limited"]);
-  assertEquals([w.calls.length, w.logCalls.length], [0, 0]);
+  assertEquals([r.status, await json(r)], [429, { error: "rate_limited" }]);
+  assertEquals([w.calls.length, w.reserves], [0, [{ source: "pixabay", action: "search", provider_calls: 1 }]]);
+  assertEquals(w.releases, []);
   assertEquals((await setup({ usage: { searches: 29 }, routes: pixabayRoutes() }).handle(post(pxSearch()))).status, 200);
 });
-Deno.test("10 picks in the last minute is 429; searches do not count against picks", async () => {
+Deno.test("(0032) a refused pick is 429 with nothing called; searches do not count against picks", async () => {
   const w = setup({ usage: { picks: 10, searches: 0 }, routes: pixabayRoutes() });
   assertEquals((await json(await w.handle(post(pxPick())))).error, "rate_limited");
-  assertEquals(w.calls.length, 0);
+  assertEquals([w.calls.length, w.reserves], [0, [{ source: "pixabay", action: "pick", provider_calls: 1 }]]);
   assertEquals((await setup({ usage: { picks: 9, searches: 30 }, routes: pixabayRoutes() }).handle(post(pxPick()))).status, 200);
 });
-Deno.test("the Unsplash budget: 45 an hour by default, a search needs 1, a pick needs 2", async () => {
-  const s = setup({ usage: { unsplash_hour: 45 }, routes: unsplashRoutes() });
-  assertEquals((await json(await s.handle(post(unSearch())))).error, "stock_busy");
-  assertEquals([s.calls.length, s.logCalls.length], [0, 0]);
-  assertEquals((await setup({ usage: { unsplash_hour: 44 }, routes: unsplashRoutes() }).handle(post(unSearch()))).status, 200);
-  const p = setup({ usage: { unsplash_hour: 44 }, routes: unsplashRoutes() });
-  assertEquals((await json(await p.handle(post(unPick())))).error, "stock_busy");
-  assertEquals(p.calls.length, 0);
-  assertEquals((await setup({ usage: { unsplash_hour: 43 }, routes: unsplashRoutes() }).handle(post(unPick()))).status, 200);
-  const env = setup({ usage: { unsplash_hour: 60 }, env: { STOCK_UNSPLASH_HOURLY: "4500" }, routes: unsplashRoutes() });
-  assertEquals((await env.handle(post(unSearch()))).status, 200);
+Deno.test("(0032) the Unsplash budget comes from stock_reserve: a search asks for 1 call, a pick for 2; stock_busy has no retry_after_s", async () => {
+  const s = setup({ usage: { unsplash_hour: 30 }, routes: unsplashRoutes() });
+  const r = await s.handle(post(unSearch()));
+  assertEquals([r.status, await json(r)], [503, { error: "stock_busy" }]);
+  assertEquals([s.calls.length, s.reserves], [0, [{ source: "unsplash", action: "search", provider_calls: 1 }]]);
+  const shared = setup({ usage: { unsplash_hour: 0, unsplash_all: 44 }, routes: unsplashRoutes() });
+  assertEquals((await json(await shared.handle(post(unPick())))).error, "stock_busy");
+  assertEquals([shared.calls.length, shared.reserves[0].provider_calls], [0, 2]);
+  assertEquals((await setup({ usage: { unsplash_all: 44 }, routes: unsplashRoutes() }).handle(post(unSearch()))).status, 200);
+});
+Deno.test("(0032) STOCK_UNSPLASH_HOURLY is no longer read: a new budget needs a migration", async () => {
+  const w = setup({ usage: { unsplash_all: 45 }, env: { STOCK_UNSPLASH_HOURLY: "4500" }, routes: unsplashRoutes() });
+  assertEquals([(await json(await w.handle(post(unSearch())))).error, w.calls.length], ["stock_busy", 0]);
 });
 Deno.test("the Unsplash budget does not touch Pixabay", async () => {
-  assertEquals((await setup({ usage: { unsplash_hour: 999 }, routes: pixabayRoutes() }).handle(post(pxSearch()))).status, 200);
+  assertEquals((await setup({ usage: { unsplash_hour: 999, unsplash_all: 999 }, routes: pixabayRoutes() }).handle(post(pxSearch()))).status, 200);
+});
+Deno.test("(0032) a reserve that fails is 500 server_error with no provider call (fail closed)", async () => {
+  for (const body of [pxSearch(), pxPick(), unSearch(), unPick()]) {
+    const w = setup({ failReserve: true, routes: { ...pixabayRoutes(), ...unsplashRoutes() } });
+    const r = await w.handle(post(body));
+    assertEquals([r.status, (await json(r)).error, w.calls.length, w.releases.length], [500, "server_error", 0, 0]);
+    assertEquals(w.logged, ["stock: unexpected Error 42501"]);
+  }
+});
+Deno.test("(0032) a reserve answer that is not understood is 500 with no provider call", async () => {
+  for (const answer of [null, {}, { ok: true }, { ok: true, id: "7" }, { ok: true, id: 0 }, { ok: true, id: 1.5 }, { ok: false, code: "other" }, [true], "ok"]) {
+    const w = setup({ reserveAnswer: answer, routes: pixabayRoutes() });
+    const r = await w.handle(post(pxPick()));
+    assertEquals([r.status, (await json(r)).error, w.calls.length], [500, "server_error", 0], JSON.stringify(answer));
+    assertEquals(w.logged, ["stock: reserve answer not understood"]);
+  }
+});
+Deno.test("(0032) 15 parallel picks against the atomic fake: 10 pass, 5 rate_limited", async () => {
+  const w = setup({ routes: pixabayRoutes() });
+  const rs = await Promise.all(Array.from({ length: 15 }, () => w.handle(post(pxPick()))));
+  const codes = await Promise.all(rs.map(async (r) => r.status === 200 ? (await r.body?.cancel(), "ok") : (await json(r)).error));
+  assertEquals([codes.filter((c) => c === "ok").length, codes.filter((c) => c === "rate_limited").length], [10, 5]);
+  assertEquals(w.calls.filter((c) => /[?&]id=/.test(c.url)).length, 10);
+});
+Deno.test("(0032) the control: the same 15 picks against a naive fake (check, wait, write) let more than 10 through", async () => {
+  const w = setup({ naive: true, routes: pixabayRoutes() });
+  const rs = await Promise.all(Array.from({ length: 15 }, () => w.handle(post(pxPick()))));
+  assert(rs.filter((r) => r.status === 200).length > 10, "the harness must see a race");
+  await Promise.all(rs.map((r) => r.body?.cancel()));
 });
 
 /* ── Search ── */
@@ -116,8 +152,9 @@ Deno.test("Pixabay search: logged first, the key in the query, 24 results, cache
     width: 1280, height: 853, type: "vector", transparent: true, author: "Ann Lee", authorUrl: "https://pixabay.com/users/ann-lee-42/",
     pageUrl: "https://pixabay.com/illustrations/leaf-1000/",
   });
-  assertEquals(w.logCalls, [{ source: "pixabay", action: "search", provider_calls: 1 }]);
+  assertEquals(w.reserves, [{ source: "pixabay", action: "search", provider_calls: 1 }]);
   assertEquals(w.calls.length, 1);
+  assertEquals(w.calls[0].init.headers, { "User-Agent": "NicheInk-stock/2 (+https://nicheink.com)", "Accept": "application/json" });
   const u = new URL(w.calls[0].url);
   assertEquals([u.host, u.searchParams.get("key"), u.searchParams.get("q"), u.searchParams.get("colors"), u.searchParams.get("safesearch")], ["pixabay.com", FAKE_PIXABAY, "green leaf", "transparent", "true"]);
   assertEquals(w.calls[0].init.redirect, "error");
@@ -138,7 +175,7 @@ Deno.test("a cached answer: no provider call, logged as 0 calls, cached true", a
   const b = await json(again);
   assertEquals([again.status, b.cached, b.results.length, b.q], [200, true, 24, "GREEN leaf"]);
   assertEquals(w.calls.length, 1);
-  assertEquals(w.logCalls.map((c) => c.provider_calls), [1, 0]);
+  assertEquals(w.reserves.map((c) => c.provider_calls), [1, 0]);
 });
 Deno.test("a cached Unsplash answer does not spend the hourly budget", async () => {
   const w = setup({ routes: unsplashRoutes() });
@@ -165,12 +202,12 @@ Deno.test("a cache read or write that fails does not stop the search", async () 
   assertEquals((await r2.handle(post(pxSearch()))).status, 200);
   assert(r2.logged.some((l) => l.startsWith("stock: cache write failed")));
 });
-Deno.test("a call that cannot be logged stops before the provider (fail closed)", async () => {
-  const w = setup({ failLog: true, routes: pixabayRoutes() });
-  const r = await w.handle(post(pxSearch()));
-  assertEquals([r.status, (await json(r)).error, w.calls.length], [500, "server_error", 0]);
-  const p = setup({ failLog: true, routes: unsplashRoutes() });
-  assertEquals([(await p.handle(post(unPick()))).status, p.calls.length], [500, 0]);
+Deno.test("(0032) a cache hit is reserved too (0 calls): a refused one is 429 and sends no answer", async () => {
+  const w = setup({ routes: pixabayRoutes() });
+  await w.handle(post(pxSearch()));
+  const full = setup({ cache: w.cache, usage: { searches: 30 }, routes: pixabayRoutes() });
+  const r = await full.handle(post(pxSearch()));
+  assertEquals([r.status, await json(r), full.calls.length, full.reserves[0].provider_calls], [429, { error: "rate_limited" }, 0, 0]);
 });
 Deno.test("Unsplash search: the key only in the header, content_filter high, 24 results", async () => {
   const w = setup({ routes: unsplashRoutes() });
@@ -239,7 +276,11 @@ Deno.test("Pixabay pick: looked up by id, the 1,280 file stored, the row built f
   assertEquals(w.calls.map((c) => new URL(c.url).host + new URL(c.url).pathname), ["pixabay.com/api/", "pixabay.com/get/g1000_1280.png"]);
   assertEquals(Object.fromEntries(new URL(w.calls[0].url).searchParams), { key: FAKE_PIXABAY, id: "1000" });
   assertEquals(w.calls[1].init.redirect, "manual");
-  assert(!("headers" in w.calls[1].init) || !JSON.stringify(w.calls[1].init.headers).includes(FAKE_PIXABAY));
+  assert(!JSON.stringify(w.calls[1].init.headers).includes(FAKE_PIXABAY));
+  assertEquals(w.calls.map((c) => c.init.headers), [
+    { "User-Agent": "NicheInk-stock/2 (+https://nicheink.com)", "Accept": "application/json" },
+    { "User-Agent": "NicheInk-stock/2 (+https://nicheink.com)", "Accept": "image/jpeg, image/png" },
+  ]);
   assertEquals(w.uploads.map((u) => [u.path, u.mime, u.bytes.length]), [[`${USER}/assets/${NEW_ID}.jpg`, "image/jpeg", bytes.length]]);
   assertEquals(w.inserted, [{
     id: NEW_ID, source: "pixabay", mime: "image/jpeg", path: `${USER}/assets/${NEW_ID}.jpg`, remote: null, width: 1280, height: 853,
@@ -247,7 +288,7 @@ Deno.test("Pixabay pick: looked up by id, the 1,280 file stored, the row built f
     credit: { id: 1000, author: "Ann Lee", authorUrl: "https://pixabay.com/users/ann-lee-42/", pageUrl: "https://pixabay.com/illustrations/leaf-1000/" },
   }]);
   assertEquals(b.asset.id, NEW_ID);
-  assertEquals(w.logCalls, [{ source: "pixabay", action: "pick", provider_calls: 1 }]);
+  assertEquals([w.reserves, w.releases, w.slept, w.logged], [[{ source: "pixabay", action: "pick", provider_calls: 1 }], [], [], []]);
   noKeys(w.logged, JSON.stringify(b));
 });
 Deno.test("Pixabay pick: the size comes from the file, not from Pixabay's numbers", async () => {
@@ -334,11 +375,17 @@ Deno.test("Pixabay pick: a redirect to a Pixabay host is followed; to any other 
   assertEquals((await json(await loop.handle(post(pxPick())))).error, "stock_unavailable");
   assertEquals(loop.calls.length, 5);
 });
-Deno.test("Pixabay pick: a download that fails or times out is stock_unavailable; a 429 is busy", async () => {
+Deno.test("(E16.2) Pixabay pick: a download that times out is stock_unavailable and not retried", async () => {
   const fail = setup({ routes: pixabayRoutes({ fileRoute: () => { throw new DOMException("x", "TimeoutError"); } }) });
   assertEquals((await json(await fail.handle(post(pxPick())))).error, "stock_unavailable");
+  assertEquals([fail.calls.length, fail.slept], [2, []]);
+  assertEquals(fail.logged, ["stock: pixabay download failed: TimeoutError"]);
+});
+Deno.test("(E16.2) Pixabay pick: a 429 that stays is busy after 2 retries, with retry_after_s 20 (no header)", async () => {
   const busy = setup({ routes: pixabayRoutes({ fileRoute: () => reply("x", 429) }) });
-  assertEquals((await json(await busy.handle(post(pxPick())))).error, "stock_busy");
+  const r = await busy.handle(post(pxPick()));
+  assertEquals([r.status, await json(r)], [503, { error: "stock_busy", retry_after_s: 20 }]);
+  assertEquals(busy.calls.map((c) => new URL(c.url).pathname), ["/api/", "/get/g1000_1280.png", "/get/g1000_1280.png", "/get/g1000_1280.png"]);
 });
 Deno.test("Pixabay pick: an upload that fails is server_error and no row is added", async () => {
   const w = setup({ failUpload: true, routes: pixabayRoutes() });
@@ -367,7 +414,8 @@ Deno.test("Unsplash pick: the photo by id, then the download ping, then a linked
     width: 6000, height: 4000, bytes: null, transparent: false, origin_book_id: BOOK, name: "a calm sea at dusk",
     credit: { id: "p0", author: "Bo Kim", authorUrl: "https://unsplash.com/@bokim", pageUrl: "https://unsplash.com/photos/p0" },
   }]);
-  assertEquals(w.logCalls, [{ source: "unsplash", action: "pick", provider_calls: 2 }]);
+  assertEquals(w.reserves, [{ source: "unsplash", action: "pick", provider_calls: 2 }]);
+  for (const c of w.calls) assert(!("User-Agent" in (c.init.headers as Record<string, string>)), "the NicheInk User-Agent is for Pixabay only");
   assertEquals(b.asset.source, "unsplash");
   noKeys(w.logged, JSON.stringify(b));
 });
@@ -420,4 +468,224 @@ Deno.test("the search answer for the browser has no provider-only fields", async
   const b = await json(await w.handle(post(unSearch())));
   assertEquals(Object.keys(b.results[0]).sort(), ["author", "authorUrl", "height", "id", "name", "pageUrl", "preview", "source", "thumb", "transparent", "type", "width"]);
   assert(!JSON.stringify(b).includes("download_location"));
+});
+
+/* ── E16.2: the Pixabay pick retry (STOP 1 inputs: 2 retries for the pick, 20 s of waiting, 45 s in all) ── */
+const UA = "NicheInk-stock/2 (+https://nicheink.com)";
+/** A route that answers each call with the next response (the last one repeats). */
+const seq = (...rs: Route[]): Route => { let n = 0; return (u, i) => rs[Math.min(n++, rs.length - 1)](u, i); };
+const okFile: Route = () => file(jpeg(1280, 853));
+const r429 = (h: Record<string, string> = {}): Route => () => reply("x", 429, h);
+const lookupOk = { totalHits: 1, hits: [pixabayHit(1000)] };
+const downloads = (w: { calls: { url: string }[] }) => w.calls.filter((c) => c.url.includes("/get/")).map((c) => c.url);
+const lookups = (w: { calls: { url: string }[] }) => w.calls.filter((c) => /[?&]id=/.test(c.url)).length;
+/** No log line carries a URL, a query or a key. */
+const clean = (lines: string[]) => {
+  noKeys(lines);
+  for (const l of lines) assert(!l.includes("://") && !l.includes("key=") && !l.includes("?"), `a URL in the log: ${l}`);
+};
+
+Deno.test("(E16.2) a download 429 with Retry-After 3: waits 3 s, then retries the download only, at the same link", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: seq(r429({ "retry-after": "3" }), okFile) }) });
+  const r = await w.handle(post(pxPick()));
+  assertEquals(r.status, 200);
+  assertEquals([lookups(w), downloads(w).length, new Set(downloads(w)).size, w.slept, w.releases], [1, 2, 1, [3000], []]);
+  assertEquals(w.logged, ["stock: pixabay download HTTP 429 (try 1 of 3, hop 0 pixabay.com, server -, cf-mitigated -, type json, bytes 1, wait 3 s, retry-after 3, reset -, remaining -)"]);
+});
+Deno.test("(E16.2) a Retry-After over the wait budget is not waited: stock_busy with retry_after_s (capped at 120)", async () => {
+  for (const [ra, want] of [["25", 25], ["500", 120]] as const) {
+    const w = setup({ routes: pixabayRoutes({ fileRoute: r429({ "retry-after": ra }) }) });
+    const r = await w.handle(post(pxPick()));
+    assertEquals([r.status, await json(r)], [503, { error: "stock_busy", retry_after_s: want }]);
+    assertEquals([downloads(w).length, w.slept, w.releases], [1, [], [1]]);
+    assert(w.logged[0].includes(`wait 0 s, retry-after ${ra},`), w.logged[0]);
+  }
+});
+Deno.test("(E16.2) Retry-After as an HTTP-date is waited (minus the function's clock)", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: seq(r429({ "retry-after": "Mon, 16 Nov 2026 12:00:04 GMT" }), okFile) }) });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  assertEquals(w.slept, [4000]);
+});
+Deno.test("(E16.2) X-RateLimit-Reset only is waited", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: seq(r429({ "x-ratelimit-reset": "7", "x-ratelimit-remaining": "0" }), okFile) }) });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  assertEquals(w.slept, [7000]);
+  assert(w.logged[0].endsWith("wait 7 s, retry-after 7, reset 7, remaining 0)"), w.logged[0]);
+});
+Deno.test("(E16.2) no header: 2 quick retries (1.5 to 2.5 s, then 4 to 6 s), then stock_busy with retry_after_s 20", async () => {
+  for (const [rand, waits] of [[0, [1500, 4000]], [0.9999999, [2499, 5999]]] as const) {
+    const w = setup({ rand, routes: pixabayRoutes({ fileRoute: r429() }) });
+    const r = await w.handle(post(pxPick()));
+    assertEquals([r.status, await json(r)], [503, { error: "stock_busy", retry_after_s: 20 }]);
+    assertEquals([downloads(w).length, w.slept], [3, waits]);
+    assertEquals(w.logged.map((l) => l.match(/try \d of \d|wait [\d.]+ s/g)!.join(", ")),
+      [`try 1 of 3, wait ${Math.round(waits[0] / 100) / 10} s`, `try 2 of 3, wait ${Math.round(waits[1] / 100) / 10} s`, "try 3 of 3, wait 0 s"]);
+  }
+});
+Deno.test("(E16.2) a 502, 503 or 504 then success: one quick retry", async () => {
+  for (const status of [502, 503, 504]) {
+    const w = setup({ routes: pixabayRoutes({ fileRoute: seq(() => reply("x", status), okFile) }) });
+    assertEquals((await w.handle(post(pxPick()))).status, 200, String(status));
+    assertEquals([downloads(w).length, w.slept], [2, [2000]]);
+  }
+});
+Deno.test("(E16.2) a 503 that stays is stock_unavailable (today's code), with no retry_after_s", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: () => reply("x", 503) }) });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([r.status, await json(r), downloads(w).length], [502, { error: "stock_unavailable" }, 3]);
+});
+Deno.test("(E16.2) a network error then success: retried; only the error name is logged", async () => {
+  const boom: Route = () => { throw new TypeError(`error sending request for url (https://pixabay.com/get/g1000_1280.png?key=${FAKE_PIXABAY})`); };
+  const w = setup({ routes: pixabayRoutes({ fileRoute: seq(boom, okFile) }) });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  assertEquals(w.logged, ["stock: pixabay download failed: TypeError (try 1 of 3, hop 0 pixabay.com, wait 2 s)"]);
+  clean(w.logged);
+});
+Deno.test("(E16.2) another 4xx is not retried", async () => {
+  for (const status of [400, 403, 404, 410]) {
+    const w = setup({ routes: pixabayRoutes({ fileRoute: () => reply("x", status) }) });
+    assertEquals((await json(await w.handle(post(pxPick())))).error, "stock_unavailable");
+    assertEquals([downloads(w).length, w.slept, w.logged], [1, [], [`stock: pixabay download HTTP ${status}`]]);
+  }
+});
+Deno.test("(E16.2) a lookup 429 is retried (the lookup only), then the download runs once", async () => {
+  const w = setup({ routes: { "https://pixabay.com/api/?": seq(r429(), () => reply(lookupOk)), "https://pixabay.com/get/": okFile } });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  assertEquals([lookups(w), downloads(w).length, w.slept], [2, 1, [2000]]);
+  assert(w.logged[0].startsWith("stock: pixabay lookup HTTP 429 (try 1 of 3, hop 0 pixabay.com,"), w.logged[0]);
+});
+Deno.test("(E16.2) a lookup 429 with X-RateLimit-Reset 41 (the API window) is not waited: retry_after_s 41", async () => {
+  const w = setup({ routes: { "https://pixabay.com/api/?": r429({ "x-ratelimit-reset": "41", "x-ratelimit-remaining": "0" }), "https://pixabay.com/get/": okFile } });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([await json(r), lookups(w), downloads(w).length, w.slept], [{ error: "stock_busy", retry_after_s: 41 }, 1, 0, []]);
+});
+Deno.test("(E16.2) the 2 retries are shared by the pick: a lookup retry leaves 1 for the download", async () => {
+  const w = setup({ routes: { "https://pixabay.com/api/?": seq(r429(), () => reply(lookupOk)), "https://pixabay.com/get/": r429() } });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([await json(r), lookups(w), downloads(w).length, w.slept], [{ error: "stock_busy", retry_after_s: 20 }, 2, 2, [2000, 5000]]);
+  assertEquals(w.logged.map((l) => l.match(/(lookup|download) HTTP 429 \(try \d of \d/)![0]),
+    ["lookup HTTP 429 (try 1 of 3", "download HTTP 429 (try 1 of 2", "download HTTP 429 (try 2 of 2"]);
+});
+Deno.test("(E16.2) the 20 s wait budget: a second Retry-After of 12 s is not waited", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: r429({ "retry-after": "12" }) }) });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([await json(r), downloads(w).length, w.slept], [{ error: "stock_busy", retry_after_s: 12 }, 2, [12000]]);
+});
+Deno.test("(E16.2) the 45 s deadline cuts a slow try: each try's timeout is the time left", async () => {
+  const clock: Clock = { t: 0 };
+  const slowLookup: Route = () => { clock.t += 30_000; return reply(lookupOk); };
+  const w = setup({ clock, routes: { "https://pixabay.com/api/?": slowLookup, "https://pixabay.com/get/": seq(r429({ "retry-after": "1" }), okFile) } });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  assertEquals([w.timeouts, w.slept], [[10_000, 15_000, 14_000], [1000]]);
+});
+Deno.test("(E16.2) no wait is taken when it leaves no time for a try before the deadline", async () => {
+  const clock: Clock = { t: 0 };
+  const w = setup({ clock, routes: { "https://pixabay.com/api/?": () => { clock.t += 42_000; return reply(lookupOk); }, "https://pixabay.com/get/": r429() } });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([await json(r), downloads(w).length, w.slept, w.releases], [{ error: "stock_busy", retry_after_s: 20 }, 1, [], [1]]);
+  assert(w.logged[0].includes("try 1 of 3") && w.logged[0].includes("wait 0 s"), w.logged[0]);
+});
+Deno.test("(E16.2) no try starts with under 2 s left: stock_unavailable, released", async () => {
+  const clock: Clock = { t: 0 };
+  const w = setup({ clock, routes: { "https://pixabay.com/api/?": () => { clock.t += 44_000; return reply(lookupOk); }, "https://pixabay.com/get/": okFile } });
+  const r = await w.handle(post(pxPick()));
+  assertEquals([await json(r), downloads(w).length, w.releases, w.logged], [{ error: "stock_unavailable" }, 0, [1], ["stock: pixabay download deadline reached"]]);
+});
+Deno.test("(E16.2) D3: a redirect hop's 429 logs its hop, host, server, cf-mitigated, type and size; the retry starts at the same first link", async () => {
+  const blocked: Route = () => new Response("<html>blocked</html>", { status: 429, headers: { server: "cloudflare", "cf-mitigated": "challenge", "content-type": "text/html; charset=UTF-8" } });
+  const w = setup({ routes: {
+    ...pixabayRoutes(),
+    "https://pixabay.com/get/": () => new Response(null, { status: 302, headers: { location: "https://cdn.pixabay.com/photo/x_1280.jpg" } }),
+    "https://cdn.pixabay.com/": seq(blocked, okFile),
+  } });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  assertEquals(w.calls.map((c) => new URL(c.url).host), ["pixabay.com", "pixabay.com", "cdn.pixabay.com", "pixabay.com", "cdn.pixabay.com"]);
+  assertEquals(w.logged, ["stock: pixabay download HTTP 429 (try 1 of 3, hop 1 cdn.pixabay.com, server cloudflare, cf-mitigated challenge, type html, bytes 20, wait 2 s, retry-after -, reset -, remaining -)"]);
+  for (const c of w.calls.slice(1)) assertEquals(c.init.headers, { "User-Agent": UA, "Accept": "image/jpeg, image/png" });
+  clean(w.logged);
+});
+Deno.test("(E16.2) D3: the body size comes from Content-Length, or is counted up to 64 KB; the body is never logged", async () => {
+  const declared = setup({ routes: pixabayRoutes({ fileRoute: seq(() => new Response("tiny", { status: 429, headers: { "content-length": "5120" } }), okFile) }) });
+  await declared.handle(post(pxPick()));
+  assert(declared.logged[0].includes("bytes 5120,"), declared.logged[0]);
+  const big = setup({ routes: pixabayRoutes({ fileRoute: seq(() => new Response("secret body ".repeat(6000), { status: 429 }), okFile) }) });
+  await big.handle(post(pxPick()));
+  assert(big.logged[0].includes("bytes >65536,") && !big.logged[0].includes("secret"), big.logged[0]);
+});
+Deno.test("(E16.2) a key echoed in a header or an error never reaches a log line", async () => {
+  const echo: Route = () => reply("x", 429, { server: `nginx ${FAKE_PIXABAY}`, "cf-mitigated": FAKE_UNSPLASH, "retry-after": "1" });
+  const w = setup({ routes: pixabayRoutes({ fileRoute: seq(echo, okFile) }) });
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+  clean(w.logged);
+  assert(w.logged[0].includes("server nginx [key], cf-mitigated [key]"), w.logged[0]);
+});
+Deno.test("(E16.2) the NicheInk User-Agent and Accept go on every Pixabay request: search, lookup, each download try", async () => {
+  const w = setup({ routes: pixabayRoutes({ fileRoute: seq(r429(), okFile) }) });
+  await w.handle(post(pxSearch()));
+  await w.handle(post(pxPick()));
+  assertEquals(w.calls.map((c) => (c.init.headers as Record<string, string>)["User-Agent"]), [UA, UA, UA, UA]);
+  assertEquals(w.calls.map((c) => (c.init.headers as Record<string, string>)["Accept"]), ["application/json", "application/json", "image/jpeg, image/png", "image/jpeg, image/png"]);
+});
+Deno.test("(E16.2) searches and Unsplash are never retried", async () => {
+  const px = setup({ routes: { "https://pixabay.com/api/": r429() } });
+  assertEquals([(await json(await px.handle(post(pxSearch())))).error, px.calls.length, px.slept], ["stock_busy", 1, []]);
+  const un = setup({ routes: { "https://api.unsplash.com/": () => { throw new TypeError("net"); } } });
+  assertEquals([(await json(await un.handle(post(unPick())))).error, un.calls.length, un.slept], ["stock_unavailable", 1, []]);
+});
+
+/* ── E16.2: stock_release, after a reserved request fails ── */
+Deno.test("(E16.2) release on stock_busy, stock_unavailable and server_error; the reply is unchanged", async () => {
+  const cases: [unknown, Parameters<typeof setup>[0], string][] = [
+    [pxPick(), { routes: pixabayRoutes({ fileRoute: r429() }) }, "stock_busy"],
+    [pxPick(), { routes: { "https://pixabay.com/api/": () => reply("x", 500) } }, "stock_unavailable"],
+    [pxPick(), { routes: pixabayRoutes({ fileRoute: () => reply("x", 403) }) }, "stock_unavailable"],
+    [pxPick(), { failUpload: true, routes: pixabayRoutes() }, "server_error"],
+    [pxPick(), { failInsert: true, routes: pixabayRoutes() }, "server_error"],
+    [pxSearch(), { routes: { "https://pixabay.com/api/": () => reply("x", 500) } }, "stock_unavailable"],
+    [pxSearch(), { routes: { "https://pixabay.com/api/": () => new Response("<html>", { status: 200 }) } }, "stock_unavailable"],
+    [unSearch(), { routes: { "https://api.unsplash.com/": () => reply("x", 429) } }, "stock_busy"],
+    [unPick(), { routes: unsplashRoutes({ ping: () => reply("x", 500) }) }, "stock_unavailable"],
+    [unPick(), { failInsert: true, routes: unsplashRoutes() }, "server_error"],
+  ];
+  for (const [body, opts, code] of cases) {
+    const w = setup(opts);
+    const r = await w.handle(post(body));
+    assertEquals([(await json(r)).error, w.releases], [code, [1]], `${JSON.stringify(body)} ${code}`);
+  }
+});
+Deno.test("(E16.2) no release on success, too_large, bad_image, not_found, not_configured, a refusal or a cache hit", async () => {
+  const big = () => new Response(new Uint8Array(4) as Uint8Array<ArrayBuffer>, { headers: { "content-length": "20000000" } });
+  const cases: [unknown, Parameters<typeof setup>[0]][] = [
+    [pxPick(), { routes: pixabayRoutes() }],
+    [pxPick(), { routes: pixabayRoutes({ fileRoute: big }) }],
+    [pxPick(), { routes: pixabayRoutes({ file: new TextEncoder().encode("GIF89a........") }) }],
+    [pxPick(), { routes: pixabayRoutes({ lookup: { totalHits: 0, hits: [] } }) }],
+    [unPick(), { routes: { "https://api.unsplash.com/photos/": () => reply("x", 401) } }],
+    [pxPick(), { usage: { picks: 10 }, routes: pixabayRoutes() }],
+    [unSearch(), { usage: { unsplash_all: 45 }, routes: unsplashRoutes() }],
+    [pxSearch(), { routes: pixabayRoutes() }],
+  ];
+  for (const [body, opts] of cases) {
+    const w = setup(opts);
+    await (await w.handle(post(body))).body?.cancel();
+    assertEquals(w.releases, [], JSON.stringify(body));
+  }
+  const w = setup({ routes: pixabayRoutes() });
+  await w.handle(post(pxSearch()));
+  await w.handle(post(pxSearch()));
+  assertEquals([w.reserves.map((r) => r.provider_calls), w.releases], [[1, 0], []]);
+});
+Deno.test("(E16.2) a released pick gives its minute slot back: the next pick passes", async () => {
+  const w = setup({ usage: { picks: 9 }, routes: pixabayRoutes({ fileRoute: seq(() => reply("x", 403), okFile) }) });
+  assertEquals((await json(await w.handle(post(pxPick())))).error, "stock_unavailable");
+  assertEquals([w.releases, w.db.pick], [[1], 9]);
+  assertEquals((await w.handle(post(pxPick()))).status, 200);
+});
+Deno.test("(E16.2) a release that fails or is refused does not change the reply, and is logged without a message", async () => {
+  const f = setup({ failRelease: true, routes: pixabayRoutes({ fileRoute: r429({ "retry-after": "60" }) }) });
+  assertEquals(await json(await f.handle(post(pxPick()))), { error: "stock_busy", retry_after_s: 60 });
+  assertEquals(f.logged.at(-1), "stock: release failed: PGRST301");
+  const n = setup({ releaseAnswer: false, routes: pixabayRoutes({ fileRoute: () => reply("x", 403) }) });
+  assertEquals((await json(await n.handle(post(pxPick())))).error, "stock_unavailable");
+  assertEquals(n.logged.at(-1), "stock: release refused");
 });

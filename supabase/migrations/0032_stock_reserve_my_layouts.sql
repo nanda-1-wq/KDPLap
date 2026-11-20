@@ -5,12 +5,15 @@
 -- 1. stock_calls.released_at: the time a failed request gave its minute slot back (null = not released).
 --    The guard clears it on insert, so no one can insert a released row. stock v1 never writes it.
 --    A partial index on the Unsplash rows serves the shared hourly sum.
+--    The guard also applies the Unsplash per-user cap (30) and the shared budget (45) to every insert,
+--    direct or through stock_reserve (STOP 2, fix A). It becomes a security definer for the shared sum.
 -- 2. stock_reserve(source, action, provider_calls): checks the limits and writes the stock_calls row in
 --    ONE transaction, under advisory locks, so parallel requests cannot all pass the last slot (the
 --    E16 Part 11 race). Security definer: it reads every user's Unsplash rows for the shared budget.
 --    It takes NO limit or budget input (B1): the limits are constants here, and a new number needs a
 --    migration. The user can call it by hand with their own JWT; the worst they can do is fill their
 --    own limits, and the per-user cap keeps 15 of the 45 shared Unsplash calls for everyone else.
+--    That holds for a direct insert into stock_calls too, because the guard applies the same cap.
 -- 3. stock_release(id): gives a minute slot back after a failed upstream call. Only the caller's own
 --    row, not released yet, younger than 2 minutes, and at most 5 releases an hour. Unsplash budget is
 --    never given back (Unsplash was really called).
@@ -21,6 +24,8 @@
 --
 -- Unchanged for stock v1 (it keeps working on 0032): stock_usage(), the direct insert policy on
 -- stock_calls, RLS on stock_calls and stock_cache, no update or delete grant to authenticated.
+-- One change v1 can see: at 30 Unsplash calls an hour (or 45 for all users) its insert now fails
+-- (P0001 stock_busy), and v1 answers 500, as it does for any call it cannot log (fail closed).
 -- Open item B2: after stock v2 is live and checked, drop the direct insert policy and stock_usage()
 -- (0033 or its own migration, on the owner's word).
 -- After 0032 the old front end's My layouts upsert fails (42P10, no unique key); the front end goes
@@ -37,17 +42,52 @@ comment on column public.stock_calls.released_at is
 comment on table public.stock_calls is
   'E16 Part 7, E16.2: one row per stock request (written before the provider is called), for the limits. stock v2 writes it through stock_reserve (atomic); stock v1 inserts it directly. Insert and select own; update and delete revoked, so a user cannot clear a limit. at is the server clock. Rows older than 2 hours are purged on insert.';
 
--- 0031's guard plus: no one inserts a released row.
+-- 0031's guard plus: no one inserts a released row, and every Unsplash row obeys the per-user cap and
+-- the shared budget (STOP 2, fix A). stock_reserve checks first and answers {ok: false}; this is the
+-- second wall for every path: stock v1's direct insert and stock_reserve's own insert. So a direct
+-- insert can neither take a user past 30 nor push the shared total past 45.
+-- Security definer: the shared total needs every user's rows, and RLS shows a direct insert only its
+-- own. It is safe because a trigger function cannot be called on its own (0A000) and no one has
+-- execute on it; it takes no input but the new row; search_path is empty; the limits are constants.
+-- A row for another user is refused before any count (42501), so the error never tells one user
+-- anything about another (RLS would refuse that row after this trigger anyway). Same locks, in the
+-- same order, as stock_reserve (user, then Unsplash); inside stock_reserve they are already held.
+-- Keep the two Unsplash constants in step with stock_reserve (t0032 checks both).
 create or replace function public.stock_calls_guard()
-returns trigger language plpgsql security invoker set search_path = '' as $$
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  c_unsplash_hour_all     constant int := 45;
+  c_unsplash_hour_user    constant int := 30;
+  uid  uuid := auth.uid();
+  n    int;
 begin
   new.at := now();
   new.released_at := null;
+  if uid is not null and new.user_id is distinct from uid then
+    raise exception 'stock_calls: own rows only' using errcode = '42501';
+  end if;
+  if new.source = 'unsplash' and new.provider_calls > 0 and new.user_id is not null then
+    perform pg_advisory_xact_lock(hashtextextended('nicheink.stock.user:' || new.user_id::text, 0));
+    perform pg_advisory_xact_lock(hashtextextended('nicheink.stock.unsplash', 0));
+    -- Released rows count (Unsplash was really called), as in stock_reserve.
+    select coalesce(sum(c.provider_calls), 0) into n from public.stock_calls c
+     where c.user_id = new.user_id and c.source = 'unsplash' and c.at > now() - interval '1 hour';
+    if n + new.provider_calls > c_unsplash_hour_user then
+      raise exception 'stock_busy' using errcode = 'P0001',
+        detail = 'Unsplash: 30 calls an hour per user.';
+    end if;
+    select coalesce(sum(c.provider_calls), 0) into n from public.stock_calls c
+     where c.source = 'unsplash' and c.at > now() - interval '1 hour';
+    if n + new.provider_calls > c_unsplash_hour_all then
+      raise exception 'stock_busy' using errcode = 'P0001',
+        detail = 'Unsplash: 45 calls an hour for all users.';
+    end if;
+  end if;
   return new;
 end $$;
 
 comment on function public.stock_calls_guard() is
-  'Trigger (E16 Part 7, 0032): at takes the server clock; released_at starts null (only stock_release sets it).';
+  'Trigger (E16 Part 7, 0032, definer): at takes the server clock; released_at starts null (only stock_release sets it); a signed-in caller inserts only their own row (42501); an Unsplash row with calls, under the per-user and the shared Unsplash advisory locks, is refused (P0001 "stock_busy") when it would take the user past 30 calls an hour or all users past 45 (released rows included). The second wall behind stock_reserve, for direct inserts too.';
 
 revoke execute on function public.stock_calls_guard() from public, anon, authenticated;
 
