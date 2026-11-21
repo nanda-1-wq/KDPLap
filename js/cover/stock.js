@@ -343,6 +343,13 @@
   function thumbImg(r, cls) {
     return `<img class="${cls}${r.transparent ? ' is-clear' : ''}" src="${esc(r.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" draggable="false">`;
   }
+  /**
+   * E16.3 (plan Item 2, owner Q2): the large view's picture. Pixabay shows the tile's own thumb (webformatURL, about
+   * 640 px, already loaded by the tile), never largeImageURL: that is a new pixabay.com/get/…_1280 load on our key
+   * right before a likely pick. The CSS never draws it above its natural size (sharp, smaller). Unsplash: its preview.
+   * The size line and the pick still use the real file (width, height, id).
+   */
+  const prevSrc = (r) => (r.source === 'pixabay' ? r.thumb : r.preview);
   function tileLabel(E, r) {
     return `${E.replaceId != null ? 'Replace with' : 'Add'} ${r.name}, ${LABEL[r.source]}${r.transparent ? ', no background' : ''}`;
   }
@@ -417,7 +424,7 @@
       const g = C.geo.geo(E.cover.fmt);
       const fills = inW >= g.tw + 0.125 && inH >= g.th + 0.25;
       main = `<div class="cv-sd-prev" data-sd-prev>
-          <div class="cv-sd-prevbox${p.transparent ? ' is-clear' : ''}"><img src="${esc(p.preview)}" alt="${esc(p.name)}" referrerpolicy="no-referrer" draggable="false"></div>
+          <div class="cv-sd-prevbox${p.transparent ? ' is-clear' : ''}"><img src="${esc(prevSrc(p))}" alt="${esc(p.name)}" referrerpolicy="no-referrer" draggable="false"></div>
           <div class="cv-sd-info">
             <h2 class="cv-sd-name">${esc(p.name)}</h2>
             <div class="cv-mono cv-sd-size">${p.width.toLocaleString('en-US')} × ${p.height.toLocaleString('en-US')} px</div>

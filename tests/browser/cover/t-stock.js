@@ -27,6 +27,10 @@ const test = async page => {
     return out;
   }, scope);
   const small44 = (list) => list.filter((c) => c.w < 43.5 || c.h < 43.5).map((c) => `${c.k} ${Math.round(c.w)}×${Math.round(c.h)}`);
+  // E16.3: the large view's picture (its src, natural and drawn size), and a Pixabay largeImageURL request.
+  const prevLoaded = (sel = '.cv-sd-prevbox img') => page.waitForFunction((s) => { const i = document.querySelector(s); return i && i.complete && i.naturalWidth > 0; }, sel, { timeout: 10000 });
+  const prevImg = () => page.$eval('.cv-sd-prevbox img', (i) => { const r = i.getBoundingClientRect(); return { src: i.getAttribute('src'), nw: i.naturalWidth, nh: i.naturalHeight, w: r.width, h: r.height }; });
+  const big = (u) => /^https:\/\/pixabay\.com\/get\/.*_1280\./.test(u);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await CV.open(page, { design: 'band' });
@@ -129,6 +133,7 @@ const test = async page => {
   await page.click('[data-stock-look="u1AbC"]');
   await page.waitForSelector('[data-sd-prev]');
   ok((await CV.txt(page, '.cv-sd-name')) === 'calm sea' && (await CV.txt(page, '.cv-sd-size')) === '5,760 × 3,840 px', 'the preview: name and size in px');
+  ok((await page.$eval('.cv-sd-prevbox img', (i) => i.getAttribute('src'))) === STK.results('unsplash')[1].preview, '(E16.3) an Unsplash preview still shows its preview link (unchanged)');
   ok(/Type: photo/.test(await CV.txt(page, '.cv-sd-info')) && /Source: Photo by Bo Kim on Unsplash/.test(await CV.txt(page, '.cv-sd-info')), '"Type: photo", "Source: Photo by Bo Kim on Unsplash"');
   const links = await page.$$eval('.cv-sd-info a', (a) => a.map((x) => [x.textContent, x.href, x.target, x.rel]));
   ok(links.length === 2 && links[0][0] === 'Bo Kim' && links[0][1] === 'https://unsplash.com/@bo?utm_source=nicheink&utm_medium=referral'
@@ -141,10 +146,20 @@ const test = async page => {
 
   /* Preview, Pixabay: the 1,280 px file is honest about its size. */
   await page.click('[data-sd-tab="pixabay"]'); await settle();
+  await prevLoaded('[data-sd-grid] [data-stock-add="1000"] img');
+  const tile0 = await page.$eval('[data-sd-grid] [data-stock-add="1000"] img', (i) => i.getAttribute('src'));
+  let net0 = st.stock.net.length;
   await page.click('[data-stock-look="1000"]');
   ok((await CV.txt(page, '.cv-sd-size')) === '1,280 × 1,280 px' && /Type: vector, no background/.test(await CV.txt(page, '.cv-sd-info')), 'Pixabay preview: the size a pick stores, "vector, no background"');
+  await prevLoaded();
+  let pi = await prevImg();
+  ok(pi.src === STK.results('pixabay')[0].thumb && pi.src === tile0,
+    `(E16.3) a Pixabay preview shows the tile's thumb (webformatURL), never largeImageURL: ${pi.src}`);
+  ok(!st.stock.net.slice(net0).some(big), `(E16.3) opening it makes no pixabay.com/get/…_1280 request (${st.stock.net.slice(net0).length} picture requests in all)`);
+  ok(pi.nw === 640 && pi.nh === 640 && pi.w <= pi.nw + 0.5 && pi.h <= pi.nh + 0.5, `(E16.3) never drawn above its natural size: ${pi.w} × ${pi.h} on screen, ${pi.nw} × ${pi.nh} natural`);
   ok(/Source: Pixabay, by Ann Lee/.test(await CV.txt(page, '.cv-sd-info')) && await page.$$eval('.cv-sd-info a', (a) => a[0].href.startsWith('https://pixabay.com/') && a[1].href === 'https://pixabay.com/users/ann-lee-42/'), '"Source: Pixabay, by Ann Lee", links to Pixabay');
   ok(await page.$eval('[data-sd-print]', (n) => n.classList.contains('is-warn') && !!n.querySelector('svg') && n.textContent === 'Sharp up to 4.3 × 4.3 in at 300 DPI. Too small to fill the front cover sharply.'), 'too small for the 6 × 9 front: amber, with an icon and words');
+  ok((await CV.txt(page, '.cv-sd-size')) === '1,280 × 1,280 px' && /Sharp up to 4\.3 × 4\.3 in/.test(await CV.txt(page, '[data-sd-print]')), '(E16.3) the size and "Sharp up to" lines still read the real file (1,280 px), not the 640 px picture shown');
   await page.click('[data-sd-back]');
   ok(!(await CV.has(page, '[data-sd-prev]')) && await page.evaluate(() => document.activeElement && document.activeElement.matches('[data-stock-look="1000"]')), 'Back to results: focus back on that PREVIEW pill');
 
@@ -334,6 +349,27 @@ const test = async page => {
   const ring = await page.evaluate(() => { const c = getComputedStyle(document.activeElement); return [c.outlineStyle, c.outlineWidth, c.outlineOffset, c.outlineColor]; });
   ok(ring.join(' ') === 'solid 2px 2px rgb(28, 28, 26)', `the focus ring: 2 px ink, 2 px off (${ring})`);
   await page.keyboard.press('Escape');
+
+  /* ── E16.3: a Pixabay photo's preview (640 × 427, smaller than the box: drawn at its natural size), then Add to cover ── */
+  await page.click('[data-srctab="pixabay"]'); await settle();
+  await page.click('[data-stock-open]'); await settle();
+  await prevLoaded('[data-sd-grid] [data-stock-add="1009"] img');
+  net0 = st.stock.net.length;
+  await page.click('[data-stock-look="1009"]');
+  await prevLoaded();
+  pi = await prevImg();
+  const box9 = await page.$eval('.cv-sd-prevbox', (b) => { const r = b.getBoundingClientRect(); return { w: r.width, h: r.height }; });
+  ok(pi.src === STK.results('pixabay')[9].thumb && pi.nw === 640 && pi.nh === 427, `(E16.3) a photo's preview is its 640 px thumb: ${pi.src}, ${pi.nw} × ${pi.nh}`);
+  ok(Math.abs(pi.w - 640) < 0.5 && Math.abs(pi.h - 427) < 0.5 && box9.w > pi.w && box9.h > pi.h, `(E16.3) smaller than the box (${Math.round(box9.w)} × ${Math.round(box9.h)}), drawn at its natural size, never scaled up: ${pi.w} × ${pi.h}`);
+  ok((await CV.txt(page, '.cv-sd-size')) === '1,280 × 853 px' && (await CV.txt(page, '[data-sd-print]')) === 'Sharp up to 4.3 × 2.8 in at 300 DPI. Too small to fill the front cover sharply.', '(E16.3) its size line: the real file, 1,280 × 853 px, "Sharp up to 4.3 × 2.8 in"');
+  const nL = (await CV.state(page)).layers.length;
+  await page.click('[data-sd-add]');
+  await page.waitForFunction(() => !window.kdpBookSteps[9]._debug().stock.busy, null, { timeout: 10000 });
+  s = await CV.state(page);
+  L = s.layers[s.layers.length - 1];
+  ok(JSON.stringify(last()) === JSON.stringify({ action: 'pick', source: 'pixabay', id: '1009', bookId: FIX.BOOK }) && s.layers.length === nL + 1 && L.name === 'sunrise over a desk' && L.natW === 1280 && L.natH === 853,
+    `(E16.3) Add to cover from that preview sends the id only and stores the real file (${L.natW} × ${L.natH}), not the thumb`);
+  ok(!st.stock.net.slice(net0).some(big), `(E16.3) the preview and the pick: no pixabay.com/get/…_1280 request from the browser (${st.stock.net.slice(net0).filter((u) => u.startsWith('https://pixabay.com/')).length} Pixabay picture requests)`);
 
   /* ── At 1024 px: no sideways scroll, 4 a row (E16 Part 9: under 1200 px the panel opens over the cover from its tool) ── */
   await page.setViewportSize({ width: 1024, height: 900 });

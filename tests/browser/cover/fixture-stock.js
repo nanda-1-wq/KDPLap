@@ -3,7 +3,8 @@
 // (supabase/functions/stock/lib.ts StockResult). The pictures are drawn in the page from the design's SVG art and
 // gradients, then posted to https://stock-files.test/<source>/<id>; the mock keeps those bytes
 // (store.stockFiles) and serves them as the providers' links: pixabay.com/get/g<id>_640|1280.png|jpg and
-// images.unsplash.com/photo-<id>. Nothing reaches Pixabay or Unsplash.
+// images.unsplash.com/photo-<id>. Nothing reaches Pixabay or Unsplash. E16.3: a _640 link serves its own copy,
+// 640 px on the long side (as Pixabay's webformatURL); _1280 serves the 1,280 px file a pick stores.
 const STK = {
   // The design's T art (63-09-cover-images-pixabay.html), as SVG bodies on a 200 × 200 box.
   ART: {
@@ -86,6 +87,9 @@ const STK = {
       const [, key, w, h, , clear] = pix[i];
       const k = 1280 / Math.max(w, h), sw = Math.round(w * Math.min(1, k)), sh = Math.round(h * Math.min(1, k));
       await post(`pixabay/${1000 + i}`, await draw(sw, sh, clear ? { art: art[key], png: true } : { stops: grad[key] })); n++;
+      // E16.3: the thumb link (webformatURL, …_640) is 640 px on the long side, as Pixabay's; not counted in n.
+      const t = 640 / Math.max(w, h), tw = Math.round(w * Math.min(1, t)), th = Math.round(h * Math.min(1, t));
+      await post(`pixabay/${1000 + i}_640`, await draw(tw, th, clear ? { art: art[key], png: true } : { stops: grad[key] }));
     }
     for (let i = 0; i < un.length; i++) {
       const [, key, w, h] = un[i];

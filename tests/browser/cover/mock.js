@@ -15,7 +15,8 @@
 // fixture-stock.js, a Pixabay pick stores a copy in the bucket and a cover_assets row, an Unsplash pick a linked row),
 // the providers' picture links (pixabay.com/get, images.unsplash.com: the bytes fixture-stock.js drew in the page) and
 // cover_assets.name (0031: 1 to 200 characters; the database names a row without one by its source).
-// store.stock = { calls: [{ action, source, ... }], net: [urls] }, store.stockFiles = { 'pixabay/<id>': { buf, type } }.
+// store.stock = { calls: [{ action, source, ... }], net: [urls] }, store.stockFiles = { 'pixabay/<id>': { buf, type } }
+// (E16.3: also 'pixabay/<id>_640', the 640 px copy a thumb link serves).
 //   __modes: stockFail / pickFail (n calls answer stockCode / pickCode, default stock_unavailable), stockNet (n calls
 //   do not reach the function), stockSlow / pickSlow (ms), stockMany (Pixabay answers 30 results: 2 pages of 24),
 //   picDown (n picture links fail)
@@ -524,7 +525,11 @@ async function setupCover(page) {
     if (take('picDown')) return r.fulfill({ status: 503, body: 'down' });
     let key = null;
     const pm = url.match(/^https:\/\/pixabay\.com\/get\/g(\d+)_/);
-    if (pm) { const n = Number(pm[1]); key = `pixabay/${n >= 2000 ? 1000 + ((n - 2000) % STK.PIXABAY.length) : n}`; }
+    if (pm) {
+      const n = Number(pm[1]); key = `pixabay/${n >= 2000 ? 1000 + ((n - 2000) % STK.PIXABAY.length) : n}`;
+      // E16.3: a thumb link (…_640) serves its 640 px copy when the fixture drew one.
+      if (/^https:\/\/pixabay\.com\/get\/g\d+_640\./.test(url) && store.stockFiles[`${key}_640`]) key += '_640';
+    }
     const um = url.match(/^https:\/\/images\.unsplash\.com\/photo-([A-Za-z0-9_-]+)/);
     if (um) key = `unsplash/${um[1]}`;
     const f = key && store.stockFiles[key];
