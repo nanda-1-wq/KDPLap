@@ -2,8 +2,10 @@
 -- names by source, 200 cap, control characters, still no update, cover_json),
 -- stock_cache (shape, server clock, fixed key, upsert, 24 h purge, 500 cap,
 -- RLS both ways, anon), stock_calls (shape, server clock, no update or delete,
--- 2 h purge of the caller's rows only, RLS, anon), stock_usage (the counts
--- on the database clock, per user), the grants and the trigger functions.
+-- 2 h purge of the caller's rows only, RLS, anon), the grants and the trigger
+-- functions. (0033) stock_usage is gone and a direct stock_calls insert is
+-- refused, so the calls below come through stock_reserve (0032) or the table
+-- owner; the checks that read stock_usage now count the caller's own rows.
 -- Run: supabase/tests/sql/run.sh t0031.sql
 \ir helpers.sql
 
@@ -28,23 +30,24 @@ select pg_temp.chk('cover_assets.name is text, not null', (select data_type = 't
   from information_schema.columns where table_schema = 'public' and table_name = 'cover_assets' and column_name = 'name'));
 select pg_temp.chk('RLS on stock_cache and stock_calls', (select bool_and(relrowsecurity) from pg_class
   where oid in ('public.stock_cache'::regclass, 'public.stock_calls'::regclass)));
-select pg_temp.chk('stock_cache has 4 own policies, stock_calls 2', (select count(*) from pg_policies where schemaname = 'public' and tablename = 'stock_cache') = 4
-  and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'stock_calls') = 2);
+select pg_temp.chk('(0033) stock_cache has 4 own policies, stock_calls 1 (select own; the insert policy went)', (select count(*) from pg_policies where schemaname = 'public' and tablename = 'stock_cache') = 4
+  and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'stock_calls') = 1);
 select pg_temp.chk('no one can update, delete or truncate stock_calls', not has_table_privilege('anon', 'public.stock_calls', 'update')
   and not has_table_privilege('anon', 'public.stock_calls', 'delete') and not has_table_privilege('anon', 'public.stock_calls', 'truncate'));
 select pg_temp.chk('authenticated cannot update or delete stock_calls', not has_table_privilege('authenticated', 'public.stock_calls', 'update')
   and not has_table_privilege('authenticated', 'public.stock_calls', 'delete') and not has_table_privilege('authenticated', 'public.stock_calls', 'truncate'));
 select pg_temp.chk('no one can truncate stock_cache', not has_table_privilege('authenticated', 'public.stock_cache', 'truncate') and not has_table_privilege('anon', 'public.stock_cache', 'truncate'));
-select pg_temp.chk('stock_usage: authenticated yes, anon no', has_function_privilege('authenticated', 'public.stock_usage()', 'execute')
-  and not has_function_privilege('anon', 'public.stock_usage()', 'execute'));
+select pg_temp.chk('(0033) stock_usage is gone; anon and authenticated have no insert on stock_calls', to_regprocedure('public.stock_usage()') is null
+  and not has_table_privilege('authenticated', 'public.stock_calls', 'insert') and not has_table_privilege('anon', 'public.stock_calls', 'insert'));
 select pg_temp.chk(g || ': no one runs the trigger function', not has_function_privilege('authenticated', g, 'execute') and not has_function_privilege('anon', g, 'execute'))
   from unnest(array['public.cover_assets_guard()', 'public.stock_cache_guard()', 'public.stock_cache_purge()', 'public.stock_calls_guard()', 'public.stock_calls_purge()']) g order by g;
 -- (0032, STOP 2 fix A) stock_calls_guard became a definer: it sums every user's Unsplash calls.
+-- (0033) stock_usage (invoker) was dropped, so it is no longer in the lists.
 select pg_temp.chk('only stock_calls_purge (and since 0032 stock_calls_guard) are definers, and every new function has search_path empty',
   (select array_agg(proname::text order by proname) from pg_proc where pronamespace = 'public'::regnamespace and prosecdef
-     and proname in ('stock_cache_guard', 'stock_cache_purge', 'stock_calls_guard', 'stock_calls_purge', 'stock_usage', 'cover_assets_guard')) = array['stock_calls_guard', 'stock_calls_purge']
+     and proname in ('stock_cache_guard', 'stock_cache_purge', 'stock_calls_guard', 'stock_calls_purge', 'cover_assets_guard')) = array['stock_calls_guard', 'stock_calls_purge']
   and (select bool_and(proconfig = array['search_path=""']) from pg_proc where pronamespace = 'public'::regnamespace
-     and proname in ('stock_cache_guard', 'stock_cache_purge', 'stock_calls_guard', 'stock_calls_purge', 'stock_usage', 'cover_assets_guard')));
+     and proname in ('stock_cache_guard', 'stock_cache_purge', 'stock_calls_guard', 'stock_calls_purge', 'cover_assets_guard')));
 
 -- ── 2. cover_assets.name ──
 :ASA
@@ -135,23 +138,28 @@ select pg_temp.chk('the new answer is kept, the oldest went', exists (select 1 f
 select pg_temp.chk('B keeps its rows (2)', (select count(*) from public.stock_cache where user_id = :B) = 2);
 
 -- ── 4. stock_calls ──
+-- (0033) A user cannot insert a row by hand any more; the server clock and the checks are proven
+-- through the paths that still insert: the table owner (as stock_reserve's own insert) and stock_reserve.
 :ASA
-select pg_temp.expect('A logs a search', $q$insert into public.stock_calls (source, action, provider_calls, at) values ('pixabay', 'search', 1, '2001-01-01')$q$, 'OK 1');
+select pg_temp.expect('(0033) A cannot log a search by a direct insert', $q$insert into public.stock_calls (source, action, provider_calls, at) values ('pixabay', 'search', 1, '2001-01-01')$q$, '42501 permission denied%');
+:OWNER
+select pg_temp.expect('the owner logs A''s search with an old time', $q$insert into public.stock_calls (user_id, source, action, provider_calls, at) values ('00000000-0000-4000-8000-00000000000a', 'pixabay', 'search', 1, '2001-01-01')$q$, 'OK 1');
 select pg_temp.chk('at is the server clock, user A', (select bool_and(at > now() - interval '1 minute' and user_id = :A) from public.stock_calls));
-select pg_temp.expect('an unknown source refused', $q$insert into public.stock_calls (source, action, provider_calls) values ('google', 'search', 1)$q$, '23514%');
-select pg_temp.expect('an unknown action refused', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'download', 1)$q$, '23514%');
-select pg_temp.expect('3 provider calls refused', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'pick', 3)$q$, '23514%');
-select pg_temp.expect('a chosen id refused (generated always)', $q$insert into public.stock_calls (id, source, action, provider_calls) values (99, 'pixabay', 'search', 1)$q$, '428C9%');
+select pg_temp.expect('an unknown source refused', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'google', 'search', 1)$q$, '23514%');
+select pg_temp.expect('an unknown action refused', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'pixabay', 'download', 1)$q$, '23514%');
+select pg_temp.expect('3 provider calls refused', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'pick', 3)$q$, '23514%');
+select pg_temp.expect('a chosen id refused (generated always)', $q$insert into public.stock_calls (id, user_id, source, action, provider_calls) values (99, '00000000-0000-4000-8000-00000000000a', 'pixabay', 'search', 1)$q$, '428C9%');
+:ASA
 select pg_temp.expect('A cannot change a call', $q$update public.stock_calls set at = now() - interval '1 day'$q$, '42501%');
 select pg_temp.expect('A cannot remove a call', $q$delete from public.stock_calls$q$, '42501%');
 :ASB
 select pg_temp.chk('B sees none of A''s calls', (select count(*) from public.stock_calls) = 0);
-select pg_temp.expect('B cannot log a call as A', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'pixabay', 'search', 1)$q$, '42501%');
+select pg_temp.expect('(0033) B cannot log a call as A (no insert right at all)', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'pixabay', 'search', 1)$q$, '42501%');
 :ANON
 select pg_temp.expect('anon cannot log a call', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'search', 1)$q$, '42501%');
 select pg_temp.expect('anon reads no call', $q$select * from public.stock_calls$q$, 'OK 0');
 
--- ── 5. stock_usage ──
+-- ── 5. Counting the caller's calls (until 0033: stock_usage) and the 2 h purge ──
 :OWNER
 set session_replication_role = replica;
 insert into public.stock_calls (user_id, source, action, provider_calls, at) values
@@ -165,25 +173,33 @@ insert into public.stock_calls (user_id, source, action, provider_calls, at) val
   (:B, 'unsplash', 'search', 1, now() - interval '3 hours'),
   (:B, 'unsplash', 'search', 1, now() - interval '10 seconds');
 set session_replication_role = origin;
+create function pg_temp.own_counts() returns text language sql as $$
+  select format('searches %s, picks %s, unsplash_hour %s',
+    count(*) filter (where c.action = 'search' and c.at > now() - interval '1 minute'),
+    count(*) filter (where c.action = 'pick' and c.at > now() - interval '1 minute'),
+    coalesce(sum(c.provider_calls) filter (where c.source = 'unsplash' and c.at > now() - interval '1 hour'), 0))
+  from public.stock_calls c $$;
+grant execute on function pg_temp.own_counts() to public;
 :ASA
 -- in the last minute: the search logged above + 2 seeded searches; 1 pick. Unsplash in the hour: 1 + 2.
-select pg_temp.chk('A: 3 searches and 1 pick a minute, 3 Unsplash calls an hour', public.stock_usage() = '{"searches": 3, "picks": 1, "unsplash_hour": 3}'::jsonb,
-  public.stock_usage()::text);
+select pg_temp.chk('(0033) A''s own rows (select own): 3 searches and 1 pick a minute, 3 Unsplash calls an hour', pg_temp.own_counts() = 'searches 3, picks 1, unsplash_hour 3',
+  pg_temp.own_counts());
+select pg_temp.expect('(0033) stock_usage is gone', $q$select public.stock_usage()$q$, '42883%');
 :ASB
-select pg_temp.chk('B counts only its own (1 Unsplash search)', public.stock_usage() = '{"searches": 1, "picks": 0, "unsplash_hour": 1}'::jsonb, public.stock_usage()::text);
-select pg_temp.expect('B logs a call', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'search', 1)$q$, 'OK 1');
+select pg_temp.chk('(0033) B sees only its own (1 Unsplash search)', pg_temp.own_counts() = 'searches 1, picks 0, unsplash_hour 1', pg_temp.own_counts());
+select pg_temp.chk('(0033) B logs a call through stock_reserve', (public.stock_reserve('unsplash', 'search', 1::smallint) ->> 'ok') = 'true');
 :OWNER
 select pg_temp.chk('B''s insert purged B''s 3-hour-old call', (select count(*) from public.stock_calls where user_id = :B) = 2);
 select pg_temp.chk('A''s 3-hour-old call is untouched by B''s insert', exists (select 1 from public.stock_calls where user_id = :A and at < now() - interval '2 hours'));
 :ASA
-select pg_temp.expect('A logs a call', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'pick', 1)$q$, 'OK 1');
+select pg_temp.chk('(0033) A logs a call through stock_reserve', (public.stock_reserve('pixabay', 'pick', 1::smallint) ->> 'ok') = 'true');
 :OWNER
 select pg_temp.chk('A''s insert purged A''s call over 2 hours, the 61-minute call stays', not exists (select 1 from public.stock_calls where user_id = :A and at < now() - interval '2 hours')
   and exists (select 1 from public.stock_calls where user_id = :A and at < now() - interval '1 hour'));
 :ASA
-select pg_temp.chk('A: 2 picks in the minute now', (public.stock_usage() ->> 'picks')::int = 2, public.stock_usage()::text);
+select pg_temp.chk('A: 2 picks in the minute now', pg_temp.own_counts() like '%picks 2,%', pg_temp.own_counts());
 :ANON
-select pg_temp.expect('anon cannot run stock_usage', $q$select public.stock_usage()$q$, '42501%');
+select pg_temp.expect('(0033) anon: stock_usage is gone', $q$select public.stock_usage()$q$, '42883%');
 
 -- ── 6. The user delete cascade ──
 :OWNER

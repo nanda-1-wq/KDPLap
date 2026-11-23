@@ -1,8 +1,9 @@
 -- 0032 F8 (E16.2): stock v2's signed-in path and the My layouts trim work on the grants 0032 writes
 -- itself, never on Supabase's default privileges. run.sh builds this file's database without the
 -- default EXECUTE on new functions for anon, authenticated and service_role (KDP_PG_NO_FN_DEFAULTS=1).
--- As A: stock_reserve (ok, then the minute limit), stock_release, the guard clears released_at, a 6th
--- My layouts export trims the oldest (the guard runs). As anon: both functions refused.
+-- As A: stock_reserve (ok, then the minute limit), stock_release, a 6th My layouts export trims the
+-- oldest (the guard runs). (0033) A's hand insert is refused and stock_usage is gone. As anon: both
+-- functions refused.
 -- Run: supabase/tests/sql/run.sh t0032_f8_nofn.sql
 \ir helpers.sql
 
@@ -26,9 +27,10 @@ select pg_temp.chk('F8 A runs stock_release on it: true', public.stock_release((
 select pg_temp.chk('F8 10 more picks pass (the released one is free), the 11th is refused',
   (select count(*) filter (where (r ->> 'ok')::boolean) = 10 and count(*) filter (where r ->> 'code' = 'rate_limited') = 1
      from (select public.stock_reserve('pixabay', 'pick', 1::smallint) r from generate_series(1, 11)) x));
-select pg_temp.expect('F8 a hand insert with released_at (guard runs)', $q$insert into public.stock_calls (source, action, provider_calls, released_at) values ('pixabay', 'search', 1, now())$q$, 'OK 1');
-select pg_temp.chk('F8 …released_at cleared', (select released_at is null from public.stock_calls order by id desc limit 1));
-select pg_temp.chk('F8 stock_usage still runs (v1)', (public.stock_usage() ->> 'picks')::int = 11, public.stock_usage()::text);
+select pg_temp.expect('(0033) F8 a hand insert with released_at is refused (no insert right)', $q$insert into public.stock_calls (source, action, provider_calls, released_at) values ('pixabay', 'search', 1, now())$q$, '42501 permission denied%');
+select pg_temp.chk('(0033) F8 …A''s rows are the 11 picks from stock_reserve, 1 released', (select count(*) = 11 and bool_and(action = 'pick') and count(released_at) = 1 from public.stock_calls),
+  (select count(*)::text from public.stock_calls));
+select pg_temp.expect('(0033) F8 stock_usage is gone', $q$select public.stock_usage()$q$, '42883%');
 
 select pg_temp.expect('F8 export 1', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Y1', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, 'OK 1');
 select pg_temp.expect('F8 export 2', $q$insert into public.cover_my_layouts (name, from_book_id, fmt, bg, layers) values ('Y2', 'b0000000-0000-4000-8000-000000000001', '{"trim": "6x9", "pages": 54, "paper": "white"}', '#FFFFFF', '[]')$q$, 'OK 1');

@@ -262,11 +262,16 @@ select pg_temp.expect('storage: B cannot use the old book path, even in B''s fol
 select pg_temp.expect('storage control: B uploads to B''s own assets folder', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000b/assets/bc000000-0000-4000-8000-000000000003.png')$q$, 'OK 1');
 select pg_temp.expect('storage control: B reads only B''s file', $q$select 1 from storage.objects where bucket_id = 'covers'$q$, 'OK 1');
 
--- 0031: B cannot write stock rows as A, and B's stock_usage counts only B's calls.
+-- 0031: B cannot write stock rows as A. (0033) B cannot insert stock_calls at all, stock_usage is gone,
+-- and stock_reserve writes only B's own row.
 select pg_temp.expect('stock_cache: B cannot add an answer with A''s user id', $q$insert into public.stock_cache (user_id, key, body) values ('00000000-0000-4000-8000-00000000000a', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '{}')$q$, '42501%');
 select pg_temp.expect('stock_cache: B cannot overwrite A''s answer by upsert', $q$insert into public.stock_cache (key, body) values ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '{"b": 1}') on conflict (user_id, key) do update set body = excluded.body$q$, 'OK 1');
-select pg_temp.expect('stock_calls: B cannot log a call with A''s user id', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'pick', 2)$q$, '42501%');
-select pg_temp.chk('stock_usage: B sees none of A''s calls', public.stock_usage() = '{"searches": 0, "picks": 0, "unsplash_hour": 0}'::jsonb, public.stock_usage()::text);
+select pg_temp.expect('(0033) stock_calls: B cannot log a call with A''s user id (no insert right)', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'pick', 2)$q$, '42501 permission denied%');
+select pg_temp.expect('(0033) stock_calls: B cannot log its own call by hand either', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'search', 1)$q$, '42501 permission denied%');
+select pg_temp.expect('(0033) stock_usage is gone', $q$select public.stock_usage()$q$, '42883%');
+select pg_temp.chk('(0033) B logs a call through stock_reserve', (public.stock_reserve('pixabay', 'search', 1::smallint) ->> 'ok') = 'true');
+select pg_temp.chk('(0033) …the row is B''s own: B sees it and none of A''s', (select count(*) = 1 and bool_and(user_id = '00000000-0000-4000-8000-00000000000b') from public.stock_calls),
+  (select count(*)::text from public.stock_calls));
 
 -- ── As user B: moving own rows to A is refused ──
 select pg_temp.expect('books: B gives a book to A refused', $q$update public.books set user_id = '00000000-0000-4000-8000-00000000000a' where id = 'b3000000-0000-4000-8000-000000000001'$q$, '42501%');

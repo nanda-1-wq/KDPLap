@@ -3,8 +3,8 @@
 -- arguments and none for a budget (B1), signed out, bad input, the per-user minute limits, a cache hit
 -- counts as a search, the Unsplash per-user cap of 30 and the shared 45, rows older than the window);
 -- stock_release (frees a minute slot, never Unsplash budget; refused for another user's row, an old row,
--- a row already released, the 6th in an hour); RLS; the v1 path (direct insert + stock_usage) still
--- works and counts; My layouts (5 kept, the 6th drops that book's oldest, a rename keeps its place, a
+-- a row already released, the 6th in an hour); RLS; (0033) the v1 path (direct insert + stock_usage)
+-- is closed, and rows written before 0033 still count; My layouts (5 kept, the 6th drops that book's oldest, a rename keeps its place, a
 -- bulk insert, other books, null-book entries, pictures and files untouched (B5), the 100 cap with the
 -- trim, B cannot trim A's); anon. The race proof is race_0032.sh.
 -- Run: supabase/tests/sql/run.sh t0032.sql
@@ -115,10 +115,10 @@ select pg_temp.chk('(fix A) the guard still fires before each insert on stock_ca
   (select count(*) = 1 from pg_trigger where tgrelid = 'public.stock_calls'::regclass and tgname = 'stock_calls_guard'
      and tgfoid = 'public.stock_calls_guard()'::regprocedure and tgenabled = 'O' and (tgtype & 2) = 2 and (tgtype & 4) = 4 and (tgtype & 1) = 1));
 select pg_temp.expect('(fix A) the owner cannot call the guard on its own (a trigger function)', 'select public.stock_calls_guard()', '0A000%');
-select pg_temp.chk('stock v1 kept: stock_calls has its 2 own policies, stock_usage runs for authenticated (invoker), no update or delete',
-  (select count(*) from pg_policies where schemaname = 'public' and tablename = 'stock_calls') = 2
-  and has_function_privilege('authenticated', 'public.stock_usage()', 'execute')
-  and not (select prosecdef from pg_proc where oid = 'public.stock_usage()'::regprocedure)
+select pg_temp.chk('(0033) stock v1 path gone: stock_calls keeps only select own, stock_usage is dropped, no insert, update or delete for authenticated',
+  (select array_agg(policyname::text) from pg_policies where schemaname = 'public' and tablename = 'stock_calls') = array['stock_calls_select_own']
+  and to_regprocedure('public.stock_usage()') is null
+  and not has_table_privilege('authenticated', 'public.stock_calls', 'insert')
   and not has_table_privilege('authenticated', 'public.stock_calls', 'update')
   and not has_table_privilege('authenticated', 'public.stock_calls', 'delete'));
 select pg_temp.chk('cover_my_layouts: the one-per-book key is gone; the primary key is the only unique index',
@@ -222,31 +222,44 @@ select pg_temp.is('…for A too (calls over an hour old do not count)', pg_temp.
 :OWNER
 delete from public.stock_calls;
 
--- ── 4b. (STOP 2 fix A) Direct inserts obey the same Unsplash caps: the guard is the second wall ──
+-- ── 4b. (STOP 2 fix A) The guard is the second wall ──
+-- (0033) A user's direct insert is refused before the guard (no insert right). The guard still checks
+-- every insert that can happen: stock_reserve's own (as the table owner) and the service role's. The
+-- same caps are proven here as the table owner (no RLS, as inside stock_reserve); the cap checks for
+-- users run through stock_reserve (§4 above, and below).
 :ASA
-select pg_temp.expect('(fix A) v1: A logs an Unsplash pick by a direct insert, under the cap', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'pick', 2)$q$, 'OK 1');
-select pg_temp.chk('(fix A) v1: stock_usage counts it (2 Unsplash calls)', (public.stock_usage() ->> 'unsplash_hour')::int = 2, public.stock_usage()::text);
-select pg_temp.expect('(fix A) v1: 13 more Unsplash picks by direct insert, in one statement (28)', $q$insert into public.stock_calls (source, action, provider_calls) select 'unsplash', 'pick', 2 from generate_series(1, 13)$q$, 'OK 13');
-select pg_temp.expect('(fix A) a direct insert of 3 searches at 28 (31) is refused whole', $q$insert into public.stock_calls (source, action, provider_calls) select 'unsplash', 'search', 1 from generate_series(1, 3)$q$, 'P0001 stock_busy | Unsplash: 30 calls an hour per user.');
+select pg_temp.expect('(0033) A''s direct Unsplash insert is refused (no insert right), under the cap too', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'pick', 2)$q$, '42501 permission denied for table stock_calls%');
+select pg_temp.expect('(0033) …13 in one statement too', $q$insert into public.stock_calls (source, action, provider_calls) select 'unsplash', 'pick', 2 from generate_series(1, 13)$q$, '42501 permission denied%');
+select pg_temp.expect('(0033) …a Pixabay pick too', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'pick', 1)$q$, '42501 permission denied%');
+:ASB
+select pg_temp.expect('(0033) B''s direct insert with A''s user id is refused (no insert right)',
+  $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'search', 1)$q$, '42501 permission denied%');
+:OWNER
+select pg_temp.chk('(0033) …none of them wrote a row', (select count(*) from public.stock_calls) = 0);
+select pg_temp.expect('(fix A) the owner logs 14 Unsplash picks for A, in one statement (28)', $q$insert into public.stock_calls (user_id, source, action, provider_calls) select '00000000-0000-4000-8000-00000000000a', 'unsplash', 'pick', 2 from generate_series(1, 14)$q$, 'OK 14');
+select pg_temp.expect('(fix A) 3 searches for A at 28 (31) are refused whole', $q$insert into public.stock_calls (user_id, source, action, provider_calls) select '00000000-0000-4000-8000-00000000000a', 'unsplash', 'search', 1 from generate_series(1, 3)$q$, 'P0001 stock_busy | Unsplash: 30 calls an hour per user.');
 select pg_temp.chk('(fix A) …no row of that statement stays (still 28)', (select sum(provider_calls) from public.stock_calls where source = 'unsplash') = 28);
-select pg_temp.expect('(fix A) 2 searches in one statement reach exactly 30', $q$insert into public.stock_calls (source, action, provider_calls) select 'unsplash', 'search', 1 from generate_series(1, 2)$q$, 'OK 2');
-select pg_temp.expect('(fix A) a direct insert as A past 30 is refused: a 1-call search', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'search', 1)$q$, 'P0001 stock_busy | Unsplash: 30 calls an hour per user.');
-select pg_temp.expect('(fix A) …and a 2-call pick', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'pick', 2)$q$, 'P0001 stock_busy | Unsplash: 30 calls an hour per user.');
-select pg_temp.expect('(fix A) …a released_at in the insert does not help (the guard clears it, then counts)', $q$insert into public.stock_calls (source, action, provider_calls, released_at) values ('unsplash', 'search', 1, now())$q$, 'P0001 stock_busy%');
-select pg_temp.expect('(fix A) A at 30: an Unsplash cache hit (0 calls) by direct insert still passes', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'search', 0)$q$, 'OK 1');
-select pg_temp.expect('(fix A) A at 30: a Pixabay pick by direct insert still passes', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'pick', 1)$q$, 'OK 1');
+select pg_temp.expect('(fix A) 2 searches in one statement reach exactly 30', $q$insert into public.stock_calls (user_id, source, action, provider_calls) select '00000000-0000-4000-8000-00000000000a', 'unsplash', 'search', 1 from generate_series(1, 2)$q$, 'OK 2');
+select pg_temp.expect('(fix A) A past 30 is refused: a 1-call search', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'search', 1)$q$, 'P0001 stock_busy | Unsplash: 30 calls an hour per user.');
+select pg_temp.expect('(fix A) …and a 2-call pick', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'pick', 2)$q$, 'P0001 stock_busy | Unsplash: 30 calls an hour per user.');
+select pg_temp.expect('(fix A) …a released_at in the insert does not help (the guard clears it, then counts)', $q$insert into public.stock_calls (user_id, source, action, provider_calls, released_at) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'search', 1, now())$q$, 'P0001 stock_busy%');
+select pg_temp.expect('(fix A) A at 30: an Unsplash cache hit (0 calls) still passes', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'search', 0)$q$, 'OK 1');
+select pg_temp.expect('(fix A) A at 30: a Pixabay pick still passes', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'pixabay', 'pick', 1)$q$, 'OK 1');
+:ASA
 select r as refused from (select public.stock_reserve('unsplash', 'search', 1::smallint) r) x \gset
 select pg_temp.chk('(fix A) stock_reserve still answers first: {ok: false, code: stock_busy}, not an error',
   :'refused'::jsonb = '{"ok": false, "code": "stock_busy"}'::jsonb, :'refused');
-:ASB
-select pg_temp.expect('(fix A) B cannot log an Unsplash call with A''s user id: refused before any count (42501, never stock_busy)',
+:OWNER
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000000b';
+select pg_temp.expect('(fix A) the owner with B''s user id cannot write A''s Unsplash row: refused before any count (42501, never stock_busy)',
   $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000a', 'unsplash', 'search', 1)$q$, '42501 stock_calls: own rows only%');
-select pg_temp.expect('(fix A) B: 7 Unsplash picks by direct insert (A 30 + B 14 = 44)', $q$insert into public.stock_calls (source, action, provider_calls) select 'unsplash', 'pick', 2 from generate_series(1, 7)$q$, 'OK 7');
-select pg_temp.expect('(fix A) B''s direct 2-call pick at 44 is refused by the shared 45 (B''s own 16 is under 30)', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'pick', 2)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
-select pg_temp.expect('(fix A) B''s direct 1-call search makes exactly 45', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'search', 1)$q$, 'OK 1');
-select pg_temp.expect('(fix A) direct inserts cannot push the shared total past 45: B''s next search is refused', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'search', 1)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
+reset request.jwt.claim.sub;
+select pg_temp.expect('(fix A) B: 7 Unsplash picks (A 30 + B 14 = 44)', $q$insert into public.stock_calls (user_id, source, action, provider_calls) select '00000000-0000-4000-8000-00000000000b', 'unsplash', 'pick', 2 from generate_series(1, 7)$q$, 'OK 7');
+select pg_temp.expect('(fix A) B''s 2-call pick at 44 is refused by the shared 45 (B''s own 16 is under 30)', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000b', 'unsplash', 'pick', 2)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
+select pg_temp.expect('(fix A) B''s 1-call search makes exactly 45', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000b', 'unsplash', 'search', 1)$q$, 'OK 1');
+select pg_temp.expect('(fix A) no insert can push the shared total past 45: B''s next search is refused', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000b', 'unsplash', 'search', 1)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
+select pg_temp.expect('(fix A) …C, who made no Unsplash call, is refused too', $q$insert into public.stock_calls (user_id, source, action, provider_calls) values ('00000000-0000-4000-8000-00000000000c', 'unsplash', 'search', 1)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
 :ASC
-select pg_temp.expect('(fix A) …C, who made no Unsplash call, is refused too', $q$insert into public.stock_calls (source, action, provider_calls) values ('unsplash', 'search', 1)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
 select pg_temp.is('(fix A) …and stock_reserve tells C stock_busy (no error)', pg_temp.reserve_n(1, 'unsplash', 'search', 1), 'ok 0, rate_limited 0, stock_busy 1');
 :OWNER
 select pg_temp.chk('(fix A) the refused inserts wrote nothing: A 30, B 15, all 45',
@@ -257,9 +270,9 @@ update public.stock_calls set at = at - interval '61 minutes';
 :ASA
 select pg_temp.is('(fix A) an hour later, the stock_reserve path still works through the guard: 10 Unsplash picks (20)', pg_temp.reserve_n(10, 'unsplash', 'pick', 2), 'ok 10, rate_limited 0, stock_busy 0');
 select pg_temp.is('(fix A) …10 searches reach exactly 30, the 11th gets stock_busy as an answer', pg_temp.reserve_n(11, 'unsplash', 'search', 1), 'ok 10, rate_limited 0, stock_busy 1');
-:ASB
-select pg_temp.expect('(fix A) A 30 by stock_reserve: B''s direct insert of 16 searches (46) is refused whole', $q$insert into public.stock_calls (source, action, provider_calls) select 'unsplash', 'search', 1 from generate_series(1, 16)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
-select pg_temp.expect('(fix A) …15 pass (45)', $q$insert into public.stock_calls (source, action, provider_calls) select 'unsplash', 'search', 1 from generate_series(1, 15)$q$, 'OK 15');
+:OWNER
+select pg_temp.expect('(fix A) A 30 by stock_reserve: 16 searches for B (46) are refused whole', $q$insert into public.stock_calls (user_id, source, action, provider_calls) select '00000000-0000-4000-8000-00000000000b', 'unsplash', 'search', 1 from generate_series(1, 16)$q$, 'P0001 stock_busy | Unsplash: 45 calls an hour for all users.');
+select pg_temp.expect('(fix A) …15 pass (45)', $q$insert into public.stock_calls (user_id, source, action, provider_calls) select '00000000-0000-4000-8000-00000000000b', 'unsplash', 'search', 1 from generate_series(1, 15)$q$, 'OK 15');
 :ASC
 select pg_temp.is('(fix A) C''s stock_reserve at 45: stock_busy', pg_temp.reserve_n(1, 'unsplash', 'search', 1), 'ok 0, rate_limited 0, stock_busy 1');
 :OWNER
@@ -291,7 +304,9 @@ select pg_temp.is('the 6th release in an hour: false (A has 1; 4 more pass)',
   pg_temp.release_list(array[:p1_id + 3, :p1_id + 4, :p1_id + 5, :p1_id + 6, :p1_id + 7]), 'true,true,true,true,false');
 select pg_temp.chk('…5 rows released in all', (select count(*) from public.stock_calls where released_at is not null) = 5);
 select pg_temp.expect('A cannot set released_at by hand (no update right)', $q$update public.stock_calls set released_at = now()$q$, '42501%');
-select pg_temp.expect('a hand insert with released_at set', $q$insert into public.stock_calls (source, action, provider_calls, released_at) values ('pixabay', 'search', 1, now() - interval '1 minute')$q$, 'OK 1');
+select pg_temp.expect('(0033) A cannot hand-insert a row with released_at set (no insert right)', $q$insert into public.stock_calls (source, action, provider_calls, released_at) values ('pixabay', 'search', 1, now() - interval '1 minute')$q$, '42501 permission denied%');
+:OWNER
+select pg_temp.expect('(0033) the owner''s insert with released_at set', $q$insert into public.stock_calls (user_id, source, action, provider_calls, released_at) values ('00000000-0000-4000-8000-00000000000a', 'pixabay', 'search', 1, now() - interval '1 minute')$q$, 'OK 1');
 select pg_temp.chk('…comes in counted (released_at cleared by the guard)', (select released_at is null from public.stock_calls order by id desc limit 1));
 :OWNER
 delete from public.stock_calls;
@@ -320,14 +335,18 @@ select pg_temp.chk('every row is its caller''s; A''s row is not released', (sele
   and (select user_id from public.stock_calls where id = :b1_id) = :B and (select released_at is null from public.stock_calls where id = :a1_id));
 delete from public.stock_calls;
 
--- ── 7. The stock v1 path still works, and its rows count for v2 ──
+-- ── 7. (0033) The stock v1 path is closed; rows written before 0033 still count ──
 :ASA
-select pg_temp.expect('v1: A logs a pick by a direct insert', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'pick', 1)$q$, 'OK 1');
-select pg_temp.chk('v1: stock_usage counts it', public.stock_usage() = '{"searches": 0, "picks": 1, "unsplash_hour": 0}'::jsonb, public.stock_usage()::text);
-select pg_temp.expect('v1: 9 more picks by direct insert', $q$insert into public.stock_calls (source, action, provider_calls) select 'pixabay', 'pick', 1 from generate_series(1, 9)$q$, 'OK 9');
-select pg_temp.is('v1 rows count for stock_reserve (the deploy gap): the 11th pick is refused', pg_temp.reserve_n(1, 'pixabay', 'pick', 1), 'ok 0, rate_limited 1, stock_busy 0');
+select pg_temp.expect('(0033) v1: A cannot log a pick by a direct insert', $q$insert into public.stock_calls (source, action, provider_calls) values ('pixabay', 'pick', 1)$q$, '42501 permission denied%');
+select pg_temp.expect('(0033) v1: stock_usage is gone', $q$select public.stock_usage()$q$, '42883%');
+:OWNER
+-- 10 picks as v1 wrote them before 0033 (plain rows, the triggers on).
+insert into public.stock_calls (user_id, source, action, provider_calls) select :A, 'pixabay', 'pick', 1 from generate_series(1, 10);
+:ASA
+select pg_temp.is('rows written before 0033 count for stock_reserve: the 11th pick is refused', pg_temp.reserve_n(1, 'pixabay', 'pick', 1), 'ok 0, rate_limited 1, stock_busy 0');
 select pg_temp.is('v2: a search by stock_reserve', pg_temp.reserve_n(1, 'pixabay', 'search', 1), 'ok 1, rate_limited 0, stock_busy 0');
-select pg_temp.chk('…v2 rows count for stock_usage (v1 reads them after a rollback)', public.stock_usage() = '{"searches": 1, "picks": 10, "unsplash_hour": 0}'::jsonb, public.stock_usage()::text);
+select pg_temp.chk('(0033) A sees its 11 rows (select own): 10 picks, 1 search', (select count(*) filter (where action = 'pick') = 10 and count(*) filter (where action = 'search') = 1
+  from public.stock_calls), (select count(*)::text from public.stock_calls));
 :OWNER
 delete from public.stock_calls;
 
