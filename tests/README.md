@@ -79,6 +79,9 @@ deno test --allow-read=supabase/functions supabase/functions/stock/
   (lookup by id, the 10 MB cap while streaming, magic bytes, redirects, storage
   and row, the Unsplash download ping), and no key in any log line or reply.
 - No live calls: Pixabay, Unsplash and Supabase are never reached.
+- E16.3 (stock v3): `usableWait` in `lib.test.ts`: a wait header under `HEADER_MIN_S` (2 s), such as the
+  live `Retry-After: 0`, counts as no header, so the pick takes the 1.5 to 2.5 s, then 4 to 6 s backoff and
+  answers `retry_after_s: 20`. The log line still prints the raw header. Live check: STOP 4 (busy line "20 s").
 ## Browser helpers (Deno)
 
 ```sh
@@ -372,6 +375,9 @@ tests/browser/run.sh write t-complete.js # (also) no strip on 01 to 09; Reopen f
 tests/browser/run.sh cover t-stock-retry.js  # Q-1: "Pixabay is busy. Trying again in N s." in design 63's error slot (grid, preview, panel), said once, one automatic retry; cancel on pick, close, leaving 09; stock v1 and bad values; Unsplash no wait
 tests/browser/run.sh cover t-my.js       # (also) Q-2: date and local time, the × label with the time, 5 per book, the 6th drops the oldest of that book only, no Storage call
 tests/browser/run.sh cover t-shots-e162.js  # STOP 3 compare shots (63 busy line, 67 with 5 entries, the export line) → docs/reviews/e16-2/ (never in a sweep)
+# E16.3 Part 2 (plan docs/reviews/2026-11-20-e16-3-plan.md; fixture-stock.js also posts a 640 px copy, pixabay/<id>_640, served for _640 links)
+tests/browser/run.sh cover t-stock.js    # (also) "(E16.3)": the Pixabay preview shows the tile (webformatURL), no pixabay.com/get/…_1280 request on opening or picking, never drawn above its natural size; Unsplash unchanged
+tests/browser/run.sh cover t-shots-e163.js  # STOP 2 compare shots (the preview against STOP 7 and design 63, the pixel diff) → docs/reviews/e16-3/ (never in a sweep)
 COVER_OUT=<scratch> node tests/browser/cover/safari-p10.mjs   # real Safari, the export: real clicks, the real engine (real CDNs), KDP checks, zip read back, Stop
 COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, the editor (text, effects, shapes, images, PDF, crop, undo, save); every Supabase call answered in the page (safari-stub.js), none reaches the host
 ```
@@ -476,6 +482,7 @@ migrations need (roles, `auth.uid()`, default grants). Suites:
 `t0030_f8_nofn` (E16 F8: the signed-in editor path on 0030's own grants),
 `t0031` stock (E16 Part 7: cover_assets.name with its plain names by source and the 200 cap, stock_cache with the server clock, the 24-hour purge and the 500 cap, stock_calls with no update or delete and the 2-hour purge of the caller's rows only, stock_usage on the database clock, the grants and trigger functions),
 `t0031_f8_nofn` (the stock path on 0031's own grants),
+`t0033` stock cleanup (E16.3, B2: one policy left on stock_calls, select own; no insert, update, delete or truncate for anon or authenticated; stock_usage gone (42883); a direct insert refused as A, as B with A's id, signed out and as anon, with no row written; stock_reserve and stock_release still work, with the minute limit, the Unsplash caps and the 2-hour purge; the guard stays the second wall). The lines marked "(0033)" in `t0031`, `t0031_f8_nofn`, `t0032`, `t0032_f8_nofn` and `rls_cross_user` were rewritten for 0033; `race_0032.sh` retired S4 and C4 (the direct-insert race). Live after 0033 (STOP 4 §8): a direct insert 403 `42501`, `rpc/stock_usage` 404 `PGRST202`, `stock_reserve` 200,
 `t_export_include` (E11: the fixture cases from `tests/fixtures/export-include.json`, recorded with the dialog's own list, read as not changed by export_badges; E13.1: the "final" cases give the same list from pdf_version_ids; run from the repo root),
 `rls_cross_user` (user B against user A's rows in every table; E15 and E16: the cover tables (34 tables after 0031), functions, the rev autosave, the move and give cases, and A's file in the "covers" bucket).
 

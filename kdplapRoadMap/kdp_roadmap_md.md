@@ -100,7 +100,8 @@ Status: ✅ done (E1 to E12, both review gates)
 - Plan: `docs/reviews/2026-11-13-e16-plan.md`; reports: `docs/reviews/2026-11-13-e16-stop0.md` to `2026-11-16-e16-stop10.md`, `2026-11-18-e16-stop11.md`, `2026-11-18-e16-1.md`; numbers `docs/reviews/e16-live/results.md`
 - Open items:
   - [x] **E16.2 live Nov 20 (0032, stock v2, main c0a0ce0):** the Pixabay pick retry with a countdown, the atomic stock limits (0032 `stock_reserve`, `stock_release`), My layouts up to 5 per book with date and time. Plan and reports `docs/reviews/2026-11-20-e16-2-plan.md`, `-stop0.md` to `-stop4.md`. Live: 7 Pixabay requests (1 over the cap of 6); the busy pick's 3 downloads were 429 "retry-after 0" from Cloudflare
-  - **Next E16.3:** Retry-After 0 = no header; the preview shows webformatURL; B2 cleanup (drop the direct insert on `stock_calls` and `stock_usage()`) in 0033 (`0033_stock_cleanup.sql`); EPUB (E13.3) uses 0034
+  - [x] **E16.3 live Nov 23 (main 3842994, stock v3, 0033):** Retry-After under 2 s = no header (the busy line says 20 s); the Pixabay preview shows webformatURL (no 1280 px load); B2 cleanup in 0033 (`0033_stock_cleanup.sql`, 20261123172100: no direct insert on `stock_calls`, `stock_usage()` gone). Plan and reports `docs/reviews/2026-11-20-e16-3-plan.md`, `-stop1.md` to `-stop4.md`. Live: 5 Pixabay requests; the pick after the preview still got 3 download 429s from Cloudflare with no 1280 px load, so H1 is ruled out
+  - **E16.4 (research, later, on the owner's word):** the Pixabay 429 is most likely Cloudflare on Supabase's shared egress IP (H2)
   - Unsplash production approval (until then it searches only on Search, N10; 45 calls an hour for the whole app);
   - Pixabay full API access (pictures are 1,280 px on the long side without it);
   - iPad memory for large covers (N6);
@@ -110,8 +111,8 @@ Status: ✅ done (E1 to E12, both review gates)
   - phone layout: after v2 (the editor needs 900 px).
 
 ## Next
-E16.2 live Nov 20 (0032, stock v2, main c0a0ce0); next E16.3: Retry-After 0 = no header, preview shows webformatURL; B2 cleanup in 0033.
-Then EPUB and the Kindle preview (E13.3, migration 0034), then the owner publishes the real book.
+E16.3 live Nov 23 (main 3842994, stock v3, 0033); Pixabay 429 most likely Cloudflare on the shared egress IP (H2), E16.4 research later; next E13.3 EPUB (0034).
+Then the owner publishes the real book.
 
 ## v2 · KDP-ready files
 Scope: owner decisions, v2 step A (Oct 31).
