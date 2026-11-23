@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Final 08 Format · Kindle preview (E13.3 · 41d)</title>
+<!-- NicheInk v2 final design · E13.3 Part 0 · 41d: the live Kindle preview in the D2/D3 layout of 08.
+     Open at 1440 px (two columns) and at 900 px (one column). Ink on paper tokens only. -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=EB+Garamond:wght@400;500;600&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1C1C1A;--ink2:#3D3D39;--graphite:#55554F;--muted:#75756F;--stone:#D9D9D5;--stone2:#B8B8B3;--mist:#E6E6E2;--paper:#F3F3F1;--surface:#FFFFFF;--surface2:#F8F8F6;--success:#1E7A46;--success-t:#E7F4EC;--warning:#8A5A00;--warning-t:#FDF3DC}
+*{box-sizing:border-box}
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;color:var(--ink);background:var(--paper);font-size:14px}
+.mono{font-family:"IBM Plex Mono",monospace}
+.app{display:flex;min-height:100vh}
+/* rail (51b) */
+.rail{width:76px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--stone);padding:20px 8px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.rail .ic{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:var(--ink2)}
+.rail .box{border:1px solid var(--stone)}
+.rail .mini{width:46px;height:69px;border-radius:3px 5px 5px 3px;background:var(--mist);box-shadow:inset 3px 0 0 rgba(0,0,0,.12),0 1px 2px rgba(28,28,26,.18);padding:5px 4px 4px;display:flex;flex-direction:column;color:var(--ink2)}
+.rail .mini b{font-size:6px;line-height:1.2;text-transform:uppercase}.rail .mini span{font-size:6px;letter-spacing:.06em;text-transform:uppercase;margin-top:auto}
+.rail .st{width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;color:var(--ink)}
+.rail .st span{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--graphite)}
+.rail .st.cur{background:var(--mist)}.rail .st.cur span{color:var(--ink);font-weight:500}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ink)}.ring{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--stone2)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+/* header (v1 shell) */
+.hdr{height:80px;display:flex;align-items:center;gap:16px;padding:0 40px;border-bottom:1px solid var(--stone);background:var(--surface)}
+.btn{height:44px;padding:0 18px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);font:500 15px "IBM Plex Sans";color:var(--ink);display:inline-flex;align-items:center;gap:8px}
+.btn.dim{background:var(--mist);color:var(--muted);border-color:var(--mist)}
+.hdr .mid{flex:1;text-align:center}.hdr .mid .k{font:500 12px "IBM Plex Mono";letter-spacing:.12em;color:var(--graphite)}.hdr .mid h1{margin:2px 0 0;font-size:20px;font-weight:600}
+.hdr .why{color:var(--graphite);font-size:13px;max-width:210px}
+.body{flex:1;display:flex;min-height:0}
+/* settings column (D2/D3, unchanged except the ISBN note) */
+.set{width:360px;flex-shrink:0;border-right:1px solid var(--stone);padding:24px 24px 40px 32px;background:var(--paper)}
+.lab{font:500 12px "IBM Plex Mono";letter-spacing:.12em;color:var(--graphite);margin:0 0 10px}
+.styles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.sty{height:102px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px;font-size:11px;line-height:1.35;color:var(--graphite)}
+.sty b{font:400 24px "EB Garamond";color:var(--ink)}.sty.on{border:2px solid var(--ink)}.sty i{font-style:normal;font-weight:600;color:var(--ink)}
+.help{font-size:12px;color:var(--graphite);margin:8px 0 14px}
+.row{display:flex;align-items:center;justify-content:space-between;min-height:32px;font-size:14px}
+.row.sub{padding-left:16px;font-size:13px;color:var(--ink2)}
+.cb{width:18px;height:18px;border:1.5px solid var(--ink2);border-radius:3px;display:inline-block}.cb.on{background:var(--ink);border-color:var(--ink);position:relative}.cb.on:after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.sel{height:44px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);padding:0 14px;display:flex;align-items:center;justify-content:space-between;font-size:14px}
+.tag{border:1px dashed var(--stone2);border-radius:12px;padding:1px 8px;font-size:12px;color:var(--graphite)}
+.tag.solid{border-style:solid;background:var(--surface2)}
+.isbn{display:flex;align-items:center;gap:10px}.isbn .sel{flex:1;color:var(--muted)}
+.new{outline:2px dashed var(--stone2);outline-offset:4px;border-radius:6px}
+/* preview area */
+.pv{flex:1;min-width:0;padding:24px 32px 40px}
+.bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.seg{display:inline-flex;border:1px solid var(--stone);border-radius:10px;padding:3px;background:var(--surface)}
+.seg span{height:38px;padding:0 16px;display:flex;align-items:center;border-radius:7px;font-weight:500}.seg .on{background:var(--ink);color:#fff}
+.chip{height:32px;border:1px solid var(--stone);border-radius:16px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;background:var(--surface);color:var(--ink2)}
+.chip b{font-weight:600;color:var(--ink)}
+.sizes{display:inline-flex;gap:6px}.sizes span{width:44px;height:44px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Sans"}
+.sizes .on{border:2px solid var(--ink)}
+.sp{flex:1}
+.stage{background:var(--mist);border-radius:12px;padding:28px 24px 20px;display:flex;flex-direction:column;align-items:center}
+.dev{background:#2E2E2B;border-radius:28px;padding:14px;box-shadow:0 2px 6px rgba(28,28,26,.25)}
+.scr{width:440px;height:600px;background:var(--surface);border-radius:14px;padding:44px 40px 20px;display:flex;flex-direction:column;font-family:"Source Serif 4",Georgia,serif;color:var(--ink);overflow:hidden}
+.scr .cl{font:500 13px "EB Garamond";letter-spacing:.18em;text-transform:uppercase;text-align:center;color:var(--ink2)}
+.scr h2{font:500 27px/1.2 "EB Garamond";text-align:center;margin:6px 0 26px}
+.scr p{margin:0;font-size:16px;line-height:1.55;text-indent:1.2em;color:var(--ink2)}
+.scr p.first{text-indent:0}
+.scr h3{font:600 18px "EB Garamond";margin:20px 0 6px}
+.ln{height:9px;border-radius:2px;background:var(--stone);margin:0 0 11px}
+.scr .loc{margin-top:auto;text-align:center;font:12px "IBM Plex Sans";color:var(--muted)}
+.pager{display:flex;align-items:center;gap:14px;margin-top:18px}
+.sq{width:44px;height:44px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:center}
+.cap{font-size:13px;color:var(--graphite);margin:14px 0 0;max-width:640px;text-align:center;line-height:1.5}
+.ready{margin-top:24px;border:1px solid var(--success);background:var(--success-t);border-radius:10px;padding:16px 20px;display:flex;gap:12px}
+.ready b{color:var(--success)}.ready p{margin:0 0 6px;line-height:1.5}.ready a{color:var(--ink)}
+.note{margin:22px 0 0;font:500 12px "IBM Plex Mono";letter-spacing:.06em;color:var(--muted)}
+@media (max-width:1199px){
+ .hdr{padding:0 24px}.hdr .why{display:none}
+ .body{flex-direction:column}
+ .set{width:auto;border-right:0;border-bottom:1px solid var(--stone)}
+ .pv{padding:24px}
+ .scr{width:380px;height:540px;padding:38px 32px 18px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+ <nav class="rail" aria-label="Book steps, folded">
+  <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span>
+  <span class="ic box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span>
+  <div class="mini"><b>Micro Study Habits for Busy Adult Learners</b><span>Adnan Haroun</span></div>
+  <span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>01</span></span>
+  <span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>02</span></span>
+  <span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>03</span></span>
+  <span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>04</span></span>
+  <span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>05</span></span>
+  <span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>06</span></span>
+  <span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>07</span></span>
+  <span class="st cur"><i class="dot"></i><span>08</span></span>
+  <span class="st"><i class="ring"></i><span>09</span></span>
+ </nav>
+ <div class="main">
+  <header class="hdr">
+   <span class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>Back</span>
+   <div class="mid"><div class="k">PACKAGE · STEP 8 OF 11</div><h1>Format</h1></div>
+   <span class="btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export files</span>
+   <span class="why">Not done yet: export the Print PDF.</span>
+   <span class="btn dim">Next<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span>
+  </header>
+  <div class="body">
+   <aside class="set">
+    <p class="lab">TEXT STYLE</p>
+    <div class="styles">
+     <div class="sty on"><b>Aa</b><i>Classic</i>EB<br>Garamond</div>
+     <div class="sty"><b style="font-family:'Source Serif 4';font-weight:600">Aa</b>Modern<br>Source<br>Serif 4</div>
+     <div class="sty"><b>Aa</b>Clean<br>Literata</div>
+     <div class="sty"><b style="font-style:italic">Aa</b>Warm<br>Lora</div>
+    </div>
+    <p class="help">Changing style can change the page count.</p>
+    <div class="row" style="gap:12px"><div style="flex:1"><div style="font-size:14px;margin-bottom:6px">Chapter label</div><div class="sel">Chapter 2<span>⌄</span></div></div><div style="padding-top:22px;display:flex;align-items:center;gap:10px">Drop cap · print <i class="cb"></i></div></div>
+    <p class="lab" style="margin-top:22px">BOOK PARTS · FIXED ORDER</p>
+    <div class="row">Title page<span class="help" style="margin:0">Always on</span></div>
+    <div class="row">Copyright<span class="help" style="margin:0">Always on</span></div>
+    <div class="new" style="margin:6px 0 4px">
+     <div class="isbn">ISBN <div class="sel">Optional</div><span class="tag solid">Print only</span></div>
+     <p class="help" style="margin:6px 0 0">Add it when KDP gives it, then export again. The EPUB never carries it: an eBook needs no ISBN.</p>
+    </div>
+    <div class="row" style="margin-top:8px">Contents<i class="cb on"></i></div>
+    <div class="row sub">Show sections too<i class="cb"></i></div>
+    <div class="row sub" style="color:var(--graphite)">Kindle: always on (KDP needs it)</div>
+    <div class="row" style="color:var(--graphite)">Dedication, epigraph, foreword, preface<span class="tag">Write in 06 · v2b</span></div>
+    <div class="row">Introduction<i class="cb on"></i></div>
+    <div class="row">Conclusion<i class="cb on"></i></div>
+    <div class="row">About the author<i class="cb on"></i></div>
+    <div class="row">Also by<a href="#" style="color:var(--ink);font-weight:500">Choose books (0)</a></div>
+    <p class="lab" style="margin-top:22px">PAGE · PRINT</p>
+    <div class="row" style="gap:10px"><div class="sel" style="flex:1">6 × 9 in<span>⌄</span></div><div class="sel" style="flex:1">White<span>⌄</span></div></div>
+   </aside>
+   <section class="pv" aria-label="Preview">
+    <div class="bar">
+     <div class="seg" role="radiogroup" aria-label="Preview"><span>Print</span><span class="on">Kindle</span></div>
+     <span class="chip"><b>EPUB 3</b> · clickable contents</span>
+     <span class="chip">No page numbers</span>
+     <span class="sp"></span>
+     <div class="sizes" aria-label="Text size"><span style="font-size:13px">A</span><span class="on" style="font-size:17px">A</span><span style="font-size:21px">A</span></div>
+     <span class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Full screen</span>
+    </div>
+    <div class="stage">
+     <div class="dev"><div class="scr">
+      <div class="cl">Chapter 2</div>
+      <h2>[Chapter title]</h2>
+      <div class="ln"></div><div class="ln"></div><div class="ln" style="width:72%"></div>
+      <div class="ln" style="margin-left:7%"></div><div class="ln"></div><div class="ln" style="width:55%"></div>
+      <h3>[Section heading]</h3>
+      <div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln" style="width:64%"></div>
+      <div class="ln" style="margin-left:7%"></div><div class="ln"></div><div class="ln" style="width:40%"></div>
+      <div class="loc">Location, not page number</div>
+     </div></div>
+     <div class="pager">
+      <span class="sq" aria-label="Previous screen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span>
+      <span>Screen 3 of 96</span>
+      <span class="sq" aria-label="Next screen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span>
+     </div>
+     <p class="cap">Text reflows. The number of screens changes with the text size. This is NicheInk's preview of your EPUB, not Kindle's own screen: KDP's Previewer is the final check.</p>
+    </div>
+    <div class="ready" role="status">
+     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E7A46" stroke-width="2.4" style="flex-shrink:0;margin-top:2px"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+     <div><p><b>Ready for Kindle.</b> All 17 sections Final. The reader picks the font, so there is no font check.</p>
+     <p style="margin:0">07 Quality Control ran on Nov 7 and is current. <a href="#">See results</a></p></div>
+    </div>
+    <p class="note">DESIGN NOTE · the dashed outline marks the only change in the settings column (ISBN "Print only"). Arrow keys page the screen; a contents link jumps to its part.</p>
+   </section>
+  </div>
+ </div>
+</div>
+</body>
+</html>
