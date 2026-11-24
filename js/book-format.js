@@ -44,6 +44,14 @@
      Notes and references: off, "Comes in v2b" (owner Q3).
    - Also by lists the other books with this pen name and their status from
      Books (owner Q6).
+   E13.3 Part 3 (designs 41d, 41e; plan docs/reviews/2026-11-23-e13-3-plan.md §3):
+   Kindle mode shows the EPUB that kdpEpub.build() makes, in a sandboxed
+   frame (js/format/kindle-preview.js): the chips, A A A, Full screen, the
+   device, "Screen x of y", the caption, and the states building, error,
+   nothing Final. Any trim works (an ebook has no trim). A change rebuilds
+   after 300 ms; the reader stays on the same part. The Kindle Ready box:
+   not Final, needs review, no pen name, links to other ebook stores (Q8).
+   The ISBN row is "Print only" (Q2). The 08 done mark stays Print PDF (Q4).
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -68,8 +76,16 @@
     next: svg('<path d="M9 6l6 6-6 6"/>'),
     full: svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
     down: svg('<path d="M12 5v14M6 13l6 6 6-6"/>', 16),
-    x: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 18, 2.2)
+    x: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 18, 2.2),
+    xBig: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 28, 2.2),
+    doc: svg('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>', 28, 1.8)
   };
+
+  /* E13.3: the Kindle preview (41d, 41e). */
+  const KINDLE_DELAY = 300;         // a setting change rebuilds the Kindle preview after this
+  const SIZE_NAMES = [['s', 'Small text'], ['m', 'Medium text'], ['l', 'Large text']];
+  // Links KDP may remove (Hyperlink Guidelines; Q8: a warning only). Short and fixed; subdomains count.
+  const STORE_HOSTS = ['kobo.com', 'barnesandnoble.com', 'books.apple.com', 'smashwords.com', 'scribd.com'];
 
   let ctx = null, book = null;
   let saver = null;
@@ -94,6 +110,12 @@
   let stageEl = null;               // the preview's stage (it moves into the full screen view and back)
   let full = null;                  // the full screen dialog while open: { dlg, opener }
   let idle = [];                    // resolved when the running preview build ends (the export waits for it)
+  let kp = null;                    // the Kindle preview (js/format/kindle-preview.js) once Kindle mode has drawn
+  let kDev = null;                  // its device (it moves into the full screen view and back)
+  let kb = { state: 'idle', key: '', shown: false, error: null, ms: null };   // idle | waiting | building | ready | error
+  let kTimer = null, kSeq = 0;
+  let kSize = 'm';                  // A A A
+  let kRetry = false;               // Try again was pressed: the focus follows the result
 
   /* ── Values ──────────────────────────────── */
 
@@ -284,6 +306,125 @@
     if (again) { again = false; scheduleBuild(true); }
   }
 
+  /* ── Kindle preview (E13.3, 41d, 41e) ────── */
+
+  /** What changes the EPUB: the model (Final sections, parts), the style, contents, label, Also by. Never print-only settings. */
+  const kindleKey = () => JSON.stringify([modelKey, settings.style, settings.parts, settings.contents_sections, settings.chapter_label, extrasFor(settings).alsoBy]);
+
+  /** Build again: now (first open, Try again) or 300 ms after a change. A change that does not touch the EPUB does nothing. */
+  function scheduleKindle(now) {
+    if (mode !== 'kindle' || !root || load.state !== 'ready' || !model) return;
+    if (!hasFinal()) { clearTimeout(kTimer); kTimer = null; paintPreview(); return; }
+    if (!now && kb.state !== 'error' && kindleKey() === kb.key) return;
+    clearTimeout(kTimer);
+    kb.state = 'waiting';
+    paintKindle();
+    kTimer = setTimeout(runKindle, now ? 0 : KINDLE_DELAY);
+  }
+
+  /** Kindle mode opens: build when nothing is shown yet or the book changed since. */
+  function ensureKindle() {
+    if (kb.state === 'error' || kTimer) return;
+    if (!kp || !kb.shown || kb.key !== kindleKey()) scheduleKindle(true);
+  }
+
+  async function runKindle() {
+    kTimer = null;
+    if (mode !== 'kindle' || !root || !model || !hasFinal()) return;
+    const seq = ++kSeq;
+    ensureModel();
+    const st = JSON.parse(JSON.stringify(settings));
+    const key = kindleKey();
+    kb.state = 'building';
+    const t0 = performance.now();
+    let built, r;
+    try {
+      built = kdpEpub.build(model, st, { ...extrasFor(st), bookId: book.id, now: fmt.now });
+      const tBuilt = performance.now();
+      if (!kp) kp = kdpKindlePreview.create(kDev.querySelector('[data-kp-host]'), { onChange: paintKindleNav, onEscape: () => { if (full && full.kind === 'kindle') closeFull(true); } });
+      kp.size(kSize);
+      r = await kp.show(built, st.style);
+      if (seq !== kSeq || !root || (r && r.superseded)) return;
+      kb = { state: 'ready', key, shown: true, error: null, ms: { build: tBuilt - t0, first: performance.now() - t0 } };
+    } catch (e) {
+      if (seq !== kSeq || !root) return;
+      kindleError(e);
+      return;
+    }
+    paintPreview();
+    // Try again worked: its button is gone, so the focus goes to the book's screen (arrow keys page at once).
+    if (kRetry) { kRetry = false; const f = root.querySelector('.kp-frame:not(.is-next)'); if (f) f.focus(); }
+  }
+
+  /** 41e B: the error box with Try again. The focus moves to it only when it was in the preview column. */
+  function kindleError(e) {
+    const a = document.activeElement;
+    const here = kRetry || !!(a && a.closest && a.closest('.fmt-preview, .kp-full'));
+    kRetry = false;
+    if (full && full.kind === 'kindle') closeFull(false);
+    kb = { ...kb, state: 'error', error: e, key: '' };
+    paintPreview();
+    const btn = here && sel('[data-kp-retry]');
+    if (btn) btn.focus();
+  }
+
+  /** A link to another ebook store (Q8): the host from the short list, or null. */
+  function storeHost(href) {
+    let u;
+    try { u = new URL(href); } catch (e) { return null; }
+    const h = u.hostname.toLowerCase().replace(/\.$/, '');
+    if (h === 'play.google.com') return u.pathname.startsWith('/store/books') ? 'play.google.com' : null;
+    return STORE_HOSTS.find((s) => h === s || h.endsWith(`.${s}`)) || null;
+  }
+
+  /** Sections whose EPUB text links to another ebook store: [{ id, where, host }], in book order (one per section). */
+  const storeCache = new WeakMap();
+  function storeLinks() {
+    if (storeCache.has(model)) return storeCache.get(model);
+    const out = [];
+    for (const c of model.chapters) {
+      const where = c.kind === 'intro' ? 'The Introduction' : c.kind === 'conclusion' ? 'The Conclusion' : `Chapter ${c.fileNumber || c.number}`;
+      for (const s of c.sections) {
+        // The links the EPUB really carries (kdpEpub's own reading of the text).
+        const htmls = kdpEpub.blockList(kdpExportBuild.mdBody(s.content)).map((b) => b.html).join('');
+        for (const m of htmls.matchAll(/href="([^"]+)"/g)) {
+          const host = storeHost(m[1].replace(/&amp;/g, '&'));
+          if (host) { out.push({ id: s.id, where, host }); break; }
+        }
+      }
+    }
+    storeCache.set(model, out);
+    return out;
+  }
+
+  /** The Kindle Ready box lines (41e E), only the true ones, in this order: not Final, needs review, no pen name, store links. */
+  function kindleWarnings() {
+    const w = [];
+    const nf = [...model.notFinal, ...model.noText.filter((s) => s.status !== 'final')];
+    if (nf.length) {
+      w.push({ text: `${nf.length === 1 ? '1 section is' : `${nf.length} sections are`} not Final. The EPUB leaves ${nf.length === 1 ? 'it' : 'them'} out.`,
+        link: { href: sectionHref(nf[0].id), text: nf.length === 1 ? 'Show it' : 'Show them' } });
+    }
+    const secs = model.needsReview.filter((x) => !x.chapter).length;
+    const chs = model.needsReview.length - secs;
+    if (secs + chs) {
+      const what = [secs ? (secs === 1 ? '1 section' : `${secs} sections`) : '', chs ? (chs === 1 ? '1 chapter' : `${chs} chapters`) : ''].filter(Boolean).join(' and ');
+      w.push({ text: `${what} ${secs + chs === 1 ? 'needs' : 'need'} review in 07 Quality Control.`, link: { go: 7, text: 'See results' } });
+    }
+    if (!String((model.book && model.book.pen_name) || '').trim()) {
+      w.push({ text: 'No pen name. The EPUB will have no author, and KDP needs it to match your title setup.', link: { go: 1, text: 'Add a pen name' } });
+    }
+    const sl = storeLinks();
+    if (sl.length) {
+      const f = sl[0];
+      const text = sl.length === 1
+        ? `${f.where} links to another ebook store (${f.host}). KDP may remove links like this.`
+        : `${sl.length} sections link to other ebook stores (${[...new Set(sl.map((x) => x.host))].join(', ')}), first in ${f.where}. KDP may remove links like this.`;
+      w.push({ text, link: { href: sectionHref(f.id), text: 'Go to the section' } });
+    }
+    return w;
+  }
+
   /* ── Saving ──────────────────────────────── */
 
   function readField(f) {
@@ -327,15 +468,37 @@
         <section class="fmt-preview" aria-label="Preview">
           <div class="fmt-view">
             <div class="fmt-bar">
-              <div class="fmt-seg" role="group" aria-label="Preview mode">
-                <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'print'}" data-fmt-mode="print">Print</button>
-                <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'kindle'}" data-fmt-mode="kindle">Kindle</button>
+              <div class="fmt-bar-start">
+                <div class="fmt-seg" role="group" aria-label="Preview mode">
+                  <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'print'}" data-fmt-mode="print">Print</button>
+                  <button type="button" class="fmt-seg-btn" aria-pressed="${mode === 'kindle'}" data-fmt-mode="kindle">Kindle</button>
+                </div>
+                <div class="fmt-chips" data-kp-chips hidden><span class="kp-chip"><strong>EPUB 3</strong> · clickable contents</span><span class="kp-chip">No page numbers</span></div>
               </div>
               <div class="fmt-bar-end">
                 <button type="button" class="fmt-tocheck" data-fmt-tocheck aria-controls="fmtReady" hidden></button>
                 <div class="fmt-chips" data-fmt-chips></div>
+                ${sizesHtml(true)}
                 <button type="button" class="btn btn-secondary fmt-full-btn" data-fmt-full aria-haspopup="dialog" disabled>${IC.full}Full screen</button>
               </div>
+            </div>
+            <div class="kp-wrap" data-kp-wrap hidden>
+              <div class="kp-dev" data-kp-dev>
+                <div class="kp-scr">
+                  <div class="kp-text"><div class="kp-host" data-kp-host></div>
+                    <div class="kp-skel" data-kp-skel aria-hidden="true" hidden><span class="is-head"></span><span class="is-title"></span>
+                      <span></span><span></span><span class="is-short"></span><span></span><span></span><span class="is-half"></span><span class="is-gap"></span><span></span><span></span><span class="is-short"></span></div></div>
+                  <p class="kp-loc">Location, not page number</p>
+                </div>
+              </div>
+              <div class="kp-msg" data-kp-msg hidden></div>
+              <div class="kp-nav" data-kp-nav hidden>
+                <button type="button" class="kp-nav-btn" data-kp-prev aria-label="Previous screen">${IC.prev}</button>
+                <span class="kp-nav-label" data-kp-label aria-live="polite"></span>
+                <button type="button" class="kp-nav-btn" data-kp-next aria-label="Next screen">${IC.next}</button>
+              </div>
+              <p class="kp-status" data-kp-status role="status" hidden><span class="spinner" aria-hidden="true"></span>Building the Kindle preview…</p>
+              <p class="kp-cap" data-kp-cap hidden>Text reflows. The number of screens changes with the text size. This is NicheInk's preview of your EPUB, not Kindle's own screen: KDP's Previewer is the final check.</p>
             </div>
             <div class="fmt-wrap" data-fmt-wrap>
               <div class="fmt-stage" data-fmt-stage></div>
@@ -353,10 +516,28 @@
       </div>`;
     closeFull(false);
     if (pv) { pv.destroy(); pv = null; }
+    dropKindle();
     stageEl = root.querySelector('[data-fmt-stage]');
+    kDev = root.querySelector('[data-kp-dev]');
     paintPreview();
     // A repaint (Retry, a new open) shows the last PDF again once the engine builds.
     if (build.pages && eng.state === 'ready') { build = { state: 'idle', pages: 0, info: null, error: null }; scheduleBuild(true); }
+    if (mode === 'kindle') scheduleKindle(true);
+  }
+
+  /** The Kindle preview ends (a repaint, leaving 08): a new open builds it again. */
+  function dropKindle() {
+    clearTimeout(kTimer);
+    kTimer = null;
+    kSeq++;
+    if (kp) { kp.destroy(); kp = null; }
+    kb = { state: 'idle', key: '', shown: false, error: null, ms: kb.ms };
+  }
+
+  /** A A A (41d). In the bar (hidden in Print mode) and in the full screen view. */
+  function sizesHtml(inBar) {
+    return `<div class="kp-sizes" role="group" aria-label="Text size" data-kp-sizes${inBar ? ' hidden' : ''}>${SIZE_NAMES.map(([k, n]) =>
+      `<button type="button" class="kp-size is-${k}" data-kp-size="${k}" aria-label="${n}" aria-pressed="${kSize === k}">A</button>`).join('')}</div>`;
   }
 
   /** The page and spine chips, the margin note with the KDP minimum for the page count, the cream note. */
@@ -401,13 +582,23 @@
     const box = sel('[data-fmt-state]');
     const stage = stageEl;
     if (!box || !stage) return;
+    const kindle = mode === 'kindle';
+    sel('[data-fmt-wrap]').hidden = kindle;
+    sel('[data-kp-wrap]').hidden = !kindle;
+    sel('.fmt-view').classList.toggle('is-kindle', kindle);
+    sel('[data-kp-chips]').hidden = true;
+    sel('[data-kp-sizes]').hidden = !kindle;
+    if (kindle) {
+      if (full && full.kind === 'print') closeFull(true);
+      paintKindle();
+      paintChips();
+      paintReady();
+      return;
+    }
     let html = '';
     let kind = '';                  // '' | 'quiet' | 'danger'
     let role = 'status';
-    if (mode === 'kindle') {
-      html = `<strong class="fmt-state-title">Kindle preview comes with the EPUB.</strong>
-        <span>The Kindle file reflows: no page numbers and no running header.</span>`;
-    } else if (!hasFinal()) {
+    if (!hasFinal()) {
       kind = 'quiet';
       html = `<strong class="fmt-state-title">Nothing to format yet</strong>
         <span>Only Final sections go into the book. Mark sections Final in 06 Write.</span>
@@ -459,6 +650,66 @@
     paintReady();
   }
 
+  /** Kindle mode (41d, 41e A to D): the device, or the error or nothing-Final box; the pager, the status line, the caption. */
+  function paintKindle() {
+    const kw = sel('[data-kp-wrap]');
+    if (!kw || !kDev) return;
+    const msg = sel('[data-kp-msg]');
+    const nothing = !hasFinal();
+    const err = !nothing && kb.state === 'error';
+    const showDev = !nothing && !err;
+    const busy = showDev && kb.state !== 'ready';
+    const kind = nothing ? 'nothing' : err ? 'error' : '';
+    // Drawn again only when the kind changes, so a repaint never takes the focus from Try again.
+    if (msg.dataset.kind === kind) { /* unchanged */ } else if (nothing) {
+      // 41e C: the built Print words, with "Kindle preview" (G6: the built button, "Go to 06 Write").
+      msg.className = 'kp-msg';
+      msg.setAttribute('role', 'status');
+      msg.innerHTML = `<span class="kp-msg-icon">${IC.doc}</span>
+        <strong class="kp-msg-title">Nothing to format yet</strong>
+        <span>Only Final sections go into the Kindle preview. Mark sections Final in 06 Write.</span>
+        <a class="btn btn-secondary" href="${sectionHref(null)}" data-fmt-go="6">Go to 06 Write</a>`;
+    } else if (err) {
+      msg.className = 'kp-msg is-danger';
+      msg.setAttribute('role', 'alert');
+      msg.innerHTML = `<span class="kp-msg-icon">${IC.xBig}</span>
+        <strong class="kp-msg-title">The Kindle preview could not be built</strong>
+        <span>Nothing in your book changed. Try again. If it keeps failing, your Print PDF is not affected.</span>
+        <button type="button" class="btn btn-primary" data-kp-retry>Try again</button>`;
+    } else {
+      msg.innerHTML = '';
+    }
+    msg.dataset.kind = kind;
+    msg.hidden = showDev;
+    kDev.hidden = !showDev;
+    if (!showDev && full && full.kind === 'kindle') closeFull(true);
+    kDev.querySelector('[data-kp-skel]').hidden = !(busy && !kb.shown);   // inside the device (it may be in Full screen)
+    kw.classList.toggle('is-updating', busy && kb.shown);
+    sel('[data-kp-status]').hidden = !busy;
+    sel('[data-kp-nav]').hidden = !showDev || busy;
+    sel('[data-kp-cap]').hidden = !showDev;
+    sel('[data-kp-chips]').hidden = !showDev;
+    const fullBtn = sel('[data-fmt-full]');
+    if (fullBtn) fullBtn.disabled = !(showDev && kb.shown && kp);
+    paintKindleNav();
+  }
+
+  /** "Screen x of y", the page buttons and A A A, below the box and in the full screen view. */
+  function paintKindleNav() {
+    if (!root) return;
+    const busy = kb.state !== 'ready';
+    const st = kp ? kp.state() : { screen: 0, screens: 0 };
+    const off = busy || !hasFinal() || kb.state === 'error';
+    for (const el of [root, full && full.kind === 'kindle' && full.dlg].filter(Boolean)) {
+      const label = el.querySelector('[data-kp-label]');
+      if (label) label.textContent = kp ? kp.label() : '';
+      const prev = el.querySelector('[data-kp-prev]'), next = el.querySelector('[data-kp-next]');
+      if (prev) prev.disabled = off || st.screen <= 0;
+      if (next) next.disabled = off || st.screen >= st.screens - 1;
+      el.querySelectorAll('[data-kp-size]').forEach((b) => { b.disabled = off; b.setAttribute('aria-pressed', String(b.dataset.kpSize === kSize)); });
+    }
+  }
+
   /** The 07 line under the Ready box (design 41), from the 07 mark. */
   function qcLine() {
     const m = ctx.qcMark();
@@ -483,6 +734,7 @@
     const el = sel('[data-fmt-ready]');
     if (!el || !model) return;
     paintToCheck('');
+    if (mode === 'kindle') { paintKindleReady(el); return; }
     if (!hasFinal() || !groupA()) { el.innerHTML = ''; return; }   // no Print PDF: the preview area says why
     const rebuildError = build.state === 'error' && build.pages
       ? `<div class="alert alert-error fmt-alert" role="alert">${IC.x}<div><p class="alert-text">The preview could not be updated. It shows your last good pages.</p>
@@ -511,6 +763,26 @@
         <span class="fmt-qc-line">${qcLine()}</span></div></div>`;
   }
 
+  /** The Kindle Ready box (41d green, 41e E warnings). Never blocks; no font check (the reader picks the font); no trim line. */
+  function paintKindleReady(el) {
+    if (!hasFinal()) { el.innerHTML = ''; return; }   // 41e C: the preview area says why
+    const ws = kindleWarnings();
+    const link = (l) => (l.go
+      ? `<a href="?id=${encodeURIComponent(book.id)}&step=${l.go}" data-fmt-go="${l.go}" class="fmt-ready-link">${esc(l.text)}</a>`
+      : `<a href="${l.href}" class="fmt-ready-link">${esc(l.text)}</a>`);
+    if (ws.length) {
+      el.innerHTML = `<div class="alert alert-warning fmt-alert" role="status">${ICON.warn(18)}
+        <div class="fmt-alert-body"><strong>Check before you export the EPUB.</strong>
+          <ul class="kp-warn-list">${ws.map((w) => `<li>${esc(w.text)} ${link(w.link)}</li>`).join('')}</ul>
+          <span class="kp-warn-foot">The reader picks the font, so there is no font check.</span></div></div>`;
+      return;
+    }
+    const n = model.sections.length;
+    el.innerHTML = `<div class="alert fmt-alert fmt-alert-ok" role="status">${IC.check}
+      <div class="fmt-alert-body"><span><strong>Ready for Kindle.</strong> All ${n} section${n === 1 ? '' : 's'} Final. The reader picks the font, so there is no font check.</span>
+      <span class="fmt-qc-line">${qcLine()}</span></div></div>`;
+  }
+
   function settingsHtml() {
     const st = settings;
     const styleCard = (key) => {
@@ -537,9 +809,10 @@
             <div class="fmt-isbn-line">
               <label class="fmt-isbn-label" for="fmtIsbn">ISBN</label>
               <input id="fmtIsbn" class="fmt-input" type="text" inputmode="numeric" autocomplete="off" placeholder="Optional"
-                value="${esc(st.isbn || '')}" aria-describedby="fmtIsbnNote fmtIsbnErr" aria-invalid="${isbnError ? 'true' : 'false'}" data-fmt-isbn />
+                value="${esc(st.isbn || '')}" aria-describedby="fmtIsbnTag fmtIsbnNote fmtIsbnErr" aria-invalid="${isbnError ? 'true' : 'false'}" data-fmt-isbn />
+              <span class="fmt-tag" id="fmtIsbnTag">Print only</span>
             </div>
-            <span class="fmt-hint" id="fmtIsbnNote">Add it when KDP gives it, then export again.</span>
+            <span class="fmt-hint" id="fmtIsbnNote">Add it when KDP gives it, then export again. The EPUB never carries it: an eBook needs no ISBN.</span>
             <span class="field-error" id="fmtIsbnErr" data-fmt-isbn-err${isbnError ? '' : ' hidden'}>${ICON.warn(13)}<span>${esc(isbnError)}</span></span>
           </div>`;
       }
@@ -634,6 +907,7 @@
     ensureModel();
     checkChars();
     if (rebuild) scheduleBuild(false);
+    scheduleKindle(false);
     paintReady();
     paintChips();
   }
@@ -721,11 +995,16 @@
     if (t.closest('[data-fmt-retry-build]')) { build.state = build.pages ? 'waiting' : 'building'; scheduleBuild(true); paintPreview(); return; }
     if (t.closest('[data-fmt-prev]')) { if (pv) pv.go(-1); return; }
     if (t.closest('[data-fmt-next]')) { if (pv) pv.go(1); return; }
+    if (t.closest('[data-kp-prev]')) { if (kp) kp.go(-1); return; }
+    if (t.closest('[data-kp-next]')) { if (kp) kp.go(1); return; }
+    const sz = t.closest('[data-kp-size]');
+    if (sz) { setSize(sz.dataset.kpSize); return; }
+    if (t.closest('[data-kp-retry]')) { kRetry = true; kb.state = 'waiting'; scheduleKindle(true); return; }
     if (t.closest('[data-fmt-alsoby]')) { openAlsoBy(t.closest('[data-fmt-alsoby]')); return; }
     const go = t.closest('[data-fmt-go]');
     if (go && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); ctx.go(Number(go.dataset.fmtGo)); return; }
     const fb = t.closest('[data-fmt-full]');
-    if (fb) { openFull(fb); return; }
+    if (fb) { if (mode === 'kindle') openKindleFull(fb); else openFull(fb); return; }
     const m = t.closest('[data-fmt-mode]');
     if (m) setMode(m.dataset.fmtMode);
   }
@@ -755,7 +1034,7 @@
         <button type="button" class="fmt-nav-btn" data-fmt-next aria-label="Next pages">${IC.next}</button>
       </div>`;
     document.body.append(d);
-    full = { dlg: d, opener, home: stageEl.parentNode, next: stageEl.nextSibling };
+    full = { kind: 'print', el: stageEl, dlg: d, opener, home: stageEl.parentNode, next: stageEl.nextSibling };
     d.querySelector('[data-full-slot]').append(stageEl);
     d.addEventListener('cancel', (e) => { e.preventDefault(); closeFull(true); });
     d.addEventListener('click', (e) => {
@@ -774,32 +1053,88 @@
     pv.refit();
   }
 
-  /** Close the full screen view: the stage goes home, drawn again at its size. focus: give the focus back. */
+  /**
+   * 41e F: Kindle mode in Full screen. The D2 view in the dark look: Exit full
+   * screen, A A A, the device, the pager. The device itself moves in and back
+   * (its frame loads again and returns to the same screen). Esc, also from
+   * inside the frame, ends it; the focus stays inside and goes back.
+   */
+  function openKindleFull(opener) {
+    if (full || !kp || !kDev || !kb.shown) return;
+    const d = document.createElement('dialog');
+    d.className = 'fmt-full kp-full';
+    d.setAttribute('aria-labelledby', 'fmtFullTitle');
+    d.innerHTML = `
+      <h2 class="sr-only" id="fmtFullTitle">Kindle preview</h2>
+      <div class="kp-full-bar">
+        <button type="button" class="btn btn-secondary" data-full-close>Exit full screen</button>
+        ${sizesHtml(false)}
+      </div>
+      <div class="kp-full-slot" data-full-slot>
+        <div class="kp-nav">
+          <button type="button" class="kp-nav-btn" data-kp-prev aria-label="Previous screen">${IC.prev}</button>
+          <span class="kp-nav-label" data-kp-label aria-live="polite"></span>
+          <button type="button" class="kp-nav-btn" data-kp-next aria-label="Next screen">${IC.next}</button>
+        </div>
+      </div>`;
+    document.body.append(d);
+    full = { kind: 'kindle', el: kDev, dlg: d, opener, home: kDev.parentNode, next: kDev.nextSibling };
+    d.querySelector('[data-full-slot]').prepend(kDev);   // the device first, the pager under it
+    d.addEventListener('cancel', (e) => { e.preventDefault(); closeFull(true); });
+    d.addEventListener('click', (e) => {
+      if (e.target.closest('[data-full-close]')) { closeFull(true); return; }
+      if (e.target.closest('[data-kp-prev]')) { kp.go(-1); return; }
+      if (e.target.closest('[data-kp-next]')) { kp.go(1); return; }
+      const sz = e.target.closest('[data-kp-size]');
+      if (sz) setSize(sz.dataset.kpSize);
+    });
+    d.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') { kp.go(-1); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { kp.go(1); e.preventDefault(); }
+    });
+    d.showModal();
+    d.querySelector('[data-full-close]').focus();
+    paintKindleNav();
+  }
+
+  /** Close the full screen view: the stage (or the Kindle device) goes home. focus: give the focus back. */
   function closeFull(focus) {
     if (!full) return;
     const f = full;
     full = null;
-    if (f.home && f.home.isConnected) f.home.insertBefore(stageEl, f.next && f.next.parentNode === f.home ? f.next : null);
+    if (f.home && f.home.isConnected) f.home.insertBefore(f.el, f.next && f.next.parentNode === f.home ? f.next : null);
     if (f.dlg.open) f.dlg.close();
     f.dlg.remove();
-    if (pv && stageEl && stageEl.isConnected) { pv.refit(); paintNav(); }
+    if (f.kind === 'print' && pv && stageEl && stageEl.isConnected) { pv.refit(); paintNav(); }
+    if (f.kind === 'kindle') paintKindleNav();
     if (focus && f.opener && f.opener.isConnected) f.opener.focus();
   }
 
-  /** Arrow keys turn the pages while the focus is in the preview (not in a field). */
-  function onKey(e) {
-    if (!root || !pv || mode !== 'print' || e.target.closest('input, select, textarea')) return;
-    if (!e.target.closest('.fmt-preview')) return;
-    if (e.key === 'ArrowLeft') { pv.go(-1); e.preventDefault(); }
-    if (e.key === 'ArrowRight') { pv.go(1); e.preventDefault(); }
+  /** A A A: the reader size. The reader stays on the same part (kindle-preview.js). */
+  function setSize(s) {
+    if (!SIZE_NAMES.some(([k]) => k === s)) return;
+    kSize = s;
+    if (kp) kp.size(s);
+    paintKindleNav();
   }
 
-  /** Print or Kindle (design 41b). Kindle preview comes with the EPUB (owner Q1): a quiet state. */
+  /** Arrow keys turn the pages (Print) or the screens (Kindle) while the focus is in the preview (not in a field). */
+  function onKey(e) {
+    if (!root || e.target.closest('input, select, textarea') || !e.target.closest('.fmt-preview')) return;
+    const p = mode === 'print' ? pv : (kb.state === 'ready' ? kp : null);
+    if (!p) return;
+    if (e.key === 'ArrowLeft') { p.go(-1); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { p.go(1); e.preventDefault(); }
+  }
+
+  /** Print or Kindle (designs 41, 41d). Kindle builds the EPUB preview (no print engine needed). */
   function setMode(m) {
     if (m === mode) return;
     mode = m;
     root.querySelectorAll('[data-fmt-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fmtMode === m)));
-    paintPreview();
+    closeFull(false);
+    paintPreview();               // shows the area of the mode (the Kindle area even when no engine runs, 41e D)
+    if (m === 'kindle') ensureKindle();
   }
 
   /** 07 "How to add one": the Copyright row, once the settings are drawn. */
@@ -942,6 +1277,7 @@
     openToken++;
     closeFull(false);
     stopEngine();
+    dropKindle();
     root = null;
     pendingFocus = null;
     if (dlg) dlg.close();
@@ -1014,6 +1350,6 @@
       });
     },
     /** Tests: the open settings. */
-    _debug: () => ({ settings, fmt, marks, engine, pv, build, eng, missing, full: !!full })
+    _debug: () => ({ settings, fmt, marks, engine, pv, build, eng, missing, full: !!full, fullKind: full ? full.kind : null, kp, kb, kSize, mode })
   };
 })();

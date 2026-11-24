@@ -110,12 +110,13 @@ const test = async page => {
   st.chapters[2].sections[0].needs_review = false;
   st.chapters[3].sections[2].version.content = st.chapters[3].sections[2].version.content.replace(' A small win 😀 today.', '');
 
-  /* Kindle (41b): the state, no chips; Print brings back the same pages with no rebuild. */
+  /* Kindle (E13.3 Part 3, 41d): the Kindle preview, no print chips; Print brings back the same pages with no rebuild. */
   await FM.open(page);
   d = await pages();
   const ms = await page.evaluate(() => window.kdpBookSteps[8]._debug().build.ms);
   await page.click('[data-fmt-mode="kindle"]');
-  ok((await FM.txt(page, '[data-fmt-state] .fmt-state-title')) === 'Kindle preview comes with the EPUB.' && await page.$eval('[data-fmt-stage]', (s) => s.hidden) && !(await FM.has(page, '.fmt-chip')), 'Kindle: the state, no pages, no chips');
+  await page.waitForFunction(() => window.kdpBookSteps[8]._debug().kb.state === 'ready', null, { timeout: 10000 });
+  ok(await page.$eval('[data-fmt-wrap]', (w) => w.hidden) && !(await page.$eval('[data-kp-wrap]', (w) => w.hidden)) && !(await FM.has(page, '.fmt-chip')) && (await FM.all(page, '.kp-chip')).join('|') === 'EPUB 3 · clickable contents|No page numbers', 'Kindle: the Kindle preview, its 2 chips, no print chips');
   await page.click('[data-fmt-mode="print"]');
   ok(!(await page.$eval('[data-fmt-stage]', (s) => s.hidden)) && (await FM.all(page, '.fmt-chip')).length === 2 && JSON.stringify(ms) === JSON.stringify(await page.evaluate(() => window.kdpBookSteps[8]._debug().build.ms)), 'Print: the pages again, no rebuild');
 

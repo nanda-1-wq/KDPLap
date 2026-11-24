@@ -66,6 +66,7 @@ Keep them working. Do not change them unless asked.
   Accepted exception: the Write editor (4 px) and the Improve menu items (2 px) draw the ring inside, because the scrolling card clips an outside ring.
   Accepted exception: the 08 Format setting rows are 32 px high, and the whole row (label and box) is the click area (design 51b, owner Q2, Nov 8). 32 px is above the WCAG 2.2 minimum of 24 px.
   Accepted exception: the 09 Layers row buttons are 44 px high but narrower, so they never overlap: grip 22 px, eye, lock and ⋮ 34 px. The whole row also selects, and the grip has arrow keys (design 66, E16 STOP 5 N1).
+  Accepted exception: in the dark 08 Kindle Full screen view the focus ring is 2 px white (`--surface`), because an ink ring cannot be seen on the dark background (design 41e F, owner Q-E, Nov 24).
 - 09 Cover canvas (E16): the cover itself is content, not UI. Its fonts (300 families) and colors are the user's.
   The canvas marks use `--cv-*` tokens defined once at the top of `css/cover.css`: selection blue, fold blue,
   guide green, the magenta lit snap guide, the KDP barcode yellow (plan §3, design D audit point 6). They are

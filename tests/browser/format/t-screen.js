@@ -28,7 +28,9 @@ const test = async page => {
   ok((await FM.all(page, '.fmt-parts .fmt-quiet')).slice(0, 2).join() === 'Always on,Always on', 'Title page and Copyright: Always on');
   ok((await FM.all(page, '.fmt-later')).join('|') === 'Write in 06 · v2b|Comes in v2b', 'v2b tags: Write in 06 · v2b, Comes in v2b');
   ok(await page.$eval('.fmt-row.is-later input[type="checkbox"]', (i) => i.disabled && !i.checked), 'Notes and references: off and disabled (owner Q3)');
-  ok((await FM.txt(page, '#fmtIsbnNote')) === 'Add it when KDP gives it, then export again.', 'ISBN note');
+  // E13.3 Part 3 (41d, Q2): the ISBN row says "Print only", and the note says the EPUB never carries it.
+  ok((await FM.txt(page, '#fmtIsbnNote')) === 'Add it when KDP gives it, then export again. The EPUB never carries it: an eBook needs no ISBN.', 'ISBN note (E13.3: the EPUB line)');
+  ok((await FM.txt(page, '.fmt-isbn-line .fmt-tag')) === 'Print only' && (await page.$eval('#fmtIsbn', (i) => i.getAttribute('aria-describedby'))) === 'fmtIsbnTag fmtIsbnNote fmtIsbnErr', 'ISBN: the "Print only" tag, read with the field');
   ok((await FM.txt(page, '[data-fmt-alsoby]')) === 'Choose books (0)', 'Also by: Choose books (0)');
 
   /* 32 px rows, the whole row is the click area (51b, CLAUDE.md §7 exception). */
@@ -125,12 +127,13 @@ const test = async page => {
   ok(!(await FM.has(page, '[data-fmt-alsoby]')) && (await FM.all(page, '.fmt-parts .fmt-quiet')).includes('No other books with this pen name'), 'no other books: a quiet line');
   st.candidates = cands;
 
-  /* Kindle (41b): a quiet state until the EPUB (owner Q1). Print brings back the stage. */
+  /* Kindle (E13.3 Part 3, 41d): the live Kindle preview (t-kindle checks it in full). Print brings back the stage. */
   await FM.open(page);
   await page.click('[data-fmt-mode="kindle"]');
-  ok(await page.$eval('[data-fmt-mode="kindle"]', (b) => b.getAttribute('aria-pressed') === 'true') && (await FM.txt(page, '.fmt-state strong')) === 'Kindle preview comes with the EPUB.', 'Kindle: Kindle preview comes with the EPUB.');
+  await page.waitForFunction(() => window.kdpBookSteps[8]._debug().kb.state === 'ready', null, { timeout: 10000 });
+  ok(await page.$eval('[data-fmt-mode="kindle"]', (b) => b.getAttribute('aria-pressed') === 'true') && /^Screen 1 of \d+$/.test(await FM.txt(page, '[data-kp-label]')) && await page.$eval('[data-fmt-wrap]', (w) => w.hidden), 'Kindle: the Kindle preview, Screen 1 of n');
   await page.click('[data-fmt-mode="print"]');
-  ok(await page.$eval('[data-fmt-mode="print"]', (b) => b.getAttribute('aria-pressed') === 'true') && !(await page.$eval('[data-fmt-state]', (b) => !b.hidden && /Kindle/.test(b.textContent))), 'Print again: the Kindle state is gone');
+  ok(await page.$eval('[data-fmt-mode="print"]', (b) => b.getAttribute('aria-pressed') === 'true') && await page.$eval('[data-kp-wrap]', (w) => w.hidden) && !(await page.$eval('[data-fmt-wrap]', (w) => w.hidden)), 'Print again: the Kindle preview is gone, the print area is back');
 
   /* Load error, then Retry. */
   globalThis.__modes.formatFail = 1;   // the open's read (since Part 4 the 08 mark reads pdf_marks)

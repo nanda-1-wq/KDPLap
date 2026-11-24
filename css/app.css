@@ -136,6 +136,18 @@
   --app-fmt-dim: 0.45;           /* old pages while the preview rebuilds */
   --app-fmt-nav-label-w: 120px;  /* "Pages 8 and 9 of 48" */
   --app-fmt-progress-w: 220px;   /* first-visit download bar (41c) */
+  --app-kp-scr-w: 440px;         /* E13.3: the Kindle screen (design 41d at 1440); 380 x 540 at 1000 px and below */
+  --app-kp-scr-h: 600px;
+  --app-kp-scr-pad: 44px 40px 20px;
+  --app-kp-dev-pad: 14px;        /* the device frame around the screen */
+  --app-kp-dev-r: 28px;
+  --app-kp-scr-r: 14px;
+  --app-kp-text-s: 14px;         /* A A A: the reader's text size inside the preview */
+  --app-kp-text-m: 16px;
+  --app-kp-text-l: 19px;
+  --app-kp-leading: 1.5;         /* the reader's line spacing (the EPUB keeps the Kindle default) */
+  --app-kp-cap-w: 640px;         /* the caption under the device */
+  --app-kp-skel-h: 9px;          /* a skeleton line (41e A) */
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -3825,8 +3837,8 @@ label.fmt-row { cursor: pointer; }
 }
 .fmt-seg-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); font-weight: 500; }
 .fmt-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.fmt-chip { padding: 6px var(--space-3); border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--stone); font-size: var(--text-sm); color: var(--ink); }
-.fmt-chip strong { font-weight: 600; }
+.fmt-chip, .kp-chip { padding: 6px var(--space-3); border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--stone); font-size: var(--text-sm); color: var(--ink); }
+.fmt-chip strong, .kp-chip strong { font-weight: 600; }
 
 /* The gray area: the spread, the page buttons, or a state (designs 41, 41c) */
 .fmt-wrap {
@@ -3845,13 +3857,13 @@ label.fmt-row { cursor: pointer; }
   padding: var(--space-1) var(--space-3); border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--stone);
   font-size: var(--text-sm); color: var(--graphite);
 }
-.fmt-nav { display: flex; align-items: center; gap: 10px; }
-.fmt-nav-btn {
+.fmt-nav, .kp-nav { display: flex; align-items: center; gap: 10px; }
+.fmt-nav-btn, .kp-nav-btn {
   width: var(--control-h); height: var(--control-h); display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); color: var(--ink-2); cursor: pointer;
 }
-.fmt-nav-btn:disabled { color: var(--stone-2); cursor: default; }
-.fmt-nav-label { min-width: var(--app-fmt-nav-label-w); text-align: center; font-size: var(--text-md); }
+.fmt-nav-btn:disabled, .kp-nav-btn:disabled { color: var(--stone-2); cursor: default; }
+.fmt-nav-label, .kp-nav-label { min-width: var(--app-fmt-nav-label-w); text-align: center; font-size: var(--text-md); }
 
 .fmt-state {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-3); max-width: var(--app-fmt-state-w);
@@ -3879,6 +3891,80 @@ label.fmt-row { cursor: pointer; }
 .fmt-qc-line { color: var(--ink-2); }
 .fmt-note { margin: 0; font-size: var(--text-sm); color: var(--graphite); line-height: 1.5; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .fmt-note.fmt-qc-line { gap: var(--space-1); }
+
+/* E13.3: the ISBN row "Print only" (41d, Q2) */
+.fmt-tag {
+  flex-shrink: 0; padding: 1px var(--space-2); border: 1px solid var(--stone-2); border-radius: var(--radius-pill);
+  background: var(--surface-2); font-size: var(--text-xs); color: var(--graphite); white-space: nowrap;
+}
+
+/* E13.3: the Kindle preview (designs 41d, 41e). The frame's own sheet is in js/format/kindle-preview.js. */
+.fmt-bar-start { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.fmt-view.is-kindle { flex: 0 0 auto; min-height: 100%; }   /* the device has a fixed size: the column scrolls to the Ready box */
+/* Kindle bar (41d): one wrapping row. A A A and Full screen sit at the end; at 900 only Full screen wraps to a second row. */
+.fmt-view.is-kindle .fmt-bar { justify-content: flex-start; }
+.fmt-view.is-kindle .fmt-bar-end { display: contents; }
+.fmt-view.is-kindle .kp-sizes { margin-left: auto; }
+.fmt-view.is-kindle [data-fmt-chips] { display: none; }   /* the print chips: empty in Kindle mode, no extra gap */
+.fmt-wrap[hidden], .kp-wrap[hidden], .fmt-chips[hidden], .kp-sizes[hidden], .kp-dev[hidden], .kp-msg[hidden],
+.kp-nav[hidden], .kp-status[hidden], .kp-cap[hidden], .kp-skel[hidden] { display: none; }
+.kp-wrap {
+  flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4);
+  background: var(--mist); border-radius: var(--radius-xl); padding: var(--space-6) var(--space-6) var(--space-5);
+}
+.kp-dev { padding: var(--app-kp-dev-pad); border-radius: var(--app-kp-dev-r); background: var(--ink); box-shadow: var(--shadow-card-hover); }
+.kp-scr {
+  width: var(--app-kp-scr-w); height: var(--app-kp-scr-h); padding: var(--app-kp-scr-pad); box-sizing: border-box;
+  display: flex; flex-direction: column; gap: var(--space-2); background: var(--surface); border-radius: var(--app-kp-scr-r);
+}
+.kp-text { position: relative; flex-grow: 1; min-height: 0; }
+.kp-host { position: absolute; inset: 0; }
+.kp-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface); }
+.kp-frame.is-next { visibility: hidden; }
+.kp-frame:focus, .kp-frame.has-focus { outline: 2px solid var(--ink); outline-offset: 2px; }   /* the focus is in the book: the arrow keys page it */
+.kp-wrap.is-updating .kp-host { opacity: var(--app-fmt-dim); }   /* 41e A: a rebuild keeps the old screen, dimmed */
+.kp-skel { position: absolute; inset: 0; display: flex; flex-direction: column; gap: var(--space-2); background: var(--surface); }
+.kp-skel span { display: block; height: var(--app-kp-skel-h); border-radius: 2px; background: var(--mist); }
+.kp-skel .is-head { width: 30%; margin: 0 auto; }
+.kp-skel .is-title { width: 60%; height: calc(var(--app-kp-skel-h) * 1.6); margin: 0 auto var(--space-4); }
+.kp-skel .is-short { width: 70%; }
+.kp-skel .is-half { width: 50%; }
+.kp-skel .is-gap { height: var(--space-2); background: none; }
+.kp-loc { margin: 0; flex-shrink: 0; text-align: center; font-size: var(--text-xs); color: var(--muted); }
+.kp-status { margin: 0; min-height: var(--control-h); display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--graphite); }
+.kp-cap { margin: 0; max-width: var(--app-kp-cap-w); text-align: center; font-size: var(--text-sm); line-height: 1.5; color: var(--graphite); }
+.kp-msg {
+  width: calc(var(--app-kp-scr-w) + 2 * var(--app-kp-dev-pad)); min-height: calc(var(--app-kp-scr-h) + 2 * var(--app-kp-dev-pad)); box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-6) var(--space-8);
+  text-align: center; font-size: var(--text-md); line-height: 1.5; color: var(--graphite);
+  border: 1px dashed var(--stone-2); border-radius: var(--app-kp-dev-r); background: var(--surface-2);
+}
+.kp-msg.is-danger { border: 1px solid var(--danger); background: var(--danger-bg); }
+.kp-msg-icon { display: flex; color: var(--graphite); }
+.kp-msg-title { font-size: var(--text-lg); font-weight: 600; color: var(--ink); }
+.kp-msg.is-danger .kp-msg-icon, .kp-msg.is-danger .kp-msg-title { color: var(--danger); }
+.kp-sizes { display: flex; gap: 6px; }
+.kp-size {
+  width: var(--control-h); height: var(--control-h); padding: 0; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--stone); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-family: var(--font-ui); line-height: 1; cursor: pointer;
+}
+.kp-size.is-s { font-size: var(--text-sm); }
+.kp-size.is-m { font-size: var(--text-xl); }
+.kp-size.is-l { font-size: var(--text-2xl); }
+.kp-size[aria-pressed="true"] { border: 2px solid var(--ink); }
+.kp-size:disabled { opacity: var(--app-fmt-dim); cursor: default; }   /* 41e A to C: "off" */
+.kp-warn-list { margin: var(--space-1) 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); }
+.kp-warn-foot { color: var(--graphite); }
+/* 41e F: Full screen in the dark look. The focus ring is light here, so it shows on the dark background. */
+.kp-full { background: var(--ink-2); }
+.kp-full[open] { align-items: center; }
+.kp-full :focus-visible, .kp-full .kp-frame:focus, .kp-full .kp-frame.has-focus { outline-color: var(--surface); }
+.kp-full-bar { align-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.kp-full-slot { flex-grow: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); }   /* the device, the pager right under it (41e F) */
+.kp-full .kp-size, .kp-full .kp-nav-btn { background: var(--ink); border-color: var(--graphite); color: var(--surface); }
+.kp-full .kp-size[aria-pressed="true"] { border-color: var(--surface); }
+.kp-full .kp-nav-btn:disabled { color: var(--graphite); }
+.kp-full .kp-nav-label { color: var(--surface); }
 
 /* Dialogs (design 43) */
 .fmt-dialog { width: min(var(--app-fmt-dialog-w), calc(100vw - 32px)); }
@@ -3937,4 +4023,6 @@ label.fmt-row { cursor: pointer; }
   .fmt-view { flex: none; min-height: calc(100vh - 2 * var(--app-fmt-pad)); }   /* D3: scrolled to the bar, the gray area fills the rest of the screen */
   .fmt-wrap { min-height: var(--app-fmt-stage-min); }
   .fmt-exp-row { flex-wrap: wrap; }
+  /* E13.3 (41d at 900): the smaller Kindle screen */
+  :root { --app-kp-scr-w: 380px; --app-kp-scr-h: 540px; --app-kp-scr-pad: 38px 32px 18px; }
 }

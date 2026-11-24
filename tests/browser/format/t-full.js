@@ -106,10 +106,21 @@ const test = async page => {
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('dialog.fmt-full'), null, { timeout: 3000 });
 
-  /* Kindle: no Full screen. */
+  /* Kindle (E13.3 Part 3, 41e F): Full screen opens the Kindle view (t-kindle checks it in full); Print opens the print view again. */
   await page.click('[data-fmt-mode="kindle"]');
-  ok(await page.$eval('[data-fmt-full]', (b) => b.disabled), 'Kindle: Full screen is off');
+  await page.waitForFunction(() => window.kdpBookSteps[8]._debug().kb.state === 'ready', null, { timeout: 10000 });
+  ok(!(await page.$eval('[data-fmt-full]', (b) => b.disabled)), 'Kindle: Full screen is on');
+  await page.click('[data-fmt-full]');
+  await page.waitForSelector('dialog.kp-full[open]', { timeout: 3000 });
+  ok(await page.evaluate(() => !!document.querySelector('dialog.kp-full [data-kp-dev]') && !document.querySelector('dialog.kp-full .fmt-page')), 'Kindle: the full screen view holds the Kindle device, not the spread');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('dialog.fmt-full'), null, { timeout: 3000 });
   await page.click('[data-fmt-mode="print"]');
+  await page.click('[data-fmt-full]');
+  await page.waitForSelector('dialog.fmt-full[open]:not(.kp-full)', { timeout: 3000 });
+  ok(await page.evaluate(() => document.querySelectorAll('dialog.fmt-full .fmt-page canvas').length >= 1), 'Print again: the print view with the spread');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('dialog.fmt-full'), null, { timeout: 3000 });
 
   /* 900 px: the view fits the window, no sideways scroll. */
   await page.setViewportSize({ width: 900, height: 900 });
