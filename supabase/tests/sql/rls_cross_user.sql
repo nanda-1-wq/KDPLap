@@ -62,6 +62,11 @@ insert into public.book_exports (user_id, book_id, format, include, parts, versi
   ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'pdf', 'final',
    '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}',
    array['a6000000-0000-4000-8000-000000000001']::uuid[], 36, public.format_key('a3000000-0000-4000-8000-000000000001'), 'typst 0.14.2 · t1');
+-- 0034: A's EPUB row.
+insert into public.book_exports (user_id, book_id, format, include, parts, versions, settings_key, engine) values
+  ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001', 'epub', 'final',
+   '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}',
+   array['a6000000-0000-4000-8000-000000000001']::uuid[], public.epub_key('a3000000-0000-4000-8000-000000000001'), 'epub3 · e1');
 -- 0028: A's run, Mark as OK and promise check.
 insert into public.qc_runs (user_id, book_id, versions, inputs_key, results, sections, words, style) values
   ('00000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-000000000001',
@@ -131,6 +136,7 @@ select pg_temp.chk('34 public tables (0030: cover_designs, cover_design_history,
 select pg_temp.chk('A''s two cover exports recorded', (select count(*) from public.cover_exports) = 2);
 select pg_temp.chk('A''s file is in the bucket', (select count(*) from storage.objects where bucket_id = 'covers') = 1);
 select pg_temp.chk('A''s Print PDF row recorded', (select count(*) from public.book_exports where format = 'pdf') = 1);
+select pg_temp.chk('(0034) A''s EPUB row recorded', (select count(*) from public.book_exports where format = 'epub') = 1);
 select pg_temp.chk('RLS on for every public table', not exists (
   select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
 select pg_temp.chk('A has a row in every table', (select bool_and(n > 0) from (
@@ -207,6 +213,13 @@ select pg_temp.expect('format_json: A''s book reads as null', $q$select 1 where 
 select pg_temp.expect('format_key: A''s book reads as null', $q$select 1 where public.format_key('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
 select pg_temp.expect('pdf_marks: none of A''s books', $q$select 1 from public.pdf_marks() where book_id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
 select pg_temp.expect('pdf_marks(A''s book): no row', $q$select 1 from public.pdf_marks('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
+select pg_temp.expect('(0034) book_exports: B reads none of A''s EPUB rows', $q$select 1 from public.book_exports where format = 'epub'$q$, 'OK 0');
+select pg_temp.expect('(0034) book_exports: B cannot record an EPUB of A''s book', $q$insert into public.book_exports (book_id, format, include, parts, versions, settings_key, engine) values ('a3000000-0000-4000-8000-000000000001', 'epub', 'final', '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}', array['a6000000-0000-4000-8000-000000000001']::uuid[], md5('x'), 'epub3 · e1')$q$, '42501%');
+select pg_temp.expect('(0034) book_exports: B cannot put A''s version in an EPUB of B''s book', $q$insert into public.book_exports (book_id, format, include, parts, versions, settings_key, engine) values ('b3000000-0000-4000-8000-000000000001', 'epub', 'final', '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}', array['a6000000-0000-4000-8000-000000000001']::uuid[], public.epub_key('b3000000-0000-4000-8000-000000000001'), 'epub3 · e1')$q$, 'P0001 export_version_not_in_book%');
+select pg_temp.expect('(0034) epub_key: A''s book reads as null', $q$select 1 where public.epub_key('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
+select pg_temp.expect('(0034) epub_marks: none of A''s books', $q$select 1 from public.epub_marks() where book_id = 'a3000000-0000-4000-8000-000000000001'$q$, 'OK 0');
+select pg_temp.expect('(0034) epub_marks(A''s book): no row', $q$select 1 from public.epub_marks('a3000000-0000-4000-8000-000000000001')$q$, 'OK 0');
+select pg_temp.expect('(0034) format_json: A''s book reads as null (no epub_key, no last_epub)', $q$select 1 where public.format_json('a3000000-0000-4000-8000-000000000001') is null$q$, 'OK 1');
 select pg_temp.expect('pdf_version_ids: none of A''s versions', $q$select 1 where public.pdf_version_ids('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
 select pg_temp.expect('also_by_valid: none of A''s ticks', $q$select 1 where public.also_by_valid('a3000000-0000-4000-8000-000000000001') = '{}'::uuid[]$q$, 'OK 1');
 select pg_temp.expect('qc_runs: B cannot record a run of A''s book', $q$insert into public.qc_runs (book_id, versions, inputs_key, results, sections, words, style) values ('a3000000-0000-4000-8000-000000000001', array['a6000000-0000-4000-8000-000000000001']::uuid[], '0123456789abcdef0123456789abcdef', '{"items": [], "more": {}, "sources": [], "notes": {"unsaved": 0, "running": 0}}', 1, 2, 'classic')$q$, '42501%');
@@ -292,6 +305,8 @@ select pg_temp.expect('storage: anon reads no file', $q$select 1 from storage.ob
 select pg_temp.expect('storage: anon cannot upload', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000a/assets/bc000000-0000-4000-8000-000000000004.jpg')$q$, '42501%');
 select pg_temp.expect('storage: anon cannot delete', $q$delete from storage.objects$q$, 'OK 0');
 select pg_temp.expect('cover_json: anon refused', $q$select public.cover_json('a3000000-0000-4000-8000-000000000001')$q$, '42501%');
+select pg_temp.expect('(0034) epub_key: anon refused', $q$select public.epub_key('a3000000-0000-4000-8000-000000000001')$q$, '42501%');
+select pg_temp.expect('(0034) epub_marks: anon refused', $q$select * from public.epub_marks()$q$, '42501%');
 
 -- ── A's rows are unchanged ──
 reset role;
