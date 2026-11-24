@@ -86,7 +86,8 @@ Keep them working. Do not change them unless asked.
 Books (dashboard) · New Book dialog · Delete dialog · Topic Lab · Topic detail · Add topic ·
 Pen Names · Pen name detail · Book wizard shell · 01 Brief · 02 Research · 03 Positioning ·
 04 Title · 05 Outline · 06 Write · Export dialog · Settings.
-v2 screens built so far: 07 Quality Control (E14), 08 Format with its Export files panel (E13.2), and
+v2 screens built so far: 07 Quality Control (E14), 08 Format with its Export files panel (E13.2), the
+Kindle preview and the EPUB export in 08 (E13.3; the 08 done mark stays Print PDF only), and
 09 Cover (E16): the cover editor with ready layouts and My layouts, uploads and Pixabay and Unsplash pictures,
 the AI back blurb, the KDP checks, and the export (print wrap PDF, PNG, Kindle JPG).
 Steps 10 and 11 show "Coming in v3".
@@ -99,6 +100,8 @@ Steps 10 and 11 show "Coming in v3".
 | `app/generators/` | Parked low-content generators |
 | `js/supabase.js` | Single Supabase client. All data access goes through it (`window.kdp`). |
 | `js/cover/`, `css/cover.css` | 09 Cover editor (E16): model, canvas view, panels, checks, export with the Typst engine |
+| `js/format/epub.js`, `js/format/epub-check.js`, `js/format/kindle-preview.js` | 08 EPUB (E13.3): the builder, its 3 checks before download, the Kindle preview |
+| `tools/epubcheck.mjs`, `tools/print-fingerprint.mjs` | EPUBCheck 5.4.0 runner (tests only, pinned sha256) and the print bytes proof |
 | `supabase/functions/` | Edge Functions: `generate` (AI) and `stock` (Pixabay and Unsplash search and pick, E16) |
 | `tools/cover-*.mjs`, `tools/check-cover-fonts.mjs` | 09 font catalog and sprite, icon set, golden files |
 | `THIRD-PARTY-NOTICES.md` | Licenses of the fonts, icons and libraries the app ships |

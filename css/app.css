@@ -3377,7 +3377,7 @@ div.delete-text p { margin: 0; }
 .exp-soon { border-style: dashed; border-color: var(--stone-2); color: var(--muted); cursor: default; }
 .exp-soon:hover { border-color: var(--stone-2); }
 /* E13.2: Print PDF is made in 08: the row links there (44 px target). */
-.exp-08 { min-height: var(--control-h); display: inline-flex; align-items: center; font-size: var(--text-sm); font-weight: 500; color: var(--ink); white-space: nowrap; }
+.exp-08, .exp-08-epub { min-height: var(--control-h); display: inline-flex; align-items: center; font-size: var(--text-sm); font-weight: 500; color: var(--ink); white-space: nowrap; }
 .exp-ticks { display: flex; flex-direction: column; }
 .exp-tick { display: grid; grid-template-columns: 20px 1fr auto; gap: var(--space-3); align-items: center; min-height: var(--control-h); padding: var(--space-1) var(--space-1); cursor: pointer; border-radius: var(--radius-sm); }
 .exp-tick + .exp-tick { border-top: 1px solid var(--mist); }

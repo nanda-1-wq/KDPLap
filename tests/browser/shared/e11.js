@@ -6,7 +6,8 @@
 //   settingsPatchFail ({ status, code }), patchSlow (ms), pensNone, usage (the RPC reply),
 //   usageFail, usageSlow (ms), callsFail, badgesFail, exportFail (n calls),
 //   exportSlow (ms), recordFail, docxFail, docxSlow (ms), recoverFail ({ status }),
-//   wordsFail, wordsSlow (ms) (0026 words_month), reopenFail (n calls) (E12 fix batch 3)
+//   wordsFail, wordsSlow (ms) (0026 words_month), reopenFail (n calls) (E12 fix batch 3),
+//   pdfMarksFail, epubMarksFail, pre0034 (E13.3: epub_marks is 404, as before 0034 is applied)
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const PB = 'aaaaaaaa-0000-4000-8000-00000000000b';
@@ -98,6 +99,7 @@ async function setupE11(page) {
     lastCalls: null,
     badges: [],
     pdfMarks: [],   // E13.2: 0027 pdf_marks rows (none by default)
+    epubMarks: [],  // E13.3: 0034 epub_marks rows (none by default)
     exportData: { [B1]: exportData('ready'), [B2]: exportData('warn'), [B3]: exportData('empty') },
     exports: [], writes: [], recovers: [], calls: []
   };
@@ -202,6 +204,11 @@ async function setupE11(page) {
     if (path === '/rest/v1/rpc/pdf_marks') {
       if (mode('pdfMarksFail')) return json(r, 500, { message: 'mock: pdf marks down' });
       return json(r, 200, store.pdfMarks);
+    }
+    if (path === '/rest/v1/rpc/epub_marks') {
+      if (mode('pre0034')) return json(r, 404, { code: 'PGRST202', message: 'Could not find the function public.epub_marks without parameters in the schema cache', details: '', hint: null });
+      if (mode('epubMarksFail')) return json(r, 500, { message: 'mock: epub marks down' });
+      return json(r, 200, store.epubMarks);
     }
     if (path === '/rest/v1/rpc/export_badges') {
       if (mode('badgesFail')) return json(r, 500, { message: 'mock: badges down' });

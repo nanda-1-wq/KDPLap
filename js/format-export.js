@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════
    NicheInk · 08 Export files panel (E13.2 Part 4; first built in the
-   parked E13.1 Part 3, reviewed here)
+   parked E13.1 Part 3, reviewed here; the EPUB row E13.3 Part 4)
    /js/format-export.js   (used by js/book-format.js through the header's
                            "Export files" button on step 08)
 
-   Design 42: one row per file.
+   Design 42 and 42b: one row per file.
    - Print PDF: read the book again, build it, check the PDF (page size =
      the trim on every page and no other page boxes, every font embedded,
      page count even and the same in the engine and the file). A failed
@@ -16,10 +16,18 @@
      Your cover must be made again." (owner Q7, Nov 3).
      Changed since the last PDF (0027 format_key): the row in the warning
      look with a filled "Export again" (design 42).
-   - EPUB: "Comes next" (E13.3, owner Q1).
+   - EPUB (E13.3, 42b): the same order as the PDF: read the book again,
+     build it (kdpEpub, no engine), check it (kdpEpubCheck: File structure,
+     Contents, Book details), record it (0034: the guard refuses a key that
+     is not epub_key today), then download {title-slug}-ebook.epub. A stale
+     book downloads nothing; any other failed record still downloads, and
+     the row says so with Try again. Changed since the last EPUB (0034
+     epub_changed): the warning look. Before 0034 format_json has no EPUB
+     keys: the row reads that as "never exported", never as an error.
+     The EPUB never sets the 08 done mark (owner Q4: Print PDF only).
    - Word (.docx): the E11 Export dialog.
    One file at a time. The footer leaves out "The Print PDF opens 09 Cover"
-   until E15 (plan F8).
+   (plan F8; known, outside E13.3).
 
    kdpFormatExport.open({ bookId, opener, engine, flush, hasUnsaved, trim,
                           pause, resume, onExported(row) })
@@ -35,10 +43,15 @@
     x: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 18, 2.2)
   };
   const STEPS = { read: [10, 'Reading the book…'], build: [40, 'Building pages…'], check: [80, 'Checking fonts and page size…'], save: [95, 'Saving the export…'] };
+  // 42b: building, checking, saving the record, downloading (the download is at once after the save).
+  const EPUB_STEPS = { read: [10, 'Reading the book…'], build: [40, 'Building the EPUB…'], check: [70, 'Checking files and contents…'], save: [90, 'Saving the export…'] };
+  const EPUB_KEPT = 'Nothing was saved. Your last EPUB is still the current one.';
   const day = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // The progress bar paints before a step that runs on the main thread.
+  const paint = () => new Promise((r) => setTimeout(r, 0));
 
   let d = null;
-  let st = null;   // { opts, data: { fmt, exp } | null, run, result, error }
+  let st = null;   // { opts, data: { fmt, exp } | null, run: { kind, phase } | null, result, error, epubResult, epubError }
 
   function build() {
     d = document.createElement('dialog');
@@ -49,6 +62,7 @@
         <button type="button" class="icon-btn" data-close aria-label="Close">${ICON.close}</button></div>
       <div class="fmt-exp-rows" data-rows></div>
       <p class="fmt-hint">Its page count sets the spine of your cover. Each PDF is checked before it downloads: page size, fonts and even count.</p>
+      <p class="fmt-hint" data-epub-foot>The EPUB is checked before it downloads: files, contents and book details. On KDP, upload it as the eBook manuscript. Upload the Kindle cover JPG from 09 separately: the EPUB has no cover inside.</p>
     </div>`;
     document.body.append(d);
     d.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
@@ -57,6 +71,9 @@
   }
 
   const $ = (q) => d.querySelector(q);
+  /** The other file is exporting: this row waits (one file at a time). */
+  const waits = (kind) => !!st.run && st.run.kind !== kind;
+  const off = (kind) => (waits(kind) ? ' disabled' : '');
 
   function sub() {
     const f = st.data && st.data.fmt;
@@ -76,39 +93,70 @@
     return '';
   }
 
+  /** The EPUB works for any trim; it needs one Final section, as the PDF. */
+  const epubEmpty = () => F().modelOf(st.data.exp, F().normalize(st.data.fmt.settings)).empty;
+
+  const progress = (label, kind, [pct, text]) => `<div class="fmt-exp-row" role="status" aria-live="polite"><span class="fmt-exp-text"><strong>${label}</strong><span>${text}</span>
+      <span class="fmt-progress is-wide" role="progressbar" aria-label="${label} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width: ${pct}%"></span></span></span>
+      <button type="button" class="btn btn-secondary" data-cancel>Cancel</button></div>`;
+
+  const errorRow = (e, attr, kind) => `<div class="fmt-exp-row is-error" role="alert"><span class="fmt-exp-x">${IC.x}</span><span class="fmt-exp-text"><strong>${esc(e.title)}</strong><span>${esc(e.text)}</span></span>
+      <button type="button" class="btn btn-primary" ${attr}${off(kind)}>Try again</button></div>`;
+
   function pdfRow() {
-    if (!st.data && !st.run) {
+    const head = '<strong>Print PDF</strong><span class="fmt-quiet">Paperback interior · fonts embedded · even page count</span>';
+    if (st.run && st.run.kind === 'pdf') return progress('Print PDF', 'pdf', STEPS[st.run.phase]);
+    if (!st.data) {
+      // The other file is exporting, or its read failed and its row says so: this row waits.
+      if (st.run || (st.epubError && !st.error)) return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}</span><button type="button" class="btn btn-secondary" disabled>Export</button></div>`;
       return st.loadError
         ? `<div class="fmt-exp-row is-error" role="alert"><span class="fmt-exp-x">${IC.x}</span><span class="fmt-exp-text"><strong>We couldn't read the book</strong><span>Check your connection, then try again.</span></span>
             <button type="button" class="btn btn-primary" data-load>Try again</button></div>`
         : `<div class="fmt-exp-row" role="status"><span class="fmt-exp-text"><strong>Print PDF</strong><span class="fmt-quiet"><span class="spinner" aria-hidden="true"></span>Reading the book…</span></span></div>`;
     }
-    const f = st.data && st.data.fmt;
-    if (st.run) {
-      const [pct, text] = STEPS[st.run.phase];
-      return `<div class="fmt-exp-row" role="status" aria-live="polite"><span class="fmt-exp-text"><strong>Print PDF</strong><span>${text}</span>
-          <span class="fmt-progress is-wide" role="progressbar" aria-label="Print PDF progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width: ${pct}%"></span></span></span>
-          <button type="button" class="btn btn-secondary" data-cancel>Cancel</button></div>`;
-    }
-    if (st.error) {
-      return `<div class="fmt-exp-row is-error" role="alert"><span class="fmt-exp-x">${IC.x}</span><span class="fmt-exp-text"><strong>${esc(st.error.title)}</strong><span>${esc(st.error.text)}</span></span>
-          <button type="button" class="btn btn-primary" data-pdf>Try again</button></div>`;
-    }
+    const f = st.data.fmt;
+    if (st.error) return errorRow(st.error, 'data-pdf', 'pdf');
     const why = blocked();
     const last = f.last_pdf;
-    const head = '<strong>Print PDF</strong><span class="fmt-quiet">Paperback interior · fonts embedded · even page count</span>';
     if (why) return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}<span class="fmt-exp-why">${ICON.warn(13)}<span>${esc(why)}</span></span></span><button type="button" class="btn btn-secondary" disabled>Export</button></div>`;
     if (last && f.changed && !st.result) {
       return `<div class="fmt-exp-row is-changed"><span class="fmt-exp-text">${head}<span class="fmt-exp-why">${ICON.warn(13)}<span>Changed since export. Last PDF ${esc(day(last.created_at))} · ${last.page_count} pages.</span></span></span>
-        <button type="button" class="btn btn-primary" data-pdf>Export again</button></div>`;
+        <button type="button" class="btn btn-primary" data-pdf${off('pdf')}>Export again</button></div>`;
     }
     if (last || st.result) {
       const at = st.result ? st.result.at : last.created_at;
       const pages = st.result ? st.result.pages : last.page_count;
       return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}<span class="fmt-pill-ok">${IC.ok}Exported ${esc(day(at || new Date().toISOString()))} · ${pages} pages</span></span>
-        <button type="button" class="btn btn-secondary" data-pdf>Export again</button></div>`;
+        <button type="button" class="btn btn-secondary" data-pdf${off('pdf')}>Export again</button></div>`;
     }
-    return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}</span><button type="button" class="btn btn-primary" data-pdf>Export</button></div>`;
+    return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}</span><button type="button" class="btn btn-primary" data-pdf${off('pdf')}>Export</button></div>`;
+  }
+
+  /** The EPUB row (42 and 42b). */
+  function epubRow() {
+    const head = '<strong>EPUB</strong><span class="fmt-quiet">Kindle ebook · clickable contents</span>';
+    if (st.run && st.run.kind === 'epub') return progress('EPUB', 'epub', EPUB_STEPS[st.run.phase]);
+    if (st.epubError) return errorRow(st.epubError, 'data-epub', 'epub');
+    // The book is being read (or could not be read: the Print PDF row has the message and Try again).
+    if (!st.data) return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}</span><button type="button" class="btn btn-secondary" disabled>Export</button></div>`;
+    const f = st.data.fmt;
+    const r = st.epubResult;
+    if (r && r.recordError) {
+      return `<div class="fmt-exp-row is-changed" role="alert"><span class="fmt-exp-text">${head}<span class="fmt-exp-why">${ICON.warn(13)}<span>Your EPUB downloaded, but it was not recorded.</span></span></span>
+        <button type="button" class="btn btn-primary" data-epub-record${off('epub')}>Try again</button></div>`;
+    }
+    if (epubEmpty()) return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}<span class="fmt-quiet">Needs at least one Final section.</span></span><button type="button" class="btn btn-secondary" disabled>Export</button></div>`;
+    const last = f.last_epub || null;
+    if (last && f.epub_changed && !r) {
+      return `<div class="fmt-exp-row is-changed"><span class="fmt-exp-text">${head}<span class="fmt-exp-why">${ICON.warn(13)}<span>Changed since export. Last EPUB ${esc(day(last.created_at))}.</span></span></span>
+        <button type="button" class="btn btn-primary" data-epub${off('epub')}>Export again</button></div>`;
+    }
+    if (last || r) {
+      const at = r ? r.at : last.created_at;
+      return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}<span class="fmt-pill-ok">${IC.ok}Exported ${esc(day(at || new Date().toISOString()))} · EPUB 3</span></span>
+        <button type="button" class="btn btn-secondary" data-epub${off('epub')}>Export again</button></div>`;
+    }
+    return `<div class="fmt-exp-row"><span class="fmt-exp-text">${head}<span class="fmt-quiet">Not exported yet</span></span><button type="button" class="btn btn-secondary" data-epub${off('epub')}>Export</button></div>`;
   }
 
   function notes() {
@@ -121,7 +169,7 @@
     }
     if (r.recordError) {
       html += `<div class="alert alert-warning" role="alert">${ICON.warn(16)}<div><p class="alert-text">We couldn't record this export, so the 08 mark and the Books badge may be missing. Your file downloaded.</p>
-        <button type="button" class="link-btn" data-record>Try again</button></div></div>`;
+        <button type="button" class="link-btn" data-record${off('pdf')}>Try again</button></div></div>`;
     }
     return html;
   }
@@ -129,8 +177,7 @@
   function render() {
     $('[data-sub]').textContent = sub();
     const busy = !!st.run;
-    $('[data-rows]').innerHTML = `${pdfRow()}${notes()}
-      <div class="fmt-exp-row"><span class="fmt-exp-text"><strong>EPUB</strong><span class="fmt-quiet">Kindle ebook · clickable contents</span></span><span class="version-tag">Comes next</span></div>
+    $('[data-rows]').innerHTML = `${pdfRow()}${notes()}${epubRow()}
       <div class="fmt-exp-row"><span class="fmt-exp-text"><strong>Word (.docx)</strong><span class="fmt-quiet">For editing in other tools</span></span>
         <button type="button" class="btn btn-secondary" data-docx${busy ? ' disabled' : ''}>Export</button></div>
       ${busy ? '<p class="fmt-hint">One file at a time. Other rows wait.</p>' : ''}`;
@@ -150,10 +197,21 @@
   }
 
   const fail = (title, text) => { st.run = null; st.error = { title, text }; render(); const b = d.querySelector('[data-pdf]'); if (b) b.focus(); };
+  const failEpub = (title, text) => { st.run = null; st.epubError = { title, text }; render(); const b = d.querySelector('[data-epub]'); if (b) b.focus(); };
+
+  /** What the book prints besides the model, for the PDF and the EPUB (as book-format.js extrasFor). */
+  function extrasOf(fmt, settings) {
+    const byId = new Map((fmt.candidates || []).map((c) => [c.id, c]));
+    return {
+      year: new Date(fmt.now || Date.now()).getFullYear(),
+      trim: fmt.book.trim,
+      alsoBy: settings.parts.also_by ? (fmt.also_by_valid || []).map((id) => byId.get(id)).filter(Boolean).map((c) => ({ title: c.title || '', subtitle: c.subtitle || null })) : []
+    };
+  }
 
   async function exportPdf() {
     const o = st.opts;
-    const run = { phase: 'read' };
+    const run = { kind: 'pdf', phase: 'read' };
     st.run = run;
     st.error = null;
     st.result = null;
@@ -172,12 +230,7 @@
     const { fmt, exp } = data;
     const settings = F().normalize(fmt.settings);
     const model = F().modelOf(exp, settings);
-    const byId = new Map((fmt.candidates || []).map((c) => [c.id, c]));
-    const extras = {
-      year: new Date(fmt.now || Date.now()).getFullYear(),
-      trim: fmt.book.trim,
-      alsoBy: settings.parts.also_by ? (fmt.also_by_valid || []).map((id) => byId.get(id)).filter(Boolean).map((c) => ({ title: c.title || '', subtitle: c.subtitle || null })) : []
-    };
+    const extras = extrasOf(fmt, settings);
     run.phase = 'build';
     render();
     let r;
@@ -218,7 +271,7 @@
       fail('Your book changed while the PDF was made', 'Make it again. Nothing was downloaded.');
       return;
     }
-    download(r.pdf, F().fileName(fmt.book.title, fmt.book.trim));
+    download(r.pdf, F().fileName(fmt.book.title, fmt.book.trim), 'application/pdf');
     st.run = null;
     st.result = {
       pages: r.pages, prevPages: fmt.last_pdf ? fmt.last_pdf.page_count : 0, paper: settings.paper,
@@ -231,6 +284,72 @@
     }
     render();
     const focus = d.querySelector('[data-record]') || d.querySelector('[data-pdf]');
+    if (focus) focus.focus();
+  }
+
+  /**
+   * The EPUB (42b), in the Print PDF's order: flush → read → build → check →
+   * record → download. Recording first means a stale book downloads nothing.
+   */
+  async function exportEpub() {
+    const o = st.opts;
+    const run = { kind: 'epub', phase: 'read' };
+    st.run = run;
+    st.epubError = null;
+    st.epubResult = null;
+    render();
+    const live = () => st && st.run === run;
+    await o.flush();
+    if (!live()) return;
+    if (o.hasUnsaved()) { failEpub('Your settings are not saved yet', 'Check your connection, then try again. Nothing was downloaded.'); return; }
+    const data = await load().then((x) => x, () => null);
+    if (!live()) return;
+    if (!data) { failEpub('EPUB could not be built', 'We couldn\'t read the book. Check your connection, then try again.'); return; }
+    const { fmt, exp } = data;
+    const settings = F().normalize(fmt.settings);
+    const model = F().modelOf(exp, settings);
+    if (model.empty) { failEpub('EPUB could not be built', 'Nothing to format yet. Mark sections Final in 06 Write.'); return; }
+    const extras = { ...extrasOf(fmt, settings), bookId: o.bookId, now: fmt.now };
+    run.phase = 'build';
+    render();
+    await paint();
+    if (!live()) return;
+    let bytes;
+    try { bytes = kdpEpub.make(model, settings, extras); } catch (e) { failEpub('EPUB could not be built', EPUB_KEPT); return; }
+    run.phase = 'check';
+    render();
+    await paint();
+    if (!live()) return;
+    let list;
+    try {
+      const info = kdpEpubCheck.read(bytes);
+      list = kdpEpubCheck.checks(info, {
+        expect: { title: fmt.book.title, subtitle: fmt.book.subtitle, author: fmt.book.pen_name, isbn: settings.isbn },
+        wellFormed: kdpEpubCheck.domWellFormed
+      });
+    } catch (e) { list = [{ key: 'structure', name: kdpEpubCheck.NAMES.structure, pass: false }]; }
+    const bad = list.find((c) => !c.pass);
+    if (bad) { failEpub(`The EPUB failed a check: ${bad.name}`, EPUB_KEPT); return; }
+    run.phase = 'save';
+    render();
+    const rec = { bookId: o.bookId, versionIds: R().versionIds(model), settingsKey: fmt.epub_key, engine: kdpEpub.ENGINE_ID };
+    let res;
+    try { res = await kdp.recordEpubExport(rec); } catch (e) { res = { error: e }; }
+    if (!live()) return;
+    const code = res.error && String(res.error.message || '');
+    if (code === 'export_stale' || code === 'export_epub_versions') {
+      failEpub('Your book changed while the EPUB was made', 'Make it again. Nothing was downloaded.');
+      return;
+    }
+    download(bytes, kdpEpub.fileName(fmt.book.title), 'application/epub+zip');
+    st.run = null;
+    st.epubResult = { at: res.data ? res.data.created_at : null, recordError: !!res.error, rec };
+    if (!res.error) {
+      fmt.last_epub = { id: res.data.id, created_at: res.data.created_at, settings_key: rec.settingsKey, engine: rec.engine };
+      fmt.epub_changed = false;
+    }
+    render();
+    const focus = d.querySelector('[data-epub-record]') || d.querySelector('[data-epub]');
     if (focus) focus.focus();
   }
 
@@ -247,8 +366,25 @@
     render();
   }
 
-  function download(bytes, name) {
-    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  /** The EPUB row's Try again after a failed record: the same row again, no new download. */
+  async function recordEpubAgain() {
+    const r = st.epubResult;
+    let res;
+    try { res = await kdp.recordEpubExport(r.rec); } catch (e) { res = { error: e }; }
+    if (!st || st.epubResult !== r) return;
+    if (!res.error) {
+      r.recordError = false;
+      r.at = res.data.created_at;
+      const f = st.data && st.data.fmt;
+      if (f) { f.last_epub = { id: res.data.id, created_at: res.data.created_at, settings_key: r.rec.settingsKey, engine: r.rec.engine }; f.epub_changed = false; }
+    }
+    render();
+    const focus = d.querySelector('[data-epub-record]') || d.querySelector('[data-epub]');
+    if (focus) focus.focus();
+  }
+
+  function download(bytes, name, type) {
+    const url = URL.createObjectURL(new Blob([bytes], { type }));
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
@@ -262,9 +398,19 @@
     const t = e.target;
     if (t.closest('[data-close]')) { close(); return; }
     if (t.closest('[data-pdf]')) { exportPdf(); return; }
+    if (t.closest('[data-epub]')) { exportEpub(); return; }
     if (t.closest('[data-load]')) { load(); return; }
-    if (t.closest('[data-cancel]')) { st.run = null; st.error = null; render(); const b = d.querySelector('[data-pdf]'); if (b) b.focus(); return; }
+    if (t.closest('[data-cancel]')) {
+      const kind = st.run && st.run.kind;
+      st.run = null;
+      if (kind === 'epub') st.epubError = null; else st.error = null;
+      render();
+      const b = d.querySelector(kind === 'epub' ? '[data-epub]' : '[data-pdf]');
+      if (b) b.focus();
+      return;
+    }
     if (t.closest('[data-record]')) { recordAgain(); return; }
+    if (t.closest('[data-epub-record]')) { recordEpubAgain(); return; }
     if (t.closest('[data-docx]')) {
       const { bookId, opener } = st.opts;
       close();
@@ -287,7 +433,7 @@
   function open(opts) {
     if (!d) build();
     if (d.open) return;
-    st = { opts, data: null, run: null, result: null, error: null, loadError: false };
+    st = { opts, data: null, run: null, result: null, error: null, epubResult: null, epubError: null, loadError: false };
     d.showModal();
     load();
   }

@@ -2,6 +2,8 @@
 // none), "Exported <date>" in the meta line, a failed badge read (no badges,
 // no error), the card menu's Export, a DOCX export refreshes the badge and a
 // Markdown export does not; the AI usage stat from usage_month. Screenshots.
+// E13.2: the Print PDF mark. E13.3 Part 4 (design 50): the EPUB mark ("EPUB" /
+// "EPUB changed"), one epub_marks read, "Exported <date>" = the newest of three.
 // Run: tests/browser/run.sh books t-badge.js
 const test = async (page) => {
   const out = globalThis.__log = [];
@@ -98,5 +100,37 @@ const test = async (page) => {
   await page.waitForTimeout(300);
   ok('E13.2 pdf_marks failed: no Print PDF mark, no error, DOCX stays', !(await T(page.locator('.book-grid'))).includes('Print PDF') && (await T(card(E11.B1))).includes('DOCX exported')
     && (await page.locator('[role="alert"]').count()) === 0);
+
+  // E13.3 (design 50): the EPUB mark after the Print PDF one. Fresh: "EPUB" (success, check).
+  // Out of date: "EPUB changed" (warning, icon and word). "Exported <date>": the newest of the three.
+  const t4 = '2026-11-20T09:00:00Z';
+  globalThis.__modes = {};
+  await setupE11(page);
+  S().badges = [{ book_id: E11.B1, exported_at: t1, changed: false }];
+  S().pdfMarks = [{ book_id: E11.B1, exported_at: t3, page_count: 48, changed: false }, { book_id: E11.B2, exported_at: t4, page_count: 40, changed: false }];
+  S().epubMarks = [{ book_id: E11.B1, exported_at: t4, changed: false }, { book_id: E11.B2, exported_at: t2, changed: true }];
+  await page.goto(`${E11.base}/app/dashboard.html`, { waitUntil: 'domcontentloaded' });
+  await page.locator('.stat .bar').waitFor({ timeout: 10000 });
+  await page.waitForFunction((id) => document.querySelector(`[data-book-menu="${id}"]`).closest('.book-card').innerText.includes('EPUB'), E11.B1, { timeout: 5000 });
+  const e1 = await T(card(E11.B1)), e2 = await T(card(E11.B2)), e3 = await T(card(E11.B3));
+  const tags1 = await card(E11.B1).locator('.book-tags .badge').allInnerTexts();
+  ok('E13.3 fresh EPUB: "EPUB", success, with a check, after the Print PDF mark', tags1.map((x) => x.trim()).join('|') === 'DOCX exported|Print PDF|EPUB' && (await card(E11.B1).locator('.badge-success svg').count()) === 3, tags1.join('|'));
+  ok('E13.3 the meta line shows the newest export (the EPUB)', e1.includes(`Exported ${day(t4)}`), e1);
+  const tags2 = await card(E11.B2).locator('.book-tags .badge').allInnerTexts();
+  ok('E13.3 out of date: "EPUB changed", warning with an icon and the word', tags2.map((x) => x.trim()).includes('EPUB changed') && (await card(E11.B2).locator('.badge-warning:has-text("EPUB changed") svg').count()) === 1, tags2.join('|'));
+  ok('E13.3 the meta line takes the newest of three (the PDF, newer than the EPUB)', e2.includes(`Exported ${day(t4)}`), e2);
+  ok('E13.3 no EPUB: no mark', !e3.includes('EPUB'), e3);
+  ok('E13.3 one epub_marks read for the page', S().calls.filter((c) => c.includes('/rpc/epub_marks')).length === 1, S().calls.filter((c) => c.includes('rpc/')).join(', '));
+  await page.locator('.book-grid').screenshot({ path: `${SHOTS}/books-epub-marks-1440.png`, timeout: 10000 }).catch(() => out.push('shot timeout'));
+  // A failed epub_marks read: no mark, no error, the other marks stay.
+  for (const m of [{ epubMarksFail: true }, { pre0034: true }]) {
+    globalThis.__modes = m;
+    await page.goto(`${E11.base}/app/dashboard.html`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.stat .bar').waitFor({ timeout: 10000 });
+    await page.waitForFunction((id) => document.querySelector(`[data-book-menu="${id}"]`).closest('.book-card').innerText.includes('Print PDF'), E11.B1, { timeout: 5000 });
+    const g = await T(page.locator('.book-grid'));
+    ok(`E13.3 epub_marks ${m.pre0034 ? '404 (before 0034)' : 'failed'}: no EPUB mark, no error, DOCX and Print PDF stay`, !g.includes('EPUB') && (await T(card(E11.B1))).includes('DOCX exported Print PDF')
+      && (await page.locator('[role="alert"]').count()) === 0, g.slice(0, 120));
+  }
   return out.join('\n');
 };

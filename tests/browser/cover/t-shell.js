@@ -11,6 +11,7 @@ const test = async page => {
   ok(ins.length === 1, `first open: one cover_designs insert (${ins.length})`);
   ok(ins[0] && JSON.stringify(ins[0].insert.fmt) === JSON.stringify(FIX.fmt) && ins[0].insert.layers.length === 0 && ins[0].insert.bg === '#FFFFFF', 'the insert: today\'s fmt, no layers, white');
   ok(st.design && st.design.rev === 1, 'the row starts at rev 1');
+  ok(await page.evaluate(() => typeof kdpEpubCheck === 'object' && typeof kdpEpubCheck.checks === 'function' && typeof kdpEpub === 'object'), 'E13.3 book.html on 09: the EPUB builder and checks load with no page error');
   ok(await page.$eval('[data-tplpop]', (p) => !p.hidden), 'a new cover opens with the KDP template popover (design 58)');
   ok(!(await page.$('[data-textbar]:not([hidden])')), 'no text bar without a selection');
   const s0 = await CV.state(page);

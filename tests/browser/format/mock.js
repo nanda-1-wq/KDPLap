@@ -5,7 +5,12 @@
 //   __modes: formatFail (n reads of format_json fail), formatSlow (ms), saveFail (n saves fail),
 //   saveSlow (ms), trimFail (the Brief trim write fails), statusFail (the Also by status read fails),
 //   exportFail (export_json fails), marksFail (pdf_marks), recordFail (n records fail), recordSlow (ms), stale (n records
-//   refused as export_stale), cdnSlowMs (the wasm waits), jsdelivrDown, cdnDown (the engine files)
+//   refused as export_stale), cdnSlowMs (the wasm waits), jsdelivrDown, cdnDown (the engine files),
+//   pre0034 (E13.3: format_json has no EPUB keys, epub_marks is 404, an EPUB row is refused by the
+//   0027 format check), epubMarksFail (epub_marks fails)
+// E13.3 Part 4: EPUB rows follow the 0034 guard in its order (versions in the book, format_missing,
+// export_epub_final, export_stale against epub_key, export_epub_versions, then the table check);
+// epub_key is a real hash of the 0034 inputs, so print-only settings never change it.
 // The print engine is real, from the checked cache (see the CDN route below).
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
@@ -44,6 +49,7 @@ async function setupFormat(page) {
     chapters,
     format: null,                    // the book_formats row (null until the first open)
     lastPdf: null,                   // { created_at, page_count } of the last Print PDF
+    lastEpub: null,                  // { id, created_at, settings_key, engine, parts, snapshot } of the last EPUB (0034)
     changed: false,
     candidates: [
       { id: B2, title: 'Worry Less Workbook', subtitle: null, status: 'completed' },
@@ -60,6 +66,39 @@ async function setupFormat(page) {
     chapters: copy(chapters),
     now: now()
   });
+  // 0027 pdf_sections: Final, text not blank, a chapter, or the intro or conclusion when its part is on.
+  const pdfSections = () => {
+    const f = store.format;
+    if (!f) return [];
+    return chapters.filter((c) => c.kind === 'chapter' || (c.kind === 'intro' && f.parts.intro) || (c.kind === 'conclusion' && f.parts.conclusion))
+      .flatMap((c) => c.sections.filter((x) => x.status === 'final' && x.version && x.version.content.trim()).map((x) => [c.id, c.kind, c.title, x.id, x.title, x.version.id]));
+  };
+  // A 32-hex stand-in for md5 (FNV-1a, four seeds): the same text gives the same key.
+  const hash = (text) => [0x811c9dc5, 0x01000193, 0x9e3779b9, 0x85ebca6b].map((seed) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h.toString(16).padStart(8, '0');
+  }).join('');
+  /** 0034 epub_key: every input that changes the EPUB, and no other. null without a format row. */
+  const epubKey = () => {
+    const f = store.format;
+    if (!f) return null;
+    const valid = f.also_by.filter((id) => store.candidates.some((c) => c.id === id));
+    return hash(JSON.stringify({
+      style: f.style,
+      parts: { intro: f.parts.intro, conclusion: f.parts.conclusion, about: f.parts.about, also_by: f.parts.also_by },
+      contents_sections: f.contents_sections,
+      chapter_label: f.chapter_label,
+      also_by: f.parts.also_by ? valid.map((id) => { const c = store.candidates.find((x) => x.id === id); return [c.id, c.title, c.subtitle]; }) : null,
+      title: store.book.title,
+      subtitle: store.book.subtitle,
+      pen_name: store.book.pen_name,
+      bio_md5: f.parts.about ? hash(store.book.bio || '') : null,
+      sections: pdfSections()
+    }));
+  };
+  store.epubKey = epubKey;             // tests read today's key and the Final list the guard compares with
+  store.pdfSections = pdfSections;
   const formatJson = () => ({
     book: { id: FB, title: store.book.title, subtitle: store.book.subtitle, pen_name_id: PA, pen_name: store.book.pen_name, trim: store.brief.trim_size },
     settings: store.format ? { book_id: FB, ...copy(store.format) } : null,
@@ -68,6 +107,11 @@ async function setupFormat(page) {
     key: '0'.repeat(31) + '1',
     last_pdf: store.lastPdf ? copy(store.lastPdf) : null,
     changed: !!store.lastPdf && store.changed,
+    ...(mode('pre0034') ? {} : {
+      epub_key: epubKey(),
+      last_epub: store.lastEpub ? { id: store.lastEpub.id, created_at: store.lastEpub.created_at, settings_key: store.lastEpub.settings_key, engine: store.lastEpub.engine } : null,
+      epub_changed: store.lastEpub ? epubKey() !== store.lastEpub.settings_key : null
+    }),
     now: now()
   });
   const view = () => ({
@@ -175,6 +219,13 @@ async function setupFormat(page) {
       if (!store.lastPdf || (p.p_book_id && p.p_book_id !== FB)) return json(r, 200, []);
       return json(r, 200, [{ book_id: FB, exported_at: store.lastPdf.created_at, page_count: store.lastPdf.page_count, changed: !!store.changed }]);
     }
+    if (path === '/rest/v1/rpc/epub_marks') {
+      if (mode('pre0034')) return json(r, 404, { code: 'PGRST202', message: 'Could not find the function public.epub_marks without parameters in the schema cache', details: '', hint: null });
+      if (mode('epubMarksFail')) return json(r, 500, { message: 'mock: epub marks down' });
+      const p = body() || {};
+      if (!store.lastEpub || (p.p_book_id && p.p_book_id !== FB)) return json(r, 200, []);
+      return json(r, 200, [{ book_id: FB, exported_at: store.lastEpub.created_at, changed: epubKey() !== store.lastEpub.settings_key }]);
+    }
     if (path === '/rest/v1/book_exports' && method === 'POST') {
       // 0027: a PDF row needs page_count (even), settings_key (= format_key today) and engine;
       // include 'final'; versions = the Final list.
@@ -183,6 +234,26 @@ async function setupFormat(page) {
       if (mode('recordSlow')) await wait(mode('recordSlow'));
       if (mode('recordFail') > 0) { globalThis.__modes.recordFail--; return json(r, 500, { message: 'mock: record down' }); }
       if (mode('stale') > 0) { globalThis.__modes.stale--; return fail(r, 400, 'P0001', 'export_stale'); }
+      if (p.format === 'epub') {
+        // Before 0034 the format check (0027) has no 'epub'.
+        if (mode('pre0034')) return fail(r, 400, '23514', 'new row for relation "book_exports" violates check constraint "book_exports_format_check"');
+        // The 0034 guard, in its order. b. every version is a version of a section of this book, no repeats.
+        const inBook = new Set(chapters.flatMap((c) => c.sections).filter((x) => x.version).map((x) => x.version.id));
+        const v = Array.isArray(p.versions) ? p.versions : null;
+        if (v && v.length && !v.includes(null) && (new Set(v).size !== v.length || v.some((id) => !inBook.has(id)))) return fail(r, 400, 'P0001', 'export_version_not_in_book');
+        if (!store.format) return fail(r, 400, 'P0001', 'format_missing');
+        if (p.include !== 'final') return fail(r, 400, 'P0001', 'export_epub_final');
+        if (p.settings_key !== epubKey()) return fail(r, 400, 'P0001', 'export_stale');
+        if (JSON.stringify(p.versions) !== JSON.stringify(pdfSections().map((x) => x[5]))) return fail(r, 400, 'P0001', 'export_epub_versions');
+        // The table check runs after the trigger (book_exports_file_fields_check).
+        if (p.page_count != null || !p.settings_key || !p.engine) return fail(r, 400, '23514', 'new row for relation "book_exports" violates check constraint "book_exports_file_fields_check"');
+        // The guard sets parts (the format row without also_by, contents on) and the snapshot (with style).
+        const parts = { ...store.format.parts, contents: true };
+        delete parts.also_by;
+        const snapshot = { title: store.book.title, subtitle: store.book.subtitle, pen_name: store.book.pen_name, trim: store.brief.trim_size, bio_md5: hash(store.book.bio || ''), include: 'final', parts, style: store.format.style };
+        store.lastEpub = { id: uid('e', ++seq), created_at: now(), settings_key: p.settings_key, engine: p.engine, parts, snapshot };
+        return json(r, 201, [{ id: store.lastEpub.id, created_at: store.lastEpub.created_at }]);
+      }
       if (p.format !== 'pdf' || p.include !== 'final' || !(p.page_count % 2 === 0 && p.page_count >= 2) || !p.engine || p.settings_key !== formatJson().key) return fail(r, 400, '23514', `mock: bad pdf row ${JSON.stringify(p).slice(0, 200)}`);
       const finals = chapters.flatMap((c) => c.sections).filter((x) => x.status === 'final' && x.version && x.version.content.trim()).map((x) => x.version.id);
       if (JSON.stringify(p.versions) !== JSON.stringify(finals)) return fail(r, 400, 'P0001', 'export_pdf_versions');
@@ -227,7 +298,7 @@ async function setupFormat(page) {
   await ctx.addInitScript(() => {
     window.__blobs = [];
     const make = URL.createObjectURL.bind(URL);
-    URL.createObjectURL = (b) => { if (b instanceof Blob && b.type === 'application/pdf') window.__blobs.push(b); return make(b); };
+    URL.createObjectURL = (b) => { if (b instanceof Blob && (b.type === 'application/pdf' || b.type === 'application/epub+zip')) window.__blobs.push(b); return make(b); };
   });
 }
 

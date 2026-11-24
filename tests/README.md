@@ -573,6 +573,16 @@ and 900 and at 200% text); `format t-trim`, `t-dialogs`, `t-states`, `t-export`,
 t-settings` check the 6 trims and the texts built from `kdpFormatRules.trimsText`. The book wizard has no phone
 layout, so 390 px is a picture only. `format`, `brief`, `settings` and `qc` `t-shots-e132b` make
 `docs/reviews/e13-2b-stop3/` (not checks; never in a sweep; the 08 one builds a 618-page book, about 2 minutes).
+For E13.3 (EPUB and the Kindle preview, plan `docs/reviews/2026-11-23-e13-3-plan.md`): `format t-kindle` (Part 3:
+the Kindle preview, 41d and 41e) and `format t-export` (Part 4, designs 42 and 42b: the EPUB row in every state,
+its record against the format mock's 0034 guard, the downloaded file read back and checked, one file at a time,
+Cancel, and Q4: an EPUB never makes 08 done). The format mock mirrors 0034: a real `epub_key` hash of the 0034
+inputs (print-only settings never change it), `epub_marks`, the EPUB keys in `format_json`, and `pre0034`
+(no EPUB keys, `epub_marks` 404, an EPUB row refused with 23514). `books t-badge` checks the "EPUB" and "EPUB
+changed" marks and the newest of three dates; `export t-export` and `format t-shell` the E11 row "EPUB: Made in 08
+Format". `window.__blobs` is pushed once per stacked init script in a reused browser, so tests compare its count as
+"more" or "the same", never as +1. `format t-shots-e133` (STOP 3) and `format` and `books` `t-shots-e134` (STOP 4)
+make `docs/reviews/e13-3-stop3/` and `docs/reviews/e13-3-stop4/` (not checks; never in a sweep).
 The E11 suites and `pen` share `tests/browser/shared/e11.js`
 (a suite's `mock.js` that starts with `// shared: e11` gets it first); it serves the Books page,
 Settings, the book page and the Export dialog, routes docx 9.5.1 to the cache and keeps every

@@ -73,6 +73,7 @@
     let books = [];
     let badges = new Map();   // book id → { exported_at, changed } (0025 export_badges; last DOCX export)
     let pdfMarks = new Map(); // book id → { exported_at, page_count, changed } (0027 pdf_marks; last Print PDF, E13.2)
+    let epubMarks = new Map(); // book id → { exported_at, changed } (0034 epub_marks; last EPUB, E13.3)
     let filter = 'all';
     let query = '';
 
@@ -169,7 +170,14 @@
       const pdfBadge = !pdf ? ''
         : pdf.changed ? `<span class="badge badge-warning">${WARN_ICON}Print PDF changed</span>`
           : `<span class="badge badge-success">${OK_ICON}Print PDF</span>`;
-      const last = [exp && exp.exported_at, pdf && pdf.exported_at].filter(Boolean).sort().pop();
+      // E13.3 (design 50): the EPUB mark after the Print PDF one, the same pattern.
+      const epub = epubMarks.get(book.id);
+      const epubBadge = !epub ? ''
+        : epub.changed ? `<span class="badge badge-warning">${WARN_ICON}EPUB changed</span>`
+          : `<span class="badge badge-success">${OK_ICON}EPUB</span>`;
+      // "Exported <date>": the newest of the DOCX, the Print PDF and the EPUB.
+      const last = [exp && exp.exported_at, pdf && pdf.exported_at, epub && epub.exported_at].filter(Boolean)
+        .sort((a, b) => new Date(a) - new Date(b)).pop();
       const when = last ? `Exported ${new Date(last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : editedText(book.updated_at);
       return `
         <article class="book-card is-link">
@@ -183,6 +191,7 @@
               ${review ? `<span class="badge badge-warning">${WARN_ICON}Needs review</span>` : ''}
               ${exportBadge}
               ${pdfBadge}
+              ${epubBadge}
             </div>
             <div class="grow"></div>
             <div class="bar" aria-hidden="true"><span style="width: ${pct}%"></span></div>
@@ -316,6 +325,14 @@
       } catch (e) { return new Map(); }
     }
 
+    /** The EPUB marks (0034 epub_marks). A failed read (or none before 0034) shows no marks and no error. */
+    async function loadEpubMarks() {
+      try {
+        const res = await kdp.listEpubMarks();
+        return res.error ? new Map() : new Map((res.data || []).map((r) => [r.book_id, r]));
+      } catch (e) { return new Map(); }
+    }
+
     async function load() {
       subtitle.hidden = false;
       searchBox.hidden = false;
@@ -325,6 +342,7 @@
       const wordsPromise = loadWords().catch(() => null);
       const badgePromise = loadBadges();
       const pdfPromise = loadPdfMarks();
+      const epubPromise = loadEpubMarks();
       let result;
       try { result = await kdp.listBooks(); } catch (e) { result = { error: e }; }
       if (result.error) { renderError(); return; }
@@ -334,7 +352,7 @@
 
       const stats = { inProgress: books.filter((b) => b.status === 'in_progress').length, usage: undefined, words: undefined };
       renderList(stats);
-      [stats.usage, stats.words, badges, pdfMarks] = await Promise.all([usagePromise, wordsPromise, badgePromise, pdfPromise]);
+      [stats.usage, stats.words, badges, pdfMarks, epubMarks] = await Promise.all([usagePromise, wordsPromise, badgePromise, pdfPromise, epubPromise]);
       renderList(stats);
     }
 

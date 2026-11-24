@@ -1438,7 +1438,9 @@ window.kdp = {
   /**
    * Everything 08 reads besides export_json (0027 format_json): book, settings
    * (null before the first open), also_by_valid, candidates, key, last_pdf,
-   * changed, now. data is null when the book is not the user's.
+   * changed, now; after 0034 also epub_key, last_epub and epub_changed (absent
+   * before 0034: the EPUB row reads that as "never exported"). data is null
+   * when the book is not the user's.
    */
   async getFormat(bookId) {
     const { data, error } = await window.sb.rpc('format_json', { p_book_id: bookId });
@@ -1487,6 +1489,27 @@ window.kdp = {
   /** The 08 mark and the Books card: [{ book_id, exported_at, page_count, changed }] (0027 pdf_marks). One book, or all. */
   async listPdfMarks(bookId) {
     const { data, error } = await window.sb.rpc('pdf_marks', bookId ? { p_book_id: bookId } : {});
+    return { data: error ? null : (data || []), error };
+  },
+
+  /**
+   * Records an EPUB (E13.3, 0034). The guard checks settingsKey against
+   * epub_key today (P0001 export_stale), the versions against the Final list
+   * (export_epub_versions), and sets the parts from the format row (contents
+   * on). No page_count: an ebook has no pages.
+   */
+  async recordEpubExport({ bookId, versionIds, settingsKey, engine }) {
+    const { data, error } = await window.sb
+      .from('book_exports')
+      .insert({ book_id: bookId, format: 'epub', include: 'final', versions: versionIds,
+        settings_key: settingsKey, engine })
+      .select('id, created_at');
+    return { data: error ? null : (data && data[0]) || null, error };
+  },
+
+  /** The Books card: [{ book_id, exported_at, changed }] (0034 epub_marks). One book, or all. */
+  async listEpubMarks(bookId) {
+    const { data, error } = await window.sb.rpc('epub_marks', bookId ? { p_book_id: bookId } : {});
     return { data: error ? null : (data || []), error };
   },
 

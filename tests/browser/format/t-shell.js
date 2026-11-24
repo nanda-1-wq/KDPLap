@@ -14,6 +14,15 @@ const test = async page => {
   // E16 Part 4: 08 is not the last step any more: Next is on and opens 09 (the 09 suite checks 09 itself).
   const nx = await page.$eval('[data-next]', (b) => ({ dis: b.disabled, aria: b.getAttribute('aria-disabled'), tip: !!b.querySelector('.tip'), by: b.getAttribute('aria-describedby') }));
   ok(!nx.dis && nx.aria === null && !nx.tip && nx.by === 'nextNote', `Next: on, no "Coming next" tip (${JSON.stringify(nx)})`);
+  // E13.3 Q4: a current EPUB and no Print PDF: the header, the rail and the sidebar are unchanged (08 = Print PDF only).
+  st.lastEpub = { id: 'e0000000-0000-4000-8000-0000000000e1', created_at: new Date().toISOString(), settings_key: st.epubKey(), engine: 'epub3 · e1', parts: {}, snapshot: {} };
+  await FM.open(page);
+  await page.waitForFunction(() => /Print PDF/.test(document.querySelector('[data-next-note]').textContent), null, { timeout: 5000 });
+  const q4 = await page.evaluate(() => ({ note: document.querySelector('[data-next-note]').textContent.trim(), done: document.querySelector('[data-step="8"]').classList.contains('is-done'), check: !!document.querySelector('[data-step="8"] .step-mark svg'), typeOk: typeof kdpEpubCheck === 'object' && typeof kdpEpubCheck.domWellFormed === 'function' }));
+  ok(q4.note === 'Not done yet: export the Print PDF.' && !q4.done && !q4.check, `E13.3 Q4: a current EPUB does not make 08 done (${JSON.stringify(q4)})`);
+  ok(q4.typeOk, 'E13.3 book.html loads js/format/epub-check.js');
+  st.lastEpub = null;
+  await FM.open(page);
 
   /* Rail (51b): 01 to 09, 08 current with the dot, 09 the lock, not a link. */
   ok(await page.$eval('.book-layout', (e) => e.classList.contains('is-rail')), '08 folds to the rail');
@@ -73,6 +82,7 @@ const test = async page => {
   await page.waitForSelector('.exp-08', { timeout: 5000 });
   ok((await FM.txt(page, '.exp-elsewhere')) === 'Print PDF Made in 08 Format', 'E11 dialog: Print PDF, Made in 08 Format');
   ok(await page.$eval('.exp-08', (a) => /book\.html\?id=.+&step=8$/.test(a.getAttribute('href')) && a.getBoundingClientRect().height >= 44), 'the link opens step 8, 44 px');
+  ok((await FM.all(page, '.exp-elsewhere')).join('|') === 'Print PDF Made in 08 Format|EPUB Made in 08 Format' && await page.$eval('.exp-08-epub', (a) => /book\.html\?id=.+&step=8$/.test(a.getAttribute('href')) && a.getBoundingClientRect().height >= 44), 'E13.3 E11 dialog: EPUB, Made in 08 Format, a 44 px link to step 8');
   await page.keyboard.press('Escape');
 
   /* A reload keeps step 8 in the URL. */
