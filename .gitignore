@@ -21,6 +21,9 @@ KDP-Lab-Project-Brief.md
 tests/browser/.cache/
 tests/browser/shots/
 
+# EPUBCheck download and golden EPUBs (tools/epubcheck.mjs, E13.3)
+tests/.cache/epubcheck/
+
 # Supabase CLI link data (project ref, CLI version)
 supabase/.temp/
 
