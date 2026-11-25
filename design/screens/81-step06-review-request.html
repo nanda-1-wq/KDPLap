@@ -1,0 +1,119 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Final 06 Write · review request page (E17 · 81)</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Source+Serif+4:wght@400;600&family=EB+Garamond:wght@400;500&display=swap" rel="stylesheet"><style>
+:root{--ink:#1C1C1A;--ink2:#3D3D39;--graphite:#55554F;--muted:#75756F;--stone:#D9D9D5;--stone2:#B8B8B3;--mist:#E6E6E2;--paper:#F3F3F1;--surface:#FFFFFF;--surface2:#F8F8F6;--warning:#8A5A00;--warning-t:#FDF3DC;--success:#1E7A46}
+*{box-sizing:border-box}
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;color:var(--ink);background:var(--paper);font-size:14px}
+.app{display:flex;height:900px;overflow:hidden;border-bottom:1px solid var(--stone2)}
+.rail{width:76px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--stone);padding:20px 8px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.rail .ic{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:var(--ink2)}
+.rail .box{border:1px solid var(--stone)}
+.rail .mini{width:46px;height:69px;border-radius:3px 5px 5px 3px;background:var(--mist);box-shadow:inset 3px 0 0 rgba(0,0,0,.12),0 1px 2px rgba(28,28,26,.18);padding:5px 4px 4px;display:flex;flex-direction:column;color:var(--ink2)}
+.rail .mini b{font-size:6px;line-height:1.2;text-transform:uppercase}.rail .mini span{font-size:6px;letter-spacing:.06em;text-transform:uppercase;margin-top:auto}
+.rail .st{width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px}
+.rail .st span{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--graphite)}
+.rail .st.cur{background:var(--mist)}.rail .st.cur span{color:var(--ink);font-weight:500}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ink)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.hdr{height:80px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 40px;border-bottom:1px solid var(--stone);background:var(--surface)}
+.btn{height:44px;padding:0 18px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);font:500 15px "IBM Plex Sans";color:var(--ink);display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn.pri{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.dis{color:var(--muted);background:var(--surface2)}
+.btn.sm{height:36px;padding:0 12px;font-size:14px}
+.hdr .mid{flex:1;text-align:center}.hdr .mid .k{font:500 12px "IBM Plex Mono";letter-spacing:.12em;color:var(--graphite)}.hdr .mid h1{margin:2px 0 0;font-size:20px;font-weight:600}
+.hdr .gap{width:0}
+.wr{flex:1;min-height:0;display:grid;grid-template-columns:260px minmax(0,1fr)}
+.wr.open{grid-template-columns:260px minmax(0,1fr) 280px}
+.ms{background:var(--surface2);border-right:1px solid var(--stone);padding:20px 12px;overflow:hidden}
+.ms-h{display:flex;flex-wrap:wrap;gap:0 12px;justify-content:space-between;padding:0 8px;font:500 13px "IBM Plex Mono";color:var(--graphite);letter-spacing:.04em}.ms-h b{color:var(--ink);font-weight:500}
+.bar{height:6px;border-radius:99px;background:var(--mist);margin:8px 8px 16px;overflow:hidden}.bar i{display:block;height:100%;width:100%;background:var(--ink)}
+.row{display:flex;align-items:flex-start;gap:8px;padding:10px 8px;border-radius:8px;font-size:14px;color:var(--ink2);line-height:1.35}
+.row .n{flex:1}.row.cur{background:var(--mist);color:var(--ink);font-weight:600}.row.sec{padding-left:24px}
+.pill{font-size:12px;font-weight:500;padding:2px 9px;border-radius:99px;background:var(--ink);color:var(--surface);flex-shrink:0}
+.mid-col{min-width:0;padding:16px 32px 24px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.head{display:flex;align-items:flex-end;gap:12px 16px;flex-wrap:wrap}
+.head .tx{flex:1 1 300px;min-width:0}
+.where{font-size:14px;color:var(--graphite)}
+.head h2{margin:2px 0 0;font-size:22px;font-weight:600;line-height:1.3}
+.ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.status{display:flex;align-items:center;gap:10px;color:var(--graphite);font-size:14px;margin-right:4px}
+.sel{height:44px;min-width:140px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:space-between;padding:0 12px;color:var(--ink);font-size:15px}
+.tog{position:relative;width:44px;height:44px;border:1px solid var(--stone);border-radius:8px;background:var(--surface);display:inline-flex;align-items:center;justify-content:center;color:var(--ink);flex-shrink:0}
+.mid-col{position:relative}.head{padding-right:56px}.head > .tog{position:absolute;top:12px;right:32px}
+.tog.on{background:var(--mist);border-color:var(--ink)}
+.tog .cnt{position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:var(--warning);color:#fff;font:600 12px/20px "IBM Plex Sans";text-align:center;border:2px solid var(--paper)}
+.tog.focus{outline:2px solid var(--ink);outline-offset:2px}
+.card{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--stone);border-radius:12px;overflow:hidden}
+.tools{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:8px 16px;border-bottom:1px solid var(--stone)}
+.tool{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:var(--ink);font-weight:600;font-size:14px}
+.sep{width:1px;height:24px;background:var(--stone);margin:0 4px}
+.imp{height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;border:1px solid var(--stone);border-radius:8px;background:var(--surface2);color:var(--muted);font-weight:500}
+.hint{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--graphite);margin-left:8px}
+.words{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:13px;color:var(--graphite)}
+.words .b{width:90px;height:6px;border-radius:99px;background:var(--ink)}
+.ed{flex:1;min-height:0;overflow:hidden;padding:24px 48px}
+.ed .col{max-width:680px;margin:0 auto;font-family:"Source Serif 4",Georgia,serif;font-size:18px;line-height:1.75}
+.ed p{margin:0 0 16px}.ed h3{font-family:"Source Serif 4",Georgia,serif;font-size:22px;font-weight:600;margin:24px 0 12px;line-height:1.3}
+.ed ul{margin:0 0 16px;padding-left:24px}
+.foot{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--stone);font-size:13px;color:var(--graphite)}
+.side{background:var(--surface);border-left:1px solid var(--stone);padding:20px 16px;display:flex;flex-direction:column;gap:16px;overflow:hidden}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}.tab{height:44px;padding:0 12px;border:1px solid var(--stone);border-radius:8px;display:inline-flex;align-items:center;font-size:15px}.tab.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:500}
+.lab{font:500 12px "IBM Plex Mono";letter-spacing:.1em;color:var(--graphite);margin:0}
+.ver{border:1px solid var(--stone);border-radius:10px;padding:12px 14px}.ver.cur{border:2px solid var(--ink)}
+.ver .t{display:flex;justify-content:space-between;font-weight:600;font-size:14px}.ver .t span{font-weight:400;color:var(--graphite);font-size:13px}
+.ver .m{font-size:13px;color:var(--graphite);margin-top:2px}.ver .a{display:flex;gap:8px;margin-top:10px}
+/* notes under the screen */
+.notes{padding:32px 40px 48px;max-width:1200px}
+.notes h3{margin:0 0 4px;font-size:18px}.notes .sub{margin:0 0 20px;color:var(--graphite)}
+.notes table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface);border:1px solid var(--stone);border-radius:10px}
+.notes td,.notes th{border-top:1px solid var(--mist);padding:10px 12px;text-align:left;vertical-align:top}.notes th{font-weight:600;background:var(--surface2);border-top:0}
+.notes .mono{font:500 12px "IBM Plex Mono";color:var(--graphite)}
+.strip{display:flex;gap:28px;flex-wrap:wrap;margin:8px 0 24px}
+.strip figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 20px;background:var(--surface);border:1px solid var(--stone);border-radius:10px;min-width:170px}
+.strip figcaption{font-size:13px;color:var(--graphite);text-align:center;max-width:180px}
+@media (max-width:1000px){
+ .hdr{padding:0 24px}
+ .wr,.wr.open{grid-template-columns:220px minmax(0,1fr)}
+ .wr.open{grid-template-rows:minmax(0,1fr) 32%}
+ .wr.open .ms{grid-row:1/3}.wr.open .side{grid-column:2;grid-row:2;border-left:0;border-top:1px solid var(--stone)}
+ .mid-col{padding:16px}
+ .head > .tog{right:16px}.head{padding-right:0}.head .tx{padding-right:56px}
+ .ed{padding:20px}
+ .notes{padding:24px}
+}
+
+:root{--danger:#B42318;--danger-t:#FDECEA}
+.pill.draft{background:var(--surface);color:var(--ink);border:1px solid var(--stone2)}
+.pill.empty{background:transparent;color:var(--graphite);border:1px dashed var(--stone2)}
+.grp{font:500 11px "IBM Plex Mono";letter-spacing:.1em;color:var(--muted);padding:10px 8px 2px}
+.addp{margin:12px 8px 0;height:40px;border:1px dashed var(--stone2);border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--ink);font-weight:500;background:var(--surface)}
+.addp.on{border-style:solid;border-color:var(--ink);background:var(--mist)}
+.menu{position:absolute;z-index:5;width:340px;background:var(--surface);border:1px solid var(--stone2);border-radius:12px;box-shadow:0 8px 24px rgba(28,28,26,.16);padding:16px}
+.menu h4{margin:0;font-size:16px}.menu .h{margin:4px 0 10px;font-size:13px;color:var(--graphite)}
+.menu .g{font:500 11px "IBM Plex Mono";letter-spacing:.1em;color:var(--muted);margin:10px 0 2px}
+.mrow{display:flex;align-items:center;gap:12px;min-height:40px;font-size:14px;padding:0 4px;border-radius:6px}
+.mrow small{margin-left:auto;color:var(--graphite);font-size:12px}
+.cb{width:18px;height:18px;border:1.5px solid var(--ink2);border-radius:3px;display:inline-block;flex-shrink:0;position:relative}
+.cb.on{background:var(--ink);border-color:var(--ink)}.cb.on:after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.menu .f{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--mist);font-size:13px;color:var(--graphite)}
+.ph{color:var(--muted)}
+.tag{border:1px solid var(--stone2);border-radius:12px;padding:2px 10px;font-size:12px;color:var(--graphite);background:var(--surface2);white-space:nowrap}
+.scrim{position:fixed;inset:0;background:rgba(28,28,26,.35);z-index:8;display:flex;align-items:center;justify-content:center}
+.app{position:relative}.app .scrim{position:absolute}
+.dlg{width:460px;max-width:calc(100% - 32px);background:var(--surface);border-radius:16px;padding:24px;box-shadow:0 12px 32px rgba(28,28,26,.25)}
+.dlg h4{margin:0 0 8px;font-size:18px}.dlg p{margin:0 0 12px;line-height:1.5;color:var(--ink2)}.dlg .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.plain{flex:1;min-height:0;overflow:hidden;padding:32px 48px}
+.plain .col{max-width:560px;margin:0 auto;font-family:"Source Serif 4",Georgia,serif;font-size:18px;line-height:1.75}
+.plain h3{font-family:"Source Serif 4",Georgia,serif;text-align:center;font-weight:600;font-size:22px;margin:24px 0 20px}
+.under{font-size:13px;color:var(--graphite);display:flex;gap:8px;align-items:flex-start;line-height:1.45}
+.ab{flex:1;min-height:0;overflow:hidden;padding:24px 32px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:32px}
+.ab h4{margin:0 0 4px;font-size:15px}.ab .h{margin:0 0 12px;font-size:13px;color:var(--graphite)}
+.brow{display:flex;align-items:center;gap:12px;border:1px solid var(--stone);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.brow .t{flex:1;min-width:0}.brow .t b{display:block;font-weight:600}.brow .t span{font-size:13px;color:var(--graphite)}
+.ar{width:44px;height:44px;border:1px solid var(--stone);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);background:var(--surface2)}
+.fld{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:14px}.inp{height:44px;border:1px solid var(--stone2);border-radius:8px;background:var(--surface);padding:0 12px;display:flex;align-items:center;color:var(--muted)}
+.pvw{background:var(--surface2);border:1px solid var(--stone);border-radius:10px;padding:16px}
+.pvw .pg{background:var(--surface);border:1px solid var(--mist);aspect-ratio:2/3;padding:28px 20px;font-family:"EB Garamond",Georgia,serif;text-align:center}
+.pvw .pg h5{font:500 13px "EB Garamond";letter-spacing:.18em;text-transform:uppercase;margin:24px 0 18px;color:var(--ink2)}
+.pvw .pg p{margin:0 0 8px;font-size:16px;font-style:italic}
+hr.sp{border:0;border-top:1px solid var(--mist);margin:16px 0}
+@media (max-width:1000px){.head .ctl{flex-basis:100%}.menu{left:308px !important}.ab{grid-template-columns:minmax(0,1fr);padding:16px}.plain{padding:20px}.menu{width:300px}}
+</style></head><body><div class="app"><nav class="rail" aria-label="Book steps, folded"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span><span class="ic box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span><div class="mini"><b>Micro Study Habits for Busy Adult Learners</b><span>Adnan Haroun</span></div><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>01</span></span><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>02</span></span><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>03</span></span><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>04</span></span><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>05</span></span><span class="st cur"><i class="dot"></i><span>06</span></span><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>07</span></span><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>08</span></span><span class="st"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>09</span></span></nav><div class="main"><header class="hdr"><span class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>Back</span><div class="mid"><div class="k">PRODUCE · STEP 6 OF 11</div><h1>Write</h1></div><span class="btn pri">Next<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span></header><div class="wr"><nav class="ms" aria-label="Manuscript"><div class="ms-h"><span>MANUSCRIPT</span><span><b>11,030</b> / 10,350</span></div><div class="bar"><i></i></div><div class="grp">BOOK PARTS · FRONT</div><div class="row "><span class="n">Dedication</span><span class="pill empty">Empty</span></div><div class="row "><span class="n">Introduction</span><span class="pill ">Final</span></div><div class="row "><span class="n">1 · Start From Your Real Day, Not an Ideal One</span><span class="pill ">Final</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div><div class="row "><span class="n">2 · Make Starting Almost Effortless</span><span class="pill ">Final</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div><div class="row "><span class="n">3 · Tie Each Habit to Something You Already Do</span><span class="pill ">Final</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div><div class="row "><span class="n">4 · The Habit Toolkit for Low-Energy Days</span><span class="pill ">Final</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div><div class="row "><span class="n">5 · Keep Going Without Burning Out</span><span class="pill ">Final</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div><div class="row "><span class="n">Conclusion</span><span class="pill ">Final</span></div><div class="grp">BOOK PARTS · BACK</div><div class="row "><span class="n">About the author</span><span class="pill draft">Draft</span></div><div class="row  cur"><span class="n">Review request page</span><span class="pill draft">Fixed</span></div><div class="row "><span class="n">Also by</span><span class="pill draft">1 book</span></div><div class="addp"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add a book part</div></nav><div class="mid-col"><div class="head"><div class="tx"><div class="where">Back of the book · Book part</div><h2>Review request page</h2></div><div class="ctl"><span class="tag">Fixed text</span><span class="btn">Turn off</span></div><span class="tog" title="Show versions, checks and Brief"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></span></div><div class="card"><div class="plain"><div class="col"><h3>A short request</h3><p>Thank you for reading <i>Micro Study Habits for Busy Adult Learners</i>.</p><p>If this book helped you, please think about leaving an honest review on Amazon. A few words about what worked for you, or what did not, help other readers decide if this book is right for them.</p><p>Adnan Haroun</p></div></div></div><p class="under"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>The book title and the pen name fill in by themselves. The words stay fixed so the page follows Amazon's review rules: an honest review, no rewards, no asking for a good review only.</span></p></div></div></div></div><section class="notes"><h3>81 · Review request page: fixed wording, on or off (E17 · P1, B2)</h3><p class="sub">Owner: approve the wording below.</p><table><tr><th>Item</th><th>Design</th><th>Note</th></tr><tr><td><b>Wording</b></td><td>Heading "A short request", thank you with the book title, one honest-review request, the pen name.</td><td>Draft by Claude chat (B2). No link: Kindle and print both show the same words.</td></tr><tr><td><b>No editor</b></td><td>Read only. No Status, no versions, nothing to make Final: it is always ready.</td><td>Turn off removes it from the book; it can be turned on again from the Add menu or 08.</td></tr><tr><td><b>Rules</b></td><td>No gift, discount or entry for a review; no "5 stars"; no asking only happy readers.</td><td>Amazon community rules for reviews.</td></tr></table></section></body></html>
