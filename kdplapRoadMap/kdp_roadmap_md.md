@@ -88,7 +88,7 @@ Status: ✅ done (E1 to E12, both review gates)
 - Open items:
   - the cold first visit can be slow on jsdelivr (55 to 142 s seen); self-hosting the engine was measured as the fallback (median 4.8 s vs 9.9 s, STOP 4);
   - private windows download the engine again on every visit;
-  - EPUB and the Kindle preview come in E13.3 (migration 0034);
+  - EPUB and the Kindle preview: done in E13.3 (0034, Nov 25);
   - Notes and references come in v2b.
 
 ## E16 · 09 Cover · ✅ done (Nov 18; merged to main 773f746, live on nicheink.com)
@@ -110,15 +110,20 @@ Status: ✅ done (E1 to E12, both review gates)
   - a "Type my own" choice in the blurb dialog (owner: a later idea; typing on the cover works today);
   - phone layout: after v2 (the editor needs 900 px).
 
+## E13.3 · 08 EPUB and Kindle preview · ✅ done (Nov 25; merged to main 2a92ba8, live on nicheink.com)
+- [x] Migration 0034 live since Nov 24
+- [x] EPUB export in 08 with its 3 checks before download, the Kindle preview, the Books mark and the E11 row
+- [x] Live check on the test account (A) and the owner's book as a KDP eBook draft (B): the online Kindle Previewer converted it, 544 locations, 0 quality issues
+- Plan: `docs/reviews/2026-11-23-e13-3-plan.md`; reports: `docs/reviews/2026-11-23-e13-3-stop1.md` to `2026-11-24-e13-3-stop4.md` and the security review `2026-11-25-e13-3-security.md`; numbers `docs/reviews/e13-3-live/results.md`
+
 ## Next
-E16.3 live Nov 23 (main 3842994, stock v3, 0033); Pixabay 429 most likely Cloudflare on the shared egress IP (H2), E16.4 research later; next E13.3 EPUB (0034).
-Then the owner publishes the real book.
+E13.3 EPUB live Nov 25 (main 2a92ba8, 0034). Next the owner publishes the real book.
 
 ## v2 · KDP-ready files
 Scope: owner decisions, v2 step A (Oct 31).
 
 **v2a · publish path**
-1. 08 Format + Print PDF + EPUB (4 styles, book parts on/off, paper type). Print PDF ✅ done Nov 10 (E13.2); EPUB in E13.3
+1. 08 Format + Print PDF + EPUB (4 styles, book parts on/off, paper type). Print PDF ✅ done Nov 10 (E13.2); EPUB ✅ done Nov 25 (E13.3)
 2. 09 Cover (4 templates + upload + blurb; print wrap PDF + Kindle JPG) ✅ done Nov 18 (E16, E16.1)
 3. Owner publishes the real book "Micro Study Habits for Busy Adult Learners"
 
