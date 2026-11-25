@@ -178,8 +178,8 @@ select pg_temp.chk(r || ' has no ' || p || ' on book_checks', not has_table_priv
 select pg_temp.chk('export_json: the section keys are the 0025 keys plus word_target',
   (select array_agg(k order by k) from jsonb_object_keys(public.export_json(:BOOK1) -> 'chapters' -> 1 -> 'sections' -> 0) k)
   = array['ai', 'id', 'needs_review', 'position', 'run', 'status', 'title', 'unsaved', 'version', 'word_target']);
-select pg_temp.chk('export_json: top keys unchanged',
-  (select array_agg(k order by k) from jsonb_object_keys(public.export_json(:BOOK1)) k) = array['book', 'chapters', 'known', 'now']);
+select pg_temp.chk('export_json: top keys (0035 adds book_parts)',
+  (select array_agg(k order by k) from jsonb_object_keys(public.export_json(:BOOK1)) k) = array['book', 'book_parts', 'chapters', 'known', 'now']);
 select pg_temp.chk('export_json: chapter keys unchanged',
   (select array_agg(k order by k) from jsonb_object_keys(public.export_json(:BOOK1) -> 'chapters' -> 1) k)
   = array['id', 'kind', 'needs_review', 'objective', 'position', 'sections', 'title']);
@@ -564,7 +564,7 @@ select pg_temp.expect('qc_json: null for another user''s book', format($q$select
 select pg_temp.expect('qc_json: null for no book', $q$select 1 where public.qc_json('b0000000-0000-4000-8000-0000000000ff') is null$q$, 'OK 1');
 select pg_temp.chk('qc_json: the top keys',
   (select array_agg(k order by k) from jsonb_object_keys(public.qc_json(:BOOK1)) k)
-  = array['current', 'data', 'dismissed', 'format', 'inputs_key', 'last_run', 'now', 'positioning', 'promise', 'versions']);
+  = array['book_parts', 'current', 'data', 'dismissed', 'format', 'inputs_key', 'last_run', 'now', 'positioning', 'promise', 'versions']);
 select pg_temp.chk('qc_json: data is export_json', (public.qc_json(:BOOK1) -> 'data') - 'now' = public.export_json(:BOOK1) - 'now');
 select pg_temp.chk('qc_json: data has word_target', public.qc_json(:BOOK1) #> '{data,chapters,1,sections,0}' ? 'word_target');
 select pg_temp.chk('qc_json: versions and key are today''s',

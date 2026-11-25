@@ -113,6 +113,18 @@ insert into storage.objects (bucket_id, name, owner) values
   ('covers', '00000000-0000-4000-8000-00000000000a/assets/ac000000-0000-4000-8000-000000000001.jpg',
    '00000000-0000-4000-8000-00000000000a');
 
+-- 0035: the books trigger made A's parts; one row in each of the other four tables.
+insert into public.book_part_versions (id, user_id, part_id, version_no, content, source)
+  select 'af000000-0000-4000-8000-000000000001', user_id, id, 1, 'Part text A', 'manual' from public.book_parts
+   where book_id = 'a3000000-0000-4000-8000-000000000001' and kind = 'preface';
+insert into public.book_part_drafts (part_id, user_id, content)
+  select id, user_id, 'Part draft A' from public.book_parts where book_id = 'a3000000-0000-4000-8000-000000000001' and kind = 'preface';
+insert into public.book_also_by (book_id, user_id, position, title) values
+  ('a3000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000000a', 1, 'Typed title A');
+insert into public.part_suggestions (id, user_id, book_id, part_id, action, selection, output)
+  select 'b0000000-aaaa-4000-8000-000000000001', user_id, book_id, id, 'improve', 'text', 'words' from public.book_parts
+   where book_id = 'a3000000-0000-4000-8000-000000000001' and kind = 'preface';
+
 -- The tables under test: every table in public.
 create temp table rls_tables as
   select c.relname::text as t from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' order by 1;
@@ -132,7 +144,7 @@ end $$;
 grant execute on function pg_temp.a_digest() to public;
 select pg_temp.a_digest() as d \gset before_
 
-select pg_temp.chk('34 public tables (0030: cover_designs, cover_design_history, cover_assets, cover_my_layouts; book_covers and cover_images dropped; 0031: stock_cache, stock_calls)', (select count(*) from rls_tables) = 34, (select count(*) from rls_tables)::text);
+select pg_temp.chk('39 public tables (0035: book_parts, book_part_versions, book_part_drafts, book_also_by, part_suggestions; 0030: cover_designs, cover_design_history, cover_assets, cover_my_layouts; book_covers and cover_images dropped; 0031: stock_cache, stock_calls)', (select count(*) from rls_tables) = 39, (select count(*) from rls_tables)::text);
 select pg_temp.chk('A''s two cover exports recorded', (select count(*) from public.cover_exports) = 2);
 select pg_temp.chk('A''s file is in the bucket', (select count(*) from storage.objects where bucket_id = 'covers') = 1);
 select pg_temp.chk('A''s Print PDF row recorded', (select count(*) from public.book_exports where format = 'pdf') = 1);
@@ -156,10 +168,12 @@ select pg_temp.chk(t || ': B reads 0 of A''s rows',
 -- (0028) no update and no delete, qc_dismissed (0028) no update, and
 -- cover_blurbs and cover_exports (0029) no update and no delete,
 -- cover_designs (0030) no delete, cover_design_history (0030) no update and
--- no delete, cover_assets (0030) no update: refused, not 0 rows.
-select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports', 'qc_runs', 'qc_dismissed', 'book_checks', 'cover_blurbs', 'cover_exports', 'cover_design_history', 'cover_assets', 'stock_calls') then '42501%' else 'OK 0' end)
+-- no delete, cover_assets (0030) no update, book_part_versions (0035) no update
+-- and no delete, book_also_by (0035) no update, book_parts and part_suggestions
+-- (0035) no delete: refused, not 0 rows.
+select pg_temp.expect(t || ': B updates 0 of A''s rows', format('update public.%I set user_id = user_id where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('book_part_versions', 'book_also_by', 'outline_checks', 'section_checks', 'section_versions', 'kept_findings', 'book_exports', 'qc_runs', 'qc_dismissed', 'book_checks', 'cover_blurbs', 'cover_exports', 'cover_design_history', 'cover_assets', 'stock_calls') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
-select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats', 'qc_runs', 'book_checks', 'cover_designs', 'cover_design_history', 'cover_blurbs', 'cover_exports', 'stock_calls') then '42501%' else 'OK 0' end)
+select pg_temp.expect(t || ': B deletes 0 of A''s rows', format('delete from public.%I where user_id = %L', t, '00000000-0000-4000-8000-00000000000a'), case when t in ('book_part_versions', 'book_parts', 'part_suggestions', 'outline_checks', 'section_checks', 'section_versions', 'section_runs', 'section_suggestions', 'book_exports', 'book_formats', 'qc_runs', 'book_checks', 'cover_designs', 'cover_design_history', 'cover_blurbs', 'cover_exports', 'stock_calls') then '42501%' else 'OK 0' end)
   from rls_tables order by t;
 
 -- ── As user B: inserts with A's user id are refused ──
@@ -298,8 +312,11 @@ select pg_temp.expect('control: B reads B''s book', $q$select 1 from public.book
 -- ── anon sees nothing ──
 reset role;
 set role anon;
+-- (0035) its five tables give anon no select grant at all: refused, not 0 rows.
 select pg_temp.chk(t || ': anon reads 0 rows',
-         coalesce((xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', t), false, true, '')))[1]::text, 'denied') in ('0', 'denied'))
+         case when has_table_privilege('anon', 'public.' || quote_ident(t), 'select')
+           then coalesce((xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', t), false, true, '')))[1]::text, 'denied') in ('0', 'denied')
+           else not has_any_column_privilege('anon', 'public.' || quote_ident(t), 'select') end)
   from rls_tables order by t;
 select pg_temp.expect('storage: anon reads no file', $q$select 1 from storage.objects$q$, 'OK 0');
 select pg_temp.expect('storage: anon cannot upload', $q$insert into storage.objects (bucket_id, name) values ('covers', '00000000-0000-4000-8000-00000000000a/assets/bc000000-0000-4000-8000-000000000004.jpg')$q$, '42501%');

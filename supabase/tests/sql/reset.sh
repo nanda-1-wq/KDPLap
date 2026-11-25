@@ -36,6 +36,9 @@ PSQL=("$PGBIN/psql" -h 127.0.0.1 -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -q -X
 if [[ ${KDP_PG_NO_FN_DEFAULTS:-} == 1 ]]; then
   "${PSQL[@]}" -d kdp -c "alter default privileges in schema public revoke execute on functions from anon, authenticated, service_role" >/dev/null
 fi
+# E17: KDP_PG_BEFORE=0035 stops before that migration, so an upgrade test
+# (*_up.sql) can seed old data and then apply it (run.sh sets it).
 for f in "$ROOT"/supabase/migrations/*.sql; do
+  if [[ -n ${KDP_PG_BEFORE:-} && ! ${f:t} < $KDP_PG_BEFORE ]]; then break; fi
   "${PSQL[@]}" -d kdp -f "$f" >/dev/null || { echo "reset.sh: failed on ${f:t}"; exit 1; }
 done

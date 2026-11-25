@@ -43,6 +43,17 @@
 \set ENGINE '''typst 0.14.2 · t1'''
 
 -- ── Seed (as the owner of the database: no RLS) ──
+-- E17 (0035): About and Also by now come from book_parts and book_also_by.
+create function pg_temp.part_on(b uuid, k text, flag boolean) returns void language sql as $$
+  update public.book_parts set enabled = flag where book_id = b and kind = k $$;
+-- Ticks both the old column (kept until 0036) and the new list.
+create function pg_temp.ticks(b uuid, ids uuid[]) returns void language sql as $$
+  update public.book_formats set also_by = ids where book_id = b;
+  select public.set_also_by(b, (select jsonb_agg(jsonb_build_object('book_id', u.x) order by u.o) from unnest(ids) with ordinality u(x, o))) $$;
+create function pg_temp.about(b uuid, t text) returns void language sql as $$
+  select public.save_part_version(p.id, t, p.current_version_id) from public.book_parts p where p.book_id = b and p.kind = 'about_author';
+  update public.book_parts set status = 'final' where book_id = b and kind = 'about_author' $$;
+grant execute on all functions in schema pg_temp to public;
 insert into auth.users values (:A), (:B);
 insert into public.pen_names (id, user_id, name, bio_text) values
   (:P1, :A, 'Nora Hale', 'Bio one.'), (:P2, :A, 'Other Pen', null), (:PB, :B, 'Pen B', null);
@@ -262,15 +273,15 @@ select public.format_key(:BOOK1) as k \gset
 update public.book_formats set paper = 'cream' where book_id = :BOOK1;
 select pg_temp.chk('key same: paper (owner, Q5)', public.format_key(:BOOK1) = :'k');
 -- Also by counts only when its part is on.
-update public.book_formats set also_by = array[:BOOK2]::uuid[] where book_id = :BOOK1;
+select pg_temp.ticks(:BOOK1, array[:BOOK2]::uuid[]);
 select pg_temp.chk('key same: Also by ticks while the part is off', public.format_key(:BOOK1) = :'k');
-update public.book_formats set parts = parts || '{"also_by": true}' where book_id = :BOOK1;
+select pg_temp.part_on(:BOOK1, 'also_by', true);
 select pg_temp.chk('key changes: Also by on', public.format_key(:BOOK1) <> :'k');
 select public.format_key(:BOOK1) as k \gset
-update public.book_formats set also_by = array[:BOOK2, :BOOK3]::uuid[] where book_id = :BOOK1;
+select pg_temp.ticks(:BOOK1, array[:BOOK2, :BOOK3]::uuid[]);
 select pg_temp.chk('key changes: an Also by tick (part on)', public.format_key(:BOOK1) <> :'k');
 select public.format_key(:BOOK1) as k \gset
-update public.book_formats set also_by = array[:BOOK3, :BOOK2]::uuid[] where book_id = :BOOK1;
+select pg_temp.ticks(:BOOK1, array[:BOOK3, :BOOK2]::uuid[]);
 select pg_temp.chk('key changes: Also by order', public.format_key(:BOOK1) <> :'k');
 select public.format_key(:BOOK1) as k \gset
 :OWNER
@@ -278,7 +289,7 @@ update public.books set title = 'Second Book, new' where id = :BOOK2;
 select pg_temp.chk('key changes: an Also by book''s title (part on)', public.format_key(:BOOK1) <> :'k');
 select public.format_key(:BOOK1) as k \gset
 update public.books set subtitle = 'Part two, new' where id = :BOOK2;
-select pg_temp.chk('key changes: an Also by book''s subtitle (part on)', public.format_key(:BOOK1) <> :'k');
+select pg_temp.chk('key same: an Also by book''s subtitle (E17: Also by prints titles only)', public.format_key(:BOOK1) = :'k');
 select public.format_key(:BOOK1) as k \gset
 update public.books set pen_name_id = :P2 where id = :BOOK3;
 select pg_temp.chk('key changes: an Also by book leaves the pen name', public.format_key(:BOOK1) <> :'k');
@@ -299,10 +310,13 @@ select pg_temp.chk('key changes: trim (in the Brief)', public.format_key(:BOOK1)
 select public.format_key(:BOOK1) as k \gset
 update public.pen_names set bio_text = 'Bio two.' where id = :P1;
 select pg_temp.chk('key same: bio while About the author is off', public.format_key(:BOOK1) = :'k');
-update public.book_formats set parts = parts || '{"about": true}' where book_id = :BOOK1;
+select pg_temp.part_on(:BOOK1, 'about_author', true);
+select pg_temp.about(:BOOK1, 'About one.');
 select public.format_key(:BOOK1) as k \gset
 update public.pen_names set bio_text = 'Bio three.' where id = :P1;
-select pg_temp.chk('key changes: bio while About the author is on', public.format_key(:BOOK1) <> :'k');
+select pg_temp.chk('key same: a pen name bio edit (E17: About prints its own text)', public.format_key(:BOOK1) = :'k');
+select pg_temp.about(:BOOK1, 'About two.');
+select pg_temp.chk('key changes: the About text while About the author is on', public.format_key(:BOOK1) <> :'k');
 -- The text.
 select public.format_key(:BOOK1) as k \gset
 update public.chapters set title = 'Getting set up' where id = :C1;
@@ -351,8 +365,8 @@ select pg_temp.expect('DOCX: a page count refused', format($q$insert into public
 select pg_temp.expect('DOCX: a settings key refused', format($q$insert into public.book_exports (book_id, format, include, parts, versions, settings_key) values (%L, 'docx', 'all', %L, array[%L]::uuid[], public.format_key(%L))$q$, :BOOK1, :PARTS6, :VI, :BOOK1), '23514%book_exports_file_fields_check%');
 select pg_temp.expect('PDF: page count 2 passes', format($q$insert into public.book_exports (book_id, format, include, parts, versions, page_count, settings_key, engine, created_at) values (%L, 'pdf', 'final', %L, public.pdf_version_ids(%L), 2, public.format_key(%L), %L, '2030-01-01 00:00+00')$q$, :BOOK1, :PARTS6, :BOOK1, :BOOK1, :ENGINE), 'OK 1');
 select pg_temp.expect('PDF: a good row passes (parts sent wrong on purpose)', format($q$insert into public.book_exports (book_id, format, include, parts, versions, page_count, settings_key, engine, created_at) values (%L, 'pdf', 'final', '{"title": false, "copyright": false, "contents": false, "intro": false, "conclusion": false, "about": false}', public.pdf_version_ids(%L), 36, public.format_key(%L), %L, '2030-01-02 00:00+00')$q$, :BOOK1, :BOOK1, :BOOK1, :ENGINE), 'OK 1');
-select pg_temp.chk('PDF: parts come from the format row (six keys)',
-  (select e.parts = (f.parts - 'also_by') from public.book_exports e join public.book_formats f on f.book_id = e.book_id where e.format = 'pdf' and e.page_count = 36),
+select pg_temp.chk('PDF: parts come from the database (six keys; E17: about from book_parts)',
+  (select e.parts = (f.parts - 'also_by') || '{"about": true}' from public.book_exports e join public.book_formats f on f.book_id = e.book_id where e.format = 'pdf' and e.page_count = 36),
   (select parts::text from public.book_exports where format = 'pdf' and page_count = 36));
 select pg_temp.chk('PDF: the snapshot adds style and paper',
   (select snapshot ->> 'style' = 'warm' and snapshot ->> 'paper' = 'cream' and snapshot ->> 'trim' = '5.25x8' and snapshot ->> 'include' = 'final'

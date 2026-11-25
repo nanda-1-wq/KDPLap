@@ -55,6 +55,17 @@ returns text language sql as $$
 grant execute on all functions in schema pg_temp to public;
 
 -- ── Seed (as the owner of the database: no RLS) ──
+-- E17 (0035): About and Also by now come from book_parts and book_also_by.
+create function pg_temp.part_on(b uuid, k text, flag boolean) returns void language sql as $$
+  update public.book_parts set enabled = flag where book_id = b and kind = k $$;
+-- Ticks both the old column (kept until 0036) and the new list.
+create function pg_temp.ticks(b uuid, ids uuid[]) returns void language sql as $$
+  update public.book_formats set also_by = ids where book_id = b;
+  select public.set_also_by(b, (select jsonb_agg(jsonb_build_object('book_id', u.x) order by u.o) from unnest(ids) with ordinality u(x, o))) $$;
+create function pg_temp.about(b uuid, t text) returns void language sql as $$
+  select public.save_part_version(p.id, t, p.current_version_id) from public.book_parts p where p.book_id = b and p.kind = 'about_author';
+  update public.book_parts set status = 'final' where book_id = b and kind = 'about_author' $$;
+grant execute on all functions in schema pg_temp to public;
 insert into auth.users values (:A), (:B);
 insert into public.pen_names (id, user_id, name, bio_text) values
   (:P1, :A, 'Nora Hale', 'Bio one.'), (:P2, :A, 'Other Pen', null), (:PB, :B, 'Pen B', null);
@@ -126,7 +137,8 @@ select pg_temp.expect('epub_key: a book without a format row is null', format($q
 select pg_temp.expect('epub_key: a book that does not exist is null', $q$select 1 where public.epub_key('b0000000-0000-4000-8000-0000000000ff') is null$q$, 'OK 1');
 
 -- The format row: contents off (the EPUB turns it on), about on.
-update public.book_formats set parts = parts || '{"contents": false, "about": true}' where book_id = :BOOK1;
+update public.book_formats set parts = parts || '{"contents": false}' where book_id = :BOOK1;
+select pg_temp.part_on(:BOOK1, 'about_author', true);
 -- A DOCX and a Print PDF first, so the other readers have rows to compare.
 select pg_temp.expect('A records a DOCX export', format($q$insert into public.book_exports (book_id, format, include, parts, versions, created_at) values (%L, 'docx', 'all', %L, array[%L, %L]::uuid[], '2030-01-01 00:00+00')$q$, :BOOK1, :PARTS6, :V11, :V12), 'OK 1');
 select pg_temp.expect('A records a Print PDF (36 pages)', pg_temp.pdf_sql(:BOOK1, 36, '2030-01-02 00:00+00'), 'OK 1');
@@ -165,7 +177,7 @@ select pg_temp.chk('no EPUB row was saved by the refused inserts', not exists (s
 select pg_temp.expect('EPUB: a good row passes (parts sent wrong on purpose)',
   pg_temp.epub_sql(:BOOK1, at => '2030-01-03 00:00+00', parts => '{"title": false, "copyright": false, "contents": false, "intro": false, "conclusion": false, "about": false}'), 'OK 1');
 select pg_temp.chk('EPUB parts: the format row''s parts without also_by, contents forced on',
-  (select e.parts = (f.parts - 'also_by') || '{"contents": true}' and (f.parts ->> 'contents')::boolean = false
+  (select e.parts = (f.parts - 'also_by') || '{"contents": true, "about": true}' and (f.parts ->> 'contents')::boolean = false
      from public.book_exports e join public.book_formats f on f.book_id = e.book_id where e.format = 'epub'),
   (select parts::text from public.book_exports where format = 'epub'));
 select pg_temp.chk('EPUB parts: exactly the six export keys',
@@ -196,13 +208,14 @@ select pg_temp.chk('format_json: every 0027 key holds the same value as before t
 -- A Print PDF after the EPUB still follows the 0027 rules: its parts as the row (contents off), paper in the snapshot.
 select pg_temp.expect('A records a Print PDF after the EPUB (40 pages)', pg_temp.pdf_sql(:BOOK1, 40, '2030-01-04 00:00+00'), 'OK 1');
 select pg_temp.chk('PDF parts: the row''s parts without also_by (contents not forced)',
-  (select e.parts = f.parts - 'also_by' and not (e.parts ->> 'contents')::boolean
+  (select e.parts = (f.parts - 'also_by') || '{"about": true}' and not (e.parts ->> 'contents')::boolean
      from public.book_exports e join public.book_formats f on f.book_id = e.book_id where e.format = 'pdf' and e.page_count = 40));
 select pg_temp.chk('PDF snapshot: style and paper, as 0027',
   (select snapshot ? 'paper' and snapshot ? 'style' from public.book_exports where format = 'pdf' and page_count = 40));
 select pg_temp.chk('DOCX snapshot: no style and no paper, as 0025',
   (select not (snapshot ? 'paper') and not (snapshot ? 'style') from public.book_exports where format = 'docx'));
-update public.book_formats set parts = parts || '{"contents": true, "about": false}' where book_id = :BOOK1;
+update public.book_formats set parts = parts || '{"contents": true}' where book_id = :BOOK1;
+select pg_temp.part_on(:BOOK1, 'about_author', false);
 
 -- ── 6. epub_key: what changes it and what does not ──
 -- "KEY no": a print-only input; the EPUB key stays, and format_key moves (the edit is real).
@@ -278,23 +291,25 @@ select public.epub_key(:BOOK1) as e \gset
 update public.pen_names set bio_text = 'Bio two.' where id = :P1;
 select pg_temp.chk('KEY no: bio while About the author is off', public.epub_key(:BOOK1) = :'e');
 :ASA
-update public.book_formats set parts = parts || '{"about": true}' where book_id = :BOOK1;
+select pg_temp.part_on(:BOOK1, 'about_author', true);
 select pg_temp.chk('KEY yes: parts.about', public.epub_key(:BOOK1) <> :'e');
 select public.epub_key(:BOOK1) as e \gset
 :OWNER
 update public.pen_names set bio_text = 'Bio three.' where id = :P1;
-select pg_temp.chk('KEY yes: bio while About the author is on', public.epub_key(:BOOK1) <> :'e');
+select pg_temp.chk('KEY no: a pen name bio edit (E17: About prints its own text)', public.epub_key(:BOOK1) = :'e');
 :ASA
+select pg_temp.about(:BOOK1, 'About two.');
+select pg_temp.chk('KEY yes: the About text while About the author is on', public.epub_key(:BOOK1) <> :'e');
 select public.epub_key(:BOOK1) as e \gset
-update public.book_formats set also_by = array[:BOOK2]::uuid[] where book_id = :BOOK1;
+select pg_temp.ticks(:BOOK1, array[:BOOK2]::uuid[]);
 select pg_temp.chk('KEY no: Also by ticks while the part is off', public.epub_key(:BOOK1) = :'e');
-update public.book_formats set parts = parts || '{"also_by": true}' where book_id = :BOOK1;
+select pg_temp.part_on(:BOOK1, 'also_by', true);
 select pg_temp.chk('KEY yes: parts.also_by', public.epub_key(:BOOK1) <> :'e');
 select public.epub_key(:BOOK1) as e \gset
-update public.book_formats set also_by = array[:BOOK2, :BOOK3]::uuid[] where book_id = :BOOK1;
+select pg_temp.ticks(:BOOK1, array[:BOOK2, :BOOK3]::uuid[]);
 select pg_temp.chk('KEY yes: an Also by tick (part on)', public.epub_key(:BOOK1) <> :'e');
 select public.epub_key(:BOOK1) as e \gset
-update public.book_formats set also_by = array[:BOOK3, :BOOK2]::uuid[] where book_id = :BOOK1;
+select pg_temp.ticks(:BOOK1, array[:BOOK3, :BOOK2]::uuid[]);
 select pg_temp.chk('KEY yes: Also by order', public.epub_key(:BOOK1) <> :'e');
 select public.epub_key(:BOOK1) as e \gset
 :OWNER
@@ -302,7 +317,7 @@ update public.books set title = 'Second Book, new' where id = :BOOK2;
 select pg_temp.chk('KEY yes: an Also by book''s title (part on)', public.epub_key(:BOOK1) <> :'e');
 select public.epub_key(:BOOK1) as e \gset
 update public.books set subtitle = 'Part two, new' where id = :BOOK2;
-select pg_temp.chk('KEY yes: an Also by book''s subtitle (part on)', public.epub_key(:BOOK1) <> :'e');
+select pg_temp.chk('KEY no: an Also by book''s subtitle (E17: Also by prints titles only)', public.epub_key(:BOOK1) = :'e');
 select public.epub_key(:BOOK1) as e \gset
 update public.books set pen_name_id = :P2 where id = :BOOK3;
 select pg_temp.chk('KEY yes: an Also by book leaves the pen name', public.epub_key(:BOOK1) <> :'e');
@@ -354,9 +369,9 @@ select pg_temp.chk('epub_marks: input p_book_id; columns book_id, exported_at, c
 select pg_temp.chk('epub_marks: one row per book with an EPUB', (select count(*) from public.epub_marks()) = 1);
 select pg_temp.chk('epub_marks(book): the same row', (select exported_at from public.epub_marks(:BOOK1)) = '2030-01-05 00:00+00');
 select pg_temp.chk('epub_marks(another book): no row', not exists (select 1 from public.epub_marks(:BOOK2)));
-select pg_temp.chk('format_json: top-level keys (the 0027 keys and the 3 EPUB keys)',
+select pg_temp.chk('format_json: top-level keys (the 0027 keys, the 3 EPUB keys and 0035 book_parts)',
   (select array_agg(k order by k) from jsonb_object_keys(public.format_json(:BOOK1)) k)
-    = array['also_by_valid', 'book', 'candidates', 'changed', 'epub_changed', 'epub_key', 'key', 'last_epub', 'last_pdf', 'now', 'settings'],
+    = array['also_by_valid', 'book', 'book_parts', 'candidates', 'changed', 'epub_changed', 'epub_key', 'key', 'last_epub', 'last_pdf', 'now', 'settings'],
   (select array_agg(k order by k) from jsonb_object_keys(public.format_json(:BOOK1)) k)::text);
 select pg_temp.chk('format_json: epub_key is today''s epub_key, key is still format_key',
   public.format_json(:BOOK1) ->> 'epub_key' = public.epub_key(:BOOK1) and public.format_json(:BOOK1) ->> 'key' = public.format_key(:BOOK1));
@@ -484,7 +499,7 @@ select pg_temp.chk('book_exports: no update, delete or truncate for the API role
   not has_table_privilege('authenticated', 'public.book_exports', 'update') and not has_table_privilege('authenticated', 'public.book_exports', 'delete')
   and not has_table_privilege('anon', 'public.book_exports', 'update') and not has_table_privilege('anon', 'public.book_exports', 'delete')
   and not has_table_privilege('authenticated', 'public.book_exports', 'truncate'));
-select pg_temp.chk('no new table: 34 public tables', (select count(*) from pg_tables where schemaname = 'public') = 34,
+select pg_temp.chk('39 public tables (0034 added none; 0035 added five)', (select count(*) from pg_tables where schemaname = 'public') = 39,
   (select count(*) from pg_tables where schemaname = 'public')::text);
 set role anon;
 select pg_temp.expect('anon: epub_key refused', format($q$select public.epub_key(%L)$q$, :BOOK1), '42501%');
