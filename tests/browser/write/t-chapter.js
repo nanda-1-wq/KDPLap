@@ -166,7 +166,9 @@ const test = async page => {
   ok(await g(() => document.activeElement && document.activeElement.matches('[data-chap-close]')), 'focus on Close');
   ok(await shots('done') === false, 'done: no sideways scroll at 900 px');
   await page.click('[data-chap-close]');
-  ok(!(await has('[data-chap]')) && await page.$eval('[data-gen-chapter]', (b) => b.disabled) && (await txt('#wrChapLine')) === 'Every section in this chapter has text.', 'Close: the card goes; the chapter is full, so the button is off with the reason');
+  // E17 N2 (design 78): grey with aria-disabled (still focusable); the reason is its tip and description, not a line.
+  ok(!(await has('[data-chap]')) && await page.$eval('[data-gen-chapter]', (b) => b.getAttribute('aria-disabled') === 'true' && !b.disabled && b.title === 'Every section in this chapter has text.')
+    && await page.$eval('#wrChapLine', (e) => e.hidden && e.textContent === 'Every section in this chapter has text.'), 'Close: the card goes; the chapter is full, so the button is off with the reason as its tip');
 
   // 7. A failure: "Try again from 3.1" goes on without a new confirm.
   const ch3 = st.outline[W1][3];

@@ -178,7 +178,7 @@
     $('[data-sub]').textContent = sub();
     const busy = !!st.run;
     $('[data-rows]').innerHTML = `${pdfRow()}${notes()}${epubRow()}
-      <div class="fmt-exp-row"><span class="fmt-exp-text"><strong>Word (.docx)</strong><span class="fmt-quiet">For editing in other tools</span></span>
+      <div class="fmt-exp-row"><span class="fmt-exp-text"><strong>Word (.docx) or Markdown (.md)</strong><span class="fmt-quiet">For editing in other tools</span></span>
         <button type="button" class="btn btn-secondary" data-docx${busy ? ' disabled' : ''}>Export</button></div>
       ${busy ? '<p class="fmt-hint">One file at a time. Other rows wait.</p>' : ''}`;
   }

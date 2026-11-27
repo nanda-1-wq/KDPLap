@@ -52,10 +52,10 @@ const test = async (page) => {
   /* ── 11 + 1. From the book header: ready ── */
   await fresh();
   await page.goto(`${E11.base}/app/book.html?id=${E11.B1}&step=1`, { waitUntil: 'domcontentloaded' });
-  await page.locator('[data-book-head]:not([hidden]) [data-export]').waitFor({ timeout: 10000 });
-  const order = await page.evaluate(() => [...document.querySelector('.book-head-next').children].filter((e) => !e.hidden).map((e) => e.matches('[data-export]') ? 'export' : e.matches('[data-next]') ? 'next' : e.className));
-  ok('11 header: Export (secondary) left of Next', order[0] === 'export' && order[order.length - 1] === 'next' && (await page.locator('[data-export]').getAttribute('class')).includes('btn-secondary'), order);
-  await page.locator('[data-export]').click();
+  await page.locator('[data-book-head]:not([hidden]) [data-next]').waitFor({ timeout: 10000 });
+  // E17 N3 (design 78): the header Export shows only from 08 on; the E11 dialog opens from the Books card menu and the 08 Word row.
+  ok('E17 N3: 01 header has no Export (hidden, not inert)', await page.evaluate(() => { const b = document.querySelector('[data-export]'); return !!b && b.hidden && !b.getClientRects().length; }));
+  await page.evaluate((id) => kdpExport.open(id, { opener: document.querySelector('[data-next]') }), E11.B1);   // E17 N3: no header Export on 01 to 07
   await ready();
   ok('1 opens on the book: title, pen name', (await T('#expTitle')) === 'Export book' && (await T('[data-exp-sub]')) === 'Chair Yoga for Seniors Over 60 · Nora Hale');
   ok('1 focus on the chosen format', await page.evaluate(() => document.activeElement.matches('input[value="docx"]')));
@@ -86,10 +86,10 @@ const test = async (page) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
-  ok('11 Esc closes; focus back on Export', !(await page.locator('.exp-dialog[open]').count()) && await page.evaluate(() => document.activeElement.matches('[data-export]')));
+  ok('11 Esc closes; focus back on the opener', !(await page.locator('.exp-dialog[open]').count()) && await page.evaluate(() => document.activeElement.matches('[data-next]')));
 
-  /* ── 9. Export the .docx from the header ── */
-  await page.locator('[data-export]').click();
+  /* ── 9. Export the .docx (opened as the 08 Word row and the Books menu do) ── */
+  await page.evaluate((id) => kdpExport.open(id, { opener: document.querySelector('[data-next]') }), E11.B1);   // E17 N3: no header Export on 01 to 07
   await ready();
   const name = await exportNow();
   ok('9 download: chair-yoga-for-seniors-over-60.docx', name === 'chair-yoga-for-seniors-over-60.docx', name);

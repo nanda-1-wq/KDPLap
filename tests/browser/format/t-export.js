@@ -29,7 +29,7 @@ const test = async page => {
   let r = await rows();
   ok(r[0] === 'Print PDF Paperback interior · fonts embedded · even page count Export', `Print PDF row: ${r[0]}`);
   ok(r[1] === 'EPUB Kindle ebook · clickable contents Not exported yet Export', `EPUB row: ${r[1]} (E13.3 42b: never exported)`);
-  ok(r[2] === 'Word (.docx) For editing in other tools Export', `Word row: ${r[2]}`);
+  ok(r[2] === 'Word (.docx) or Markdown (.md) For editing in other tools Export', `Word row: ${r[2]}`);
   ok((await FM.txt(page, `${panel} > .dialog-inner > .fmt-hint`)) === 'Its page count sets the spine of your cover. Each PDF is checked before it downloads: page size, fonts and even count.', 'footer (F8: no "opens 09 Cover" yet)');
   ok(await page.$eval(`${panel} [data-pdf]`, (b) => b.classList.contains('btn-primary')), 'first Export is the primary button');
 

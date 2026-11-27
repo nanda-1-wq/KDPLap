@@ -80,6 +80,9 @@
   const CHECKS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 13l4 4 9-10"/><path d="M11 16l1 1 9-10"/></svg>';
   const BOOK_DONE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M9 11l2 2 4-4"/></svg>';
   const REOPEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg>';
+  // E17 N1 (design 78b): the panel toggle's icon, a box with its right column.
+  const PANEL_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M14.5 4.5v15"/></svg>';
+  const PANEL_KEY = 'nicheink.write.panel';   // "open" or "closed", on this computer
   const INFO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
   const TOOL = {
     bold: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></svg>',
@@ -96,6 +99,7 @@
   let sectionToken = 0;
   let open = new Set();               // chapter ids shown open in the manuscript list
   let tab = 'versions';               // versions | checks | brief
+  let panelOpen = false;              // E17 N1: the right panel, hidden by default (read in init)
   let note = null;                    // { kind, text, retry } above the editor
   let idleTimer = null;
   let cmp = null;                     // the Compare dialog
@@ -893,7 +897,7 @@
       <div class="wr">
         <nav class="wr-ms" aria-label="Manuscript" data-ms></nav>
         <div class="wr-main" data-main></div>
-        <aside class="wr-side" aria-label="Versions, checks and Brief" data-side></aside>
+        <aside class="wr-side" id="wrSide" aria-label="Versions, checks and Brief" data-side></aside>
         <p class="sr-only" aria-live="polite" data-live></p>
       </div>`;
     els = {
@@ -949,6 +953,7 @@
       return;
     }
     wr.classList.remove('is-single');
+    wr.classList.toggle('is-panel-off', !panelOpen);
     renderManuscript();
     renderMainShell();
     renderSide();
@@ -1065,23 +1070,23 @@
   function renderMainShell() {
     if (!els) return;
     if (!cur) {
-      els.main.innerHTML = `<div data-notes></div><p class="wr-empty-pick">Pick a section in the manuscript list to start writing.</p>`;
+      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div data-notes></div><p class="wr-empty-pick">Pick a section in the manuscript list to start writing.</p>`;
       renderNotes();
       return;
     }
     if (cur.state === 'loading') {
-      els.main.innerHTML = `<div class="wr-skel" aria-hidden="true"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div></div><p class="sr-only" role="status">Loading the section…</p>`;
+      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div class="wr-skel" aria-hidden="true"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div></div><p class="sr-only" role="status">Loading the section…</p>`;
       return;
     }
     if (cur.state === 'error') {
-      els.main.innerHTML = `<div class="alert alert-error" role="alert">${ICON.warn(16)}<div><p class="alert-text">We couldn’t load this section. Your writing is safe.</p><p class="alert-text"><button type="button" class="link-btn" data-retry-section>Try again</button></p></div></div>`;
+      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div class="alert alert-error" role="alert">${ICON.warn(16)}<div><p class="alert-text">We couldn’t load this section. Your writing is safe.</p><p class="alert-text"><button type="button" class="link-btn" data-retry-section>Try again</button></p></div></div>`;
       return;
     }
     const ro = locked();
     const writing = G.busyOn(cur.id);
     const kept = G.keptOn(cur.id);
     els.main.innerHTML = `
-      <div class="wr-head" data-head></div>
+      <div class="wr-top"><div class="wr-head" data-head></div>${toggleHtml()}</div>
       <div data-notes></div>
       <div data-gen></div>
       <div data-imp></div>
@@ -1093,9 +1098,9 @@
           <button type="button" class="wr-tool" data-cmd="list" aria-label="Bulleted list" title="Bulleted list"${ro ? ' disabled' : ''}>${TOOL.list}</button>
           <button type="button" class="wr-tool" data-cmd="clear" aria-label="Clear formatting" title="Clear formatting"${ro ? ' disabled' : ''}>${TOOL.clear}</button>
           ${imp.toolbarHtml()}
+          <span class="wr-imp-hint" id="wrImpHint" data-imp-hint hidden></span>
           <div class="wr-words" data-words></div>
         </div>
-        <p class="wr-imp-hint" id="wrImpHint" data-imp-hint hidden></p>
         <div class="wr-editor" id="wrEditor" data-editor role="textbox" aria-multiline="true" aria-labelledby="wrSecTitle"
              contenteditable="${ro ? 'false' : 'true'}" spellcheck="true" aria-readonly="${ro}" data-placeholder="Start writing this section, or use Generate section."></div>
         <div class="wr-stream" data-stream hidden></div>
@@ -1117,11 +1122,57 @@
     Q.paint();
   }
 
-  /** Generate section, and in a chapter Generate chapter with its line on a row of their own (design 23b, 1A). */
+  /** Generate section, and in a chapter Generate chapter (design 23b; E17 N2: in the head row, design 78). */
   function genButtons() {
     const one = `<button type="button" class="btn btn-secondary wr-gen-btn" data-generate${G.block() ? ' disabled' : ''}>${SPARKLE}Generate section</button>`;
     const chap = G.chapterButton();
     return chap ? `<div class="wr-gen-btns">${one}${chap}</div>` : one;
+  }
+
+  /* ── E17 N1: the right panel toggle (designs 78, 78b) ── */
+
+  function readPanel() {
+    try { return localStorage.getItem(PANEL_KEY) === 'open'; } catch (e) { return false; }   // blocked: closed
+  }
+
+  function toggleText(n) {
+    const base = 'Show versions, checks and Brief';
+    return n ? `${base}, ${fmt(n)} ${n === 1 ? 'check' : 'checks'} to look at` : base;
+  }
+
+  /** The amber count shows only while the panel is hidden (accepted exception, Q-P1). */
+  function toggleCount() {
+    if (panelOpen || !cur || cur.state !== 'ready') return 0;
+    return chk.count();
+  }
+
+  function toggleHtml() {
+    const n = toggleCount();
+    const label = esc(toggleText(n));
+    return `<button type="button" class="wr-tog" data-panel-toggle aria-controls="wrSide" aria-pressed="${panelOpen}" aria-label="${label}" title="${label}">${PANEL_ICON}${n ? `<span class="wr-tog-count" aria-hidden="true" data-tog-count>${fmt(n)}</span>` : ''}</button>`;
+  }
+
+  /** The toggle in place (keeps its focus): pressed look, name, count. */
+  function paintToggle() {
+    const b = els && els.main.querySelector('[data-panel-toggle]');
+    if (!b) return;
+    const n = toggleCount();
+    const label = toggleText(n);
+    b.setAttribute('aria-pressed', String(panelOpen));
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    let c = b.querySelector('[data-tog-count]');
+    if (!n) { if (c) c.remove(); return; }
+    if (!c) { c = document.createElement('span'); c.className = 'wr-tog-count'; c.setAttribute('aria-hidden', 'true'); c.dataset.togCount = ''; b.append(c); }
+    c.textContent = fmt(n);
+  }
+
+  function setPanel(on) {
+    panelOpen = !!on;
+    try { localStorage.setItem(PANEL_KEY, panelOpen ? 'open' : 'closed'); } catch (e) { /* blocked: kept for this visit only */ }
+    const wr = els && els.root.querySelector('.wr');
+    if (wr) wr.classList.toggle('is-panel-off', !panelOpen);
+    paintToggle();
   }
 
   function renderHead() {
@@ -1136,13 +1187,16 @@
         <div class="wr-where">${where}</div>
         <h2 id="wrSecTitle" tabindex="-1" data-sec-title>${esc(sectionLabel(c, s))}</h2>
       </div>
-      <label class="wr-status">
-        <span>Status</span>
-        <select class="text-input" data-status${locked() ? ' disabled' : ''}>
-          ${STATUSES.map(([k, l]) => `<option value="${k}"${s.status === k ? ' selected' : ''}>${l}</option>`).join('')}
-        </select>
-      </label>
-      ${genButtons()}`;
+      <div class="wr-head-ctl">
+        <label class="wr-status">
+          <span>Status</span>
+          <select class="text-input" data-status${locked() ? ' disabled' : ''}>
+            ${STATUSES.map(([k, l]) => `<option value="${k}"${s.status === k ? ' selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </label>
+        ${genButtons()}
+      </div>
+      ${G.chapterLine()}`;
     // The hint of design 22: under the target, with text, nothing running.
     const hint = els.main.querySelector('[data-hint]');
     if (hint) {
@@ -1151,6 +1205,7 @@
     }
     // The Checks panel follows the same gates (Generate, conflicts, a suggestion open).
     chk.refresh();
+    paintToggle();
   }
 
   function renderNotes() {
@@ -1235,6 +1290,7 @@
     if (tab === 'versions') panel.innerHTML = versionsHtml();
     else if (tab === 'checks') panel.innerHTML = chk.panelHtml();
     else panel.innerHTML = briefHtml();
+    paintToggle();
   }
 
   function versionsHtml() {
@@ -1337,6 +1393,7 @@
       const t = e.target.closest('button, a');
       if (!t || !root.contains(t)) return;
       if (t.dataset.goStep) { e.preventDefault(); ctx.go(Number(t.dataset.goStep)); return; }
+      if (t.hasAttribute('data-panel-toggle')) { setPanel(!panelOpen); return; }
       if (els.side.contains(t) && chk.handleClick(t)) return;
       if (t.hasAttribute('data-mark-reviewed')) { markReviewed(); return; }
       // E12 fix batch 3 (design 22f).
@@ -1349,6 +1406,7 @@
       if (t.hasAttribute('data-fin-reload')) { reloadFin(); return; }
       if (t.hasAttribute('data-chk-review')) {
         tab = 'checks';
+        if (!panelOpen) setPanel(true);   // E17 N1: the check runs in the panel, so it shows
         renderSide();
         chk.run();
         return;
@@ -1377,6 +1435,14 @@
     });
     root.addEventListener('change', (e) => {
       if (e.target.matches('[data-status]')) setStatus(e.target.value);
+    });
+    // E17 N1 (design 78b): Escape while focus is in the panel hides it; focus goes back to the toggle.
+    root.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !panelOpen || !els.side.contains(e.target)) return;
+      e.preventDefault();
+      setPanel(false);
+      const b = els.main.querySelector('[data-panel-toggle]');
+      if (b) b.focus();
     });
     // Arrow keys move between the tabs (WAI-ARIA tabs pattern).
     root.addEventListener('keydown', (e) => {
@@ -1499,6 +1565,7 @@
   function init(b, c) {
     ctx = c;
     book = b;
+    panelOpen = readPanel();
     Q = kdpWriteQc.create({
       els: () => els,
       cur: () => cur,
@@ -1533,6 +1600,7 @@
     });
     chk = kdpWriteChecks.create({
       els: () => els,
+      paintToggle: () => paintToggle(),
       cur: () => cur,
       book: () => book,
       chapters: () => chapters,

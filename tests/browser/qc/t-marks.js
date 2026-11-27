@@ -39,13 +39,8 @@ const test = async page => {
   ok(r.check && !r.ring && r.current === 'step', `07 current and done: the check: ${JSON.stringify(r)}`);
   ok(await QC.has(page, '.qc-verdict'), 'a run with warnings is still done');
 
-  /* Export opens the Word / Markdown dialog. */
-  await page.click('[data-export]');
-  await page.waitForSelector('dialog[open]', { timeout: 5000 });
-  await page.waitForFunction(() => /Word/.test(document.querySelector('dialog[open]').innerText), null, { timeout: 5000 });
-  ok((await QC.txt(page, 'dialog[open]')).includes('Export book'), '07 Export: the Word / Markdown dialog');
-  await page.keyboard.press('Escape');
-  await page.waitForFunction(() => !document.querySelector('dialog[open]'), null, { timeout: 3000 });
+  /* E17 N3 (design 78): no header Export on 07 (it shows from 08 on). */
+  ok(await page.evaluate(() => { const b = document.querySelector('[data-export]'); return !!b && b.hidden && !b.getClientRects().length; }), '07: the header Export is hidden (E17 N3)');
 
   /* Back → 06: the rail with every step. */
   await page.click('[data-back]');

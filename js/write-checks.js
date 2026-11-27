@@ -504,6 +504,7 @@
         tab.innerHTML = n ? `Checks <span class="count" aria-hidden="true">${n}</span>` : 'Checks';
         tab.setAttribute('aria-label', n ? `Checks, ${n} to review` : 'Checks');
       }
+      if (host.paintToggle) host.paintToggle();   // E17 N1: the amber count on the panel toggle
       const panel = e.side.querySelector('[data-panel][data-panel-kind="checks"]');
       if (!panel) return;
       // Keep the focus where it was (a re-render replaces the buttons).

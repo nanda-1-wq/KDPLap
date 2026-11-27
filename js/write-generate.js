@@ -25,7 +25,7 @@
    open section follows the queue; Stop ends the section being written (its
    text so far is saved in Versions, as today) and cancels the rest. A
    section with text is skipped; "Generate the rest" writes again a section
-   whose partial text was not kept. G.chapterButton() is the head's button.
+   whose partial text was not kept. G.chapterButton() is the head's button, G.chapterLine() its line.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -573,15 +573,25 @@
       return '';
     }
 
-    /** The head's button and its line (design 23b, 1A), or '' for the Introduction and the Conclusion. */
+    /** The head's button (design 23b), or '' for the Introduction and the Conclusion.
+        E17 N2 (design 78): when every section has text, the button is grey with aria-disabled (it keeps
+        focus), and its reason is the hover tip and the screen-reader description, not a line. */
     function chapterButton() {
       const why = chapBlock();
       if (why === 'none') return '';
+      const off = why === 'full' ? ` aria-disabled="true" title="${esc(CHAP_WHY.full)}"` : why ? ' disabled' : '';
+      return `<button type="button" class="btn btn-secondary wr-chap-btn" data-gen-chapter aria-describedby="wrChapLine"${off}>${LAYERS}Generate chapter</button>`;
+    }
+
+    /** The button's line under the head row (design 23b, 1A); hidden text only for 'full' (E17 N2). */
+    function chapterLine() {
+      const why = chapBlock();
+      if (why === 'none') return '';
+      if (why === 'full') return `<span id="wrChapLine" hidden>${esc(CHAP_WHY.full)}</span>`;
       const hit = host.findSection(cur().id);
       const n = emptySections(hit.c).length;
       const line = why ? CHAP_WHY[why] : `Writes the ${n === 1 ? '1 section' : `${fmt(n)} sections`} of this chapter that ${n === 1 ? 'has' : 'have'} no text, in order.`;
-      return `<button type="button" class="btn btn-secondary wr-chap-btn" data-gen-chapter aria-describedby="wrChapLine"${why ? ' disabled' : ''}>${LAYERS}Generate chapter</button>
-        <p class="wr-chap-line" id="wrChapLine">${why ? INFO : ''}<span>${esc(line)}</span></p>`;   // inside .wr-gen-btns (book-write.js)
+      return `<p class="wr-chap-line" id="wrChapLine">${why ? INFO : ''}<span>${esc(line)}</span></p>`;   // in .wr-head (book-write.js)
     }
 
     function buildDialog() {
@@ -821,7 +831,7 @@
 
     /** Clicks on the Generate button and the run's cards. True when handled. */
     function handleClick(t) {
-      if (t.hasAttribute('data-gen-chapter')) { openChapterDialog(); return true; }
+      if (t.hasAttribute('data-gen-chapter')) { if (t.getAttribute('aria-disabled') !== 'true') openChapterDialog(); return true; }
       if (t.hasAttribute('data-chap-stop')) { stopChapter(); return true; }
       if (t.hasAttribute('data-chap-close')) { closeChapter(); return true; }
       if (t.hasAttribute('data-chap-retry')) { if (chap && !genBlock()) { chap.state = 'run'; chap.stop = false; chap.error = ''; chap.items[chap.k].status = 'wait'; runChapter(); } return true; }
@@ -844,6 +854,7 @@
       busy: () => genBusy() || chapRunning(),
       busyOn: (id) => (genBusy() && gen.id === id) || chapRunning(),
       chapterButton,
+      chapterLine,
       chapterRunning: chapRunning,
       /** The section Generate chapter is writing now (the manuscript's "Writing…" pill). */
       writingNow: (id) => chapRunning() && chap.items[chap.k] && chap.items[chap.k].id === id,

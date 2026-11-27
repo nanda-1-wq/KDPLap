@@ -378,6 +378,9 @@ tests/browser/run.sh cover t-shots-e162.js  # STOP 3 compare shots (63 busy line
 # E16.3 Part 2 (plan docs/reviews/2026-11-20-e16-3-plan.md; fixture-stock.js also posts a 640 px copy, pixabay/<id>_640, served for _640 links)
 tests/browser/run.sh cover t-stock.js    # (also) "(E16.3)": the Pixabay preview shows the tile (webformatURL), no pixabay.com/get/…_1280 request on opening or picking, never drawn above its natural size; Unsplash unchanged
 tests/browser/run.sh cover t-shots-e163.js  # STOP 2 compare shots (the preview against STOP 7 and design 63, the pixel diff) → docs/reviews/e16-3/ (never in a sweep)
+# E17 Part 3 (plan docs/reviews/2026-11-25-e17-plan.md, 06 shell N1 to N3; the write mock opens the panel unless __panelFresh)
+tests/browser/run.sh write t-e17-shell.js   # designs 78, 78b: panel hidden by default, the 44 px toggle (aria-pressed, stored, blocked storage, Escape), the amber count, compact head, Generate chapter tip, toolbar hint, spacing, 680 px column, 200% text, header Export hidden on 01 to 07
+tests/browser/run.sh write t-shots-e17.js   # STOP 3 compare shots (78, 78b at 1440 and 900, the toggle states) → docs/reviews/e17-stop3/ (never in a sweep)
 COVER_OUT=<scratch> node tests/browser/cover/safari-p10.mjs   # real Safari, the export: real clicks, the real engine (real CDNs), KDP checks, zip read back, Stop
 COVER_OUT=<scratch> node tests/browser/cover/safari-editor.mjs   # real Safari, the editor (text, effects, shapes, images, PDF, crop, undo, save); every Supabase call answered in the page (safari-stub.js), none reaches the host
 ```

@@ -59,6 +59,8 @@ Keep them working. Do not change them unless asked.
 - App UI is "ink on paper": grays only.
 - Functional colors carry meaning only: `--danger` (errors, delete), `--success` (pass, done), `--warning` (check this). Always with an icon and a word. Small areas only.
   Accepted exception: in the rail, the 07 "Out of date" mark is an amber dot with an aria-label and a title, because the word does not fit (design 57, plan Q10).
+  Accepted exception: in 06 Write, while the right panel is hidden, its toggle shows the Checks count as a small amber
+  number with an aria-label and a title, because the word does not fit (design 78b, E17 Q-P1).
 - Filled red button only at the final destructive step. In menus, delete is red text.
 - Brand navy and blue are allowed on the logo, the landing page, and the public auth pages only. Never on app buttons or cards.
 - Fonts: IBM Plex Sans (UI), IBM Plex Mono (small labels), Source Serif 4 (editor text only).

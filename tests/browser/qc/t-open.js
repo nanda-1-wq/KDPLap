@@ -126,7 +126,7 @@ const test = async page => {
   await page.waitForFunction((id) => location.search.includes(`section=${id}`) && document.querySelector('[data-editor]'), twoRow.id, { timeout: 8000 });
   await marked();
   ok((await spot()) === webs[0].quote, 'the first link is marked');
-  await page.waitForSelector('.wr-vers', { timeout: 6000 });
+  await page.waitForSelector('.wr-vers', { state: 'attached', timeout: 6000 });   // the versions read is done (E17 N1: the panel may be hidden)
   await page.waitForTimeout(300);
   const reads = st.calls.filter((c) => /section_versions/.test(c)).length;
   await page.click('[data-qc-next]');

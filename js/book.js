@@ -404,6 +404,8 @@
     // E16 Part 4: a step can draw Export inert (exportInert = N: "Comes in Part N"). 09's is live since Part 10.
     const exportBtnEl = document.querySelector('[data-export]');
     if (exportBtnEl) {
+      // E17 N3 (design 78): Export shows from 08 on. Markdown stays in the Books card menu and the 08 Word row.
+      exportBtnEl.hidden = step < FORMAT_STEP;
       if (mod && mod.exportInert) { exportBtnEl.setAttribute('aria-disabled', 'true'); exportBtnEl.title = `Comes in Part ${mod.exportInert}`; }
       else { exportBtnEl.removeAttribute('aria-disabled'); exportBtnEl.removeAttribute('title'); }
     }

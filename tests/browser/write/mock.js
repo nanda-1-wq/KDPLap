@@ -426,6 +426,14 @@ const setup = async page => {
       user_metadata: { full_name: 'Adnan' }, app_metadata: {}, created_at: ago(30) }
   };
   await ctx.addInitScript((s) => { try { localStorage.setItem('sb-hmtxnbgfzwqawfulwwrg-auth-token', s); } catch (e) {} }, JSON.stringify(session));
+  // E17 N1: the right panel is hidden by default. The older tests use it, so they start with it open
+  // (as a writer who opened it once). A test sets globalThis.__panelFresh = true to start with no key.
+  // Set once per run on the site's origin (init scripts stay in the session, so no init script here).
+  await page.goto('http://127.0.0.1:5500/robots.txt');
+  await page.evaluate((fresh) => {
+    try { sessionStorage.removeItem('__blockPanel'); } catch (e) {}
+    try { if (fresh) localStorage.removeItem('nicheink.write.panel'); else localStorage.setItem('nicheink.write.panel', 'open'); } catch (e) {}
+  }, !!globalThis.__panelFresh);
   // E10.2: Generate streams, and route.fulfill sends a body all at once. So the page's fetch
   // answers /functions/v1/generate itself, with a stream the test drives step by step:
   //   window.__gen.send(event, data), .close(), .fail(); .refuse = { status, body } answers JSON.

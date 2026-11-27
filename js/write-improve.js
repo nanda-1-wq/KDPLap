@@ -920,7 +920,8 @@
       after();
       // Close returns focus to the Checks tab (design 22d, 9).
       const tab = els() && els().side.querySelector('[data-tab="checks"]');
-      if (tab) tab.focus();
+      if (tab && tab.getClientRects().length) tab.focus();
+      else if (els()) { const b = els().main.querySelector('[data-panel-toggle]'); if (b) b.focus(); }   // E17 N1: the panel was hidden
     }
 
     /** "Keep as is" on a waiting item takes it out of the queue ("1 of 2", 22d 7a). */
