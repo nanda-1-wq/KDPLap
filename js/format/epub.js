@@ -30,6 +30,10 @@
      model     kdpFormatRules.modelOf(export_json, settings)
      settings  the book_formats row (kdpFormatRules.normalize)
      extras    { year, alsoBy: [{ title, subtitle }], bookId, now (ISO, the server time) }
+     E17: model.bookParts adds dedication, epigraph (centered, before the contents),
+     foreword, preface (after it), acknowledgments, about, review request and Also by,
+     with epub:type per part. nav, NCX and contents list foreword, preface,
+     acknowledgments and about only (Q-5). extras.alsoBy is then not read.
      spine     [{ id, href, title }] in reading order (the Kindle preview renders these)
      nav       [{ label, href, children: [{ label, href }] }] (nav, NCX and contents.xhtml)
      meta      { title, subtitle, author, identifier, modified }
@@ -316,7 +320,7 @@ ${body}</body>
 `;
 
   /** style.css for a text style. Body text keeps every Kindle default (no font, size, line height or color). */
-  function css(style) {
+  function css(style, { centered = false } = {}) {
     const head = style === 'modern' ? 'sans-serif' : 'serif';
     return [
       `/* NicheInk EPUB, ${ENGINE_ID}, style ${style} */`,
@@ -341,6 +345,8 @@ ${body}</body>
       'p.bio { text-indent: 0; margin-top: 0.75em; }',
       'p.also-by { text-align: center; text-indent: 0; margin-top: 1.1em; }',
       'span.also-sub { font-size: 0.85em; }',
+      // E17: dedication and epigraph pages, only when one of them is in the file (old books keep the same style.css).
+      ...(centered ? ['section.centered { text-align: center; margin-top: 30%; }', 'section.centered p { text-indent: 0; margin-top: 0.75em; }'] : []),
       ''
     ].join('\n');
   }
@@ -410,8 +416,12 @@ ${body}</body>
     const subtitle = s0(b.subtitle).trim();
     const pen = s0(b.pen_name).trim();
     const parts = st.parts;
-    const bio = parts.about ? plainParas(b.bio) : [];
-    const alsoBy = parts.also_by ? (extras.alsoBy || []).filter((x) => s0(x.title).trim()) : [];
+    // E17: with model.bookParts (0035), About and Also by come from the parts (Also by: titles only, Q-10);
+    // without it, the old path (until 0036).
+    const bp = model.bookParts;
+    const part = (kind) => (bp ? bp.find((x) => x.kind === kind) : null);
+    const bio = bp ? [] : parts.about ? plainParas(b.bio) : [];
+    const alsoBy = bp ? (part('also_by') ? part('also_by').entries : []) : parts.also_by ? (extras.alsoBy || []).filter((x) => s0(x.title).trim()) : [];
     const identifier = uuid(extras.bookId);
     const modified = modifiedOf(extras.now);
     const year = extras.year || new Date(modified).getUTCFullYear();
@@ -429,9 +439,26 @@ ${subtitle ? `<p class="subtitle">${htmlText(subtitle)}</p>\n` : ''}${pen ? `<p 
 <p class="copyright">${htmlText(R().copyright(pen, year))}</p>
 </section>
 ` });
+    // E17: one document per part, from the part's Markdown (as a section's text).
+    //   type   the epub:type, or null; title  the h1, or null (dedication, epigraph)
+    //   toc    true: in nav, NCX and the contents (Q-5: foreword, preface, acknowledgments, about)
+    const partDoc = (kind, href, type, { title = null, toc = false, centered = false } = {}) => {
+      const p = part(kind);
+      if (!p) return;
+      let body = `<section${type ? ` epub:type="${type}"` : ''}${centered ? ' class="centered"' : ''}>\n`;
+      if (title) body += `<h1>${htmlText(title)}</h1>\n`;
+      body += render(blockList(X().mdBody(p.content), 1), title ? 'h' : null);
+      body += '</section>\n';
+      docs.push({ id: href.replace('.xhtml', ''), href, title: title || R().PART_TITLES[kind] || kind[0].toUpperCase() + kind.slice(1), body });
+      if (toc) nav.push({ label: title, href, children: [] });
+    };
+    partDoc('dedication', 'dedication.xhtml', 'dedication', { centered: true });
+    partDoc('epigraph', 'epigraph.xhtml', 'epigraph', { centered: true });
     // Contents: always on in the EPUB (KDP needs it). Filled below.
     const contents = { id: 'contents', href: 'contents.xhtml', title: 'Contents', body: '' };
     docs.push(contents);
+    partDoc('foreword', 'foreword.xhtml', 'foreword', { title: 'Foreword', toc: true });
+    partDoc('preface', 'preface.xhtml', 'preface', { title: 'Preface', toc: true });
 
     model.chapters.forEach((c, i) => {
       const href = `c${String(i + 1).padStart(2, '0')}.xhtml`;
@@ -461,6 +488,18 @@ ${subtitle ? `<p class="subtitle">${htmlText(subtitle)}</p>\n` : ''}${pen ? `<p 
       nav.push(entry);
     });
 
+    partDoc('acknowledgments', 'acknowledgments.xhtml', 'acknowledgments', { title: 'Acknowledgments', toc: true });
+    partDoc('about_author', 'about.xhtml', null, { title: 'About the author', toc: true });
+    if (part('review_request')) {
+      const W = R().REVIEW;
+      docs.push({ id: 'review', href: 'review.xhtml', title: W.title, body: `<section>
+<h1>${htmlText(W.title)}</h1>
+<p class="bio">${htmlText(W.thanks)} <em>${htmlText(title)}</em>.</p>
+<p class="bio">${htmlText(W.body)}</p>
+${pen ? `<p class="bio">${htmlText(pen)}</p>\n` : ''}</section>
+` });
+      // Not in the contents (Q-5). p.bio: no indent, 0.75em above (separate paragraphs, design 81; style.css unchanged).
+    }
     if (bio.length) {
       docs.push({ id: 'about', href: 'about.xhtml', title: 'About the author', body: `<section>
 <h1>About the author</h1>
@@ -571,7 +610,7 @@ ${docs.map((d) => `<itemref idref="${d.id}"/>`).join('\n')}
       { name: 'OEBPS/content.opf', text: opf },
       { name: 'OEBPS/nav.xhtml', text: navDoc },
       { name: 'OEBPS/toc.ncx', text: ncx },
-      { name: 'OEBPS/style.css', text: css(st.style) },
+      { name: 'OEBPS/style.css', text: css(st.style, { centered: !!(part('dedication') || part('epigraph')) }) },
       ...docs.map((d) => ({ name: `OEBPS/${d.href}`, text: page(d.title, d.body) }))
     ];
     return {

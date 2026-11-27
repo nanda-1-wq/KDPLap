@@ -61,21 +61,31 @@
     return MD().normalize(R().strip(md)).split('\n').map((l) => (/^#{1,5}[ \t]/.test(l) ? `#${l}` : l)).join('\n');
   }
 
+  /** E17: typed text (titles, the pen name) as Markdown that shows it as typed: ASCII punctuation gets a backslash (CommonMark). */
+  const mdText = (s) => str(s).replace(/[\\`*_{}\[\]<>()#+\-.!|~&$@"']/g, (c) => `\\${c}`);
+  // E17: the parts of the model, or null before 0035 (the old About path).
+  const partOf = (m, kind) => (m.bookParts ? m.bookParts.find((p) => p.kind === kind) || null : null);
+  const contentsParts = (m, front) => (m.bookParts || []).filter((p) => p.title && p.front === front);
+
   function toMarkdown(m, { year }) {
     const b = m.book || {};
     const out = [];
+    const bp = m.bookParts;
+    const textPart = (p) => { const t = mdBody(p.content); return p.title ? [`# ${p.title}`, ...(t ? [t] : [])] : (t ? [t] : []); };
     if (m.parts.title) {
       out.push(`# ${str(b.title) || 'Untitled book'}`);
       if (str(b.subtitle)) out.push(`*${str(b.subtitle)}*`);
       if (str(b.pen_name)) out.push(`by ${str(b.pen_name)}`);
     }
     if (m.parts.copyright) out.push(R().copyright(b.pen_name, year));
+    for (const k of ['dedication', 'epigraph']) if (partOf(m, k)) out.push(...textPart(partOf(m, k)));
     if (m.parts.contents) {
       out.push('# Contents');
-      const items = m.chapters.map(chapterHeading);
-      if (m.parts.about && bioParas(b.bio).length) items.push('About the author');
+      const items = [...contentsParts(m, true).map((p) => p.title), ...m.chapters.map(chapterHeading), ...contentsParts(m, false).map((p) => p.title)];
+      if (!bp && m.parts.about && bioParas(b.bio).length) items.push('About the author');
       out.push(items.map((t) => `- ${t}`).join('\n'));
     }
+    for (const k of ['foreword', 'preface']) if (partOf(m, k)) out.push(...textPart(partOf(m, k)));
     for (const c of m.chapters) {
       out.push(`# ${chapterHeading(c)}`);
       for (const s of c.sections) {
@@ -84,7 +94,15 @@
         if (body) out.push(body);
       }
     }
-    if (m.parts.about) {
+    if (bp) {
+      for (const k of ['acknowledgments', 'about_author']) if (partOf(m, k)) out.push(...textPart(partOf(m, k)));
+      if (partOf(m, 'review_request')) {
+        const W = R().REVIEW;
+        out.push(`# ${W.title}`, `${W.thanks} *${mdText(str(b.title) || 'Untitled book')}*.`, W.body, ...(str(b.pen_name) ? [mdText(str(b.pen_name))] : []));
+      }
+      const also = partOf(m, 'also_by');
+      if (also) out.push(`# Also by${str(b.pen_name) ? ` ${mdText(str(b.pen_name))}` : ''}`, also.entries.map((e) => `- *${mdText(e.title)}*`).join('\n'));
+    } else if (m.parts.about) {
       const paras = bioParas(b.bio);
       if (paras.length) out.push('# About the author', ...paras);
     }
@@ -171,14 +189,34 @@
     if (m.parts.copyright) {
       front.push(new Paragraph({ style: 'Copyright', pageBreakBefore: newPage(), children: [new TextRun(R().copyright(b.pen_name, year))] }));
     }
-    const aboutParas = m.parts.about ? bioParas(b.bio) : [];
+    const bp = m.bookParts;
+    const aboutParas = !bp && m.parts.about ? bioParas(b.bio) : [];
+    const anchorPart = (p) => `part-${p.kind.replace('_', '-')}`;
+    const contentsItem = (anchor, text) => new Paragraph({ style: 'ContentsItem', children: [
+      new InternalHyperlink({ anchor, children: [new TextRun({ text, style: 'Hyperlink' })] })] });
+    // E17: a part with a heading (Heading 1 with a bookmark), or a centered page (dedication, epigraph).
+    const partParas = (p, breakBefore) => {
+      if (p.title) {
+        return [new Paragraph({ heading: HeadingLevel.HEADING_1, pageBreakBefore: breakBefore, keepNext: true,
+          children: [new Bookmark({ id: anchorPart(p), children: [new TextRun(p.title)] })] }), ...body(p.content)];
+      }
+      // Every block becomes one centered paragraph (a list item or a heading too), a third down the page.
+      const groups = MD().parse(R().strip(p.content))
+        .flatMap((blk) => (blk.type === 'p' ? [blk.lines] : blk.type === 'h2' ? [[blk.lines[0]]] : blk.items.map((it) => [it])));
+      return groups.map((lines, i) => new Paragraph({ style: 'BodyFirst', alignment: AlignmentType.CENTER, pageBreakBefore: i === 0 && breakBefore,
+        spacing: { before: i === 0 ? 2880 : 240 },
+        children: lines.flatMap((line, j) => [...(j ? [new TextRun({ break: 1 })] : []), ...runs(line)]) }));
+    };
+    for (const k of ['dedication', 'epigraph']) if (partOf(m, k)) front.push(...partParas(partOf(m, k), newPage()));
     if (m.parts.contents) {
       front.push(new Paragraph({ style: 'ContentsHeading', pageBreakBefore: newPage(), children: [new TextRun('Contents')] }));
-      m.chapters.forEach((c, i) => front.push(new Paragraph({ style: 'ContentsItem', children: [
-        new InternalHyperlink({ anchor: anchorOf(c, i), children: [new TextRun({ text: chapterHeading(c), style: 'Hyperlink' })] })] })));
-      if (aboutParas.length) front.push(new Paragraph({ style: 'ContentsItem', children: [
-        new InternalHyperlink({ anchor: 'about-the-author', children: [new TextRun({ text: 'About the author', style: 'Hyperlink' })] })] }));
+      for (const p of contentsParts(m, true)) front.push(contentsItem(anchorPart(p), p.title));
+      m.chapters.forEach((c, i) => front.push(contentsItem(anchorOf(c, i), chapterHeading(c))));
+      for (const p of contentsParts(m, false)) front.push(contentsItem(anchorPart(p), p.title));
+      if (aboutParas.length) front.push(contentsItem('about-the-author', 'About the author'));
     }
+    // E17 (Q-3): foreword and preface stay in the front section: no page numbers.
+    for (const k of ['foreword', 'preface']) if (partOf(m, k)) front.push(...partParas(partOf(m, k), newPage()));
 
     // The book: page numbers from 1, centered in the footer.
     const main = [];
@@ -190,6 +228,22 @@
         main.push(...body(s.content));
       }
     });
+    if (bp) {
+      for (const k of ['acknowledgments', 'about_author']) if (partOf(m, k)) main.push(...partParas(partOf(m, k), main.length > 0));
+      if (partOf(m, 'review_request')) {
+        const W = R().REVIEW;
+        main.push(new Paragraph({ heading: HeadingLevel.HEADING_1, pageBreakBefore: main.length > 0, keepNext: true, children: [new TextRun(W.title)] }),
+          new Paragraph({ style: 'BodyFirst', children: [new TextRun(`${W.thanks} `), new TextRun({ text: str(b.title) || 'Untitled book', italics: true }), new TextRun('.')] }),
+          new Paragraph({ style: 'BodyFirst', spacing: { before: 240 }, children: [new TextRun(W.body)] }),
+          ...(str(b.pen_name) ? [new Paragraph({ style: 'BodyFirst', spacing: { before: 240 }, children: [new TextRun(str(b.pen_name))] })] : []));
+      }
+      const also = partOf(m, 'also_by');
+      if (also) {
+        main.push(new Paragraph({ heading: HeadingLevel.HEADING_1, pageBreakBefore: main.length > 0, keepNext: true,
+          children: [new TextRun(str(b.pen_name) ? `Also by ${str(b.pen_name)}` : 'Also by')] }),
+          ...also.entries.map((e) => new Paragraph({ style: 'BodyFirst', alignment: AlignmentType.CENTER, spacing: { before: 240 }, children: [new TextRun({ text: e.title, italics: true })] })));
+      }
+    }
     if (aboutParas.length) {
       main.push(new Paragraph({ heading: HeadingLevel.HEADING_1, pageBreakBefore: main.length > 0, keepNext: true,
         children: [new Bookmark({ id: 'about-the-author', children: [new TextRun('About the author')] })] }));

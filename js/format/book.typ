@@ -140,20 +140,44 @@
   }
 }
 
+// E17: dedication or epigraph, alone on its page, centered, one third down. Front matter: no header, no number.
+#let quiet-page(body) = context {
+  let g = geo.get()
+  set par(first-line-indent: 0pt, justify: false)
+  set align(center)
+  v(g.height / 3 - g.margin.top - 0.3in)
+  body
+}
+
+// E17: foreword or preface. Front matter (Q-3): no header, no number, and the
+// contents shows it without a page number. No <part-start>: is-front() reads
+// the first <part-end>, which must stay the end of the front matter.
+#let front-part(title, body) = {
+  context [#metadata((toc: title)) <front-start>]
+  context {
+    let g = geo.get()
+    v(g.height / 3 - g.margin.top - 0.3in)
+  }
+  heading(level: 1, title)
+  body
+}
+
 #let contents(sections: false) = context {
   let g = geo.get()
   set par(first-line-indent: 0pt, justify: false)
   v(g.height / 3 - g.margin.top - 0.3in)
   align(center, text(font: g.style.head, size: 1.45em, weight: g.style.head-weight, hyphenate: false, [Contents]))
   v(0.3in)
-  let items = query(selector(<part-start>).or(heading.where(level: 2)))
+  let items = query(selector(<part-start>).or(<front-start>).or(heading.where(level: 2)))
   for it in items {
     let page = counter(page).at(it.location()).first()
     let line(body, indent) = block(above: if indent == 0pt { 0.85em } else { 0.45em }, pad(left: indent,
       box(width: 100%)[#body #box(width: 1fr, repeat[.#h(3pt)]) #str(page)]))
-    if it.func() == metadata {
+    if it.func() == metadata and it.label == <front-start> {
+      block(above: 0.85em, it.value.toc)
+    } else if it.func() == metadata {
       if it.value.toc != none { line(it.value.toc, 0pt) }
-    } else if sections {
+    } else if sections and not is-front(it.location().page()) {
       line(text(size: 0.92em, it.body), 0.25in)
     }
   }
@@ -169,6 +193,8 @@
   running-header: true, header-title: none,
   about: none, about-recto: true,
   also-by: (), also-by-title: [Also by], also-by-plain: "Also by",
+  // E17 book parts: markup, or none when the part is not in the file. review: (title, plain, body).
+  dedication: none, epigraph: none, foreword: none, preface: none, acknowledgments: none, review: none,
   body,
 ) = {
   let st = STYLES.at(style)
@@ -235,11 +261,27 @@
     if isbn != none { parbreak(); [ISBN #isbn] }
     front = true
   }
+  // E17: dedication, then epigraph, each on its own right-hand page.
+  for part in (dedication, epigraph) {
+    if part != none {
+      if front { pagebreak(to: "odd") }
+      quiet-page(part)
+      front = true
+    }
+  }
   // Contents (right-hand). Page numbers are body page numbers.
   if contents-page {
     if front { pagebreak(to: "odd") }
     contents(sections: contents-sections)
     front = true
+  }
+  // E17: foreword, then preface, each from a right-hand page, still front matter.
+  for (t, part) in (([Foreword], foreword), ([Preface], preface)) {
+    if part != none {
+      if front { pagebreak(to: "odd") }
+      front-part(t, part)
+      front = true
+    }
   }
   context [#metadata(here().page()) <part-end>]
 
@@ -250,10 +292,22 @@
   body
 
   // ── Back matter ──
+  if acknowledgments != none {
+    chapter(title: [Acknowledgments], plain: "Acknowledgments", toc: [Acknowledgments], recto: about-recto, acknowledgments)
+  }
   if about != none {
     chapter(title: [About the author], plain: "About the author", toc: [About the author], recto: about-recto, {
       set par(first-line-indent: 0pt)
       about
+    })
+  }
+  if review != none {
+    chapter(title: review.title, plain: review.plain, toc: none, recto: about-recto, {
+      // A short fixed message: ragged right, no hyphen ("re-view"), and 0.75em more
+      // between its paragraphs than between its lines (as p.bio in the EPUB, design 81).
+      set par(first-line-indent: 0pt, justify: false, spacing: st.leading + 0.75em)
+      set text(hyphenate: false)
+      review.body
     })
   }
   if also-by.len() > 0 {

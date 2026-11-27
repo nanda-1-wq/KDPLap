@@ -17,6 +17,7 @@ import "../js/export-build.js";
 import "../js/format-rules.js";
 import "../js/format/md2typst.js";
 import "./fixtures/typst-cases.js";
+import "./fixtures/part-cases.js";
 
 const T = globalThis.kdpFormatTypst;
 const F = globalThis.kdpFormatRules;
@@ -253,4 +254,67 @@ Deno.test("chapterTitle: empty titles", () => {
   assertEquals(T.chapterTitle({ kind: "conclusion", title: "" }), "Conclusion");
   assertEquals(T.chapterTitle({ kind: "chapter", title: "", fileNumber: 4 }), "Chapter 4");
   assertEquals(T.chapterLabel({ kind: "chapter", title: "", fileNumber: 4 }, F.defaults()), { label: null, toc: "Chapter 4" });
+});
+
+/* ── E17 book parts ──────────────────────────── */
+
+const PC = globalThis.kdpPartCases;
+const X = globalThis.kdpExportBuild;
+const withParts = (parts = PC.all()) => data({ book_parts: parts });
+const lineOf = (typ, name) => typ.split("\n").findIndex((l) => l.startsWith(`  ${name}: `));
+
+Deno.test("E17: no book_parts → the old About and Also by path, no part params", () => {
+  const typ = build({ parts: { ...F.defaults().parts, about: true, also_by: true } }, { alsoBy: [{ title: "Other", subtitle: "Sub" }] });
+  for (const k of ["dedication", "epigraph", "foreword", "preface", "acknowledgments", "review"]) assertEquals(lineOf(typ, k), -1, k);
+  assertStringIncludes(typ, "Nora teaches chair yoga.#linebreak();She lives by the sea.");
+  assertStringIncludes(typ, "(title: [Other], subtitle: [Sub]),");
+});
+
+Deno.test("E17: book_parts [] → no part, About and Also by off even when the old switches are on", () => {
+  const typ = build({ parts: { ...F.defaults().parts, about: true, also_by: true } }, { alsoBy: [{ title: "Other" }] }, withParts([]));
+  for (const k of ["dedication", "epigraph", "foreword", "preface", "acknowledgments", "review"]) assertEquals(lineOf(typ, k), -1, k);
+  assertStringIncludes(typ, "  about: none, about-recto: true,");
+  assertStringIncludes(typ, "  also-by: (),");
+});
+
+Deno.test("E17: every part on → params in book order, About from the part, Also by titles only", () => {
+  const typ = build({}, { alsoBy: [{ title: "Ignored", subtitle: "Old path" }] }, withParts());
+  const at = ["dedication", "epigraph", "foreword", "preface", "acknowledgments", "review"].map((k) => lineOf(typ, k));
+  assert(at.every((i, n) => i > 0 && (n === 0 || i > at[n - 1])), `order ${at}`);
+  assert(lineOf(typ, "dedication") > lineOf(typ, "also-by-title"), "after the old params: their lines keep their bytes");
+  assertStringIncludes(typ, `  about: [\n${T.blocks(X.mdBody(PC.parts[5].content))}\n], about-recto: true,`);
+  assertStringIncludes(typ, "(title: [Chair Yoga for Seniors], subtitle: none)");
+  assertStringIncludes(typ, "(title: [1\\. Looks like a list], subtitle: none)");
+  assert(!typ.includes("Subtitle "), "Q-10: no subtitles");
+  assert(!typ.includes("Ignored"), "extras.alsoBy is not read with book_parts");
+  assertStringIncludes(typ, "  review: (title: [A short request], plain: \"A short request\", body: [\nThank you for reading #emph[Chair Yoga: \"Gentle\" \\#1];.\n\nIf this book helped you, please think about leaving an honest review on Amazon.");
+  assertStringIncludes(typ, "right for them.\n\nNora Hale\n]),");
+  assert(!typ.includes("[Verify"), "marks removed from part text");
+});
+
+Deno.test("E17: a part leaves the file when it is missing or blank; the review needs no text", () => {
+  const typ = build({}, {}, withParts([{ kind: "foreword", content: " \n\t" }, { kind: "review_request", content: null }, { kind: "also_by", entries: [{ title: "  " }] }]));
+  assertEquals(lineOf(typ, "foreword"), -1);
+  assert(lineOf(typ, "review") > 0);
+  assertStringIncludes(typ, "  also-by: (),");
+  const noPen = build({}, {}, data({ book: { ...data().book, pen_name: "" }, book_parts: [{ kind: "review_request" }] }));
+  assertStringIncludes(noPen, "right for them.\n]),");
+});
+
+Deno.test("E17 hostile text (C4): every part kind and every typed Also by title stays text", () => {
+  const typ = build({}, {}, withParts());
+  for (const p of PC.parts.filter((x) => x.content)) {
+    const out = T.blocks(X.mdBody(p.content));
+    assertEquals(firstUnescaped(out), -1, `${p.kind}: ${out}`);
+    assertStringIncludes(typ, out, p.kind);
+    assertStringIncludes(out, String.raw`\# \$ \@ \* \_ & \< \> " '`, p.kind);
+    assertStringIncludes(out, String.raw`\<b\>not bold\<\/b\> & "quotes" 'single' 5\" tall`, p.kind);
+  }
+  for (const e of PC.parts[7].entries) {
+    assertEquals(firstUnescaped(T.escapeText(e.title)), -1, e.title);
+    assertStringIncludes(typ, `(title: [${T.escapeText(e.title)}], subtitle: none)`);
+  }
+  const hostileTitle = build({}, {}, data({ book: { ...data().book, title: `T ${PC.HOSTILE}`, pen_name: `P ${PC.HOSTILE}` }, book_parts: [{ kind: "review_request" }] }));
+  const review = hostileTitle.slice(hostileTitle.indexOf("  review: "));
+  assertEquals(firstUnescaped(review.slice(review.indexOf("body: [") + 7, review.lastIndexOf("]),"))), -1);
 });

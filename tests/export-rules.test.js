@@ -197,3 +197,24 @@ Deno.test("file name: a slug of the title", () => {
   assertEquals(R.fileName("", "docx"), "book.docx");
   assert(R.fileName("x".repeat(200), "docx").length <= 85);
 });
+
+/* ── E17 book parts ──────────────────────────── */
+
+Deno.test("E17 bookParts: book order, one per kind, blank text out, review needs no text, Also by titles only (max 20)", () => {
+  const R = globalThis.kdpExportRules;
+  const list = R.bookParts([
+    { kind: "also_by", entries: [{ title: " B ", subtitle: "x" }, { title: "  " }, ...Array.from({ length: 30 }, (_, i) => ({ title: `T${i}` }))] },
+    { kind: "about_author", content: "About." }, { kind: "about_author", content: "Second row ignored." },
+    { kind: "foreword", content: " \n\t " }, { kind: "review_request", content: null }, { kind: "dedication", content: "For you." },
+    { kind: "notes", content: "Not a kind." }, null]);
+  assertEquals(list.map((p) => p.kind), ["dedication", "about_author", "review_request", "also_by"]);
+  assertEquals(list[1].content, "About.");
+  assertEquals(list[1].title, "About the author");
+  assertEquals(list[0].title, null);
+  assertEquals(list[0].front, true);
+  assertEquals(list[3].entries.length, 20);
+  assertEquals(list[3].entries[0], { title: "B" });
+  assertEquals(R.bookParts(undefined), []);
+  assertEquals(R.model({ chapters: [] }, {}).bookParts, null);
+  assertEquals(R.model({ chapters: [], book_parts: [] }, {}).bookParts, []);
+});

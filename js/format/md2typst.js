@@ -28,7 +28,11 @@
    kdpFormatTypst.mainTyp(model, settings, extras) → the main.typ source
      model     kdpExportRules.model(export_json, { include: 'final', parts })
      settings  the book_formats row (kdpFormatRules.normalize)
-     extras    { year, trim, alsoBy: [{ title, subtitle }] }
+     extras    { year, trim, alsoBy: [{ title, subtitle }] } (alsoBy: only without model.bookParts)
+   E17: model.bookParts (kdpExportRules.bookParts) adds the params dedication,
+   epigraph, foreword, preface, acknowledgments and review, each only when that
+   part is in the file. About and Also by then come from the parts (Also by:
+   titles only, Q-10). Part text goes through mdBody() and blocks(), as sections.
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -196,6 +200,12 @@
     return out.join('\n\n');
   }
 
+  /** The review request page (design 81): the fixed words, the title in italics, the pen name under them. */
+  function reviewBody(title, pen) {
+    const W = R().REVIEW;
+    return [`${escapeText(W.thanks)} #emph[${escapeText(title)}];.`, escapeText(W.body), ...(pen ? [escapeText(pen)] : [])].join('\n\n');
+  }
+
   function mainTyp(model, settings, extras = {}) {
     const st = F().normalize(settings);
     const b = model.book || {};
@@ -208,8 +218,12 @@
     const m = lay.margin;
     const parts = st.parts;
     const recto = st.recto_start ? 'true' : 'false';
-    const bio = parts.about ? plainParas(b.bio) : [];
-    const alsoBy = parts.also_by ? (extras.alsoBy || []).filter((x) => s0(x.title).trim()) : [];
+    // E17: with model.bookParts (0035), About and Also by come from the parts; without it, the old path (until 0036).
+    const bp = model.bookParts;
+    const part = (kind) => (bp ? bp.find((x) => x.kind === kind) : null);
+    const partBody = (kind) => (part(kind) ? blocks(X().mdBody(part(kind).content)) : '');
+    const bio = bp ? (partBody('about_author') ? [partBody('about_author')] : []) : (parts.about ? plainParas(b.bio) : []);
+    const alsoBy = bp ? (part('also_by') ? part('also_by').entries : []) : parts.also_by ? (extras.alsoBy || []).filter((x) => s0(x.title).trim()) : [];
     const out = [
       '#import "/book.typ": book, chapter, drop, after-drop',
       '#show: book.with(',
@@ -228,6 +242,10 @@
       `  about: ${bio.length ? `[\n${bio.join('\n\n')}\n]` : 'none'}, about-recto: ${recto},`,
       `  also-by: (${alsoBy.map((x) => `(title: ${markup(s0(x.title).trim())}, subtitle: ${optMarkup(x.subtitle)})`).join(', ')}${alsoBy.length === 1 ? ',' : ''}),`,
       `  also-by-title: ${markup(pen ? `Also by ${pen}` : 'Also by')}, also-by-plain: ${str(pen ? `Also by ${pen}` : 'Also by')},`,
+      // E17: one line per part that is in the file, never a line for a part that is not (the print fingerprint).
+      ...['dedication', 'epigraph', 'foreword', 'preface', 'acknowledgments'].filter((k) => partBody(k))
+        .map((k) => `  ${k}: [\n${partBody(k)}\n],`),
+      ...(part('review_request') ? [`  review: (title: ${markup(R().REVIEW.title)}, plain: ${str(R().REVIEW.title)}, body: [\n${reviewBody(title, pen)}\n]),`] : []),
       ')',
     ];
     for (const c of model.chapters) {

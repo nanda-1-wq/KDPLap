@@ -24,6 +24,15 @@
                                             and source labels ("[S3]", E12 fix batch 2)
    kdpExportRules.copyright(pen, year)    → the copyright page text (owner, 2026-10-25)
    kdpExportRules.fileName(title, format) → "chair-yoga-for-seniors-over-60.docx"
+
+   E17 book parts. data.book_parts is book_parts_files() (0035): the parts in
+   the file, with their Final text. The server already applies the "in the
+   file" rule (part_file_list); bookParts() applies it again and fixes the order.
+   kdpExportRules.BOOK_PARTS              → the 8 kinds in book order
+   kdpExportRules.bookParts(list)         → [{ kind, front, title, content, entries }]
+   kdpExportRules.REVIEW                  → the fixed review request text (design 81)
+   model.bookParts is null when data.book_parts is missing (before 0035): every
+   builder then keeps its old About (pen name bio) and Also by path, until 0036.
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -125,7 +134,8 @@
       repeats: [],      // sentences in more than one section in the file: [{ text, items }], most places first (fix batch 2, item 11 A)
       marks: { total: 0, numbers: 0, sections: [] },
       ai: { draft: 0, edits: 0, own: 0, words: { draft: 0, edits: 0, own: 0 } },
-      words: 0
+      words: 0,
+      bookParts: Array.isArray(data.book_parts) ? bookParts(data.book_parts) : null   // E17: never counted in words
     };
 
     for (const c of chapters) {
@@ -201,11 +211,50 @@
     return `Copyright © ${year}${who ? ` ${who}` : ''}. All rights reserved. No part of this book may be reproduced without written permission from the author, except for short quotes in reviews. The information in this book is for general education only. It is not medical, legal or financial advice. Talk to a qualified professional before you act on it.`;
   }
 
+  /* ── E17 book parts ───────────────────────── */
+
+  const BOOK_PARTS = ['dedication', 'epigraph', 'foreword', 'preface', 'acknowledgments', 'about_author', 'review_request', 'also_by'];
+  const FRONT_PARTS = ['dedication', 'epigraph', 'foreword', 'preface'];
+  // The printed heading. Dedication and epigraph have none. Q-5: only these four are in the contents.
+  const PART_TITLES = { foreword: 'Foreword', preface: 'Preface', acknowledgments: 'Acknowledgments', about_author: 'About the author' };
+  // Design 81 (owner approved): only the title and the pen name fill in. Amazon's review rules: no rewards, no "good review only".
+  const REVIEW = {
+    title: 'A short request',
+    thanks: 'Thank you for reading',
+    body: 'If this book helped you, please think about leaving an honest review on Amazon. A few words about what worked for you, or what did not, help other readers decide if this book is right for them.'
+  };
+  const ALSO_BY_MAX = 20;
+
+  /** The parts in the file, in book order. Q-10: Also by keeps titles only. */
+  function bookParts(list) {
+    const byKind = new Map();
+    for (const p of Array.isArray(list) ? list : []) {
+      if (p && BOOK_PARTS.includes(p.kind) && !byKind.has(p.kind)) byKind.set(p.kind, p);
+    }
+    const out = [];
+    for (const kind of BOOK_PARTS) {
+      const p = byKind.get(kind);
+      if (!p) continue;
+      const item = { kind, front: FRONT_PARTS.includes(kind), title: PART_TITLES[kind] || null, content: '', entries: [] };
+      if (kind === 'also_by') {
+        item.entries = (Array.isArray(p.entries) ? p.entries : [])
+          .map((e) => ({ title: str(e && e.title).trim() })).filter((e) => e.title).slice(0, ALSO_BY_MAX);
+        if (!item.entries.length) continue;
+      } else if (kind !== 'review_request') {
+        if (isBlank(p.content)) continue;
+        item.content = str(p.content);
+      }
+      out.push(item);
+    }
+    return out;
+  }
+
   function fileName(title, format) {
     const slug = str(title).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80).replace(/-+$/, '');
     return `${slug || 'book'}.${format === 'md' ? 'md' : 'docx'}`;
   }
 
-  root.kdpExportRules = { FLAG, PARTS, RUN_FRESH, AI_EDITS, isBlank, available, defaults, model, versionIds, strip, copyright, fileName, markCount, inFile };
+  root.kdpExportRules = { FLAG, PARTS, RUN_FRESH, AI_EDITS, isBlank, available, defaults, model, versionIds, strip, copyright, fileName, markCount, inFile,
+    BOOK_PARTS, PART_TITLES, REVIEW, bookParts };
 })(globalThis);

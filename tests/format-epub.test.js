@@ -19,6 +19,7 @@ import "../js/cover/zip.js";
 import "../js/format/epub.js";
 import "../js/format/epub-check.js";
 import "./fixtures/epub-books.js";
+import "./fixtures/part-cases.js";
 import { wellFormed } from "./lib/xml-strict.js";
 
 const E = globalThis.kdpEpub;
@@ -565,4 +566,90 @@ Deno.test("fileName: the title slug with -ebook.epub", () => {
   assertEquals(E.fileName("Caf\u00E9 \u00DCn\u00EFcode"), "cafe-unicode-ebook.epub");
   assertEquals(E.fileName(""), "book-ebook.epub");
   assertEquals(E.ENGINE_ID, "epub3 \u00B7 e1");
+});
+
+/* -- E17 book parts ------------------------ */
+
+const PC = globalThis.kdpPartCases;
+const C = globalThis.kdpEpubCheck;
+/** Like build(), with data.book_parts (the fixture's data() keeps only the keys it knows). null: no book_parts key. */
+function withParts(parts = PC.all(), settings = ALL, over = {}) {
+  const st = { ...F.defaults(), ...settings };
+  const d = { ...B.data(over), ...(parts === null ? {} : { book_parts: parts }) };
+  return E.build(F.modelOf(d, st), st, { year: 2026, bookId: B.BOOK_ID, now: B.NOW, alsoBy: B.ALSO_BY });
+}
+
+Deno.test("E17: every part on → docs in book order, epub:type per part, all well formed", () => {
+  const b = withParts();
+  const order = b.spine.map((d) => d.href);
+  const want = ["title.xhtml", "copyright.xhtml", "dedication.xhtml", "epigraph.xhtml", "contents.xhtml", "foreword.xhtml", "preface.xhtml"];
+  assertEquals(order.slice(0, 7), want);
+  assertEquals(order.slice(-4), ["acknowledgments.xhtml", "about.xhtml", "review.xhtml", "also-by.xhtml"]);
+  for (const [href, type] of [["dedication", "dedication"], ["epigraph", "epigraph"], ["foreword", "foreword"], ["preface", "preface"], ["acknowledgments", "acknowledgments"]]) {
+    assertStringIncludes(file(b, `OEBPS/${href}.xhtml`), `<section epub:type="${type}"`, href);
+  }
+  for (const f of b.files.filter((x) => /\.(xhtml|opf|ncx)$/.test(x.name))) assertEquals(wellFormed(f.name, f.text), true, f.name);
+  assertStringIncludes(file(b, "OEBPS/style.css"), "section.centered");
+  for (const href of order) assertStringIncludes(file(b, "OEBPS/content.opf"), `href="${href}"`);
+});
+
+Deno.test("E17 Q-5: nav, NCX and contents list foreword, preface, acknowledgments, about only", () => {
+  const b = withParts();
+  const labels = b.nav.map((e) => e.label);
+  assertEquals(labels.slice(0, 2), ["Foreword", "Preface"]);
+  assertEquals(labels.slice(-2), ["Acknowledgments", "About the author"]);
+  for (const no of ["Dedication", "Epigraph", "A short request", "Also by"]) assert(!labels.some((l) => l.startsWith(no)), no);
+  const ncx = file(b, "OEBPS/toc.ncx"), navDoc = file(b, "OEBPS/nav.xhtml"), contents = file(b, "OEBPS/contents.xhtml");
+  for (const doc of [ncx, navDoc, contents]) {
+    for (const href of ["foreword.xhtml", "preface.xhtml", "acknowledgments.xhtml", "about.xhtml"]) assertStringIncludes(doc, `"${href}"`);
+    for (const href of ["dedication.xhtml", "epigraph.xhtml", "review.xhtml", "also-by.xhtml"]) assertNotMatch(doc, new RegExp(`"${href}"`));
+  }
+});
+
+Deno.test("E17: About from the part, Also by titles only, the review request words", () => {
+  const b = withParts();
+  assertStringIncludes(file(b, "OEBPS/about.xhtml"), "<h1>About the author</h1>");
+  assertStringIncludes(file(b, "OEBPS/about.xhtml"), "She lives by the sea.");
+  const also = file(b, "OEBPS/also-by.xhtml");
+  assertStringIncludes(also, "<em>Chair Yoga for Seniors</em>");
+  assertNotMatch(also, /Subtitle|also-sub/);
+  const review = file(b, "OEBPS/review.xhtml");
+  assertStringIncludes(review, "<h1>A short request</h1>");
+  assertStringIncludes(review, "If this book helped you, please think about leaving an honest review on Amazon. A few words about what worked for you, or what did not, help other readers decide if this book is right for them.");
+  assertStringIncludes(review, "Thank you for reading <em>");
+  assertEquals((review.match(/<p class="bio">/g) || []).length, 3, "three separate paragraphs (p.bio: 0.75em above)");
+  assertEquals(file(withParts([{ kind: "review_request" }]), "OEBPS/style.css"), file(build(ALL), "OEBPS/style.css"), "no review CSS");
+});
+
+Deno.test("E17: no book_parts → the old EPUB, byte for byte; book_parts [] → no About, no Also by", () => {
+  const old = build(ALL);
+  assertEquals(withParts(null).files, old.files);
+  const none = withParts([]);
+  assert(!none.files.some((f) => /about|also-by|dedication|review/.test(f.name)));
+  assertNotMatch(file(none, "OEBPS/style.css"), /centered/);
+  assertEquals(file(none, "OEBPS/style.css"), file(old, "OEBPS/style.css"));
+});
+
+Deno.test("E17 hostile text (C4): every part kind and every typed Also by title is escaped XHTML", () => {
+  const b = withParts();
+  for (const href of ["dedication", "epigraph", "foreword", "preface", "acknowledgments", "about"]) {
+    const t = file(b, `OEBPS/${href}.xhtml`);
+    assertStringIncludes(t, "&amp;", href);
+    assertStringIncludes(t, "&lt;b&gt;not bold&lt;/b&gt;", href);
+    assertNotMatch(t, /<b>/, href);
+    assertStringIncludes(t, "# $ @ * _ &amp; &lt; &gt;", href);
+  }
+  const also = file(b, "OEBPS/also-by.xhtml");
+  assertStringIncludes(also, "<em>Typed # $ @ * _ &amp; &lt; &gt;");
+  assertStringIncludes(also, "<em>1. Looks like a list</em>");
+  const hostile = withParts(PC.all(), ALL, { book: { title: `T ${PC.HOSTILE}`, pen_name: `P ${PC.HOSTILE}` } });
+  for (const f of hostile.files.filter((x) => x.name.endsWith(".xhtml") || x.name.endsWith(".ncx"))) assertEquals(wellFormed(f.name, f.text), true, f.name);
+  assertStringIncludes(file(hostile, "OEBPS/review.xhtml"), "<em>T # $ @ * _ &amp; &lt; &gt;");
+});
+
+Deno.test("E17: the 3 checks before download pass with every part on", () => {
+  const b = withParts();
+  const d = B.data();
+  const list = C.checks(C.read(E.zip(b)), { expect: { title: d.book.title, subtitle: d.book.subtitle, author: d.book.pen_name, isbn: null }, wellFormed });
+  assertEquals(C.ok(list), true, JSON.stringify(list));
 });

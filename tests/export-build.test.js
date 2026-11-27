@@ -7,6 +7,8 @@
 // the copyright text, lists and styles.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { unzip } from "./lib/unzip.js";
+import { wellFormed } from "./lib/xml-strict.js";
+import "./fixtures/part-cases.js";
 import "../js/markdown-lite.js";
 import "../js/word-budget.js";
 import "../js/sentences.js";
@@ -221,4 +223,65 @@ Deno.test("DOCX styles: every style id once; Title and headings bold, Georgia, b
   for (const id of ["Heading4", "Heading5", "Heading6"]) assert(!/<w:color w:val="(?!auto")[^"]*"/.test(block(id)), `${id}: only auto`);
   assert(/w:ascii="Georgia"/.test(block("Subtitle")), "Subtitle is Georgia");
   assert(/<w:sz w:val="32"\/>/.test(block("Heading1")) && /<w:sz w:val="48"\/>/.test(block("Title")));
+});
+
+/* ── E17 book parts ──────────────────────────── */
+
+const PC = globalThis.kdpPartCases;
+const ON = { parts: { title: true, copyright: true, contents: true, intro: true, conclusion: true, about: true } };
+const dataP = (parts = PC.all(), book = {}) => ({ ...DATA, book: { ...DATA.book, ...book }, book_parts: parts });
+const mdOf = (d) => X.toMarkdown(R.model(d, { include: "all", format: "md", ...ON }), { year: 2026 });
+const at = (s, sub) => { const i = s.indexOf(sub); assert(i >= 0, `missing ${sub}`); return i; };
+
+Deno.test("E17 Markdown: parts in book order, contents lists foreword, preface, acknowledgments, about only", () => {
+  const md = mdOf(dataP());
+  const marks = ["\n\nFor my mother.", "*Small steps add up.*", "# Contents", "# Foreword", "# Preface", "# Introduction", "# Acknowledgments", "# About the author", "# A short request", "# Also by Nora Hale"];
+  const pos = marks.map((x) => at(md, x));
+  assert(pos.every((p, i) => i === 0 || p > pos[i - 1]), `order ${pos}`);
+  const contents = md.slice(at(md, "# Contents"), at(md, "# Foreword"));
+  assert(contents.startsWith("# Contents\n\n- Foreword\n- Preface\n- Introduction"), contents);
+  assert(contents.trim().endsWith("- Acknowledgments\n- About the author"), contents);
+  for (const no of ["Dedication", "Epigraph", "A short request", "Also by"]) assert(!contents.includes(no), no);
+  assert(!md.includes("Nora teaches chair yoga."), "Q-4: About reads the part, not the bio");
+  assert(!md.includes("[Verify"), "marks removed");
+  assert(!md.includes("Subtitle"), "Q-10: titles only");
+  assertEquals(md.split("\n").filter((l) => l === "# Foreword").length, 1);
+});
+
+Deno.test("E17 Markdown: no book_parts → the old About; [] → none", () => {
+  assert(mdOf({ ...DATA }).includes("# About the author\n\nNora teaches chair yoga."));
+  assert(!mdOf(dataP([])).includes("About the author"));
+});
+
+Deno.test("E17 Markdown hostile text (C4): part text is the writer's Markdown, typed text is escaped", () => {
+  const md = mdOf(dataP(PC.all(), { title: `T ${PC.HOSTILE}`, pen_name: `P ${PC.HOSTILE}` }));
+  for (const p of PC.parts.filter((x) => x.content)) assert(md.includes(X.mdBody(p.content)), p.kind);
+  assert(md.includes(String.raw`- *Typed \# \$ \@ \* \_ \& \< \> \" \'*`), "typed Also by title");
+  assert(md.includes(String.raw`- *1\. Looks like a list*`), "not a list");
+  assert(md.includes(String.raw`Thank you for reading *T \# \$ \@ \* \_ \& \< \> \" \'*.`), "review title");
+  assert(md.includes(String.raw`# Also by P \# \$ \@ \* \_ \& \< \> \" \'`), "pen name");
+});
+
+Deno.test("E17 DOCX: parts in order, front parts unnumbered, About from the part, hostile text is text", async () => {
+  const { doc, files } = await build(ON, dataP(PC.all(), { title: `T ${PC.HOSTILE}`, pen_name: `P ${PC.HOSTILE}` }));
+  // xml-strict is the EPUB checker: it refuses the standalone="yes" declaration docx writes, so the body is checked.
+  const xmlBody = (t) => (typeof t === "string" ? t : new TextDecoder().decode(t)).replace(/^<\?xml[^?]*\?>\s*/, "");
+  for (const [name, text] of files) if (name.endsWith(".xml")) assertEquals(wellFormed(name, xmlBody(text)), true, name);
+  const frontEnd = at(doc, "<w:sectPr>");
+  const marks = ["For my mother.", "Small steps add up.", ">Contents<", ">Foreword<", ">Preface<"];
+  const pos = marks.map((x) => at(doc, x));
+  assert(pos.every((p, i) => (i === 0 || p > pos[i - 1]) && p < frontEnd), `front ${pos} < ${frontEnd}`);
+  const back = ["Acknowledgments text.", "About text.", ">A short request<", "Also by P", "Chair Yoga for Seniors"].map((x) => at(doc, x));
+  assert(back.every((p, i) => p > frontEnd && (i === 0 || p > back[i - 1])), `back ${back}`);
+  assert(!doc.includes("Nora teaches chair yoga."));
+  assert(!doc.includes("Subtitle # $"), "Q-10: titles only");
+  for (const a of ["part-foreword", "part-preface", "part-acknowledgments", "part-about-author"]) assertEquals(count(doc, new RegExp(`w:anchor="${a}"`)), 1, a);
+  assert(doc.includes("# $ @ * _ &amp; &lt; &gt;"), "escaped XML text");
+  assert(doc.includes("&lt;b&gt;not bold&lt;/b&gt;"));
+  assert(doc.includes("Typed # $ @ * _ &amp; &lt; &gt;"), "typed title");
+  assert(doc.includes("1. Looks like a list"));
+  // The review request: three paragraphs, the 2nd and 3rd with 12 pt (240 twips) above.
+  const review = doc.slice(at(doc, ">A short request<"), at(doc, "Also by P"));
+  assertEquals(count(review, /<w:p>|<w:p /g), 4, "heading + 3 paragraphs");
+  assertEquals(count(review, /<w:spacing w:before="240"\/>/g), 2, review);
 });
