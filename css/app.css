@@ -70,6 +70,8 @@
   --app-wr-cursor-h: 1.1em;
   --app-wr-flag-line: 1px;      /* the dashed line under an unsourced sentence */
   --app-imp-menu-w: 300px;      /* E10.3: the Improve menu (design 22) */
+  --app-wr-pm-w: 340px;         /* E17 Part 4: the Add a book part menu (design 79) */
+  --app-wr-fixed-w: 560px;      /* E17 Part 4: the text column of a fixed page (design 81) */
   --app-imp-spin: 18px;         /* the loading spinner (design 22b) */
   --app-imp-gap: calc(var(--control-h) + var(--space-4));   /* room for the floating button under a block */
   --app-mini-cover-w: 46px;
@@ -4082,3 +4084,81 @@ label.fmt-row { cursor: pointer; }
   /* E13.3 (41d at 900): the smaller Kindle screen */
   :root { --app-kp-scr-w: 380px; --app-kp-scr-h: 540px; --app-kp-scr-pad: 38px 32px 18px; }
 }
+
+/* ── E17 Part 4: book parts in 06 (designs 79, 80, 80c, 81, js/write-parts.js) ── */
+.wr-ms-group { margin: var(--space-3) 0 var(--space-1); }
+.wr-ms-group > .chip-label { display: block; padding: 0 var(--space-2) var(--space-1); }
+.wr-ms-list > li + .wr-ms-group { margin-top: var(--space-4); }
+.wr-ms-parts { padding-left: 0; margin: 0; }
+.wr-ms-add { margin-top: var(--space-4); justify-content: flex-start; border-style: dashed; }
+.wr-ms-add[aria-expanded="true"] { border-style: solid; border-color: var(--ink); background: var(--mist); }
+.wr-pm {
+  position: fixed;
+  z-index: 20;
+  width: min(var(--app-wr-pm-w), calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-2) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--stone-2);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu);
+}
+.wr-pm-head { padding: 0 var(--space-2); }
+.wr-pm-head strong { display: block; font-size: var(--text-md); font-weight: 600; color: var(--ink); }
+.wr-pm-head p { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--graphite); }
+.wr-pm-group { display: flex; flex-direction: column; gap: 1px; }
+.wr-pm-group > .chip-label { padding: var(--space-1) var(--space-2); }
+.wr-pm-row {
+  width: 100%;
+  min-height: var(--control-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.wr-pm-row:hover, .wr-pm-row:focus-visible { background: var(--mist); }
+.wr-pm-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.wr-pm-row[aria-disabled="true"] { cursor: progress; }
+.wr-pm-name { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; }
+.wr-pm-side { flex-shrink: 0; font-size: var(--text-sm); color: var(--graphite); }
+.wr-pm-box {
+  width: var(--app-checkbox);
+  height: var(--app-checkbox);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--graphite);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--surface);
+}
+.wr-pm-box.is-on { background: var(--ink); border-color: var(--ink); }
+.wr-pm-note { margin: 0; padding: var(--space-2) var(--space-2) 0; border-top: 1px solid var(--mist); font-size: var(--text-sm); color: var(--graphite); }
+.wr-pm-err { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; padding: 0 var(--space-2); font-size: var(--text-sm); color: var(--danger); }
+.wr-pm-err svg { flex-shrink: 0; margin-top: 2px; }
+/* 80c: the epigraph's hint sits where Improve would be. */
+[data-quote-hint] { flex: 1 1 auto; }
+/* 81: the review request page and Also by, a page of fixed text. */
+.wr-fixed { padding: var(--space-5); }
+@container wrmain (min-width: 60rem) { .wr-fixed { padding: var(--space-8) var(--space-12); } }
+.wr-fixed-page { max-width: var(--app-wr-fixed-w); margin: 0 auto; font-family: var(--font-read); font-size: var(--text-read); line-height: var(--leading-read); color: var(--ink); overflow-wrap: break-word; }
+.wr-fixed-page h3 { margin: var(--space-6) 0 var(--space-5); font-family: var(--font-read); font-size: var(--text-2xl); font-weight: 600; text-align: center; }
+.wr-fixed-page p { margin: 0 0 var(--space-4); }
+.wr-fixed-list { margin: 0; padding: 0; list-style: none; }
+.wr-fixed-list li + li { margin-top: var(--space-2); }
+.wr-fixed-note { margin: var(--space-4) 0 0; font-size: var(--text-sm); align-items: flex-start; }
+.wr-fixed-note svg { flex-shrink: 0; margin-top: 2px; }
+.wr-fixed-tag { align-self: center; }

@@ -128,6 +128,14 @@ const setup = async page => {
     addVersion: (sid, content, source, extra) => addVersion(sectionOf(sid).s, content, source, { created_at: now(), ...extra }),
     sectionOf: (sid) => sectionOf(sid)
   };
+  // E17 Part 4: 0035 book_parts rows (the books trigger: 8 per book, off; text parts 'draft').
+  const KINDS = ['dedication', 'epigraph', 'foreword', 'preface', 'acknowledgments', 'about_author', 'review_request', 'also_by'];
+  store.parts = { rows: {}, versions: [], drafts: {}, alsoBy: {} };
+  for (const bid of Object.keys(store.books)) {
+    store.parts.rows[bid] = KINDS.map((kind) => ({ id: uid('9'), book_id: bid, kind, enabled: false,
+      status: kind === 'review_request' || kind === 'also_by' ? null : 'draft', current_version_id: null, updated_at: ago(1) }));
+  }
+  store.partOf = (bid, kind) => store.parts.rows[bid].find((x) => x.kind === kind);
   globalThis.__modes = globalThis.__modes || {};
   const mode = (k) => globalThis.__modes[k];
   const cors = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-range' };
@@ -413,6 +421,84 @@ const setup = async page => {
       return json(r, 500, { error: 'server_error' });
     }
     if (path === '/rest/v1/pen_names' && method === 'GET') return json(r, 200, [{ id: PA, name: 'Nora Hale', voice: {} }]);
+    // E17 Part 4: book parts (0035), only with globalThis.__modes.parts (other tests see no parts, as before 0035).
+    if (mode('parts') && /^\/rest\/v1\/(rpc\/(book_parts_json|save_part_version|restore_part_version|apply_part_suggestion)|book_parts|book_part_versions|book_part_drafts)$/.test(path)) {
+      const P = store.parts;
+      const partById = (id) => { for (const bid of Object.keys(P.rows)) { const x = P.rows[bid].find((y) => y.id === id); if (x) return x; } return null; };
+      const pv = (id) => P.versions.find((v) => v.id === id) || null;
+      const addPv = (row, content, source, extra = {}) => {
+        const v = { id: uid('8'), part_id: row.id, version_no: P.versions.filter((x) => x.part_id === row.id).length + 1, content, word_count: count(content), source, label: null, partial: false, created_at: now(), ...extra };
+        P.versions.push(v);
+        row.current_version_id = v.id;
+        return v;
+      };
+      if (path === '/rest/v1/rpc/book_parts_json') {
+        if (mode('partsError')) { globalThis.__modes.partsError--; return json(r, 500, { message: 'mock' }); }
+        const bid = body().p_book_id;
+        const rows = P.rows[bid] || [];
+        return json(r, 200, {
+          parts: rows.map((x) => { const v = pv(x.current_version_id); const d = P.drafts[x.id];
+            return { id: x.id, kind: x.kind, enabled: x.enabled, status: x.status, version_id: x.current_version_id, version_no: v ? v.version_no : null, words: v ? v.word_count : 0,
+              has_draft: !!d && d.content.trim() !== (v ? v.content : '').trim() }; }),
+          also_by: copy(P.alsoBy[bid] || []), candidates: [], now: now() });
+      }
+      if (path === '/rest/v1/book_parts' && method === 'GET') { const x = partById(eq('id')); return json(r, 200, x ? [{ id: x.id, current_version_id: x.current_version_id }] : []); }
+      if (path === '/rest/v1/book_parts' && method === 'PATCH') {
+        const x = partById(eq('id'));
+        const f = body();
+        store.writes.push({ table: 'book_parts', id: eq('id'), body: f });
+        if (mode('partSetError')) { globalThis.__modes.partSetError--; return json(r, 500, { message: 'mock' }); }
+        if (!x) return json(r, 200, []);
+        if (Object.keys(f).some((k) => k !== 'enabled' && k !== 'status')) return fail(r, 'P0001', 'part_fixed');
+        Object.assign(x, f, { updated_at: now() });
+        return json(r, 200, [{ id: x.id, enabled: x.enabled, status: x.status, updated_at: x.updated_at }]);
+      }
+      if (path === '/rest/v1/book_part_versions' && method === 'GET') {
+        if (param('id')) { const v = pv(eq('id')); return json(r, 200, v ? [copy(v)] : []); }
+        return json(r, 200, copy(P.versions.filter((v) => v.part_id === eq('part_id')).sort((a, b) => b.version_no - a.version_no).map(({ content, ...rest }) => rest)));
+      }
+      if (path === '/rest/v1/book_part_drafts' && method === 'GET') { const d = P.drafts[eq('part_id')]; return json(r, 200, d ? [copy(d)] : []); }
+      if (path === '/rest/v1/book_part_drafts' && method === 'POST') {
+        const f = body();
+        store.writes.push({ table: 'book_part_drafts', body: f });
+        const x = partById(f.part_id);
+        if (!x) return json(r, 403, { code: '42501', message: 'draft_owner' });
+        if (x.kind === 'epigraph' && f.content.length > 1000) return fail(r, 'P0001', 'part_too_long');
+        P.drafts[x.id] = { content: f.content, base_version_id: f.base_version_id, saved_at: now() };
+        return json(r, 201, [{ part_id: x.id, saved_at: P.drafts[x.id].saved_at }]);
+      }
+      if (path === '/rest/v1/rpc/save_part_version') {
+        const f = body();
+        store.writes.push({ table: 'rpc', fn: 'save_part_version', body: f });
+        const x = partById(f.p_part_id);
+        if (!x) return json(r, 400, { code: 'P0002', message: 'part_not_found' });
+        if (x.kind === 'epigraph' && f.p_content.length > 1000) return fail(r, 'P0001', 'part_too_long');
+        if (!x.current_version_id && !f.p_content.trim()) return fail(r, 'P0001', 'empty_first_version');
+        if (f.p_make_current) {
+          if ((x.current_version_id || null) !== (f.p_base_version_id || null)) return fail(r, 'P0001', 'version_conflict');
+          const c = pv(x.current_version_id);
+          if (c && c.content === f.p_content) { delete P.drafts[x.id]; return json(r, 200, { id: c.id, version_no: c.version_no, word_count: c.word_count, created_at: c.created_at, created: false }); }
+        }
+        const keep = x.current_version_id;
+        const v = addPv(x, f.p_content, 'manual');
+        if (!f.p_make_current) x.current_version_id = keep;
+        delete P.drafts[x.id];
+        return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, created: true });
+      }
+      if (path === '/rest/v1/rpc/restore_part_version') {
+        const f = body();
+        store.writes.push({ table: 'rpc', fn: 'restore_part_version', body: f });
+        const x = partById(f.p_part_id);
+        if (!x) return json(r, 400, { code: 'P0002', message: 'part_not_found' });
+        if ((x.current_version_id || null) !== (f.p_base_version_id || null)) return fail(r, 'P0001', 'version_conflict');
+        const old = pv(f.p_version_id);
+        if (!old || old.part_id !== x.id) return json(r, 400, { code: 'P0002', message: 'version_not_found' });
+        delete P.drafts[x.id];
+        const v = addPv(x, old.content, 'restore', { label: `Restored from v${old.version_no}` });
+        return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, created: true });
+      }
+      return json(r, 404, { code: 'PGRST202', message: 'mock: not here' });
+    }
     if (path.startsWith('/rest/v1/')) return json(r, 200, []);
     return json(r, 404, { message: 'mock: unknown' });
   }
@@ -481,7 +567,7 @@ const setup = async page => {
         chk.requests.push({ body: sent, at: Date.now() });
         return new Promise((resolve, reject) => chk.pending.push({ resolve, reject }));
       }
-      if (sent.stage === 'section_improve') {
+      if (sent.stage === 'section_improve' || sent.stage === 'part_improve') {   // E17: part_improve answers the same way
         imp.requests.push({ body: sent, headers: init.headers });
         return new Promise((resolve, reject) => {
           const entry = { resolve, reject };

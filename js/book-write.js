@@ -57,6 +57,14 @@
    - Opened from 07 (E14.4, design 56, js/write-qc.js): openSpot names the
      section and the spot, a QC bar sits above the columns until the step
      changes. The editor is rebuilt often, so the mark is put back each time.
+   - E17 Part 4 (designs 79, 80, 80c, 81, js/write-parts.js): book parts in the
+     list (FRONT above the Introduction, BACK under the Conclusion) and the
+     "+ Add a book part" menu. A part opens in this same editor with a part
+     target (cur.type 'part'): autosave, versions, Compare, Restore and the
+     conflict card go through T(type) (risk P1). No Generate, no checks, no
+     word target; the epigraph has no Improve and stops at 1,000 characters.
+     The review request page is fixed text. Parts never count in the
+     manuscript words, the chapter numbers or 06 done.
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -104,6 +112,8 @@
   let idleTimer = null;
   let cmp = null;                     // the Compare dialog
   let ask = null;                     // the confirm dialog (rule B, leave while writing)
+  let P = null;                       // E17: the book parts (js/write-parts.js)
+  let wantPart = null;                // ?part= from the first URL
   let G = null;                       // Generate (js/write-generate.js)
   let imp = null;                     // the Improve menu (js/write-improve.js)
   let chk = null;                     // the Checks tab (js/write-checks.js)
@@ -126,6 +136,28 @@
   const hasWriting = (s) => (typeof s.has_writing === 'boolean' ? s.has_writing : !!(s.current_version_id || s.has_draft));
   const anyWriting = () => allSections().some((x) => hasWriting(x.s));
   const gateOpen = () => !!book.outline_approved_at || anyWriting();
+
+  // E17 (risk P1): the open target is a section or a book part (cur.type). Every data seam
+  // (autosave, versions, Compare, Restore, save, the head check) goes through T(type).
+  const isPart = () => !!cur && cur.type === 'part';
+  const sec = () => (cur && cur.type !== 'part' ? cur : null);   // what Generate, Checks and the QC bar see
+  const noun = () => (isPart() ? 'part' : 'section');
+  const partOf = () => (isPart() ? P.byId(cur.id) : null);
+  const epigraph = () => isPart() && cur.kind === 'epigraph';
+  const textMax = () => (epigraph() ? P.EPIGRAPH_MAX : MAX_CHARS);
+  const T = (type) => (type === 'part'
+    ? { text: (id) => kdp.parts.text(id), head: (id) => kdp.parts.head(id), versions: (id) => kdp.parts.versions(id), version: (id) => kdp.parts.version(id),
+      saveDraft: (id, c, b) => kdp.parts.saveDraft(id, c, b), saveVersion: (id, c, b, m) => kdp.parts.saveVersion(id, c, b, m), restore: (id, v, b) => kdp.parts.restore(id, v, b) }
+    : { text: (id) => kdp.getSectionText(id), head: (id) => kdp.getSectionHead(id), versions: (id) => kdp.getVersions(id), version: (id) => kdp.getVersion(id),
+      saveDraft: (id, c, b) => kdp.saveDraft(id, c, b), saveVersion: (id, c, b, m) => kdp.saveVersion(id, c, b, m), restore: (id, v, b) => kdp.restoreVersion(id, v, b) });
+  /** "&section=<id>" or "&part=<id>" for the address. */
+  const query = () => (cur ? `&${isPart() ? 'part' : 'section'}=${encodeURIComponent(cur.id)}` : '');
+  /** A part's words now: the open one counts its typing, else its draft, else its version. */
+  function partWords(p) {
+    if (cur && cur.id === p.id && cur.state === 'ready') return curWords();
+    if (p.draft_words != null) return p.draft_words;
+    return p.words || (p.has_draft ? 1 : 0);
+  }
 
   /** The open section's words, counted once per text (typing reads it in several places, G2 P2). */
   let counted = { text: null, n: 0 };
@@ -186,8 +218,9 @@
 
   function read() {
     if (!cur || cur.state !== 'ready' || cur.conflict) return undefined;
-    if (cur.text.length > MAX_CHARS) return { error: `this section is too long. Keep it under ${fmt(MAX_CHARS)} characters.` };
-    return { sectionId: cur.id, content: cur.text, base: cur.base };
+    if (cur.fixed) return undefined;
+    if (cur.text.length > textMax()) return { error: epigraph() ? `an epigraph holds at most ${fmt(P.EPIGRAPH_MAX)} characters.` : `this ${noun()} is too long. Keep it under ${fmt(MAX_CHARS)} characters.` };
+    return { type: cur.type, id: cur.id, content: cur.text, base: cur.base };
   }
 
   async function save(fields) {
@@ -196,7 +229,7 @@
     // Accept is saving: no draft may land between save_version and apply_suggestion (decision A).
     // The text it holds is already in the manual version Accept saved first.
     if (holdDrafts) return { data: {}, error: null };
-    const res = await kdp.saveDraft(d.sectionId, d.content, d.base);
+    const res = await T(d.type).saveDraft(d.id, d.content, d.base);
     if (res.error) return res;
     return { data: { ...res.data, sent: d }, error: null };
   }
@@ -204,9 +237,14 @@
   function onSaved(res) {
     const d = res.data.sent;
     if (!d) return;
-    const hit = findSection(d.sectionId);
-    if (hit) Object.assign(hit.s, { has_draft: true, has_writing: true, draft_words: W.count(d.content), draft_at: res.data.saved_at || new Date().toISOString() });
-    if (cur && cur.id === d.sectionId) cur.hasDraft = true;
+    if (d.type === 'part') {
+      const p = P.byId(d.id);
+      if (p) Object.assign(p, { has_draft: true, draft_words: W.count(d.content) });
+    } else {
+      const hit = findSection(d.id);
+      if (hit) Object.assign(hit.s, { has_draft: true, has_writing: true, draft_words: W.count(d.content), draft_at: res.data.saved_at || new Date().toISOString() });
+    }
+    if (cur && cur.id === d.id) cur.hasDraft = true;
     ctx.refresh({ draft: true });
     if (active()) { renderManuscript(); renderFoot(); }
   }
@@ -215,7 +253,7 @@
     const e = res.error || {};
     if (e.notFound || e.code === '42501' || e.code === '23503') {
       // The section is gone (deleted in 05) or no longer the caller's.
-      saver.reset('error', 'This section is gone. The manuscript was reloaded.');
+      saver.reset('error', `This ${noun()} is gone. The manuscript was reloaded.`);
       loadOutline(true);
       return true;
     }
@@ -227,7 +265,8 @@
   async function loadOutline(quiet) {
     if (!quiet || load.state !== 'ready') { load = { state: 'loading' }; if (active()) renderAll(); }
     let res;
-    try { res = await kdp.getOutline(book.id); } catch (err) { res = { error: err }; }
+    // E17: the parts are read with the outline (P.read never throws; before 0035 they stay hidden).
+    try { [res] = await Promise.all([kdp.getOutline(book.id), P.read(book.id)]); } catch (err) { res = { error: err }; }
     if (res.error) {
       if (!quiet || load.state !== 'ready') load = { state: 'error' };
       if (active()) renderAll();
@@ -237,12 +276,24 @@
     load = { state: 'ready' };
     ctx.refresh();
     if (!active()) return;
-    if (cur && !findSection(cur.id)) {
+    if (cur && !isPart() && !findSection(cur.id)) {
       note = { kind: 'warning', text: 'The section you had open was removed in 05 Outline. Your other writing is safe.' };
+      cur = null;
+    }
+    // A part turned off in another tab or in 08: it closes; its text is kept.
+    if (isPart() && P.state() !== 'error' && !(P.byId(cur.id) || {}).enabled && !dirty() && !saver.hasUnsaved()) {
+      note = { kind: 'info', text: 'The book part you had open was turned off. Its text is kept.' };
       cur = null;
     }
     // 07 "Open in 06" may ask for another section than the open one.
     if (wantSection && !findSection(wantSection)) wantSection = null;
+    if (wantPart && !(P.byId(wantPart) || {}).enabled) wantPart = null;
+    if (wantPart && !wantSection && !cur && gateOpen()) {
+      const id = wantPart;
+      wantPart = null;
+      openTarget('part', id, { quiet: true });
+      return;
+    }
     if ((!cur || wantSection) && gateOpen()) {
       const pick = firstSection();
       // Only 07 "Open in 06" gets here with a section open: the normal leave rules apply.
@@ -266,24 +317,39 @@
    * current version (or with the same text) is shown as unsaved changes; a
    * draft from another version is a conflict (another tab saved).
    */
-  async function openSection(id, opts = {}) {
+  const openSection = (id, opts) => openTarget('section', id, opts);
+
+  /** E17: a section or a book part (type 'part') in the same editor. */
+  async function openTarget(type, id, opts = {}) {
     const token = ++sectionToken;
     clearIdle();
     G.dropOther(id);   // an old section's result card
     if (imp.sectionId() && imp.sectionId() !== id) imp.reset();
-    const hit = findSection(id);
+    const hit = type === 'section' ? findSection(id) : null;
+    const part = type === 'part' ? P.byId(id) : null;
     if (hit) open.add(hit.c.id);
-    cur = { id, state: 'loading', versions: null, versionsState: 'idle' };
+    cur = { type, id, kind: part ? part.kind : null, state: 'loading', versions: null, versionsState: 'idle' };
     if (!opts.keepNote) note = null;
     if (active()) {
       renderAll();
-      history.replaceState(history.state, '', `?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(id)}`);
+      history.replaceState(history.state, '', `?id=${encodeURIComponent(book.id)}&step=6${query()}`);
+    }
+    // The review request page and Also by have no text, no status and no versions (0035).
+    if (part && !P.isText(part.kind)) {
+      Object.assign(cur, { state: 'ready', fixed: true, version: null, savedText: '', base: null, text: '', hasDraft: false, conflict: null, otherRun: false, versions: [], versionsState: 'ready' });
+      if (active()) renderAll();
+      return;
     }
     let res;
-    try { res = await kdp.getSectionText(id); } catch (err) { res = { error: err }; }
+    try { res = await T(type).text(id); } catch (err) { res = { error: err }; }
     if (token !== sectionToken) return;
     if (res.error) {
-      if (res.error.notFound) { cur = null; note = { kind: 'warning', text: 'This section was removed in 05 Outline.' }; loadOutline(true); return; }
+      if (res.error.notFound) {
+        cur = null;
+        note = { kind: 'warning', text: type === 'part' ? 'We couldn’t find this book part. Your other writing is safe.' : 'This section was removed in 05 Outline.' };
+        loadOutline(true);
+        return;
+      }
       cur.state = 'error';
       if (active()) renderAll();
       return;
@@ -301,21 +367,21 @@
       }
     }
     if (hit) Object.assign(hit.s, { current_version_id: base, words: version ? version.word_count : 0, version_at: version ? version.created_at : null });
-    Q.arrive(id);
+    if (part) Object.assign(part, { version_id: base, words: version ? version.word_count : 0, has_draft: !!draft, draft_words: draft ? W.count(draft.content) : null });
+    if (!part) Q.arrive(id);
     if (active()) renderAll();
     loadVersions();
-    G.loadRun();
-    chk.open(id);
+    if (!part) { G.loadRun(); chk.open(id); }
     if (dirty()) armIdle();
   }
 
   async function loadVersions() {
-    if (!cur || cur.state !== 'ready') return;
+    if (!cur || cur.state !== 'ready' || cur.fixed) return;
     const id = cur.id;
     cur.versionsState = 'loading';
     if (active()) renderSide();
     let res;
-    try { res = await kdp.getVersions(id); } catch (err) { res = { error: err }; }
+    try { res = await T(cur.type).versions(id); } catch (err) { res = { error: err }; }
     if (!cur || cur.id !== id) return;
     if (res.error) cur.versionsState = 'error';
     else { cur.versions = res.data; cur.versionsState = 'ready'; }
@@ -336,7 +402,7 @@
    * or at least as a draft), false when the text could not be saved at all.
    */
   async function makeVersion(reason) {
-    if (!cur || cur.state !== 'ready' || cur.conflict) return true;
+    if (!cur || cur.state !== 'ready' || cur.conflict || cur.fixed) return true;
     if (cur.saving) return cur.saving;
     const run = (async () => {
       clearIdle();
@@ -349,7 +415,7 @@
       const sent = cur.text;
       const id = cur.id;
       let res;
-      try { res = await kdp.saveVersion(id, sent, cur.base); } catch (err) { res = { error: err }; }
+      try { res = await T(cur.type).saveVersion(id, sent, cur.base); } catch (err) { res = { error: err }; }
       if (!cur || cur.id !== id) return true;
       if (res.error) {
         const m = res.error.message;
@@ -359,6 +425,7 @@
           return draftOk;
         }
         if (m === 'section_too_long') note = { kind: 'error', text: `This section is too long to save. Keep it under ${fmt(MAX_CHARS)} characters.` };
+        else if (m === 'part_too_long') note = { kind: 'error', text: epigraph() ? `An epigraph holds at most ${fmt(P.EPIGRAPH_MAX)} characters. Your text is kept as a draft.` : `This part is too long to save. Your text is kept as a draft.` };
         else if (res.error.notFound || res.error.code === 'P0002') { loadOutline(true); return draftOk; }
         else note = { kind: 'error', text: draftOk ? 'We couldn’t save a version. Your text is kept as a draft.' : 'We couldn’t save your text. Check your connection.', retry: 'version' };
         if (active()) renderNotes();
@@ -369,11 +436,13 @@
       cur.savedText = sent;
       cur.hasDraft = false;
       cur.version = { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, content: sent };
-      const hit = findSection(id);
+      const hit = isPart() ? null : findSection(id);
       if (hit) {
         Object.assign(hit.s, { current_version_id: v.id, has_writing: true, has_draft: false, draft_words: null, draft_at: null, words: v.word_count, version_at: v.created_at });
         if (hit.s.status === 'not_started') hit.s.status = 'draft';
       }
+      const p = partOf();
+      if (p) Object.assign(p, { version_id: v.id, words: v.word_count, has_draft: false, draft_words: null });
       if (note && note.retry === 'version') note = null;
       // Typed while saving: the server deleted the draft, so send it again from the new version.
       // Otherwise the version holds the text: a draft save still waiting (after an error) is dropped,
@@ -402,11 +471,11 @@
     if (!cur || cur.state !== 'ready' || cur.conflict || genBusy()) return;
     const ok = await makeVersion('restore');
     if (!ok) return;
-    const id = cur.id;
+    const id = cur.id, type = cur.type;
     cur.busy = 'restore';
     renderFoot();
     let res;
-    try { res = await kdp.restoreVersion(id, versionId, cur.base); } catch (err) { res = { error: err }; }
+    try { res = await T(type).restore(id, versionId, cur.base); } catch (err) { res = { error: err }; }
     if (!cur || cur.id !== id) return;
     cur.busy = '';
     if (res.error) {
@@ -420,7 +489,7 @@
       return;
     }
     const from = (cur.versions || []).find((v) => v.id === versionId);
-    await openSection(id, { keepNote: false });
+    await openTarget(type, id, { keepNote: false });
     announce(`Restored ${from ? `v${from.version_no}` : 'the version'} as version ${res.data.version_no}.`);
   }
 
@@ -433,16 +502,17 @@
    */
   async function adoptRemote(id, serverBase) {
     if (!cur || cur.id !== id || cur.state !== 'ready' || cur.conflict) return;
+    const what = noun();
     if (!dirty() && !cur.hasDraft && !saver.hasUnsaved()) {
-      await openSection(id, { keepNote: true });
-      announce('This section was updated in another tab. The newest text is shown.');
+      await openTarget(cur.type, id, { keepNote: true });
+      announce(`This ${what} was updated in another tab. The newest text is shown.`);
       return;
     }
     let base = serverBase;
     if (base === null) {
       let head;
-      try { head = await kdp.getSectionHead(id); } catch (err) { head = { error: err }; }
-      if (head.error || !head.data) { note = { kind: 'error', text: 'This section was saved in another tab, and we couldn’t read it. Your text is still here. Try again in a moment.' }; renderNotes(); return; }
+      try { head = await T(cur.type).head(id); } catch (err) { head = { error: err }; }
+      if (head.error || !head.data) { note = { kind: 'error', text: `This ${what} was saved in another tab, and we couldn’t read it. Your text is still here. Try again in a moment.` }; renderNotes(); return; }
       base = head.data.current_version_id || null;
     }
     // Our typing goes to the server first, still from our old version, so a reload shows the same choice.
@@ -459,16 +529,16 @@
   let remoteCheck = false;
   /** On focus: did another tab save a newer version of the open section? */
   async function checkRemote() {
-    if (!active() || remoteCheck || !cur || cur.state !== 'ready' || cur.conflict || cur.busy || cur.saving || genBusy()) return;
+    if (!active() || remoteCheck || !cur || cur.state !== 'ready' || cur.fixed || cur.conflict || cur.busy || cur.saving || genBusy()) return;
     const id = cur.id;
     remoteCheck = true;
     try {
       let head;
-      try { head = await kdp.getSectionHead(id); } catch (err) { return; }
+      try { head = await T(cur.type).head(id); } catch (err) { return; }
       if (head.error || !head.data || !cur || cur.id !== id || cur.saving || cur.conflict) return;
       const server = head.data.current_version_id || null;
       if (server !== (cur.base || null)) await adoptRemote(id, server);
-      if (!genBusy()) G.loadRun();
+      if (!genBusy() && !isPart()) G.loadRun();
     } finally {
       remoteCheck = false;
     }
@@ -477,33 +547,34 @@
   /** "Use my draft" or "Keep saved version" after another tab saved. */
   async function resolveConflict(useDraft) {
     if (!cur || !cur.conflict) return;
-    const id = cur.id;
+    const id = cur.id, type = cur.type, what = noun();
     cur.busy = 'conflict';
     renderNotes();
     let res;
     try {
       res = useDraft
-        ? await kdp.saveVersion(id, cur.conflict.content, cur.base)
-        : await kdp.saveVersion(id, cur.conflict.content, null, false);
+        ? await T(type).saveVersion(id, cur.conflict.content, cur.base)
+        : await T(type).saveVersion(id, cur.conflict.content, null, false);
     } catch (err) { res = { error: err }; }
     if (!cur || cur.id !== id) return;
     cur.busy = '';
     if (res.error) {
       note = { kind: 'error', text: res.error.message === 'version_conflict'
-        ? 'This section was saved again in another tab. Reload to see it.'
+        ? `This ${what} was saved again in another tab. Reload to see it.`
         : 'We couldn’t save your choice. Your draft is still kept.' };
       if (active()) renderNotes();
       return;
     }
     const msg = useDraft ? `Your draft is now version ${res.data.version_no}.` : `Your draft was kept as version ${res.data.version_no}. The saved text stays current.`;
     await loadOutline(true);
-    await openSection(id);
+    await openTarget(type, id);
     announce(msg);
   }
 
   /** Saves the section status (the select, and Mark Final in Checks, 22e). True when it is saved. */
   async function setStatus(value) {
     if (!cur || cur.state !== 'ready' || locked()) return false;
+    if (isPart()) return setPartStatus(value);
     const hit = findSection(cur.id);
     if (!hit) return false;
     if (hit.s.status === value) return true;
@@ -534,6 +605,27 @@
     }
     ctx.refresh();
     if (active()) chk.refresh();
+    return true;
+  }
+
+  /** E17 (design 80): a book part is Draft or Final. Only Final text goes into the files. 06 done ignores parts. */
+  async function setPartStatus(value) {
+    const p = partOf();
+    if (!p || cur.fixed || (value !== 'draft' && value !== 'final')) return false;
+    if (p.status === value) return true;
+    const before = p.status;
+    p.status = value;
+    renderManuscript();
+    let res;
+    try { res = await kdp.parts.set(p.id, { status: value }); } catch (err) { res = { error: err }; }
+    if (res.error) {
+      p.status = before;
+      note = { kind: 'error', text: 'We couldn’t save the status. Try again.' };
+      if (active()) { renderManuscript(); renderHead(); renderNotes(); }
+      return false;
+    }
+    ctx.refresh();
+    if (active()) announce(`Status saved: ${value === 'final' ? 'Final' : 'Draft'}.`);
     return true;
   }
 
@@ -698,7 +790,9 @@
    * Leaving the section: a version first. Stays when the text could not be saved at all.
    * Resolves true when the section is the open one.
    */
-  async function moveToSection(id) {
+  const moveToSection = (id) => moveTo('section', id);
+
+  async function moveTo(type, id) {
     if (cur && cur.id === id && cur.state === 'ready') return true;
     if (!(await confirmLeave())) return false;
     const ok = await makeVersion('leave');
@@ -707,13 +801,13 @@
       renderNotes();
       return false;
     }
-    await openSection(id);
+    await openTarget(type, id);
     return true;
   }
 
-  async function selectSection(id) {
+  async function selectSection(id, type = 'section') {
     if (cur && cur.id === id && cur.state === 'ready') return;
-    if (!(await moveToSection(id))) return;
+    if (!(await moveTo(type, id))) return;
     const h = els && els.root.querySelector('[data-sec-title]');
     if (h) h.focus();
   }
@@ -871,11 +965,13 @@
     cur.savedText = full;
     cur.hasDraft = false;
     cur.version = { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, content: full, source };
-    const hit = findSection(id);
+    const hit = isPart() ? null : findSection(id);
     if (hit) {
       Object.assign(hit.s, { current_version_id: v.id, has_writing: true, has_draft: false, draft_words: null, draft_at: null, words: v.word_count, version_at: v.created_at });
       if (hit.s.status === 'not_started') hit.s.status = 'draft';
     }
+    const p = partOf();
+    if (p) Object.assign(p, { version_id: v.id, words: v.word_count, has_draft: false, draft_words: null });
     const ed = els && els.main.querySelector('[data-editor]');
     if (ed) {
       ed.setAttribute('contenteditable', 'true');
@@ -893,6 +989,7 @@
   /* ── Rendering ───────────────────────────── */
 
   function render(root) {
+    if (P) P.closeMenu(false);
     root.innerHTML = `
       <div class="wr">
         <nav class="wr-ms" aria-label="Manuscript" data-ms></nav>
@@ -915,10 +1012,10 @@
     renderAll();
     if (load.state !== 'ready') return;
     // The step's address has no section yet. A reload keeps it, also when the section is not read again below.
-    if (cur) history.replaceState(history.state, '', `?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(cur.id)}`);
+    if (cur) history.replaceState(history.state, '', `?id=${encodeURIComponent(book.id)}&step=6${query()}`);
     // Back from another step: the outline may have changed there (05 edits, an unlock in 03).
     loadOutline(true).then(() => {
-      if (active() && cur && cur.state === 'ready' && !dirty() && !saver.hasUnsaved()) openSection(cur.id, { keepNote: true });
+      if (active() && cur && cur.state === 'ready' && !dirty() && !saver.hasUnsaved()) openTarget(cur.type, cur.id, { keepNote: true });
     });
   }
 
@@ -970,7 +1067,8 @@
     const total = allSections().reduce((a, x) => a + sectionWords(x.s), 0);
     const planned = allSections().reduce((a, x) => a + (x.s.word_target || 0), 0);
     const pct = planned ? Math.min(100, Math.round((total / planned) * 100)) : 0;
-    const rows = chapters.map((c) => {
+    const curId = cur ? cur.id : null;
+    const rows = P.groupHtml('front', curId, partWords) + chapters.map((c) => {
       if (c.kind !== 'chapter') {
         const s = c.sections[0];
         return s ? `<li>${sectionBtn(c, s, true)}</li>` : '';
@@ -988,7 +1086,7 @@
             ${(c.sections || []).map((s) => `<li>${sectionBtn(c, s, false)}</li>`).join('')}
           </ul>
         </li>`;
-    }).join('');
+    }).join('') + P.groupHtml('back', curId, partWords);
     els.ms.innerHTML = `
       <div class="wr-ms-head">
         <span class="chip-label">MANUSCRIPT</span>
@@ -997,6 +1095,7 @@
       <div class="wr-bar" role="img" aria-label="${fmt(total)} of ${fmt(planned)} planned words"><span style="width: ${pct}%"></span></div>
       ${reviewHtml()}
       <ul class="wr-ms-list">${rows}</ul>
+      ${P.addHtml()}
       ${finHtml()}`;
   }
 
@@ -1075,13 +1174,21 @@
       return;
     }
     if (cur.state === 'loading') {
-      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div class="wr-skel" aria-hidden="true"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div></div><p class="sr-only" role="status">Loading the section…</p>`;
+      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div class="wr-skel" aria-hidden="true"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div></div><p class="sr-only" role="status">Loading the ${noun()}…</p>`;
       return;
     }
     if (cur.state === 'error') {
-      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div class="alert alert-error" role="alert">${ICON.warn(16)}<div><p class="alert-text">We couldn’t load this section. Your writing is safe.</p><p class="alert-text"><button type="button" class="link-btn" data-retry-section>Try again</button></p></div></div>`;
+      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div class="alert alert-error" role="alert">${ICON.warn(16)}<div><p class="alert-text">We couldn’t load this ${noun()}. Your writing is safe.</p><p class="alert-text"><button type="button" class="link-btn" data-retry-section>Try again</button></p></div></div>`;
       return;
     }
+    // E17 (81): the review request page and Also by show a page, not an editor.
+    if (cur.fixed) {
+      els.main.innerHTML = `<div class="wr-top"><div class="wr-head" data-head></div>${toggleHtml()}</div><div data-notes></div>${cur.kind === 'review_request' ? P.reviewHtml(book) : P.alsoByHtml()}`;
+      renderHead();
+      renderNotes();
+      return;
+    }
+    if (isPart()) { renderPartShell(); return; }
     const ro = locked();
     const writing = G.busyOn(cur.id);
     const kept = G.keptOn(cur.id);
@@ -1120,6 +1227,41 @@
     renderFoot();
     imp.render();
     Q.paint();
+  }
+
+  /**
+   * E17 (designs 80, 80c): a book part in the section's card. The same tools and Improve
+   * (the epigraph has none: a hint says why), words only, a gray hint in an empty editor.
+   * No Generate, no stream, no QC mark.
+   */
+  function renderPartShell() {
+    const ro = locked();
+    const quote = epigraph();
+    const tool = (cmd, label, title, body, cls = '') => `<button type="button" class="wr-tool${cls}" data-cmd="${cmd}" aria-label="${label}" title="${title}"${ro ? ' disabled' : ''}>${body}</button>`;
+    els.main.innerHTML = `
+      <div class="wr-top"><div class="wr-head" data-head></div>${toggleHtml()}</div>
+      <div data-notes></div>
+      <div data-imp></div>
+      <div class="wr-card">
+        <div class="wr-tools" role="toolbar" aria-label="Formatting" aria-controls="wrEditor">
+          ${tool('bold', 'Bold', 'Bold (Ctrl+B)', TOOL.bold)}${tool('italic', 'Italic', 'Italic (Ctrl+I)', TOOL.italic)}${tool('h2', 'Heading', 'Heading', 'H2', ' wr-tool-text')}${tool('list', 'Bulleted list', 'Bulleted list', TOOL.list)}${tool('clear', 'Clear formatting', 'Clear formatting', TOOL.clear)}
+          ${quote ? `<span class="wr-tool-sep" aria-hidden="true"></span><span class="wr-imp-hint" id="wrImpHint" data-quote-hint>${INFO}<span>Improve is off for quotes. Use your own words or a public domain quote.</span></span>` : `${imp.toolbarHtml()}<span class="wr-imp-hint" id="wrImpHint" data-imp-hint hidden></span>`}
+          <div class="wr-words" data-words></div>
+        </div>
+        <div class="wr-editor" id="wrEditor" data-editor role="textbox" aria-multiline="true" aria-labelledby="wrSecTitle"${quote ? ' aria-describedby="wrImpHint"' : ''}
+             contenteditable="${ro ? 'false' : 'true'}" spellcheck="true" aria-readonly="${ro}" data-placeholder="${esc(P.hint(cur.kind))}"></div>
+        <div class="wr-foot" data-foot></div>
+      </div>`;
+    const ed = els.main.querySelector('[data-editor]');
+    ed.innerHTML = MD.toHtml(cur.text);
+    ed.classList.toggle('is-empty', !cur.text);
+    try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { /* older browsers */ }
+    bindEditor(ed);
+    renderHead();
+    renderNotes();
+    renderWords();
+    renderFoot();
+    if (!quote) imp.render();
   }
 
   /** Generate section, and in a chapter Generate chapter (design 23b; E17 N2: in the head row, design 78). */
@@ -1178,6 +1320,7 @@
   function renderHead() {
     const box = els && els.main.querySelector('[data-head]');
     if (!box || !cur) return;
+    if (isPart()) { renderPartHead(box); return; }
     const hit = findSection(cur.id);
     if (!hit) return;
     const { c, s } = hit;
@@ -1208,6 +1351,24 @@
     paintToggle();
   }
 
+  /** E17 (80, 81): "Front of the book · Book part", the name, then Status (Draft, Final) or "Fixed text" and Turn off. */
+  function renderPartHead(box) {
+    const p = partOf();
+    if (!p) return;
+    const ctl = cur.fixed
+      ? `${cur.kind === 'review_request' ? '<span class="wr-tag wr-fixed-tag">Fixed text</span>' : ''}<button type="button" class="btn btn-secondary" data-part-off>Turn off</button>`
+      : `<label class="wr-status"><span>Status</span><select class="text-input" data-status${locked() ? ' disabled' : ''}>
+          ${[['draft', 'Draft'], ['final', 'Final']].map(([k, l]) => `<option value="${k}"${(p.status || 'draft') === k ? ' selected' : ''}>${l}</option>`).join('')}
+        </select></label>`;
+    box.innerHTML = `
+      <div class="wr-head-text">
+        <div class="wr-where">${esc(P.whereOf(p.kind))}</div>
+        <h2 id="wrSecTitle" tabindex="-1" data-sec-title>${esc(P.nameOf(p.kind))}</h2>
+      </div>
+      <div class="wr-head-ctl">${ctl}</div>`;
+    paintToggle();
+  }
+
   function renderNotes() {
     const box = els && els.main.querySelector('[data-notes]');
     if (!box) return;
@@ -1228,7 +1389,7 @@
     if (cur && cur.conflict) {
       const busy = cur.busy === 'conflict';
       parts.push(`<div class="alert alert-warning wr-note" role="alert">${ICON.warn(16)}<div>
-          <p class="alert-text"><strong>This section changed in another tab.</strong> Your typed text (${fmt(W.count(cur.conflict.content))} words, ${esc(relTime(cur.conflict.at))}) is kept as a draft. Choose which text to keep. Nothing is lost.</p>
+          <p class="alert-text"><strong>This ${noun()} changed in another tab.</strong> Your typed text (${fmt(W.count(cur.conflict.content))} words, ${esc(relTime(cur.conflict.at))}) is kept as a draft. Choose which text to keep. Nothing is lost.</p>
           <div class="wr-note-actions">
             <button type="button" class="btn btn-primary btn-sm" data-use-draft${busy ? ' disabled' : ''}>Use my draft</button>
             <button type="button" class="btn btn-secondary btn-sm" data-keep-saved${busy ? ' disabled' : ''}>Keep saved version</button>
@@ -1247,9 +1408,14 @@
   function renderWords() {
     const box = els && els.main.querySelector('[data-words]');
     if (!box || !cur || cur.state !== 'ready') return;
-    const hit = findSection(cur.id);
+    const hit = isPart() ? null : findSection(cur.id);
     const n = curWords();
     const t = hit ? hit.s.word_target || 0 : 0;
+    // E17 (80): a part has no word target. Near the epigraph's limit the characters show too (80c).
+    if (epigraph() && cur.text.length >= P.EPIGRAPH_MAX - 100) {
+      box.innerHTML = `<span>${fmt(n)} words · ${fmt(cur.text.length)} / ${fmt(P.EPIGRAPH_MAX)} characters</span>`;
+      return;
+    }
     const pct = t ? Math.min(100, Math.round((n / t) * 100)) : 0;
     box.innerHTML = t
       ? `<span class="wr-bar wr-bar-sm" aria-hidden="true"><span style="width: ${pct}%"></span></span><span>${fmt(n)} / ${fmt(t)} words</span>`
@@ -1280,7 +1446,7 @@
     const tabBtn = (k, label, aria) => `<button type="button" class="tab" role="tab" id="wrTab-${k}" aria-controls="wrPanel" aria-selected="${tab === k}" tabindex="${tab === k ? 0 : -1}" data-tab="${k}"${aria ? ` aria-label="${aria}"` : ''}>${label}</button>`;
     // The Checks count: code warnings + AI findings of a current check, never the words row (decision 6).
     // The number is hidden from screen readers; the tab's name says it ("Checks, 4 to review").
-    const n = chk.count();
+    const n = isPart() ? 0 : chk.count();
     els.side.innerHTML = `
       <div class="tabs wr-tabs" role="tablist" aria-label="Section tools">
         ${tabBtn('versions', 'Versions')}${tabBtn('checks', n ? `Checks <span class="count" aria-hidden="true">${n}</span>` : 'Checks', n ? `Checks, ${n} to review` : 'Checks')}${tabBtn('brief', 'Brief')}
@@ -1288,22 +1454,27 @@
       <div class="wr-panel" id="wrPanel" role="tabpanel" aria-labelledby="wrTab-${tab}" data-panel data-panel-kind="${tab}"></div>`;
     const panel = els.side.querySelector('[data-panel]');
     if (tab === 'versions') panel.innerHTML = versionsHtml();
-    else if (tab === 'checks') panel.innerHTML = chk.panelHtml();
+    else if (tab === 'checks' && isPart()) {
+      // E17 (80): no checks on book parts. Its own kind, so the Checks module never draws here.
+      panel.dataset.panelKind = 'checks-part';
+      panel.innerHTML = '<div class="chip-label">CHECKS</div><p class="wr-soon">Book parts have no checks.</p>';
+    } else if (tab === 'checks') panel.innerHTML = chk.panelHtml();
     else panel.innerHTML = briefHtml();
     paintToggle();
   }
 
   function versionsHtml() {
     if (!cur || cur.state !== 'ready') return '<p class="wr-soon">Open a section to see its versions.</p>';
-    const hit = findSection(cur.id);
-    const head = `<div class="chip-label">${esc(hit ? sectionLabel(hit.c, hit.s).split(' ')[0].toUpperCase() : '')} · VERSIONS</div>`;
+    const hit = isPart() ? null : findSection(cur.id);
+    const head = `<div class="chip-label">${esc(isPart() ? P.nameOf(cur.kind).toUpperCase() : hit ? sectionLabel(hit.c, hit.s).split(' ')[0].toUpperCase() : '')} · VERSIONS</div>`;
+    if (cur.fixed) return `${head}<p class="wr-soon">This page has no text of its own, so it has no versions.</p>`;
     if (cur.versionsState === 'loading' && !cur.versions) return `${head}<div class="wr-skel" aria-hidden="true"><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div></div>`;
     if (cur.versionsState === 'error') return `${head}<div class="alert alert-error" role="alert">${ICON.warn(16)}<div><p class="alert-text">We couldn’t load the versions.</p><p class="alert-text"><button type="button" class="link-btn" data-retry-versions>Try again</button></p></div></div>`;
     const list = cur.versions || [];
     const items = [];
     if (dirty() && !cur.conflict) {
       items.push(`<li class="wr-ver is-unsaved"><div class="wr-ver-top"><strong>Unsaved changes</strong><span>${fmt(curWords())} words</span></div>
-        <p class="wr-ver-meta">A draft. It becomes a version when you save, leave the section, or after 10 minutes.</p></li>`);
+        <p class="wr-ver-meta">A draft. It becomes a version when you save, leave the ${noun()}, or after 10 minutes.</p></li>`);
     }
     for (const v of list) {
       const isCur = v.id === cur.base;
@@ -1372,7 +1543,7 @@
     cmp.body.innerHTML = '<p class="sr-only" role="status">Loading…</p><div class="skel skel-line"></div>';
     cmp.d.showModal();
     let res;
-    try { res = await kdp.getVersion(versionId); } catch (err) { res = { error: err }; }
+    try { res = await T(cur.type).version(versionId); } catch (err) { res = { error: err }; }
     if (cmp.id !== versionId) return;
     if (res.error || !res.data) {
       cmp.body.innerHTML = `<div class="alert alert-error" role="alert">${ICON.warn(16)}<p class="alert-text">We couldn’t load v${v.version_no}. Close and try again.</p></div>`;
@@ -1420,8 +1591,13 @@
         return;
       }
       if (t.dataset.section) { selectSection(t.dataset.section); return; }
+      // E17 (79, 81): a book part, the Add menu, Turn off, the parts load error.
+      if (t.dataset.part) { selectSection(t.dataset.part, 'part'); return; }
+      if (t.hasAttribute('data-parts-add')) { if (P.menuOpen()) P.closeMenu(true); else P.openMenu(); return; }
+      if (t.hasAttribute('data-part-off') && isPart()) { P.toggle(cur.kind, true); return; }
+      if (t.hasAttribute('data-parts-retry')) { P.read(book.id).then(() => { if (active()) renderManuscript(); }); return; }
       if (t.hasAttribute('data-retry-load')) { loadOutline(); return; }
-      if (t.hasAttribute('data-retry-section')) { openSection(cur.id); return; }
+      if (t.hasAttribute('data-retry-section')) { openTarget(cur.type, cur.id); return; }
       if (t.hasAttribute('data-retry-versions')) { loadVersions(); return; }
       if (t.hasAttribute('data-retry-version')) { note = null; renderNotes(); makeVersion('button'); return; }
       if (t.hasAttribute('data-save-version')) { makeVersion('button'); return; }
@@ -1464,7 +1640,16 @@
       // Plain text only: pasted markup never reaches the stored text.
       e.preventDefault();
       const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-      document.execCommand('insertText', false, text);
+      const fit = room(text);
+      if (fit) document.execCommand('insertText', false, fit);
+    });
+    // E17 (80c): the epigraph stops taking text at 1,000 characters (0035 refuses longer drafts).
+    ed.addEventListener('beforeinput', (e) => {
+      if (!epigraph() || !/^insert/.test(e.inputType) || e.inputType === 'insertFromPaste') return;
+      if (e.inputType === 'insertText' && e.data && room(e.data) === e.data) return;
+      if (e.inputType !== 'insertText' && room('\n\n').length === 2) return;
+      e.preventDefault();
+      full();
     });
     ed.addEventListener('drop', (e) => {
       e.preventDefault();
@@ -1477,21 +1662,55 @@
     });
   }
 
+  /** E17 (80c): the part of `text` that still fits in the epigraph (all of it elsewhere). */
+  function room(text) {
+    if (!epigraph()) return text;
+    const ed = els.main.querySelector('[data-editor]');
+    const sel = window.getSelection();
+    const picked = sel && sel.rangeCount && ed.contains(sel.anchorNode) ? sel.toString().length : 0;
+    const left = P.EPIGRAPH_MAX - (MD.fromDom(ed).length - picked);
+    return left > 0 ? text.slice(0, left) : '';
+  }
+
+  /** Said once when the epigraph is full. */
+  function full() {
+    announce(`An epigraph holds at most ${fmt(P.EPIGRAPH_MAX)} characters.`);
+    renderWords();
+  }
+
   function onInput() {
     if (!cur || cur.state !== 'ready' || locked()) return;
     const ed = els.main.querySelector('[data-editor]');
-    const md = MD.fromDom(ed);
+    let md = MD.fromDom(ed);
+    // The last guard (an input that got past beforeinput, as a drop or an undo): the text goes back.
+    if (epigraph() && md.length > P.EPIGRAPH_MAX) {
+      ed.innerHTML = MD.toHtml(cur.text);
+      const end = document.createRange();
+      end.selectNodeContents(ed);
+      end.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(end);
+      md = MD.fromDom(ed);
+      full();
+    }
     ed.classList.toggle('is-empty', !md);
     if (md === cur.text) return;
     cur.text = md;
     imp.onInput();
-    chk.onInput();
+    if (!isPart()) chk.onInput();
     saver.edit('draft', 800);
     armIdle();
     renderWords();
     renderFoot();
-    renderManuscriptCount();
+    if (isPart()) renderPartPill(); else renderManuscriptCount();
     if (tab === 'versions') renderUnsavedRow();
+  }
+
+  /** Typing in a part: its pill may change between Empty and Draft (the list is drawn again only then). */
+  function renderPartPill() {
+    const b = els.ms.querySelector(`[data-part="${cur.id}"] .wr-ms-pills`);
+    if (b && !b.querySelector('.is-not_started') !== !!curWords()) renderManuscript();
   }
 
   /**
@@ -1566,9 +1785,32 @@
     ctx = c;
     book = b;
     panelOpen = readPanel();
+    // E17 (risk P1): Generate, Checks and the QC bar work on sections only: a part is "nothing open" to them.
+    P = kdpWriteParts.create({
+      els: () => els,
+      isOpen: (id) => !!cur && cur.id === id,
+      leave: () => makeVersion('leave'),
+      changed: () => { ctx.refresh(); if (active()) renderManuscript(); },
+      // Turned on: its editor opens at once (Q-P4), with the focus on its name.
+      open: async (id) => {
+        if (!(await moveTo('part', id))) return;
+        const h = els && els.root.querySelector('[data-sec-title]');
+        if (h) h.focus();
+      },
+      // The open part was turned off: the first section opens (the text stays on the server).
+      closed: async (id, fromEditor) => {
+        cur = null;
+        note = null;
+        const pick = load.state === 'ready' && gateOpen() ? firstSection() : null;
+        if (pick) await openSection(pick); else if (active()) renderAll();
+        if (fromEditor && els) { const b = els.ms.querySelector('[data-parts-add]') || els.root.querySelector('[data-sec-title]'); if (b) b.focus(); }
+      },
+      error: (text) => { note = { kind: 'error', text }; if (active()) renderNotes(); },
+      announce
+    });
     Q = kdpWriteQc.create({
       els: () => els,
-      cur: () => cur,
+      cur: sec,
       active,
       editor: () => (els ? els.main.querySelector('[data-editor]') : null),
       announce,
@@ -1580,7 +1822,7 @@
       els: () => els,
       cur: () => cur,
       book: () => book,
-      label: () => { const hit = cur && findSection(cur.id); return hit ? sectionLabel(hit.c, hit.s).split(' ')[0] : ''; },
+      label: () => { if (isPart()) return P.nameOf(cur.kind); const hit = cur && findSection(cur.id); return hit ? sectionLabel(hit.c, hit.s).split(' ')[0] : ''; },
       why: improveWhy,
       changed: () => { if (active() && cur && cur.state === 'ready') { renderHead(); G.render(); renderFoot(); } },
       sync: onInput,
@@ -1601,7 +1843,7 @@
     chk = kdpWriteChecks.create({
       els: () => els,
       paintToggle: () => paintToggle(),
-      cur: () => cur,
+      cur: sec,
       book: () => book,
       chapters: () => chapters,
       findSection,
@@ -1632,7 +1874,7 @@
     });
     G = kdpWriteGenerate.create({
       els: () => els,
-      cur: () => cur,
+      cur: sec,
       book: () => book,
       imp: () => imp,
       note: () => note,
@@ -1662,6 +1904,7 @@
       renderManuscript
     });
     wantSection = new URLSearchParams(location.search).get('section');
+    wantPart = wantSection ? null : new URLSearchParams(location.search).get('part');
     saver = kdpAutosave.create({
       read,
       save,
@@ -1700,7 +1943,7 @@
     /** Another step, Back/Forward or Exit while the AI writes: ask first (E10.2). Resolves false to stay. */
     confirmLeave: () => confirmLeave(),
     /** "&section=<id>" for the open section (book.js puts the address back after a cancelled Back). */
-    sectionQuery: () => (cur ? `&section=${encodeURIComponent(cur.id)}` : ''),
+    sectionQuery: () => query(),
     /** 07 "Open in 06": the session first, then the spot, then ctx.go(6). */
     qcSession: (s) => Q.start(s),
     openSpot,

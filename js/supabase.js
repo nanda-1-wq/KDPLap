@@ -906,6 +906,101 @@ window.kdp = {
     return window.sb.rpc('restore_version', { p_section_id: sectionId, p_version_id: versionId, p_base_version_id: baseVersionId });
   },
 
+  /**
+   * E17 book parts (0035): the same reads and saves as a section, for a part.
+   * 06 Write gives each one a target type, so one editor serves both.
+   */
+  parts: {
+    /**
+     * One read for 06: { parts: [{ id, kind, enabled, status, version_id, version_no, words, has_draft }],
+     * also_by, candidates, now } (book_parts_json). error.notFound when the book is not the caller's.
+     */
+    async json(bookId) {
+      const { data, error } = await window.sb.rpc('book_parts_json', { p_book_id: bookId });
+      if (error) return { data: null, error };
+      if (!data || typeof data !== 'object' || !Array.isArray(data.parts)) return { data: null, error: notFound('Book not found.') };
+      return { data, error: null };
+    },
+
+    /** A part's current version and its draft, as getSectionText. */
+    async text(partId) {
+      const { data: p, error } = await window.sb.from('book_parts').select('id, current_version_id').eq('id', partId).maybeSingle();
+      if (error) return { data: null, error };
+      if (!p) return { data: null, error: notFound('Part not found.') };
+      const [v, d] = await Promise.all([
+        p.current_version_id
+          ? window.sb.from('book_part_versions')
+            .select('id, version_no, content, word_count, source, label, partial, created_at')
+            .eq('id', p.current_version_id)
+            .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        window.sb.from('book_part_drafts').select('content, base_version_id, saved_at').eq('part_id', partId).maybeSingle()
+      ]);
+      if (v.error || d.error) return { data: null, error: v.error || d.error };
+      return { data: { version: v.data || null, draft: d.data || null }, error: null };
+    },
+
+    /** A part's current version id only (checked when the tab gets focus). */
+    async head(partId) {
+      const { data, error } = await window.sb.from('book_parts').select('id, current_version_id').eq('id', partId).maybeSingle();
+      if (error) return { data: null, error };
+      if (!data) return { data: null, error: notFound('Part not found.') };
+      return { data, error: null };
+    },
+
+    /** Every version of a part, newest first, without the text. */
+    async versions(partId) {
+      const { data, error } = await window.sb
+        .from('book_part_versions')
+        .select('id, version_no, source, label, word_count, partial, created_at')
+        .eq('part_id', partId)
+        .order('version_no', { ascending: false });
+      return { data: error ? null : (data || []), error };
+    },
+
+    /** One part version's text (Compare). */
+    async version(id) {
+      const { data, error } = await window.sb.from('book_part_versions').select('id, version_no, content, source, label').eq('id', id).maybeSingle();
+      return { data: error ? null : data, error };
+    },
+
+    /** Autosave: the part's draft (one row per part). The epigraph draft is refused over 1,000 characters (part_too_long). */
+    async saveDraft(partId, content, baseVersionId) {
+      const { data, error } = await window.sb
+        .from('book_part_drafts')
+        .upsert({ part_id: partId, content, base_version_id: baseVersionId }, { onConflict: 'part_id' })
+        .select('part_id, saved_at');
+      return oneRow(data, error, 'Part not found.');
+    },
+
+    /** save_part_version: as saveVersion. error.message: version_conflict, empty_first_version, part_too_long, part_no_text. */
+    async saveVersion(partId, content, baseVersionId, makeCurrent = true) {
+      return window.sb.rpc('save_part_version', {
+        p_part_id: partId, p_content: content, p_base_version_id: baseVersionId, p_make_current: makeCurrent
+      });
+    },
+
+    /** restore_part_version: as restoreVersion (a new current version; nothing is overwritten). */
+    async restore(partId, versionId, baseVersionId) {
+      return window.sb.rpc('restore_part_version', { p_part_id: partId, p_version_id: versionId, p_base_version_id: baseVersionId });
+    },
+
+    /** Turns a part on or off ({ enabled }), or sets a text part's status ({ status: 'draft' | 'final' }). Text is never touched. */
+    async set(partId, fields) {
+      const { data, error } = await window.sb
+        .from('book_parts')
+        .update(fields)
+        .eq('id', partId)
+        .select('id, enabled, status, updated_at');
+      return oneRow(data, error, 'Part not found.');
+    },
+
+    /** Improve on a part (E17 Part 6 adds the stage): apply_part_suggestion, as applySuggestion. */
+    async applySuggestion(suggestionId, baseVersionId, fullText) {
+      return window.sb.rpc('apply_part_suggestion', { p_suggestion_id: suggestionId, p_base_version_id: baseVersionId, p_full_text: fullText });
+    }
+  },
+
   /** The Research gaps (step 02 insights) for "Copy gaps from Research". [] before an analysis. */
   async getResearchGaps(bookId) {
     const { data, error } = await window.sb
@@ -1176,7 +1271,8 @@ window.kdp = {
     try { body = await res.json(); } catch (err) {
       if (signal && signal.aborted) return { data: null, error: { code: 'aborted' } };
     }
-    return generateReply(res, body, 'section_improve');
+    // E17: a part sends part_improve, and its reply names that stage.
+    return generateReply(res, body, input && input.stage === 'part_improve' ? 'part_improve' : 'section_improve');
   },
 
   /**

@@ -550,7 +550,11 @@
       // A queue item sends from its own card (the queue gates the rest of Improve).
       if (!c || host.why() || busy() || (queueOn() && !inQueue()) || !pick) return;
       const ctx = S.context(c.text, pick.start, pick.end);
-      const body = { stage: 'section_improve', bookId: host.book().id, sectionId: c.id, baseVersionId: c.base || null, action, selection: pick.text, before: ctx.before, after: ctx.after };
+      // E17 (risk P1): a book part sends part_improve with its part id (the stage arrives in Part 6;
+      // until then the server refuses it and the normal error with Retry shows).
+      const body = c.type === 'part'
+        ? { stage: 'part_improve', bookId: host.book().id, partId: c.id, baseVersionId: c.base || null, action, selection: pick.text, before: ctx.before, after: ctx.after }
+        : { stage: 'section_improve', bookId: host.book().id, sectionId: c.id, baseVersionId: c.base || null, action, selection: pick.text, before: ctx.before, after: ctx.after };
       if (action === 'custom') body.instruction = instruction;
       const my = ++token;
       const queued = inQueue();
@@ -708,7 +712,8 @@
       // 3. Autosave paused (decision A): no draft can land before apply_suggestion.
       host.hold(2);
       let res;
-      try { res = await kdp.applySuggestion(my.result.suggestionId, cur().base, full); } catch (err) { res = { error: err }; }
+      const apply = cur().type === 'part' ? kdp.parts.applySuggestion : kdp.applySuggestion;   // E17 P1: by target type
+      try { res = await apply(my.result.suggestionId, cur().base, full); } catch (err) { res = { error: err }; }
       if (imp !== my || !cur() || cur().id !== id) { host.hold(0); return; }
       if (res.error) { host.hold(0); return applyFailed(my, res.error, full); }
       imp = null;
@@ -724,7 +729,7 @@
       if (m === 'suggestion_used') {
         // The reply may have been lost after a good save: the section's text tells.
         let r;
-        try { r = await kdp.getSectionText(my.sid); } catch (e) { r = { error: e }; }
+        try { r = await (my.body && my.body.partId ? kdp.parts.text(my.sid) : kdp.getSectionText(my.sid)); } catch (e) { r = { error: e }; }
         if (imp !== my) return;
         if (!r.error && r.data && r.data.version && r.data.version.content === full) {
           imp = null;

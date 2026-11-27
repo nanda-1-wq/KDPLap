@@ -567,9 +567,11 @@
     Object.values(MODULES).forEach((m) => m.init && m.init(book, ctx));
     head.hidden = false;
     // Normalise the URL (for example a missing or bad step) without a new history entry.
-    // Step 06 keeps the open section (?section=, js/book-write.js).
+    // Step 06 keeps the open section (?section=, js/book-write.js) or book part (?part=, E17).
     const section = step === 6 ? params.get('section') : null;
-    history.replaceState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}${section && UUID.test(section) ? `&section=${encodeURIComponent(section)}` : ''}`);
+    const part = step === 6 && !section ? params.get('part') : null;
+    const keep = section && UUID.test(section) ? `&section=${encodeURIComponent(section)}` : part && UUID.test(part) ? `&part=${encodeURIComponent(part)}` : '';
+    history.replaceState({ step }, '', `?id=${encodeURIComponent(bookId)}&step=${step}${keep}`);
     renderStep(false);
   }
 
