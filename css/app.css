@@ -2951,6 +2951,13 @@ div.delete-text p { margin: 0; }
 .wr-foot-text.is-error { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--danger); }
 .wr-empty-pick { margin: 0; color: var(--graphite); font-size: var(--text-base); }
 .wr-skel { display: flex; flex-direction: column; gap: var(--space-3); }
+/* E17 (design 84): save failed in the foot (sections and parts), the part loading lines, the Checks tab on a part. */
+.wr-foot-err { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); min-width: 0; }
+.wr-foot-under { flex-basis: 100%; margin: 0; font-size: var(--text-sm); line-height: 1.45; color: var(--graphite); }
+.wr-skel-part > div { display: flex; flex-direction: column; gap: var(--space-3); }
+.wr-skel-note { margin: 0; font-size: var(--text-sm); color: var(--graphite); }
+.skel-w70 { width: 70%; }
+.wr-soon.wr-soon-title { margin-bottom: var(--space-1); font-size: var(--text-md); font-weight: 600; color: var(--ink); }
 
 /* Gate: before the outline is approved */
 .wr-gate { max-width: var(--app-dialog-sm-w); margin: var(--space-10) auto; padding: var(--space-8); border: 1px dashed var(--stone-2); border-radius: var(--radius-xl); background: var(--surface); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }

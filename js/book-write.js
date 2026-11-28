@@ -1259,7 +1259,10 @@
       return;
     }
     if (cur.state === 'loading') {
-      els.main.innerHTML = `<div class="wr-top">${toggleHtml()}</div><div class="wr-skel" aria-hidden="true"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div></div><p class="sr-only" role="status">Loading the ${noun()}…</p>`;
+      // E17 (84): a book part shows gray lines and the words, then the editor.
+      els.main.innerHTML = isPart()
+        ? `<div class="wr-top">${toggleHtml()}</div><div class="wr-skel wr-skel-part" data-part-loading><div aria-hidden="true"><div class="skel skel-line skel-w40"></div><div class="skel skel-line"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w70"></div></div><p class="wr-skel-note" role="status">Loading the book part…</p></div>`
+        : `<div class="wr-top">${toggleHtml()}</div><div class="wr-skel" aria-hidden="true"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line skel-w40"></div></div><p class="sr-only" role="status">Loading the ${noun()}…</p>`;
       return;
     }
     if (cur.state === 'error') {
@@ -1527,16 +1530,24 @@
     const v = cur.version;
     let text;
     const saveErr = saver && saver.state === 'error' && saver.hasUnsaved();
+    const can = dirty() && !blankFirst() && !cur.conflict && !cur.busy && !genBusy();
+    const saveBtn = `<button type="button" class="btn btn-secondary btn-sm" data-save-version${can ? '' : ' disabled'}>Save version</button>`;
+    // E17 (84): save failed. Red icon and word, Retry, and the text stays on screen (sections and parts alike).
+    // Offline: the same, and the 'online' event sends it again by itself (init).
+    if (saveErr && !cur.conflict && !G.busyOn(cur.id)) {
+      const off = navigator.onLine === false;
+      box.innerHTML = `<span class="wr-foot-err"><span class="wr-foot-text is-error" data-foot-text>${ICON.warn(16)}${off ? 'Not saved. You are offline.' : 'Not saved. Check your connection.'}</span>
+        <button type="button" class="btn btn-secondary btn-sm" data-foot-retry>Retry</button></span>${saveBtn}
+        <p class="wr-foot-under" data-foot-under>Your text stays on screen. The app tries again when you are back online.</p>`;
+      return;
+    }
     if (cur.conflict) text = 'Choose which text to keep above.';
     else if (G.busyOn(cur.id)) text = 'The editor is read only while the AI writes.';
-    else if (saveErr) text = 'Your latest typing is not saved yet. Use Retry in the sidebar, or Save version.';
     else if (dirty()) text = v ? `Unsaved changes since v${v.version_no}. Kept as a draft while you type.` : 'Not saved as a version yet. Kept as a draft while you type.';
     else if (v && v.source === 'bio_copy') text = penName() ? `Saved as v${v.version_no} · copied from the pen name ${penName()}` : `Saved as v${v.version_no} · copied from the pen name`;
     else if (v) text = `Saved as v${v.version_no} · ${relTime(v.created_at)}`;
     else text = 'Nothing written yet.';
-    const can = dirty() && !blankFirst() && !cur.conflict && !cur.busy && !genBusy();
-    box.innerHTML = `<span class="wr-foot-text${saveErr ? ' is-error' : ''}" data-foot-text>${saveErr ? ICON.warn(14) : ''}${esc(text)}</span>
-      <button type="button" class="btn btn-secondary btn-sm" data-save-version${can ? '' : ' disabled'}>Save version</button>`;
+    box.innerHTML = `<span class="wr-foot-text" data-foot-text>${esc(text)}</span>${saveBtn}`;
   }
 
   /* ── Right panel ─────────────────────────── */
@@ -1557,7 +1568,8 @@
     else if (tab === 'checks' && isPart()) {
       // E17 (80): no checks on book parts. Its own kind, so the Checks module never draws here.
       panel.dataset.panelKind = 'checks-part';
-      panel.innerHTML = '<div class="chip-label">CHECKS</div><p class="wr-soon">Book parts have no checks.</p>';
+      panel.innerHTML = '<div class="chip-label">CHECKS</div><p class="wr-soon wr-soon-title">Book parts have no checks.</p>'
+        + '<p class="wr-soon">AI checks are for chapters. 07 Quality Control still tells you when a part is on but empty or not Final.</p>';
     } else if (tab === 'checks') panel.innerHTML = chk.panelHtml();
     else panel.innerHTML = briefHtml();
     paintToggle();
@@ -1697,6 +1709,7 @@
       if (t.hasAttribute('data-part-off') && isPart()) { P.toggle(cur.kind, true); return; }
       if (t.hasAttribute('data-copy-bio') && isPart()) { copyBio(); return; }
       if (t.hasAttribute('data-parts-retry')) { P.read(book.id).then(() => { if (active()) renderManuscript(); }); return; }
+      if (t.hasAttribute('data-foot-retry')) { if (saver) saver.retry(); return; }   // E17 (84)
       if (t.hasAttribute('data-retry-load')) { loadOutline(); return; }
       if (t.hasAttribute('data-retry-section')) { openTarget(cur.type, cur.id); return; }
       if (t.hasAttribute('data-retry-versions')) { loadVersions(); return; }
@@ -2029,6 +2042,9 @@
     // Back in this tab: another tab may have saved the open section meanwhile.
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkRemote(); });
     window.addEventListener('focus', checkRemote);
+    // E17 (84): back online after a failed save: send it again ("The app tries again when you are back online").
+    window.addEventListener('online', () => { if (saver && saver.state === 'error' && saver.hasUnsaved()) saver.retry(); else if (active()) renderFoot(); });
+    window.addEventListener('offline', () => { if (active()) renderFoot(); });
     // Closing the tab while the AI writes: the browser's own "Leave site?" prompt.
     // If the writer leaves anyway, the server treats it like Stop (answer 4).
     window.addEventListener('beforeunload', (e) => {

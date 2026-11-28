@@ -410,8 +410,15 @@ Deno.test("Settings and Export (E11 STOP 3): the browser files match 0025, the B
 Deno.test("07 Quality Control: rule ids, groups and caps equal 0028; the shape copy cannot drift", () => {
   const Q = globalThis.kdpQcRules;
   const sql = read(M("0028_quality_control.sql"));
-  const rules = sql.match(/select coalesce\(p = any \(array\[([\s\S]*?)\]\), false\)/);
+  // E17: 0035 replaces qc_rule_ok (0028's list + part_empty, part_not_final), so the newest list is 0035's.
+  const s35 = read(M("0035_book_parts.sql"));
+  const rules = s35.match(/select coalesce\(p = any \(array\[([\s\S]*?)\]\), false\)/);
   assertEquals(rules[1].split(",").map((x) => x.trim().replace(/^'|'$/g, "")), Q.RULES);
+  const old = sql.match(/select coalesce\(p = any \(array\[([\s\S]*?)\]\), false\)/);
+  assertEquals(old[1].split(",").map((x) => x.trim().replace(/^'|'$/g, "")), Q.RULES.filter((r) => !Q.NO_OK.includes(r)));
+  // No Mark as OK on part items (Q-P3): the qc_dismissed check of 0035 refuses exactly NO_OK.
+  const refused = s35.match(/qc_dismissed_rule_check\s+check \(\(public\.qc_rule_ok\(rule\) and rule not in \(([^)]*)\)\) or rule = 'promise_drift'\)/);
+  assertEquals(refused[1].split(",").map((x) => x.trim().replace(/'/g, "")), Q.NO_OK);
   const groups = sql.match(/when e ->> 'g' not in \(([^)]*)\)/);
   assertEquals(groups[1].split(",").map((x) => Number(x.trim().replace(/'/g, ""))), Q.GROUPS);
   assertEquals(one(M("0028_quality_control.sql"), String.raw`jsonb_array_length\(j -> 'items'\) > (\d+)`), Q.CAPS.total);

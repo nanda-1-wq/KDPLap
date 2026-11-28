@@ -24,6 +24,12 @@
    rows have the shape of a run's items, and a ref of "d:" + the chapter id in
    place of the item's index. They are never saved in a run.
 
+   E17 (design 84): group 1 lists a book part that is on and empty, or on and
+   not Final (js/qc-rules.js). Its row is "Book part", the part name in bold,
+   and "Open in 06" goes to that part by its address. No Mark as OK (Q-P3).
+   Out of date after a part change comes from qc_json current (0035
+   qc_inputs_key), never from a rule here.
+
    E13.2: "Go to 08 Format" opens 08. "How to add one" opens 08 at the
    Copyright row (the copyright page carries the disclaimer).
 ═══════════════════════════════════════════════════ */
@@ -140,7 +146,7 @@
         if (s.version && today.has(s.version.id) && !before.has(s.version.id)) changed.push(labels.get(s.id));
       }
     }
-    if (!changed.length) return `Your outline, Brief, Research, a section's status or 08 settings changed after the last run on ${when}. These results may be wrong.`;
+    if (!changed.length) return `Your outline, Brief, Research, a section's status, a book part or 08 settings changed after the last run on ${when}. These results may be wrong.`;
     const rest = changed.length - 1;
     return `You changed ${changed[0]}${rest ? ` and ${plural(rest, 'more section', 'more sections')}` : ''} after the last run on ${when}. These results may be wrong.`;
   }
@@ -178,8 +184,18 @@
     return chip('warn', onlyMarks ? `${plural(n, 'Verify mark', 'Verify marks')} left` : `${n.toLocaleString('en-US')} to check`, WARN(14)) + named;
   }
 
-  /** The label of a row: a section, a chapter, or the whole book. */
+  /** E17 (84): a part item's part, from the part id at the start of its key (today's qc_json book_parts). */
+  const isPartItem = (x) => kdpQcRules.NO_OK.includes(x.rule);
+  function partOfItem(x) {
+    const id = x.key.split('|')[0];
+    const p = (Array.isArray(qc && qc.book_parts) ? qc.book_parts : []).find((y) => y && y.id === id);
+    const row = p && window.kdpFormatRules ? kdpFormatRules.PART_ROWS.find((r) => r.part && r.key === p.kind) : null;
+    return { id, name: row ? row.name : '' };
+  }
+
+  /** The label of a row: a section, a chapter, a book part, or the whole book. */
   function whereOf(x, labels) {
+    if (isPartItem(x)) return 'Book part';
     if (x.rule === 'chapter_review' || (x.rule === 'promise_drift' && !labels.has(x.section_id))) return chapterName(x.key);
     return !x.section_id ? 'Whole book' : labels.get(x.section_id) || 'Removed section';
   }
@@ -192,17 +208,31 @@
 
   /** The link of one row: Open in 06, Open in 05, How to add one, or nothing. */
   function rowLink(x, labels) {
+    // E17 (84): a part opens in 06 by its address, as the 08 rows do (no QC session: it has no spot).
+    if (isPartItem(x)) {
+      const p = partOfItem(x);
+      return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=6&part=${encodeURIComponent(p.id)}" data-open-part="${esc(p.id)}">Open in 06${p.name ? `<span class="sr-only">: ${esc(p.name)}</span>` : ''}</a>`;
+    }
     if (x.rule === 'chapter_review') return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=5" data-go="5">Open in 05</a>`;
     if (x.rule === 'disclaimer') return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=8" data-go="8" data-focus="copyright">How to add one</a>`;
     if (!opensIn06(x, labels)) return '';
     return `<a class="qc-lk" href="?id=${encodeURIComponent(book.id)}&step=6&section=${encodeURIComponent(sectionToOpen(x))}" data-open="${esc(sectionToOpen(x))}">Open in 06</a>`;
   }
 
+  /** A row's text. A part item shows its name in bold (84); the message holds the fixed name only. */
+  function rowText(x) {
+    const name = isPartItem(x) ? partOfItem(x).name : '';
+    if (name && x.message.startsWith(`${name} `)) return `<b>${esc(name)}</b>${esc(x.message.slice(name.length))}`;
+    return esc(x.message);
+  }
+
   function rowOf(x, i, labels) {
     const err = rowError.get(idOf(x));
+    // E17 (Q-P3): no Mark as OK on a part item. It clears when the part is Final or turned off.
+    const ok = isPartItem(x) ? '' : `<button type="button" class="qc-lk2" data-ok="${i}"${run.on ? ' disabled' : ''}>Mark as OK</button>`;
     return `<li class="qc-it" data-item="${i}">
-        <span class="qc-sec">${esc(whereOf(x, labels))}</span><span class="qc-tx">${esc(x.message)}${x.rule === 'promise_drift' ? P.verify(x.unsourced) : ''}</span>
-        ${rowLink(x, labels)}<button type="button" class="qc-lk2" data-ok="${i}"${run.on ? ' disabled' : ''}>Mark as OK</button>
+        <span class="qc-sec">${esc(whereOf(x, labels))}</span><span class="qc-tx">${rowText(x)}${x.rule === 'promise_drift' ? P.verify(x.unsourced) : ''}</span>
+        ${rowLink(x, labels)}${ok}
         ${err ? `<p class="qc-row-err" role="alert">${ICON.warn(14)}<span>${esc(err)}</span></p>` : ''}
       </li>`;
   }
@@ -565,7 +595,7 @@
   /** ref: the row's. card: Mark as OK was pressed in the promise card, so the focus stays there. */
   async function markOk(ref, card = false) {
     const x = itemAt(ref);
-    if (!x) return;
+    if (!x || isPartItem(x)) return;   // 0035 qc_dismissed refuses part items (Q-P3)
     const key = idOf(x);
     if (offKeys().has(key)) return;
     const labels = sectionLabels();

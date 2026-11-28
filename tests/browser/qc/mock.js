@@ -10,6 +10,9 @@
 //   answer ({ verdict, reason, quote, section_id, unsourced }; default keeps). __modes.prFail { n: code } fails chapter n
 //   once; code 'network' drops the connection, 'saved' saves the check and then drops it. prSlow (ms), prHold (a chapter
 //   number waits until the test clears it), usage (usage_month reply), usageFail, usageSlow (ms).
+//   E17 Part 8 (0035): store.parts (8 rows, all off), store.alsoBy. qc_json has book_parts and data.book_parts (a mirror
+//   of part_file_list, mock only); the key adds [kind, status, version] of every part that is on (qc_inputs_key);
+//   qc_dismissed refuses part_empty and part_not_final (23514, as 0035). __modes.parts answers the 06 part reads.
 const U = '00000000-0000-4000-8000-000000000001';
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const QB = 'c1c1c1c1-0000-4000-8000-000000000001';   // the book of design 52, 53
@@ -53,6 +56,11 @@ async function setupQc(page) {
     format: null,
     pos: { locked_at: ago(2), one_sentence: 'Study habits for busy adults.', reader_promise: 'You can study ten minutes a day.', approach: null, lacks: null, selling_points: [], focus_tags: [] },
     key: '0'.repeat(31) + '1',
+    // E17 (0035): the 8 book parts, all off (the other tests see no parts). version: { id, content, word_count } or null.
+    parts: ['dedication', 'epigraph', 'foreword', 'preface', 'acknowledgments', 'about_author', 'review_request', 'also_by']
+      .map((kind, i) => ({ id: uid('9', i + 1), kind, enabled: false, status: ['review_request', 'also_by'].includes(kind) ? null : 'draft', version: null })),
+    alsoBy: [],                      // [{ title, valid }]
+    part: (kind) => store.parts.find((p) => p.kind === kind),
     runs: [], dismissed: [], writes: [], calls: [], drafts: {}, marks: 0, qcReads: 0, nextId: 1,
     checks: [], plan: {}, posts: [], usage: { limit: 2000000, tokens: 400000, resets: '2026-12-01T00:00:00+00:00', by_stage: [] },
     chapter: (n) => chapters.filter((x) => x.kind === 'chapter')[n - 1],
@@ -87,7 +95,7 @@ async function setupQc(page) {
     dismiss(rule, issue_key, label, section_id = null) { store.dismissed.unshift({ id: uid('d', store.nextId++), section_id, rule, issue_key, label, created_at: now() }); },
     /** An old run: the run of today's book, then its key moved. */
     addRun(results, extra = {}) {
-      const r = { id: uid('e', store.nextId++), created_at: ago(1), versions: versions(), inputs_key: store.key, results, sections: 30, words: 9000, style: 'classic', ...extra };
+      const r = { id: uid('e', store.nextId++), created_at: ago(1), versions: versions(), inputs_key: keyNow(), results, sections: 30, words: 9000, style: 'classic', ...extra };
       store.runs.unshift(r);
       return r;
     }
@@ -95,24 +103,39 @@ async function setupQc(page) {
 
   const versions = () => chapters.flatMap((c) => c.sections).filter((s) => s.version && s.version.content.trim()).map((s) => s.version.id);
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  /** 32 hex, the same for the same text (stands in for md5; mock only). */
+  const hex32 = (s) => [1, 2, 3, 4].map((k) => { let h = 2166136261 ^ k; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0'); }).join('');
+  /** 0035 qc_inputs_key: [kind, status, current version] of every part that is on; no key part when none is (owner option 2). */
+  const keyNow = () => {
+    const on = store.parts.filter((p) => p.enabled).map((p) => [p.kind, p.status, p.version ? p.version.id : null]);
+    return on.length ? hex32(`${store.key}${JSON.stringify(on)}`) : store.key;
+  };
+  /** 0035 part_file_list + book_parts_files (mock mirror; the real rule is SQL only). */
+  const partsFiles = () => store.parts.filter((p) => p.enabled && (
+    (p.status === 'final' && p.version && p.version.content.trim()) || p.kind === 'review_request' || (p.kind === 'also_by' && store.alsoBy.some((e) => e.valid))))
+    .map((p) => ({ kind: p.kind, version_id: p.version ? p.version.id : null, content: p.version ? p.version.content : null }));
+  /** 0035 book_parts_json -> parts. */
+  const partsList = () => store.parts.map((p) => ({ id: p.id, kind: p.kind, enabled: p.enabled, status: p.status, version_id: p.version ? p.version.id : null,
+    version_no: p.version ? 1 : null, words: p.version ? p.version.word_count : 0, has_draft: false }));
   const data = () => ({
     book: copy(store.book),
     known: { brief: copy(store.brief), research: copy(store.research) },
     chapters: copy(chapters).map(({ include_examples, include_exercise, unsourced, ...c }) => c),
+    book_parts: partsFiles(),
     now: now()
   });
   const qcJson = () => {
     const last = store.runs[0] || null;
     return {
-      data: data(), versions: versions(), inputs_key: store.key, format: copy(store.format), positioning: copy(store.pos),
+      data: data(), versions: versions(), inputs_key: keyNow(), format: copy(store.format), positioning: copy(store.pos),
       last_run: last ? copy(last) : null,
-      current: !!last && same(last.versions, versions()) && last.inputs_key === store.key,
-      dismissed: copy(store.dismissed), promise: copy(store.checks), now: now()
+      current: !!last && same(last.versions, versions()) && last.inputs_key === keyNow(),
+      dismissed: copy(store.dismissed), promise: copy(store.checks), book_parts: partsList(), now: now()
     };
   };
   const qcMark = () => {
     const last = store.runs[0];
-    return last ? [{ checked_at: last.created_at, current: same(last.versions, versions()) && last.inputs_key === store.key }] : [];
+    return last ? [{ checked_at: last.created_at, current: same(last.versions, versions()) && last.inputs_key === keyNow() }] : [];
   };
   const outlineJson = () => chapters.map((c) => ({
     id: c.id, position: c.position, kind: c.kind, title: c.kind === 'chapter' ? c.title : null, objective: c.objective, needs_review: c.needs_review,
@@ -137,7 +160,8 @@ async function setupQc(page) {
   const fail = (r, status, code, message) => json(r, status, { code, message, details: '', hint: null });
 
   const RULES = ['not_final', 'no_text', 'needs_review', 'chapter_review', 'under_target', 'stopped_run', 'cut_off', 'verify_mark', 'number_no_source', 'source_not_named',
-    'same_sentence', 'same_sentence_here', 'same_paragraph', 'overused_word', 'chapter_missing', 'section_number', 'preview', 'leftover', 'two_spellings', 'us_uk', 'web_link', 'emoji', 'missing_char', 'length', 'disclaimer'];
+    'same_sentence', 'same_sentence_here', 'same_paragraph', 'overused_word', 'chapter_missing', 'section_number', 'preview', 'leftover', 'two_spellings', 'us_uk', 'web_link', 'emoji', 'missing_char', 'length', 'disclaimer',
+    'part_empty', 'part_not_final'];   // 0035 qc_rule_ok
   /** The 0028 shape checks that a page can break. */
   function badRun(p) {
     if (!/^[0-9a-f]{32}$/.test(p.inputs_key)) return 'inputs_key';
@@ -202,7 +226,7 @@ async function setupQc(page) {
       if (mode('stale') > 0) { globalThis.__modes.stale--; return fail(r, 400, 'P0001', 'qc_stale'); }
       const bad = badRun(p);
       if (bad) return fail(r, 400, '23514', `mock: bad run: ${bad}`);
-      if (!same(p.versions, versions()) || p.inputs_key !== store.key) return fail(r, 400, 'P0001', 'qc_stale');
+      if (!same(p.versions, versions()) || p.inputs_key !== keyNow()) return fail(r, 400, 'P0001', 'qc_stale');
       const row = { ...p, id: uid('e', store.nextId++), created_at: now() };
       store.runs.unshift(row);
       store.runs.length = Math.min(store.runs.length, 5);
@@ -214,6 +238,8 @@ async function setupQc(page) {
       if (mode('okSlow')) await wait(mode('okSlow'));
       if (mode('okFail') > 0) { globalThis.__modes.okFail--; return json(r, 500, { message: 'mock: dismiss down' }); }
       if (mode('okLimit')) return fail(r, 400, 'P0001', 'qc_dismissed_limit');
+      // 0035 qc_dismissed_rule_check: a book part item has no Mark as OK (Q-P3).
+      if (['part_empty', 'part_not_final'].includes(p.rule)) return fail(r, 400, '23514', 'new row for relation "qc_dismissed" violates check constraint "qc_dismissed_rule_check"');
       if (mode('okRace')) {
         // Another tab marked it first.
         globalThis.__modes.okRace = false;
@@ -281,6 +307,19 @@ async function setupQc(page) {
       return json(r, 200, { id: v.id, version_no: 2, word_count: v.word_count, created_at: now(), created: true });
     }
     if (path === '/rest/v1/section_runs' && method === 'GET') return json(r, 200, one ? null : []);
+    // E17: the part reads 06 makes when 07 "Open in 06" lands on a part (only with __modes.parts, as the write mock).
+    if (mode('parts') && path === '/rest/v1/rpc/book_parts_json') return json(r, 200, body().p_book_id === QB ? { parts: partsList(), also_by: [], candidates: [], now: now() } : null);
+    if (mode('parts') && path === '/rest/v1/book_parts' && method === 'GET') {
+      const x = store.parts.find((y) => y.id === eq('id'));
+      const out = x ? { id: x.id, current_version_id: x.version ? x.version.id : null } : null;
+      return json(r, 200, one ? out : (out ? [out] : []));
+    }
+    if (mode('parts') && path === '/rest/v1/book_part_versions' && method === 'GET') {
+      const x = store.parts.find((y) => y.version && (y.version.id === eq('id') || y.id === eq('part_id')));
+      const v = x ? { id: x.version.id, part_id: x.id, version_no: 1, content: x.version.content, word_count: x.version.word_count, source: 'manual', label: null, partial: false, created_at: ago(1) } : null;
+      return json(r, 200, one ? v : (v ? [v] : []));
+    }
+    if (mode('parts') && path === '/rest/v1/book_part_drafts' && method === 'GET') return json(r, 200, one ? null : []);
 
     // 02 Research: the counts its sidebar mark reads.
     if (path === '/rest/v1/competitors' && method === 'GET') return json(r, 200, store.research.competitors.map((c, i) => ({ id: uid('b', i + 1), asin: null, ...c })));

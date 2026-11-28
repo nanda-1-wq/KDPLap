@@ -149,7 +149,8 @@ const test = async page => {
   await page.keyboard.type(' More text.');
   await settle();
   ok(/Couldn't save\./.test(await txt('[data-saved-line]')) && !!(await page.$('[data-retry-save]')), 'draft error: Couldn’t save with Retry');
-  ok(/Your latest typing is not saved yet\./.test(await txt('[data-foot]')), `foot says it: "${await txt('[data-foot]')}"`);
+  // E17 (84): the foot says it in red with an icon and its own Retry.
+  ok(/Not saved\. Check your connection\./.test(await txt('[data-foot]')) && !!(await page.$('[data-foot-retry]')), `foot says it: "${await txt('[data-foot]')}"`);
   ok(await page.$eval('[data-retry-save]', (b) => b.offsetParent !== null && b.getBoundingClientRect().height >= 44), 'Retry visible in the rail, 44 px');
   await page.screenshot({ path: `${SHOTS}/t-draft-error-rail.png` });
   const before12 = saves().length;

@@ -413,6 +413,32 @@ select pg_temp.expect('but have no Mark as OK: ' || r, format($q$insert into pub
   from unnest(array['part_empty', 'part_not_final']) r;
 select pg_temp.expect('another rule can still be marked as OK', format($q$insert into public.qc_dismissed (book_id, rule, issue_key, label) values (%L, 'emoji', 'k', 'l')$q$, :BOOK1), 'OK 1');
 
+-- ── 07 part items (E17 Part 8, design 84): what js/qc-rules.js reads and saves ──
+select pg_temp.chk('qc_json part rows carry what 07 reads (id, kind, enabled, status, version_id, words)',
+  (select bool_and(e ?& array['id', 'kind', 'enabled', 'status', 'version_id', 'words']) and count(*) = 8
+     from jsonb_array_elements(public.qc_json(:BOOK1) -> 'book_parts') e));
+select pg_temp.chk('a part item (no section, no spot, the key starts with the part id) passes qc_item_ok: ' || r,
+  public.qc_item_ok(jsonb_build_object('g', 1, 'rule', r, 'key', pg_temp.part(:BOOK1, 'dedication')::text || '|none', 'section_id', null,
+    'version_id', null, 'start', null, 'end', null, 'message', 'Dedication is on but empty.', 'quote', '')))
+  from unnest(array['part_empty', 'part_not_final']) r;
+select pg_temp.expect('07: a run with part items is saved', format($q$insert into public.qc_runs (book_id, versions, inputs_key, results, sections, words, style) values (%L, public.qc_versions(%L), public.qc_inputs_key(%L), %L, 1, 1, 'classic')$q$,
+  :BOOK1, :BOOK1, :BOOK1, jsonb_build_object('items', jsonb_build_array(
+    jsonb_build_object('g', 1, 'rule', 'part_empty', 'key', pg_temp.part(:BOOK1, 'dedication')::text || '|none', 'section_id', null, 'version_id', null, 'start', null, 'end', null, 'message', 'Dedication is on but empty.', 'quote', ''),
+    jsonb_build_object('g', 1, 'rule', 'part_not_final', 'key', pg_temp.part(:BOOK1, 'about_author')::text || '|' || coalesce(pg_temp.cur(:BOOK1, 'about_author')::text, 'none'), 'section_id', null, 'version_id', null, 'start', null, 'end', null, 'message', 'About the author is on but not Final.', 'quote', '')),
+    'more', '{}'::jsonb, 'sources', '[]'::jsonb, 'notes', jsonb_build_object('unsaved', 0, 'running', 0))), 'OK 1');
+-- An Also by list change is not in qc_inputs_key (owner option 2: kind, status, version): 07 gives Also by no item.
+select (select enabled from public.book_parts where book_id = :BOOK1 and kind = 'also_by') as ab_was,
+  coalesce((select jsonb_agg(case when other_book_id is null then jsonb_build_object('title', title, 'subtitle', subtitle) else jsonb_build_object('book_id', other_book_id) end order by list_position)
+    from public.also_by_entries(:BOOK1)), '[]'::jsonb) as ab_list \gset
+update public.book_parts set enabled = true where book_id = :BOOK1 and kind = 'also_by';
+select public.qc_inputs_key(:BOOK1) as q4 \gset
+select pg_temp.chk('07: Also by list changed (one typed book)', pg_temp.entries(:BOOK1, '[{"title": "Only This"}]') = 'OK 1');
+select pg_temp.chk('07 key unchanged after an Also by list change', public.qc_inputs_key(:BOOK1) = :'q4');
+select pg_temp.chk('07: Also by list emptied', pg_temp.entries(:BOOK1, '[]') = 'OK 1');
+select pg_temp.chk('07 key unchanged with no Also by book', public.qc_inputs_key(:BOOK1) = :'q4');
+select pg_temp.chk('07: the Also by list is put back', pg_temp.entries(:BOOK1, :'ab_list'::jsonb) = 'OK 1');
+update public.book_parts set enabled = :'ab_was'::boolean where book_id = :BOOK1 and kind = 'also_by';
+
 -- ── Exports and badges ──
 update public.book_parts set enabled = false where book_id = :BOOK1;
 update public.book_parts set enabled = true, status = 'final' where book_id = :BOOK1 and kind in ('dedication', 'about_author');

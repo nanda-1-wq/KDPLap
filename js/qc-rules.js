@@ -14,6 +14,9 @@
      notes are qc_runs.results and pass qc_results_ok.
      item: { g, rule, key, section_id, version_id, start, end, message, quote }
        chapter_review has no section: its key starts with the chapter id.
+       E17 part_empty and part_not_final (group 1, design 84) have no section:
+       the key starts with the part id. They read qc_json book_parts and the
+       server's file list (data.book_parts); they have no Mark as OK (NO_OK).
      more: { "1": n, … } open issues past the caps.
      A dismissed issue never takes the place of an open one, and past a cap it
      is left out, not counted in more: more holds open issues only.
@@ -40,7 +43,10 @@
     'same_sentence', 'same_sentence_here', 'same_paragraph', 'overused_word',
     'chapter_missing', 'section_number', 'preview', 'leftover',
     'two_spellings', 'us_uk',
-    'web_link', 'emoji', 'missing_char', 'length', 'disclaimer'];
+    'web_link', 'emoji', 'missing_char', 'length', 'disclaimer',
+    'part_empty', 'part_not_final'];
+  // E17 (design 84): book part items have no Mark as OK (owner Q-P3). 0035 qc_dismissed refuses them.
+  const NO_OK = ['part_empty', 'part_not_final'];
   // The numbers of 0028 (tests/limits-parity.test.js). bytes stays under its 400,000: results::text adds spaces.
   const CAPS = { perGroup: 100, total: 400, sources: 50, sourceSections: 400, citation: 200, message: 300, quote: 300, key: 300, bytes: 370000, words: 1000000 };
   // Owner Q5: 4 or more letters, 20 or more uses and 25 or more per 10,000 words, at most 5 words.
@@ -470,6 +476,28 @@
     }
   }
 
+  /**
+   * E17 (design 84): the text parts that are on and left out of the files. "In the files" is the
+   * server's list (export_json book_parts = 0035 part_file_list), the one 08 reads, never a JS rule.
+   * Empty: no saved text. Otherwise not Final. The review request page and Also by have no text and no
+   * status, so they never give an item (an Also by list change is not in qc_inputs_key: such an item
+   * could never clear). The message holds the part's fixed name only, never its text.
+   */
+  function partItems(q) {
+    const F = root.kdpFormatRules;
+    if (!F || !Array.isArray(q.book_parts)) return [];
+    const inFile = new Set((Array.isArray(obj(q.data).book_parts) ? q.data.book_parts : []).map((x) => obj(x).kind));
+    const out = [];
+    for (const p of q.book_parts) {
+      const x = obj(p);
+      const row = F.PART_ROWS.find((r) => r.part && r.key === x.kind);
+      if (!row || !x.enabled || F.PART_FIXED.includes(x.kind) || inFile.has(x.kind) || typeof x.id !== 'string') continue;
+      if (!x.version_id || !(x.words > 0)) out.push({ rule: 'part_empty', key: `${x.id}|none`, message: `${row.name} is on but empty.` });
+      else if (x.status !== 'final') out.push({ rule: 'part_not_final', key: `${x.id}|${x.version_id}`, message: `${row.name} is on but not Final.` });
+    }
+    return out;
+  }
+
   /* ── The run ── */
 
   function context(qc) {
@@ -492,6 +520,7 @@
       words: model.words,
       bookTitles: [...titles, str(book.pen_name)],
       topicTexts: [...titles, str(brief.topic_text), str(brief.reader_problem), str(positioning.one_sentence), str(positioning.reader_promise)],
+      parts: partItems(q),
       off: new Set((Array.isArray(q.dismissed) ? q.dismissed : []).map((d) => `${d.rule}\u0000${d.issue_key}`))
     };
   }
@@ -552,6 +581,8 @@
       const name = c.kind === 'chapter' ? `Chapter ${n}` : c.kind === 'intro' ? 'The Introduction' : 'The Conclusion';
       add(1, 'chapter_review', `${c.id}|review`, null, `${name} needs review: planned before 03 Positioning changed. Open it in 05 Outline.`, null);
     }
+    // E17 (84): the book parts, in book order (from = the place in the list, so empty and not Final mix in order).
+    ctx.parts.forEach((p, i) => { add(1, p.rule, p.key, null, p.message, null); all[all.length - 1].from = i; });
     yield { group: 1 };
 
     // 2. Sources.
@@ -671,5 +702,5 @@
     };
   }
 
-  root.kdpQcRules = { GROUPS, RULES, CAPS, OVERUSED, PAGES, DEFAULTS, run, steps, results, verdict, driftKey };
+  root.kdpQcRules = { GROUPS, RULES, NO_OK, CAPS, OVERUSED, PAGES, DEFAULTS, run, steps, results, verdict, driftKey };
 })(globalThis);

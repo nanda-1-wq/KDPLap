@@ -70,6 +70,83 @@ Deno.test("chapter_review: any chapter kind, text or not; the chapter id leads t
   assertEquals([rows[0].section_id, rows[0].start], [null, null]);
 });
 
+/* ── E17 book parts (design 84) ── */
+
+/** A qc_json book_parts row (0035 book_parts_json -> parts). */
+const PART_KINDS = ["dedication", "epigraph", "foreword", "preface", "acknowledgments", "about_author", "review_request", "also_by"];
+function parts(o = {}) {
+  return PART_KINDS.map((kind, i) => ({
+    id: `9${i}000000-0000-4000-8000-00000000000${i}`, kind, enabled: false, status: ["review_request", "also_by"].includes(kind) ? null : "draft",
+    version_id: null, version_no: null, words: 0, has_draft: false, ...(o[kind] || {}),
+  }));
+}
+const withParts = (list, files = [], sections = [section("Plain text here.")]) => {
+  const q = one(...sections);
+  q.book_parts = list;
+  q.data.book_parts = files;
+  return q;
+};
+const V = "8a000000-0000-4000-8000-000000000001";
+
+Deno.test("E17 part_empty and part_not_final: on parts left out of the files, in book order, group 1, no section", () => {
+  const list = parts({
+    dedication: { enabled: true },
+    foreword: { enabled: true, version_id: V, words: 12 },
+    preface: { enabled: true, version_id: V, words: 0, status: "final" },
+    about_author: { enabled: true, version_id: V, words: 30, status: "final" },
+    acknowledgments: { enabled: false, version_id: V, words: 9 },
+    review_request: { enabled: true },
+    also_by: { enabled: true },
+  });
+  // The server's list: About is Final with text, so it is in the files. Also by has no valid book (not in it).
+  const r = run(withParts(list, [{ kind: "about_author", version_id: V, content: "x" }, { kind: "review_request", version_id: null, content: null }]));
+  const got = r.items.filter((x) => x.rule.startsWith("part_"));
+  assertEquals(got.map((x) => [x.rule, x.message]), [
+    ["part_empty", "Dedication is on but empty."],
+    ["part_not_final", "Foreword is on but not Final."],
+    ["part_empty", "Preface is on but empty."],
+  ]);
+  assertEquals(got.map((x) => x.key), [`${list[0].id}|none`, `${list[2].id}|${V}`, `${list[3].id}|none`]);
+  for (const x of got) assertEquals([x.g, x.section_id, x.version_id, x.start, x.end, x.quote], [1, null, null, null, null, ""]);
+});
+
+Deno.test("E17 parts: the review request page and Also by never give an item; off parts never; the file list wins", () => {
+  const list = parts({ review_request: { enabled: true }, also_by: { enabled: true }, epigraph: { enabled: false } });
+  assertEquals(run(withParts(list, [])).items.filter((x) => x.rule.startsWith("part_")), []);
+  // A Draft the server lists (impossible today) is never an item: 07 reads the server list, it does not judge Final.
+  const d = parts({ dedication: { enabled: true, version_id: V, words: 3, status: "draft" } });
+  assertEquals(run(withParts(d, [{ kind: "dedication", version_id: V, content: "For Ana." }])).items.filter((x) => x.rule.startsWith("part_")), []);
+  assertEquals(hits(run(withParts(d, [])), "part_not_final").length, 1);
+});
+
+Deno.test("E17 parts: before 0035 (no book_parts) and a broken row give nothing; hostile part text is never in an item", () => {
+  assertEquals(run(one(section("Plain text here."))).items.filter((x) => x.rule.startsWith("part_")), []);
+  const bad = withParts([null, 5, { kind: "dedication", enabled: true }, { id: "x", kind: "nope", enabled: true }], []);
+  assertEquals(run(bad).items.filter((x) => x.rule.startsWith("part_")), []);
+  const hostile = '<img src=x onerror="alert(1)"> # $ @ * _ & < > " \'';
+  // The About text in the file list is hostile; the Draft dedication's item holds its fixed name only.
+  const h = withParts(parts({ dedication: { enabled: true, version_id: V, words: 9 }, about_author: { enabled: true, version_id: V, words: 9, status: "final" } }),
+    [{ kind: "about_author", version_id: V, content: hostile }]);
+  const r = run(h);
+  assertEquals(hits(r, "part_not_final").map((x) => [x.message, x.quote]), [["Dedication is on but not Final.", ""]]);
+  assertEquals(JSON.stringify(r.items).includes("onerror"), false);
+});
+
+Deno.test("E17 parts: no Mark as OK (NO_OK), and a dismissed row never hides one; the verdict counts them, never not ready", () => {
+  assertEquals(Q.NO_OK, ["part_empty", "part_not_final"]);
+  for (const r of Q.NO_OK) assert(Q.RULES.includes(r));
+  const q = withParts(parts({ dedication: { enabled: true } }), []);
+  const r = run(q);
+  const x = hits(r, "part_empty")[0];
+  const v = Q.verdict(Q.results(r), q);
+  const none = run(withParts(parts(), []));
+  assertEquals(v.open, Q.verdict(Q.results(none), q).open + 1);
+  assertEquals([v.ready, /^Ready for Format, with \d+ warnings?$/.test(v.title)], [false, true]);
+  // Even a qc_dismissed row (0035 refuses it, so it never exists) would only count as marked.
+  const v2 = Q.verdict(Q.results(r), { ...q, dismissed: [{ rule: x.rule, issue_key: x.key }] });
+  assertEquals(v2.title.startsWith("Ready for Format"), true);
+});
+
 Deno.test("under_target: under 80% only, the 06 rule", () => {
   const words = (n) => `${"word ".repeat(n).trim()}.`;
   assertEquals(hits(text(words(79), { target: 100 }), "under_target")[0].message, "79 of 100 words, under 80% of its target.");

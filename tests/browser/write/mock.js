@@ -499,7 +499,11 @@ const setup = async page => {
         P.alsoBy[bid] = out;
         return json(r, 200, copy(out));
       }
-      if (path === '/rest/v1/book_parts' && method === 'GET') { const x = partById(eq('id')); return json(r, 200, x ? [{ id: x.id, current_version_id: x.current_version_id }] : []); }
+      if (path === '/rest/v1/book_parts' && method === 'GET') {
+        // E17 Part 8: partTextSlow (ms) holds the part read, so the 84 loading lines show.
+        if (mode('partTextSlow')) await delay(mode('partTextSlow'));
+        const x = partById(eq('id')); return json(r, 200, x ? [{ id: x.id, current_version_id: x.current_version_id }] : []);
+      }
       if (path === '/rest/v1/book_parts' && method === 'PATCH') {
         const x = partById(eq('id'));
         const f = body();
@@ -518,6 +522,9 @@ const setup = async page => {
       if (path === '/rest/v1/book_part_drafts' && method === 'POST') {
         const f = body();
         store.writes.push({ table: 'book_part_drafts', body: f });
+        // E17 Part 8: partDraftError (n) fails, partDraftOffline (n) drops the connection.
+        if (mode('partDraftOffline') > 0) { globalThis.__modes.partDraftOffline--; return r.abort('internetdisconnected'); }
+        if (mode('partDraftError') > 0) { globalThis.__modes.partDraftError--; return json(r, 500, { message: 'mock' }); }
         const x = partById(f.part_id);
         if (!x) return json(r, 403, { code: '42501', message: 'draft_owner' });
         if (x.kind === 'epigraph' && f.content.length > 1000) return fail(r, 'P0001', 'part_too_long');
