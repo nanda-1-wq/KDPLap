@@ -5,7 +5,7 @@
      check      pre-checks before any money is spent; the Job, or an error code
      prompt     [system, schema, user message]
      interpret  the provider reply as an Outcome
-     save       optional: drift_check, title_ideas, outline_ideas, outline_check, section_improve, section_check and promise_check save their own results
+     save       optional: drift_check, title_ideas, outline_ideas, outline_check, section_improve, part_improve, section_check and promise_check save their own results
                 (cover_blurb saves nothing: the browser saves the version when the writer accepts)
      reply      the 200 body
    A stage with no entry throws "generate: unknown stage". */
@@ -26,7 +26,8 @@ import { interpretOutlineCheck, OUTLINE_CHECK_SCHEMA, OUTLINE_CHECK_SYSTEM, type
 import { locateSection, mdWords, runIsFresh, WRITE_SYSTEM, type WriteContext, writeAim, writeUserMessage, estimateTokens } from "./section_write.ts";
 import type { WriteJob } from "./write_run.ts";
 import { IMPROVE_SCHEMA, IMPROVE_SYSTEM, improveMaxTokens, improveMaxWords, type ImproveJob, improveUserMessage, improveWords, interpretImprove, selectionInText } from "./section_improve.ts";
-import { CHECK, IMPROVE, PROMISE, SECTION_MAX_CHARS } from "./limits.ts";
+import { CHECK, IMPROVE, partCanImprove, PROMISE, SECTION_MAX_CHARS } from "./limits.ts";
+import { interpretPartImprove, type PartContext, type PartImproveJob, partImproveSystem, partImproveUserMessage } from "./part_improve.ts";
 import { checkKeyOf, type CheckJob, checkKnown, checkUserMessage, hasVoice, interpretSectionCheck, SECTION_CHECK_SCHEMA, SECTION_CHECK_SYSTEM, sectionRefs } from "./section_check.ts";
 import { chapterOf, interpretPromiseCheck, PROMISE_SCHEMA, PROMISE_SYSTEM, type PromiseContext, type PromiseJob, promiseKey, promiseKnown, promiseSections, promiseUserMessage } from "./promise_check.ts";
 import { bioText, COVER_BLURB_SYSTEM, type CoverBlurbContext, type CoverBlurbJob, coverBlurbSchema, coverBlurbUserMessage, interpretCoverBlurb } from "./cover_blurb.ts";
@@ -45,6 +46,7 @@ export type Job =
   | { stage: "outline_check"; ctx: OutlineCheckContext; chapters: OutlineRow[]; key: string }
   | WriteJob
   | ImproveJob
+  | PartImproveJob
   | CheckJob
   | PromiseJob
   | CoverBlurbJob;
@@ -384,6 +386,81 @@ const sectionImprove: StageDef<"section_improve", WriteContext> = {
 };
 
 /**
+ * part_improve (E17 Part 6): Improve on a book part. Checks before any money
+ * is spent, in this order (every refusal writes no usage row):
+ *   1. the part is in the caller's book (read through RLS; checked again here),
+ *   2. the part is a text kind: not the review request page or Also by,
+ *   3. the part is not the epigraph (a quote: Improve is off),
+ *   4. the positioning is locked (the prompt sends it as locked),
+ *   5. the base the browser started from is the part's current version
+ *      (version_conflict, as section_improve),
+ *   6. the selection has 3 to 1,500 words (Expand 1,000),
+ *   7. the selection and its before and after are in the draft or the current version.
+ * The request carries no limit or budget: max_tokens, the reserve and the
+ * monthly limit are the server's (MAX_TOKENS.part_improve, limitError).
+ * Context: the Brief and the locked Positioning only (no chapter text).
+ */
+const partImprove: StageDef<"part_improve", PartContext> = {
+  read: (store, input) => store.getPartContext(input.bookId, input.partId),
+  check: (input, ctx) => {
+    const part = ctx.part;
+    // 1. The caller's book and this part of it.
+    if (part.id !== input.partId || part.book_id !== input.bookId || ctx.bookId !== input.bookId) return { fail: "not_found" };
+    // 2. A text kind: the review request page and Also by have no text.
+    if (part.kind === "review_request" || part.kind === "also_by") return { fail: "part_no_improve" };
+    // 3. Not the epigraph. Any kind not in PART_IMPROVE_KINDS is refused too.
+    if (part.kind === "epigraph" || !partCanImprove(part.kind)) return { fail: "part_no_improve" };
+    // 4. The positioning is locked.
+    if (!ctx.positioning?.locked_at) return { fail: "positioning_not_locked" };
+    // 5. A stale base: the same error section_improve gives.
+    if ((part.current_version_id ?? null) !== input.baseVersionId || (ctx.current?.id ?? null) !== input.baseVersionId) return { fail: "version_conflict" };
+    const words = mdWords(input.selection);
+    if (words < IMPROVE.minWords) return { fail: "selection_too_short", extra: { words } };
+    if (words > improveMaxWords(input.action)) return { fail: "selection_too_long", extra: { words } };
+    if (!selectionInText([ctx.draft, ctx.current?.content], input.selection, input.before, input.after)) return { fail: "selection_not_in_text" };
+    const base = { ctx, kind: part.kind, action: input.action, instruction: input.instruction, selection: input.selection, before: input.before, after: input.after, words };
+    const user = partImproveUserMessage(base);
+    const maxTokens = improveMaxTokens(input.action, words, "part_improve");
+    const inputEstimate = estimateTokens(partImproveSystem(part.kind).length + user.length);
+    return {
+      stage: "part_improve", ...base, bookId: input.bookId, partId: input.partId, baseVersionId: input.baseVersionId,
+      maxTokens, user, inputEstimate, reserve: inputEstimate + maxTokens,
+    };
+  },
+  prompt: (job) => [partImproveSystem(job.kind), IMPROVE_SCHEMA, job.user],
+  interpret: (job, httpOk, body) => {
+    const out = interpretPartImprove(job, httpOk, body);
+    // The drop is logged with counts only (never the text): the usage row says failed, not counted.
+    if (out.dropped) console.warn(`generate: part_improve dropped a suggestion (about_author): ${out.dropped.numbers} new numbers, ${out.dropped.names} new names`);
+    const { dropped: _d, ...rest } = out;
+    return rest;
+  },
+  save: async (store, job, out, run) => {
+    // As section_improve: "No changes suggested" saves no row and is counted; a failed save is not counted.
+    if (out.improve!.unchanged) return { out, saved: null };
+    let saved: { id: string; created_at: string } | null = null;
+    try {
+      saved = await store.savePartSuggestion({
+        userId: run.userId, bookId: job.bookId, partId: job.partId, action: job.action, instruction: job.instruction,
+        baseVersionId: job.baseVersionId, selection: job.selection, output: out.improve!.text, flagged: out.improve!.flagged, notes: out.improve!.notes,
+      });
+    } catch (err) {
+      console.error(`generate: part suggestion save failed: ${(err as { code?: string })?.code ?? "unknown"}`);
+      out = { ...out, counted: false, code: "server_error" };
+    }
+    return { out, saved };
+  },
+  reply: (job, out, saved) => {
+    const r = out.improve!;
+    if (r.unchanged) return { stage: "part_improve", action: job.action, unchanged: true };
+    return {
+      stage: "part_improve", suggestionId: (saved as { id: string }).id, action: job.action, text: r.text,
+      words: improveWords(job, r.text), flagged: r.flagged, notes: r.notes,
+    };
+  },
+};
+
+/**
  * section_check (E10.4): the AI check of the saved current version. Checks
  * before any money is spent, in this order: the section is in the outline;
  * Write is open (outline approved, or any writing); the positioning is locked
@@ -535,6 +612,7 @@ export const STAGE_TABLE: { [S in Stage]: StageDef<S, any> } = {
   outline_check: outlineCheck,
   section_write: sectionWrite,
   section_improve: sectionImprove,
+  part_improve: partImprove,
   section_check: sectionCheck,
   promise_check: promiseCheck,
   cover_blurb: coverBlurb,
@@ -560,7 +638,7 @@ export function buildRequest(job: Job) {
   const [system, schema, content] = stageDef(stage).prompt(job);
   return {
     model: MODEL_FOR_STAGE[stage],
-    // section_improve (E10.3) sets its own, from the passage; every other stage uses its fixed cap.
+    // section_improve (E10.3) and part_improve (E17) set their own, from the passage; every other stage uses its fixed cap.
     max_tokens: "maxTokens" in job ? job.maxTokens : MAX_TOKENS[stage],
     // Sonnet 5.5's lowest thinking setting: no extended thinking for a bio or a copy task.
     thinking: { type: "between_tools" },
@@ -588,7 +666,7 @@ export function interpretJob(job: Job, httpOk: boolean, body: unknown): Outcome 
 /**
  * Map a reply without the job. Only for bio, amazon_import, brief_help (no
  * sources) and review_insights. positioning_help, drift_check, title_ideas,
- * competitor_import, outline_ideas, outline_check, section_improve, section_check, promise_check and cover_blurb need their job's data: they throw (use interpretJob).
+ * competitor_import, outline_ideas, outline_check, section_improve, part_improve, section_check, promise_check and cover_blurb need their job's data: they throw (use interpretJob).
  */
 export function interpretResponse(stage: Stage, httpOk: boolean, body: unknown, books: Competitor[] = []): Outcome {
   const def = stageDef(stage);

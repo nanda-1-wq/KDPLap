@@ -10,7 +10,7 @@ Deno.test("stage table: one entry per stage, nothing else", () => {
     for (const k of ["read", "check", "prompt", "interpret", "reply"] as const) assertEquals(typeof d[k], "function", `${s}.${k}`);
   }
   // Only the stages that save their own results have a save step.
-  assertEquals(L.STAGES.filter((s) => L.stageDef(s).save), ["drift_check", "title_ideas", "outline_ideas", "outline_check", "section_improve", "section_check", "promise_check"]);
+  assertEquals(L.STAGES.filter((s) => L.stageDef(s).save), ["drift_check", "title_ideas", "outline_ideas", "outline_check", "section_improve", "part_improve", "section_check", "promise_check"]);
   // E10.2: only section_write streams; it never goes through buildRequest or interpret.
   assertEquals(L.STAGES.filter((s) => L.stageDef(s).stream), ["section_write"]);
   assertThrows(() => L.buildRequest({ stage: "section_write" } as unknown as L.Job), Error, "generate: section_write streams, use writeRequest");
@@ -70,7 +70,7 @@ Deno.test("stage table: an unknown stage fails clearly", () => {
 Deno.test("interpretResponse: the stages that need their job throw instead of using the Brief parser", async () => {
   // This reply is a valid Brief answer. Before B1 these three stages fell into the Brief parser.
   const brief = await anthropic("end_turn", { result: "ok", target_reader: "A", reader_problem: "B", promise_draft: "C", stance: "D", standout: "E", missing: "" }).json();
-  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_improve", "section_check", "promise_check", "cover_blurb"] as const) {
+  for (const s of ["positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_improve", "part_improve", "section_check", "promise_check", "cover_blurb"] as const) {
     assertThrows(() => L.interpretResponse(s, true, brief), Error, `generate: ${s} needs its job, use interpretJob`);
   }
   assertEquals(L.interpretResponse("brief_help", true, brief).code, null);

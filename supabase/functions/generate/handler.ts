@@ -10,7 +10,7 @@
 import * as L from "./lib.ts";
 
 // The Store types live in lib/types.ts (Batch B1); the tests import them from here.
-export type { DriftSave, OutlineCheckSave, RunBegin, RunFinish, RunSaved, SavedTitleOption, SectionCheckSave, Store, SuggestionSave, UsageRow } from "./lib/types.ts";
+export type { DriftSave, OutlineCheckSave, RunBegin, RunFinish, RunSaved, SavedTitleOption, PartSuggestionSave, SectionCheckSave, Store, SuggestionSave, UsageRow } from "./lib/types.ts";
 import type { Store } from "./lib/types.ts";
 
 export type Deps = {

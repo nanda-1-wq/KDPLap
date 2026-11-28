@@ -3,7 +3,7 @@
 
 /* ── Stages and models ───────────────────── */
 
-export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write", "section_improve", "section_check", "promise_check", "cover_blurb"] as const;
+export const STAGES = ["bio", "amazon_import", "brief_help", "review_insights", "positioning_help", "drift_check", "title_ideas", "competitor_import", "outline_ideas", "outline_check", "section_write", "section_improve", "part_improve", "section_check", "promise_check", "cover_blurb"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Model IDs from https://platform.claude.com/docs/en/models/overview (checked 2026-09-29).
@@ -25,6 +25,7 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
   outline_check: MODELS.sonnet,
   section_write: MODELS.sonnet,
   section_improve: MODELS.sonnet,
+  part_improve: MODELS.sonnet,
   section_check: MODELS.sonnet,
   promise_check: MODELS.sonnet,
   cover_blurb: MODELS.sonnet,
@@ -33,12 +34,12 @@ export const MODEL_FOR_STAGE: Record<Stage, string> = {
 /* ── Limits ──────────────────────────────── */
 
 // The request reader stops at the largest stage cap; each stage then checks its own.
-export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048, section_improve: 65_536, section_check: 2048, promise_check: 2048, cover_blurb: 2048 };
+export const BODY_BYTES: Record<Stage, number> = { bio: 2048, amazon_import: 262_144, brief_help: 2048, review_insights: 2048, positioning_help: 2048, drift_check: 2048, title_ideas: 2048, competitor_import: 262_144, outline_ideas: 2048, outline_check: 2048, section_write: 2048, section_improve: 65_536, part_improve: 65_536, section_check: 2048, promise_check: 2048, cover_blurb: 2048 };
 export const MAX_BODY_BYTES = Math.max(...Object.values(BODY_BYTES));
 export const CALLS_PER_MINUTE = 10;
 export const DEFAULT_MONTHLY_LIMIT = 2_000_000; // user_settings default (0001)
-export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000, section_check: 90_000, promise_check: 60_000, cover_blurb: 60_000 };
-export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 4600, section_improve: 4800, section_check: 1500, promise_check: 500, cover_blurb: 800 };
+export const TIMEOUT_MS: Record<Stage, number> = { bio: 60_000, amazon_import: 120_000, brief_help: 60_000, review_insights: 120_000, positioning_help: 90_000, drift_check: 60_000, title_ideas: 90_000, competitor_import: 120_000, outline_ideas: 120_000, outline_check: 60_000, section_write: 100_000, section_improve: 120_000, part_improve: 120_000, section_check: 90_000, promise_check: 60_000, cover_blurb: 60_000 };
+export const MAX_TOKENS: Record<Stage, number> = { bio: 600, amazon_import: 8000, brief_help: 1200, review_insights: 2000, positioning_help: 2000, drift_check: 1200, title_ideas: 3000, competitor_import: 4000, outline_ideas: 8000, outline_check: 1500, section_write: 4600, section_improve: 4800, part_improve: 4800, section_check: 1500, promise_check: 500, cover_blurb: 800 };
 export const MAX_BIO_CHARS = 3000; // same as the browser (js/pen-name-common.js)
 
 // Amazon import: pasted page text and extracted books (same caps as js/topic-import.js and 0006).
@@ -167,6 +168,16 @@ export const IMPROVE_GROWTH: Record<ImproveAction, number> = {
   edit_format: 1.15, improve: 1.15, humanize: 1.15, shorten: 0.85, custom: 1.6, expand: 2.2,
 };
 
+// Improve on book parts (E17 Part 6, stage part_improve, not streamed): the same
+// actions, words, characters and max_tokens as section_improve. Only the text
+// parts that are the author's own words: never the epigraph (a quote), the
+// review request page (fixed text) or Also by (a list). Same kinds as 0035
+// book_parts and its part_no_improve guard (tests/limits-parity.test.js).
+export const PART_KINDS = ["dedication", "epigraph", "foreword", "preface", "acknowledgments", "about_author", "review_request", "also_by"] as const;
+export type PartKind = (typeof PART_KINDS)[number];
+export const PART_IMPROVE_KINDS = ["dedication", "foreword", "preface", "acknowledgments", "about_author"] as const satisfies readonly PartKind[];
+export const partCanImprove = (kind: string) => (PART_IMPROVE_KINDS as readonly string[]).includes(kind);
+
 // AI check of one section (E10.4, stage section_check, not streamed). The
 // saved current version: 50 to 6,000 words (md_word_count rule). At most 8
 // findings, a message and a quote of at most 300 characters each, at most 2
@@ -255,6 +266,7 @@ export const ERROR_STATUS = {
   selection_too_short: 422,
   selection_too_long: 422,
   selection_not_in_text: 409,
+  part_no_improve: 422,
   check_too_short: 422,
   check_too_long: 422,
   monthly_limit: 429,
@@ -263,6 +275,7 @@ export const ERROR_STATUS = {
   ai_unavailable: 502,
   ai_stopped: 502,
   ai_declined: 502,
+  ai_new_facts: 502,       // part_improve, About the author: the suggestion added a fact (E17 Part 6)
 } as const;
 export type ErrorCode = keyof typeof ERROR_STATUS;
 
@@ -312,6 +325,10 @@ export type GenerateInput =
   | {
     stage: "section_improve"; bookId: string; sectionId: string; baseVersionId: string | null; action: ImproveAction;
     selection: string; before: string; after: string; instruction: string | null;
+  }
+  | {
+    stage: "part_improve"; bookId: string; partId: string; baseVersionId: string | null; action: ImproveAction;
+    selection: string; before: string; after: string; instruction: string | null;
   };
 
 const sameKeys = (o: Record<string, unknown>, want: string[]) =>
@@ -336,6 +353,7 @@ const sameKeys = (o: Record<string, unknown>, want: string[]) =>
  *                      [, instruction (only and always for action "custom")] }   at most 64 KB;
  *                    selection 1 to 15,000 characters, before and after 0 to 2,500,
  *                    instruction 1 to 300 after trim (sent trimmed)
+ *   part_improve:    the same, with partId in place of sectionId (E17 Part 6)
  *   section_check:   { stage, bookId, sectionId, baseVersionId (uuid, never null) }   at most 2 KB
  *   promise_check:   { stage, bookId, chapterId }   at most 2 KB
  *   cover_blurb:     { stage, bookId, length, tone, authorLine }   at most 2 KB; length one of
@@ -403,12 +421,15 @@ export function parseInput(raw: string): GenerateInput | null {
     return { stage, bookId: (o.bookId as string).toLowerCase(), chapterId: (o.chapterId as string).toLowerCase() };
   }
 
-  if (stage === "section_improve") {
+  if (stage === "section_improve" || stage === "part_improve") {
+    // One reader for both: a section or a book part (E17 Part 6), the same keys and limits.
+    const idKey = stage === "part_improve" ? "partId" : "sectionId";
     const custom = o.action === "custom";
-    const keys = ["stage", "bookId", "sectionId", "baseVersionId", "action", "selection", "before", "after"];
+    const keys = ["stage", "bookId", idKey, "baseVersionId", "action", "selection", "before", "after"];
     if (!sameKeys(o, custom ? [...keys, "instruction"] : keys)) return null;
     if (typeof o.bookId !== "string" || !UUID_RE.test(o.bookId)) return null;
-    if (typeof o.sectionId !== "string" || !UUID_RE.test(o.sectionId)) return null;
+    const id = o[idKey];
+    if (typeof id !== "string" || !UUID_RE.test(id)) return null;
     if (o.baseVersionId !== null && (typeof o.baseVersionId !== "string" || !UUID_RE.test(o.baseVersionId))) return null;
     if (typeof o.action !== "string" || !(IMPROVE_ACTIONS as readonly string[]).includes(o.action)) return null;
     if (typeof o.selection !== "string" || o.selection.length < 1 || o.selection.length > IMPROVE.selectionChars) return null;
@@ -421,11 +442,11 @@ export function parseInput(raw: string): GenerateInput | null {
       instruction = o.instruction.trim();
       if (instruction.length < 1 || instruction.length > IMPROVE.instructionChars) return null;
     }
-    return {
-      stage, bookId: o.bookId.toLowerCase(), sectionId: o.sectionId.toLowerCase(),
-      baseVersionId: o.baseVersionId === null ? null : o.baseVersionId.toLowerCase(),
+    const common = {
+      bookId: o.bookId.toLowerCase(), baseVersionId: o.baseVersionId === null ? null : o.baseVersionId.toLowerCase(),
       action: o.action as ImproveAction, selection: o.selection, before: o.before as string, after: o.after as string, instruction,
     };
+    return stage === "part_improve" ? { stage, partId: id.toLowerCase(), ...common } : { stage, sectionId: id.toLowerCase(), ...common };
   }
 
   if (stage === "cover_blurb") {

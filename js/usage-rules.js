@@ -52,7 +52,7 @@
   const PROMISE_OUT = 250;
 
   const STAGE_NAMES = {
-    section_write: 'Write section', section_improve: 'Improve', section_check: 'AI check',
+    section_write: 'Write section', section_improve: 'Improve', part_improve: 'Improve book part', section_check: 'AI check',
     outline_ideas: 'Outline ideas', outline_check: 'Outline check', title_ideas: 'Title ideas',
     positioning_help: 'Positioning help', drift_check: 'Drift check', brief_help: 'Brief help',
     review_insights: 'Review insights', amazon_import: 'Amazon import', competitor_import: 'Competitor import',
@@ -60,7 +60,7 @@
   };
   // The short words in the "Other (…)" row.
   const SHORT = {
-    section_write: 'writing', section_improve: 'Improve', section_check: 'checks', outline_ideas: 'outline',
+    section_write: 'writing', section_improve: 'Improve', part_improve: 'book parts', section_check: 'checks', outline_ideas: 'outline',
     outline_check: 'outline check', title_ideas: 'titles', positioning_help: 'positioning', drift_check: 'drift',
     brief_help: 'Brief', review_insights: 'reviews', amazon_import: 'Amazon import', competitor_import: 'competitors',
     bio: 'bio', promise_check: 'promise', cover_blurb: 'blurb'

@@ -17,6 +17,7 @@ import type { ImproveNotes } from "./section_improve.ts";
 import type { CheckAreas, SectionFinding } from "./section_check.ts";
 import type { PromiseContext, PromiseResult } from "./promise_check.ts";
 import type { CoverBlurbContext } from "./cover_blurb.ts";
+import type { PartContext } from "./part_improve.ts";
 
 export type UsageRow = {
   user_id: string;
@@ -88,6 +89,18 @@ export interface Store {
    */
   saveSuggestion(s: SuggestionSave): Promise<{ id: string; created_at: string }>;
   /**
+   * part_improve (E17 Part 6): the book, its Brief, pen name, positioning and
+   * Research, and the part with its current version and draft, through RLS.
+   * null = not the caller's book, or a part that is not in it.
+   */
+  getPartContext(bookId: string, partId: string): Promise<PartContext | null>;
+  /**
+   * part_improve: save a suggestion (service role, 0035: only that role writes
+   * part_suggestions; its guard checks the part's owner and book, and refuses
+   * the epigraph and the parts with no text). Returns the new row's id.
+   */
+  savePartSuggestion(s: PartSuggestionSave): Promise<{ id: string; created_at: string }>;
+  /**
    * section_check (E10.4): save the last AI check of a section (service role,
    * 0022: only that role writes section_checks; its guard checks the
    * section's owner, book and version). One row per section: an upsert.
@@ -125,6 +138,9 @@ export type SuggestionSave = {
   userId: string; bookId: string; sectionId: string; action: ImproveAction; instruction: string | null;
   baseVersionId: string | null; selection: string; output: string; flagged: number; notes: ImproveNotes;
 };
+
+/** part_improve (E17 Part 6): the same row as a section's, for a part (0035 part_suggestions). */
+export type PartSuggestionSave = Omit<SuggestionSave, "sectionId"> & { partId: string };
 
 export type SectionCheckSave = {
   sectionId: string; bookId: string; userId: string; versionId: string; findings: SectionFinding[]; areas: CheckAreas;

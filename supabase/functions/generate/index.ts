@@ -47,7 +47,7 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { makeHandler, type SavedTitleOption, type Store, type UsageRow } from "./handler.ts";
-import type { BriefContext, Competitor, CoverBlurbContext, OutlineContext, OutlineRow, PenRow, PositioningContext, PromiseContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
+import type { BriefContext, Competitor, CoverBlurbContext, OutlineContext, OutlineRow, PartContext, PartRow, PenRow, PositioningContext, PromiseContext, ReviewContext, TitleContext, TopicRow, WriteChapterRow, WriteContext } from "./lib.ts";
 import { outlineHasWriting, RUN_STALE, stopAllRuns, WRITE_TIMING } from "./lib.ts";
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
@@ -394,6 +394,53 @@ function openStore(authHeader: string): Store {
         .from("section_suggestions")
         .insert({
           user_id: s.userId, book_id: s.bookId, section_id: s.sectionId, action: s.action, instruction: s.instruction,
+          base_version_id: s.baseVersionId, selection: s.selection, output: s.output, flagged: s.flagged, notes: s.notes,
+        })
+        .select("id, created_at")
+        .single();
+      if (error) throw error;
+      return data as { id: string; created_at: string };
+    },
+
+    // part_improve (E17 Part 6), through RLS as the caller: the book with its
+    // Brief, pen name and voice, Research (number sources only) and
+    // positioning; the part (only a part of this book: book_id is in the
+    // filter), its current version and its draft. No chapter text.
+    // null = not the caller's book, or a part that is not in it.
+    async getPartContext(bookId, partId) {
+      const [data, part] = await Promise.all([
+        readBook(bookId, `${POSITIONING_SELECT}, pen_name:pen_names ( name )`),
+        asUser.from("book_parts").select("id, book_id, kind, enabled, status, current_version_id").eq("id", partId).eq("book_id", bookId).maybeSingle(),
+      ]);
+      const ctx = data && positioningContext(data);
+      if (!ctx) return null;
+      if (part.error) throw part.error;
+      const row = part.data as PartRow | null;
+      if (!row) return null;
+      const [version, draft] = await Promise.all([
+        row.current_version_id
+          ? asUser.from("book_part_versions").select("id, content").eq("id", row.current_version_id).eq("part_id", row.id).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        asUser.from("book_part_drafts").select("content").eq("part_id", row.id).maybeSingle(),
+      ]);
+      for (const r of [version, draft]) if (r.error) throw r.error;
+      return {
+        ...ctx,
+        penName: (one(data.pen_name) as { name: string } | null)?.name ?? null,
+        part: row,
+        current: (version.data as { id: string; content: string } | null) ?? null,
+        draft: (draft.data as { content: string } | null)?.content ?? null,
+      } satisfies PartContext;
+    },
+
+    // Service role (0035 lets only this role write part_suggestions). The part
+    // was read through RLS as the caller first, and the 0035 guard checks that
+    // user_id owns the part, book_id is its book, and the part takes Improve.
+    async savePartSuggestion(s) {
+      const { data, error } = await admin()
+        .from("part_suggestions")
+        .insert({
+          user_id: s.userId, book_id: s.bookId, part_id: s.partId, action: s.action, instruction: s.instruction,
           base_version_id: s.baseVersionId, selection: s.selection, output: s.output, flagged: s.flagged, notes: s.notes,
         })
         .select("id, created_at")

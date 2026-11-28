@@ -205,7 +205,7 @@ const test = async page => {
   ok(req.stage === 'part_improve' && req.partId === part('dedication').id && !req.sectionId, `Improve: part_improve with the part id (${req.stage})`);
   await g(() => window.__imp.reply(500, { error: 'server_error' }));
   await until(() => /Retry|Try again/.test((document.querySelector('[data-imp-card]') || {}).textContent || ''));
-  ok(/Something went wrong on our side\./.test(await g(() => document.querySelector('[data-imp-card]').textContent)), 'Improve: the normal error with Retry until Part 6');
+  ok(/Something went wrong on our side\./.test(await g(() => document.querySelector('[data-imp-card]').textContent)), 'Improve: a server error shows the normal error with Retry');
   await page.keyboard.press('Escape');
 
   /* ── Compare and Restore on a part (About the author) ── */

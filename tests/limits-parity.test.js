@@ -228,6 +228,29 @@ Deno.test("Generate section: words per call, max_tokens, the soft deadline, the 
   for (const [n] of nums(f, String.raw`(?:left\([^;]*?, |> )(\d{6})\b`)) assertEquals(n, L.SECTION_MAX_CHARS);
 });
 
+Deno.test("Improve on book parts: the server and 0035 (E17 Part 6)", () => {
+  const f = M("0035_book_parts.sql");
+  const text = read(f);
+  const quoted = (x) => [...x.matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  // The 8 kinds, and the kinds the part_suggestions guard refuses (part_no_improve).
+  assertEquals(quoted(text.match(/constraint book_parts_kind_check check \(kind in \(([^)]*)\)\)/)[1]), [...L.PART_KINDS]);
+  const refused = quoted(text.match(/p\.kind in \(([^)]*)\)\) then\s+raise exception 'part_no_improve'/)[1]);
+  assertEquals(L.PART_KINDS.filter((k) => !L.partCanImprove(k)), refused);
+  // part_suggestions: the same actions and text sizes as section_improve.
+  const sg = text.slice(text.indexOf("create table public.part_suggestions"), text.indexOf("create index part_suggestions_user_id_idx"));
+  assertEquals(quoted(sg.match(/check \(action in \(([^)]*)\)\)/)[1]), [...L.IMPROVE_ACTIONS]);
+  assertEquals(Number(sg.match(/char_length\(selection\) between 1 and (\d+)/)[1]), L.IMPROVE.selectionChars);
+  assertEquals(Number(sg.match(/char_length\(output\) between 1 and (\d+)/)[1]), L.IMPROVE.outputChars);
+  assertEquals(Number(sg.match(/char_length\(instruction\) <= (\d+)/)[1]), L.IMPROVE.instructionChars);
+  // Every action is a part version source (apply_part_suggestion saves source = the action).
+  const sources = quoted(text.match(/book_part_versions_source_check check \(source in \(([^)]*)\)\)/)[1]);
+  for (const a of L.IMPROVE_ACTIONS) assertEquals(sources.includes(a), true, `0035 source ${a}`);
+  // The suggestion lives 1 hour, as a section's.
+  assertEquals(Number(text.match(/s\.created_at < now\(\) - interval '(\d+) hour'/)[1]), 1);
+  // The server caps: the same as section_improve.
+  for (const k of ["MAX_TOKENS", "TIMEOUT_MS", "BODY_BYTES"]) assertEquals(L[k].part_improve, L[k].section_improve, k);
+});
+
 Deno.test("Improve menu: the browser, the server and 0021 (owner, E10.3)", () => {
   const f = M("0021_section_suggestions.sql");
   // The six actions: the server, the suggestion table, the version guard, and 0001's version sources.

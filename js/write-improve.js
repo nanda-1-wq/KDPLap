@@ -125,7 +125,9 @@
       conflict: 'Choose which text to keep first.',
       open: 'Accept or reject the suggestion first.',
       queue: 'Finish or stop Fix major first.',
-      loading: 'Improve turns on when the section is ready.'
+      loading: 'Improve turns on when the section is ready.',
+      // E17: the epigraph is a quote (the toolbar has no Improve there; this guards a shortcut).
+      quote: 'Improve is off for quotes.'
     };
 
     /* ── Selection ─────────────────────────── */
@@ -550,8 +552,8 @@
       // A queue item sends from its own card (the queue gates the rest of Improve).
       if (!c || host.why() || busy() || (queueOn() && !inQueue()) || !pick) return;
       const ctx = S.context(c.text, pick.start, pick.end);
-      // E17 (risk P1): a book part sends part_improve with its part id (the stage arrives in Part 6;
-      // until then the server refuses it and the normal error with Retry shows).
+      // E17 (risk P1, Part 6): a book part sends part_improve with its part id. Before the
+      // deploy the server refuses the stage and the normal error with Retry shows (risk P4).
       const body = c.type === 'part'
         ? { stage: 'part_improve', bookId: host.book().id, partId: c.id, baseVersionId: c.base || null, action, selection: pick.text, before: ctx.before, after: ctx.after }
         : { stage: 'section_improve', bookId: host.book().id, sectionId: c.id, baseVersionId: c.base || null, action, selection: pick.text, before: ctx.before, after: ctx.after };
@@ -598,6 +600,7 @@
     /** The words for a refused or failed request: { line, sub, retry, kind }. */
     function errorOf(err, action) {
       const code = err.code;
+      const what = host.noun ? host.noun() : 'section';
       const line = {
         ai_unavailable: 'The AI service did not respond.',
         ai_stopped: 'The AI service stopped.',
@@ -609,7 +612,10 @@
         outline_not_approved: 'Approve the outline in 05 to use Improve.',
         unauthorized: 'Your session ended. Sign in again, then try again.',
         selection_too_short: 'Select at least 3 words.',
-        selection_not_in_text: 'We couldn’t find the selected text in your saved section. Try again.',
+        selection_not_in_text: `We couldn’t find the selected text in your saved ${what}. Try again.`,
+        // E17 Part 6: parts only.
+        part_no_improve: 'Improve is off for this part.',
+        ai_new_facts: 'The suggestion added facts that are not in your text, so we didn’t show it.',
         selection_too_long: `Select up to ${fmt(action === 'expand' ? LIMITS.expandMaxWords : LIMITS.maxWords)} words${action === 'expand' ? ' to expand' : ''}.${err.words ? ` You selected ${fmt(err.words)}.` : ''}`,
         monthly_limit: kdpUi.aiMessage('monthly_limit')[1],
         rate_limited: kdpUi.aiMessage('rate_limited')[1]
@@ -619,8 +625,8 @@
       const sub = code === 'network'
         ? 'Your text is safe. If the AI had already finished, this call may still count.'
         : 'Your text is safe. This attempt was not counted in your usage.';
-      const retry = !['positioning_not_locked', 'outline_not_approved', 'unauthorized', 'selection_too_short', 'selection_too_long', 'monthly_limit', 'run_in_progress'].includes(code);
-      const warn = ['monthly_limit', 'rate_limited', 'run_in_progress', 'positioning_not_locked', 'outline_not_approved', 'selection_too_short', 'selection_too_long', 'selection_not_in_text'].includes(code);
+      const retry = !['positioning_not_locked', 'outline_not_approved', 'unauthorized', 'selection_too_short', 'selection_too_long', 'monthly_limit', 'run_in_progress', 'part_no_improve'].includes(code);
+      const warn = ['monthly_limit', 'rate_limited', 'run_in_progress', 'positioning_not_locked', 'outline_not_approved', 'selection_too_short', 'selection_too_long', 'selection_not_in_text', 'part_no_improve', 'ai_new_facts'].includes(code);
       return { line, sub, retry, kind: warn ? 'warning' : 'error' };
     }
 
@@ -755,7 +761,10 @@
         suggestion_expired: ['This suggestion is too old. Ask again.', 'Your text is safe. Suggestions last 1 hour.', 'request'],
         run_in_progress: ['This section is being written in another tab.', 'Your text is safe. Try again when it finishes.', 'accept'],
         section_not_found: ['This section was removed in 05 Outline.', 'Your other writing is safe.', null],
-        section_too_long: [`This section is too long to save. Keep it under ${fmt(100000)} characters.`, 'Your text is safe.', null]
+        section_too_long: [`This section is too long to save. Keep it under ${fmt(100000)} characters.`, 'Your text is safe.', null],
+        // E17 Part 6: apply_part_suggestion (0035).
+        part_not_found: ['This part was removed.', 'Your other writing is safe.', null],
+        part_too_long: [`This part is too long to save. Keep it under ${fmt(20000)} characters.`, 'Your text is safe.', null]
       };
       if (m === 'run_in_progress') host.otherRun();
       const [line, sub, retry] = lines[m] || ['We couldn’t save the change. Your text is safe.', '', 'accept'];

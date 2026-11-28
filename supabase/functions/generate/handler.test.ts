@@ -109,6 +109,7 @@ Deno.test("a failed usage log still returns the bio", quiet(async () => {
       finishSectionRun: () => Promise.resolve({ version_id: null, version_no: null, word_count: null, current: false, partial: false, conflict: false, capped: false }),
       // E10.3 (section_improve): not used by this test.
       saveSuggestion: () => Promise.resolve({ id: "", created_at: "" }),
+      getPartContext: () => Promise.resolve(null), savePartSuggestion: () => Promise.resolve({ id: "", created_at: "" }),
       // E10.4 (section_check): not used by this test.
       saveSectionCheck: () => Promise.resolve({ checked_at: "", inputs_key: "" }),
       // E14.5 (promise_check): not used by this test.

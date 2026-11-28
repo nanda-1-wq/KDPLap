@@ -957,6 +957,8 @@
   /** Why Improve is off for the open section ('' when it can run). The suggestion's own state is in write-improve.js. */
   function improveWhy() {
     if (!cur || cur.state !== 'ready') return 'loading';
+    // E17 (80c): never Improve on the epigraph (a quote), also from a shortcut.
+    if (epigraph()) return 'quote';
     if (cur.conflict) return 'conflict';
     if (G.busyOn(cur.id)) return 'gen_here';
     if (cur.otherRun) return 'other_tab';
@@ -1937,7 +1939,9 @@
       hold,
       applied: improveApplied,
       adoptRemote: () => (cur ? adoptRemote(cur.id, null) : undefined),
-      reload: () => (cur ? openSection(cur.id, { keepNote: true }) : undefined),
+      // E17 Part 6: a part opens as a part (openSection would look for a section with its id).
+      reload: () => (cur ? openTarget(cur.type, cur.id, { keepNote: true }) : undefined),
+      noun,
       otherRun: () => { if (cur) { cur.otherRun = true; if (active()) { renderHead(); G.render(); imp.refresh(); } } },
       confirm: confirmDialog,
       // G5: the Checks tab follows Improve (Fix off while a suggestion is open, the Fix major queue).

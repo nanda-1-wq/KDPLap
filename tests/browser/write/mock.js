@@ -130,7 +130,7 @@ const setup = async page => {
   };
   // E17 Part 4: 0035 book_parts rows (the books trigger: 8 per book, off; text parts 'draft').
   const KINDS = ['dedication', 'epigraph', 'foreword', 'preface', 'acknowledgments', 'about_author', 'review_request', 'also_by'];
-  store.parts = { rows: {}, versions: [], drafts: {}, alsoBy: {}, others: {} };
+  store.parts = { rows: {}, versions: [], drafts: {}, alsoBy: {}, others: {}, suggestions: {} };   // suggestions: E17 Part 6, put there by the test (as store.suggestions)
   // E17 Part 5: the pen name bio (copy_bio_to_about) and the other books with the same pen name (candidates).
   store.penBio = 'Nora Hale teaches chair yoga to adults over 60. She lives in Ohio with her two dogs.';
   for (const bid of Object.keys(store.books)) {
@@ -541,6 +541,34 @@ const setup = async page => {
         if (!f.p_make_current) x.current_version_id = keep;
         delete P.drafts[x.id];
         return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, created: true });
+      }
+      // E17 Part 6: apply_part_suggestion, with the checks of 0035 in its order.
+      if (path === '/rest/v1/rpc/apply_part_suggestion') {
+        const f = body();
+        store.writes.push({ table: 'rpc', fn: 'apply_part_suggestion', body: f });
+        if (mode('applyError')) return json(r, 500, { message: 'mock' });
+        if (f.p_full_text == null) return fail(r, '22023', 'bad_content');
+        const sg = P.suggestions[f.p_suggestion_id];
+        if (!sg) return json(r, 400, { code: 'P0002', message: 'suggestion_not_found' });
+        const x = partById(sg.part_id);
+        if (!x) return json(r, 400, { code: 'P0002', message: 'part_not_found' });
+        if (sg.used_at) return fail(r, 'P0001', 'suggestion_used');
+        if (mode('expired') || Date.now() - Date.parse(sg.created_at) > 3600e3) return fail(r, 'P0001', 'suggestion_expired');
+        const base = pv(f.p_base_version_id), sgBase = pv(sg.base_version_id);
+        if (!base || base.part_id !== x.id || (sgBase && base.version_no < sgBase.version_no) || x.current_version_id !== base.id) return fail(r, 'P0001', 'version_conflict');
+        if (P.drafts[x.id] && P.drafts[x.id].content.trim() && P.drafts[x.id].content !== base.content) return fail(r, 'P0001', 'unsaved_draft');
+        const full = f.p_full_text;
+        let okText = false;
+        for (let i = full.indexOf(sg.output); i >= 0 && !okText; i = full.indexOf(sg.output, i + 1)) {
+          okText = full.slice(0, i) + sg.selection + full.slice(i + sg.output.length) === base.content;
+        }
+        if (!okText) return fail(r, 'P0001', 'suggestion_mismatch');
+        if (full.length > 20000) return fail(r, 'P0001', 'part_too_long');
+        const v = addPv(x, full, sg.action);
+        delete P.drafts[x.id];
+        sg.used_at = now();
+        sg.version_id = v.id;
+        return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, source: v.source });
       }
       if (path === '/rest/v1/rpc/restore_part_version') {
         const f = body();
