@@ -1,4 +1,4 @@
-// 43: the Also by dialog and the trim warning. E13.2 Part 2.
+// 43: the trim warning. E13.2 Part 2. (E17 Part 7: the Also by dialog went; 06 edits Also by, design 82.)
 const test = async page => {
   const { log, ok } = FM.log();
   const st = globalThis.__store;
@@ -7,65 +7,8 @@ const test = async page => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await FM.open(page);
 
-  /* Also by: the pen name, the note, each book with its status from Books (owner Q6). */
-  await page.click('[data-fmt-alsoby]');
-  await open();
-  ok((await FM.txt(page, '#fmtDlgTitle')) === 'Also by Adnan Haroun', 'title: Also by <pen name>');
-  ok((await FM.txt(page, 'dialog .fmt-dlg-text')) === 'Tick only books that are live on Amazon. Completed in NicheInk does not mean published.', 'the live on Amazon note');
-  await page.waitForFunction(() => document.querySelector('[data-fmt-status]').textContent !== '', null, { timeout: 3000 });
-  ok((await FM.all(page, 'dialog .fmt-pick')).join('|') === 'Worry Less Workbook Completed|Sleep Better Tonight In progress', `books with status: ${(await FM.all(page, 'dialog .fmt-pick')).join('|')}`);
-  ok((await FM.txt(page, 'dialog .fmt-hint')) === 'None ticked: the Also by page is left out.', 'none ticked note');
-  ok(await page.$$eval('dialog .fmt-pick input', (i) => i.every((x) => !x.checked)), 'none ticked by default');
-  ok(await page.$eval('dialog', (d) => d.getAttribute('aria-labelledby') === 'fmtDlgTitle'), 'the dialog is named by its title');
-  ok(await page.$$eval('dialog .fmt-pick', (r) => r.every((x) => x.getBoundingClientRect().height >= 44)), 'book rows are at least 44 px');
-
-  /* Tick the second, then the first: print order = the order they were ticked into the list. */
-  await page.click('dialog .fmt-pick:nth-child(3)');
-  await page.click('dialog [data-save]');
-  await closed();
-  await FM.saved(page);
-  ok(JSON.stringify(st.format.also_by) === JSON.stringify([st.candidates[1].id]) && st.format.parts.also_by === true, 'Save: also_by and the part on');
-  ok((await FM.txt(page, '[data-fmt-alsoby]')) === 'Choose books (1)', 'the link counts: Choose books (1)');
-  ok(await page.evaluate(() => document.activeElement.matches('[data-fmt-alsoby]')), 'focus back on the link');
-  await page.click('[data-fmt-alsoby]');
-  await open();
-  await page.click('dialog .fmt-pick:nth-child(2)');
-  await page.click('dialog [data-save]');
-  await closed();
-  await FM.saved(page);
-  ok(JSON.stringify(st.format.also_by) === JSON.stringify([st.candidates[1].id, st.candidates[0].id]), 'a new tick goes after the books already ticked');
-
-  /* Cancel and Escape change nothing. */
-  await page.click('[data-fmt-alsoby]');
-  await open();
-  await page.click('dialog .fmt-pick:nth-child(2)');
-  await page.click('dialog .dialog-foot [data-close]');
-  await closed();
-  ok(st.format.also_by.length === 2, 'Cancel keeps the books');
-  await page.click('[data-fmt-alsoby]');
-  await open();
-  await page.keyboard.press('Escape');
-  await closed();
-  ok(st.format.also_by.length === 2 && await page.evaluate(() => document.activeElement.matches('[data-fmt-alsoby]')), 'Escape closes, focus back');
-
-  /* Untick all: the part goes off. */
-  await page.click('[data-fmt-alsoby]');
-  await open();
-  for (const i of await page.$$('dialog .fmt-pick input:checked')) await i.click();
-  await page.click('dialog [data-save]');
-  await closed();
-  await FM.saved(page);
-  ok(st.format.also_by.length === 0 && st.format.parts.also_by === false, 'none ticked: the part is off');
-
-  /* A failed status read: the books still show, with no status line. */
-  globalThis.__modes.statusFail = true;
-  await page.click('[data-fmt-alsoby]');
-  await open();
-  await page.waitForTimeout(300);
-  ok((await FM.all(page, 'dialog .fmt-pick')).join('|') === 'Worry Less Workbook|Sleep Better Tonight', 'status read failed: titles only');
-  await page.keyboard.press('Escape');
-  await closed();
-  globalThis.__modes.statusFail = false;
+  /* E17 Part 7: the 08 Also by dialog is gone (06 edits Also by, design 82). */
+  ok(!(await FM.has(page, '[data-fmt-alsoby]')), 'no Also by dialog link in 08 (E17)');
 
   /* Trim, no Print PDF yet: the dialog without the yellow box (owner Q5). Keep changes nothing. */
   await page.selectOption('[data-fmt-trim]', '5.5x8.5');
@@ -111,11 +54,11 @@ const test = async page => {
   ok((await page.$$eval('[data-fmt-trim] option', (o) => o.map((x) => x.textContent))).join() === '6 × 9 in,5.5 × 8.5 in,5.25 × 8 in,5 × 8 in,8 × 10 in,8.5 × 11 in,7 × 10 in' && await page.$eval('[data-fmt-trim]', (s) => s.value === '7x10'), '7 × 10: an extra choice, chosen');
   ok((await FM.txt(page, '.fmt-trim-off')) === 'Print PDF needs 6 × 9, 5.5 × 8.5, 5.25 × 8, 5 × 8, 8 × 10 or 8.5 × 11 in. Pick one of these.' && await page.$eval('.fmt-trim-off svg', () => true), '7 × 10: the note with an icon');
 
-  /* 900 px: both dialogs fit, no sideways scroll. */
+  /* 900 px: the trim dialog fits, no sideways scroll. */
   await page.setViewportSize({ width: 900, height: 900 });
-  await page.click('[data-fmt-alsoby]');
+  await page.selectOption('[data-fmt-trim]', '6x9');
   await open();
-  ok(await page.$eval('dialog', (d) => d.getBoundingClientRect().right <= innerWidth && d.getBoundingClientRect().left >= 0) && await FM.noScroll(page), '900: the Also by dialog fits');
+  ok(await page.$eval('dialog', (d) => d.getBoundingClientRect().right <= innerWidth && d.getBoundingClientRect().left >= 0) && await FM.noScroll(page), '900: the trim dialog fits');
   await page.keyboard.press('Escape');
   await closed();
 

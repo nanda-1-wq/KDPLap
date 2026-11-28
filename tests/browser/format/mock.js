@@ -8,6 +8,12 @@
 //   refused as export_stale), cdnSlowMs (the wasm waits), jsdelivrDown, cdnDown (the engine files),
 //   pre0034 (E13.3: format_json has no EPUB keys, epub_marks is 404, an EPUB row is refused by the
 //   0027 format check), epubMarksFail (epub_marks fails)
+// E17 Part 7: book_parts as 0035. store.parts (8 rows, all off), store.alsoBy (Also by entries with "valid").
+// book_parts_json, PATCH book_parts (only enabled and status, as the 0035 guard), and book_parts in
+// format_json and export_json = book_parts_files (the part_file_list rule, mirrored here for the mock only).
+// A switch changes format_key and epub_key (part_key_extra): the 08 mark turns "changed".
+//   __modes: partSaveFail (n part saves fail), partSaveOffline (n saves fail as a network error),
+//   partsReadFail (n book_parts_json reads fail), partsSlow (ms)
 // E13.3 Part 4: EPUB rows follow the 0034 guard in its order (versions in the book, format_missing,
 // export_epub_final, export_stale against epub_key, export_epub_versions, then the table check);
 // epub_key is a real hash of the 0034 inputs, so print-only settings never change it.
@@ -56,14 +62,45 @@ async function setupFormat(page) {
       { id: B3, title: 'Sleep Better Tonight', subtitle: 'A plan', status: 'in_progress' }
     ],
     qcRun: null,                     // { checked_at, current } for qc_mark
+    // E17: the 8 parts (0035 book_parts), in book order. version: { id, content, word_count } or null.
+    parts: ['dedication', 'epigraph', 'foreword', 'preface', 'acknowledgments', 'about_author', 'review_request', 'also_by']
+      .map((kind, i) => ({ id: uid('9', i + 1), kind, enabled: false, status: ['review_request', 'also_by'].includes(kind) ? null : 'draft', version: null })),
+    alsoBy: [],                      // [{ book_id, title, subtitle, valid }] in print order
     writes: [], calls: [], inserts: 0, formatReads: 0, cdn: [],
     sections: () => chapters.flatMap((c) => c.sections)
   };
 
+  /** 0035 part_file_list + book_parts_files: on, and Final with text, or the review request, or Also by with a valid entry. */
+  const partsFiles = () => store.parts.filter((p) => p.enabled && (
+    (p.status === 'final' && p.version && p.version.content.trim())
+    || p.kind === 'review_request'
+    || (p.kind === 'also_by' && store.alsoBy.some((e) => e.valid))))
+    .map((p) => ({ kind: p.kind, version_id: p.version ? p.version.id : null, content: p.version ? p.version.content : null,
+      ...(p.kind === 'also_by' ? { entries: store.alsoBy.filter((e) => e.valid).map((e) => ({ title: e.title, subtitle: e.subtitle || null })) } : {}) }));
+  store.partsFiles = partsFiles;
+  /** 0035 book_parts_json. */
+  const partsJson = () => ({
+    parts: store.parts.map((p) => ({ id: p.id, kind: p.kind, enabled: p.enabled, status: p.status, version_id: p.version ? p.version.id : null,
+      version_no: p.version ? 1 : null, words: p.version ? p.version.word_count : 0, has_draft: false })),
+    also_by: store.alsoBy.map((e, i) => ({ position: i + 1, book_id: e.book_id || null, title: e.title, subtitle: e.subtitle || null, valid: e.valid })),
+    candidates: store.candidates.map(({ id, title, subtitle }) => ({ id, title, subtitle })),
+    now: now()
+  });
+  /** What the parts add to format_key and epub_key: 0035 part_key_extra ([kind, on, version in the file] for
+      each new part that is on, About and Also by left out), plus the About text and Also by books in the file
+      (0035 bio_md5 and also_by). An on part that is not in the file still changes the key, as in 0035. */
+  const partsKey = () => {
+    const files = partsFiles();
+    const inFile = (k) => files.find((x) => x.kind === k);
+    const extra = store.parts.filter((p) => p.enabled && !['about_author', 'also_by'].includes(p.kind))
+      .map((p) => [p.kind, true, inFile(p.kind) ? inFile(p.kind).version_id : null]);
+    return [extra, inFile('about_author') ? inFile('about_author').content : null, inFile('also_by') ? inFile('also_by').entries : null];
+  };
   const data = () => ({
     book: { ...copy(store.book), trim: store.brief.trim_size },
     known: { brief: copy(store.brief) },
     chapters: copy(chapters),
+    book_parts: partsFiles(),
     now: now()
   });
   // 0027 pdf_sections: Final, text not blank, a chapter, or the intro or conclusion when its part is on.
@@ -94,7 +131,8 @@ async function setupFormat(page) {
       subtitle: store.book.subtitle,
       pen_name: store.book.pen_name,
       bio_md5: f.parts.about ? hash(store.book.bio || '') : null,
-      sections: pdfSections()
+      sections: pdfSections(),
+      ...(store.parts.some((p) => p.enabled) ? { book_parts: partsKey() } : {})
     }));
   };
   store.epubKey = epubKey;             // tests read today's key and the Final list the guard compares with
@@ -105,6 +143,7 @@ async function setupFormat(page) {
     also_by_valid: store.format ? store.format.also_by.filter((id) => store.candidates.some((c) => c.id === id)) : [],
     candidates: store.candidates.map(({ id, title, subtitle }) => ({ id, title, subtitle })),
     key: '0'.repeat(31) + '1',
+    book_parts: partsFiles(),
     last_pdf: store.lastPdf ? copy(store.lastPdf) : null,
     changed: !!store.lastPdf && store.changed,
     ...(mode('pre0034') ? {} : {
@@ -260,6 +299,39 @@ async function setupFormat(page) {
       store.lastPdf = { created_at: now(), page_count: p.page_count };
       store.changed = false;
       return json(r, 201, [{ id: uid('e', ++seq), created_at: store.lastPdf.created_at, page_count: p.page_count }]);
+    }
+    if (path === '/rest/v1/rpc/book_parts_json') {
+      if (mode('partsSlow')) await wait(mode('partsSlow'));
+      if (mode('partsReadFail') > 0) { globalThis.__modes.partsReadFail--; return json(r, 500, { message: 'mock: parts read down' }); }
+      return json(r, 200, body().p_book_id === FB ? partsJson() : null);
+    }
+    // E17: the part reads 06 makes when "Open in 06" lands on a part (kdp.parts.text).
+    if (path === '/rest/v1/book_parts' && method === 'GET') {
+      const row = store.parts.find((x) => x.id === eq('id'));
+      const out = row ? { id: row.id, current_version_id: row.version ? row.version.id : null } : null;
+      return json(r, 200, one ? out : (out ? [out] : []));
+    }
+    if (path === '/rest/v1/book_part_versions' && method === 'GET') {
+      const row = store.parts.find((x) => x.version && (x.version.id === eq('id') || x.id === eq('part_id')));
+      const v = row ? { id: row.version.id, version_no: 1, content: row.version.content, word_count: row.version.word_count, source: 'manual', label: null, partial: false, created_at: ago(1) } : null;
+      return json(r, 200, one ? v : (v ? [v] : []));
+    }
+    if (path === '/rest/v1/book_part_drafts' && method === 'GET') return json(r, 200, one ? null : []);
+    if (path === '/rest/v1/book_parts' && method === 'PATCH') {
+      const p = body();
+      store.writes.push({ table: 'book_parts', id: eq('id'), body: p });
+      if (mode('partsSlow')) await wait(mode('partsSlow'));
+      if (mode('partSaveOffline') > 0) { globalThis.__modes.partSaveOffline--; return r.abort('internetdisconnected'); }
+      if (mode('partSaveFail') > 0) { globalThis.__modes.partSaveFail--; return json(r, 500, { message: 'mock: part save down' }); }
+      // The 0035 guard: users change only enabled and status.
+      if (Object.keys(p).some((k) => !['enabled', 'status'].includes(k))) return fail(r, 400, 'P0001', 'part_fixed_columns');
+      const row = store.parts.find((x) => x.id === eq('id'));
+      if (!row) return json(r, 200, []);
+      const before = JSON.stringify(partsKey());
+      Object.assign(row, p);
+      // format_key changes with the parts (0035): the Print PDF mark turns "changed".
+      if (store.lastPdf && JSON.stringify(partsKey()) !== before) store.changed = true;
+      return json(r, 200, [{ id: row.id, enabled: row.enabled, status: row.status, updated_at: now() }]);
     }
     if (path === '/rest/v1/rpc/export_json') {
       if (mode('exportFail')) return json(r, 500, { message: 'mock: export read down' });

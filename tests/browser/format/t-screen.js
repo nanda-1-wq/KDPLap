@@ -22,25 +22,25 @@ const test = async page => {
   ok((await FM.txt(page, '.fmt-group .fmt-hint')) === 'Changing style can change the page count.', 'style hint');
   ok((await page.$$eval('[data-fmt-select="chapter_label"] option', (o) => o.map((x) => x.textContent))).join() === 'Chapter 2,2,None', 'chapter label: Chapter 2, 2, None');
 
-  /* BOOK PARTS in the fixed order (41; Introduction and Conclusion when the book has them). */
+  /* BOOK PARTS in the fixed order (83 since E17; Introduction and Conclusion when the book has them). The part
+     switches themselves (book_parts.enabled) are in t-e17-rows.js. */
   const rows = await page.$$eval('.fmt-parts > .fmt-row', (r) => r.map((x) => x.firstElementChild ? x.firstElementChild.textContent.trim() : x.textContent.trim()));
-  ok(rows.join('|') === 'Title page|Copyright|Contents|Show sections too|Kindle: always on (KDP needs it)|Dedication, epigraph, foreword, preface|Introduction|Conclusion|Notes and references, at the back|About the author|Also by', `parts: ${rows.join('|')}`);
-  ok((await FM.all(page, '.fmt-parts .fmt-quiet')).slice(0, 2).join() === 'Always on,Always on', 'Title page and Copyright: Always on');
-  ok((await FM.all(page, '.fmt-later')).join('|') === 'Write in 06 · v2b|Comes in v2b', 'v2b tags: Write in 06 · v2b, Comes in v2b');
-  ok(await page.$eval('.fmt-row.is-later input[type="checkbox"]', (i) => i.disabled && !i.checked), 'Notes and references: off and disabled (owner Q3)');
+  ok(rows.join('|') === 'Title page|Copyright|Dedication|Epigraph|Contents|Show sections too|Kindle: always on (KDP needs it)|Foreword|Preface|Introduction|Conclusion|Acknowledgments|Notes and references|About the author|Review request page|Also by', `parts: ${rows.join('|')}`);
+  ok((await FM.all(page, '.fmt-parts > .fmt-row > .fmt-tag')).join('|') === 'Always on|Always on|Comes later', 'tags (83): Always on twice, Notes and references: Comes later');
+  ok(!(await page.$('.fmt-parts .fmt-row:has(.fmt-tag) input')) && !(await FM.has(page, '.fmt-later')), 'Notes and references: a tag, no switch; the old v2b tags are gone');
+  ok(!(await FM.has(page, '[data-fmt-alsoby]')) && !(await FM.has(page, '[data-fmt-part="about"]')), 'the 0027 About and Also by rows are gone (E17)');
   // E13.3 Part 3 (41d, Q2): the ISBN row says "Print only", and the note says the EPUB never carries it.
   ok((await FM.txt(page, '#fmtIsbnNote')) === 'Add it when KDP gives it, then export again. The EPUB never carries it: an eBook needs no ISBN.', 'ISBN note (E13.3: the EPUB line)');
   ok((await FM.txt(page, '.fmt-isbn-line .fmt-tag')) === 'Print only' && (await page.$eval('#fmtIsbn', (i) => i.getAttribute('aria-describedby'))) === 'fmtIsbnTag fmtIsbnNote fmtIsbnErr', 'ISBN: the "Print only" tag, read with the field');
-  ok((await FM.txt(page, '[data-fmt-alsoby]')) === 'Choose books (0)', 'Also by: Choose books (0)');
 
   /* 32 px rows, the whole row is the click area (51b, CLAUDE.md §7 exception). */
   const heights = await page.$$eval('.fmt-parts > label.fmt-row', (r) => r.map((x) => Math.round(x.getBoundingClientRect().height)));
   ok(heights.every((h) => h === 32), `switch rows are 32 px: ${heights}`);
-  await page.click('.fmt-parts label.fmt-row:has([data-fmt-part="about"]) > span');
-  ok(await page.$eval('[data-fmt-part="about"]', (i) => i.checked), 'a click on the row label ticks the box');
+  await page.click('.fmt-parts label.fmt-row:has([data-fmt-part="conclusion"]) > span');
+  ok(!(await page.$eval('[data-fmt-part="conclusion"]', (i) => i.checked)), 'a click on the row label ticks the box');
   await FM.saved(page);
-  ok(st.format.parts.about === true, 'About the author saved');
-  await page.click('.fmt-parts label.fmt-row:has([data-fmt-part="about"]) > span');
+  ok(st.format.parts.conclusion === false, 'Conclusion saved');
+  await page.click('.fmt-parts label.fmt-row:has([data-fmt-part="conclusion"]) > span');
   await FM.saved(page);
 
   /* PAGE · PRINT */
@@ -112,20 +112,13 @@ const test = async page => {
   st.chapters.unshift(intro);
   st.chapters.push(concl);
 
-  /* About the author on, the pen name has no bio: a note. */
-  st.book.bio = '';
+  /* E17: the About the author row no longer looks at the pen name bio (06 copies it into the part, 80b). */
   st.format.parts.about = true;
+  st.book.bio = '';
   await FM.open(page);
-  ok((await FM.txt(page, '.fmt-hint-row')) === 'Your pen name has no bio yet, so this page is left out.', 'no bio: the About the author note');
+  ok(!(await FM.has(page, '.fmt-hint-row')), 'no bio note in 08 any more (the part is the text)');
   st.book.bio = 'A teacher of adult learners.';
   st.format.parts.about = false;
-
-  /* No other book with this pen name: no Choose books link. */
-  const cands = st.candidates;
-  st.candidates = [];
-  await FM.open(page);
-  ok(!(await FM.has(page, '[data-fmt-alsoby]')) && (await FM.all(page, '.fmt-parts .fmt-quiet')).includes('No other books with this pen name'), 'no other books: a quiet line');
-  st.candidates = cands;
 
   /* Kindle (E13.3 Part 3, 41d): the live Kindle preview (t-kindle checks it in full). Print brings back the stage. */
   await FM.open(page);
@@ -162,11 +155,11 @@ const test = async page => {
   ok(await page.$eval('.fmt-style.is-on', (c) => { const s = getComputedStyle(c); return s.outlineStyle === 'solid' && s.outlineWidth === '2px' && s.outlineOffset === '2px'; }), 'the focused card shows the 2 px ring, 2 px offset');
   await page.keyboard.press('Tab');
   await page.keyboard.press('Shift+Tab');
-  await page.focus('[data-fmt-part="about"]');
+  await page.focus('[data-fmt-part="intro"]');
   await page.keyboard.press('Space');
-  ok(await page.$eval('[data-fmt-part="about"]', (i) => i.checked), 'Space ticks a row box');
+  ok(await page.$eval('[data-fmt-part="intro"]', (i) => i.checked), 'Space ticks a row box');
   await FM.saved(page);
-  ok(st.format.parts.about === true, 'the Space tick saved');
+  ok(st.format.parts.intro === true, 'the Space tick saved');
   ok(await FM.noScroll(page), '1440: no sideways scroll');
 
   /* 900 px: one column, no sideways scroll. */

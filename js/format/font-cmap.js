@@ -10,6 +10,7 @@
 
    kdpFontCmap.parse(bytes)          → { format, has(codePoint) }   throws on a font with no usable cmap
    kdpFontCmap.collect(model, extras) → Map(char → { kind: 'body' | 'head', where: [label] })
+     extras: { about, copyright, alsoBy, headerTitle, parts: [{ text, label }] (E17 book parts) }
      Every character the PDF will print: section text (marks removed), section
      and chapter titles, the book's title, subtitle, pen name, bio, copyright
      line, Also by titles, and the characters Typst adds itself (curly quotes,
@@ -112,6 +113,8 @@
     if (extras.copyright) add(extras.copyright, 'body', 'Copyright page');
     for (const x of extras.alsoBy || []) { add(x.title, 'body', 'Also by'); add(x.subtitle, 'body', 'Also by'); }
     if (extras.headerTitle) add(extras.headerTitle, 'head', 'Header title');
+    // E17 Part 7: the book parts in the file ({ text, label }, e.g. the Dedication text, an Also by title).
+    for (const x of extras.parts || []) add(x && x.text, 'body', x && x.label);
     for (const c of model.chapters || []) {
       add(c.title, 'head', c.kind === 'chapter' ? `Chapter ${c.fileNumber}` : (c.kind === 'intro' ? 'Introduction' : 'Conclusion'));
       for (const s of c.sections) {

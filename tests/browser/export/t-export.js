@@ -64,8 +64,8 @@ const test = async (page) => {
   ok('1 E13.2: Print PDF is made in 08 (a link to step 8)', d1.includes('Print PDF Made in 08 Format') && /[?&]step=8$/.test(await page.locator('.exp-08').getAttribute('href')));
   ok('1 E13.3: the EPUB is made in 08 (a link to step 8, the same as the Print PDF)', d1.includes('EPUB Made in 08 Format') && /[?&]step=8$/.test(await page.locator('.exp-08-epub').getAttribute('href')) && (await page.locator('.exp-08-epub').evaluate((a) => a.getBoundingClientRect().height)) >= 44);
   ok('1 include: all 10, "10 Final."', (await T('#expInclude option:checked')) === 'All sections with text (10)' && (await T('#expIncludeHelp')) === '10 Final.');
-  ok('1 parts: Intro and Conclusion shown, About off, Chapters always', d1.includes('Introduction 1 section') && d1.includes('Conclusion 1 section') && d1.includes("About the author Nora Hale's bio from Pen Names Off")
-    && await page.locator('.exp-tick.is-locked input').isDisabled() && !(await page.locator('[data-exp-part="about"]').isChecked()));
+  ok('1 parts: Intro and Conclusion shown, no About toggle (E17 Q-4), Chapters always', d1.includes('Introduction 1 section') && d1.includes('Conclusion 1 section') && !d1.includes('About the author')
+    && await page.locator('.exp-tick.is-locked input').isDisabled() && (await page.locator('[data-exp-part="about"]').count()) === 0);
   ok('1 copyright row: this year and the pen name', d1.includes(`"Copyright © ${new Date().getFullYear()} Nora Hale. All rights reserved." and a short disclaimer. Edit it in Word.`));
   ok('1 layout: page size from the Brief, page numbers from the Introduction, margins, text', d1.includes('Page size 6 × 9 in, from the Brief Change in Brief')
     && d1.includes('Centered in the footer, from 1 on the Introduction. The title, copyright and contents pages have none.') && d1.includes('Margins 0.75 in on every side.') && d1.includes('Georgia 11 pt'));
@@ -128,11 +128,11 @@ const test = async (page) => {
   for (const c of FX.cases) {
     if (!UI[c.name]) { ok(`include rule: a UI for ${c.name}`, false); continue; }
     S().exportData[E11.B1] = fxData(c.book);
-    if (c.name === 'final-only-no-intro') S().exportData[E11.B1].book.bio = 'Bio.';
+    // E17 (Q-4): About is in the file when the server list (book_parts_files) has it; the fixture expects about: true.
+    if (c.name === 'final-only-no-intro') S().exportData[E11.B1].book_parts = [{ kind: 'about_author', version_id: 'a0000000-0000-4000-8000-000000000001', content: 'Bio.' }];
     await fromCard(E11.B1);
     await ready();
     await UI[c.name]();
-    if (c.name === 'final-only-no-intro') await page.locator('[data-exp-part="about"]').check();
     if (await page.locator('[data-exp-ack]').count()) await page.locator('[data-exp-ack]').check();
     if (c.name === 'all-sections-all-parts') ok('6 a running section: "Writing now", the button names the saved version', (await D()).includes('Writing now: 2.3 c2c.') && (await go().innerText()).trim() === 'Export with v1');
     await exportNow();
@@ -196,6 +196,28 @@ const test = async (page) => {
   await page.waitForTimeout(100);
   await tallShot('export-3-final-only-full');
   await page.keyboard.press('Escape');
+
+  /* ── E17 (Q-4): About the author follows the part. In the file only when Final (book_parts_files has it). ── */
+  for (const [label, list] of [['Draft (not in the list)', []], ['Final', [{ kind: 'about_author', version_id: 'a0000000-0000-4000-8000-000000000002', content: 'Nora teaches *chair yoga* to adults.' }]]]) {
+    const fin = list.length > 0;
+    for (const fmt of ['docx', 'md']) {
+      S().exportData[E11.B1] = { ...exportData('ready'), book_parts: list };
+      await fromCard(E11.B1);
+      await ready();
+      if (fmt === 'md') await page.locator('input[value="md"]').check();
+      await page.waitForTimeout(100);
+      ok(`E17 About ${label} ${fmt}: no About toggle`, (await page.locator('[data-exp-part="about"]').count()) === 0 && !(await D()).includes('About the author'));
+      if (await page.locator('[data-exp-ack]').count()) await page.locator('[data-exp-ack]').check();
+      await exportNow();
+      const body = await lastBlob(fmt === 'md' ? 'text' : 'docx');
+      const has = body.includes('About the author') && body.includes('Nora teaches');
+      const rec = S().exports[S().exports.length - 1];
+      ok(`E17 About ${label} ${fmt}: ${fin ? 'in' : 'not in'} the file, recorded about: ${fin}`, has === fin && rec.parts.about === fin, [has, rec.parts]);
+      await page.locator('[data-exp-done]').click();
+    }
+  }
+  delete S().exportData[E11.B1].book_parts;
+  S().exportData[E11.B1] = exportData('ready');
 
   /* ── 4. Markdown ── */
   await fromCard(E11.B1);

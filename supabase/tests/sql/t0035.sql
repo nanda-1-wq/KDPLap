@@ -437,6 +437,30 @@ select pg_temp.chk('has no book_parts key and is current',
   (select not (snapshot ? 'book_parts') from public.book_exports where format = 'docx' order by created_at desc limit 1)
   and not (select changed from public.export_badges() where book_id = :BOOK1));
 
+-- ── E17 Part 7: an 08 switch (book_parts.enabled only, as the 08 row writes it) and the 08 marks ──
+update public.book_parts set status = 'draft' where book_id = :BOOK1 and kind = 'preface';
+update public.book_parts set enabled = true where book_id = :BOOK1 and kind = 'dedication';
+select pg_temp.chk('the dedication is in the file', exists (select 1 from public.part_file_list(:BOOK1) where kind = 'dedication'));
+select pg_temp.expect('A records a PDF with the dedication', format($q$insert into public.book_exports (book_id, format, include, parts, versions, page_count, settings_key, engine, created_at) values (%L, 'pdf', 'final', '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}', public.pdf_version_ids(%L), 40, public.format_key(%L), 'typst 0.14.2 · t1', clock_timestamp())$q$, :BOOK1, :BOOK1, :BOOK1), 'OK 1');
+select pg_temp.expect('and an EPUB', format($q$insert into public.book_exports (book_id, format, include, parts, versions, settings_key, engine, created_at) values (%L, 'epub', 'final', '{"title": true, "copyright": true, "contents": true, "intro": true, "conclusion": true, "about": false}', public.pdf_version_ids(%L), public.epub_key(%L), 'epub3 · e1', clock_timestamp())$q$, :BOOK1, :BOOK1, :BOOK1), 'OK 1');
+select pg_temp.chk('08 switch: both marks current after the exports',
+  not (select changed from public.pdf_marks(:BOOK1)) and not (select changed from public.epub_marks(:BOOK1)));
+update public.book_parts set enabled = false where book_id = :BOOK1 and kind = 'dedication';
+select pg_temp.chk('08 switch: a part in the file turned off marks the PDF and the EPUB changed',
+  (select changed from public.pdf_marks(:BOOK1)) and (select changed from public.epub_marks(:BOOK1)));
+update public.book_parts set enabled = true where book_id = :BOOK1 and kind = 'dedication';
+select pg_temp.chk('08 switch: turned on again, both marks are current again',
+  not (select changed from public.pdf_marks(:BOOK1)) and not (select changed from public.epub_marks(:BOOK1)));
+-- Design 83 "Changed mark": turning a part on or off marks both changed, in the file or not (part_key_extra).
+update public.book_parts set enabled = true where book_id = :BOOK1 and kind = 'preface';
+select pg_temp.chk('08 switch: a Draft part turned on (not in the file) is not in the file list, and both marks read changed (83)',
+  not exists (select 1 from public.part_file_list(:BOOK1) where kind = 'preface')
+  and (select changed from public.pdf_marks(:BOOK1)) and (select changed from public.epub_marks(:BOOK1)));
+update public.book_parts set enabled = false where book_id = :BOOK1 and kind = 'preface';
+select pg_temp.chk('08 switch: turned off again, current again',
+  not (select changed from public.pdf_marks(:BOOK1)) and not (select changed from public.epub_marks(:BOOK1)));
+update public.book_parts set enabled = false where book_id = :BOOK1;
+
 -- ── Deletes ──
 select pg_temp.chk('BOOK2 lists BOOK3', pg_temp.entries(:BOOK2, format('[{"book_id": "%s"}, {"title": "T"}]', :BOOK3)::jsonb) = 'OK 1');
 select pg_temp.expect('A deletes a ticked book', format($q$delete from public.books where id = %L$q$, :BOOK3), 'OK 1');

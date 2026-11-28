@@ -184,12 +184,42 @@ Deno.test("E13.2 MARGIN equals the template's margins (js/format/book.typ)", () 
   assertEquals({ inside: Number(m[1]), outside: Number(m[2]), top: Number(m[3]), bottom: Number(m[4]) }, F.layout("6x9").margin);
 });
 
-Deno.test("E13.2 PART_ROWS: design 41 order, every switch is a 0027 part key", () => {
-  assertEquals(F.PART_ROWS.map((p) => p.key), ["title", "copyright", "contents", "front", "intro", "conclusion", "notes", "about", "also_by"]);
-  for (const p of F.PART_ROWS) if (!p.later) assert(F.PART_KEYS.includes(p.key), p.key);
+Deno.test("E17 PART_ROWS: design 83 order; book_formats switches are 0027 keys, the rest are the 8 0035 kinds", () => {
+  assertEquals(F.PART_ROWS.map((p) => p.key), ["title", "copyright", "dedication", "epigraph", "contents", "foreword", "preface",
+    "intro", "conclusion", "acknowledgments", "notes", "about_author", "review_request", "also_by"]);
+  for (const p of F.PART_ROWS) if (!p.later && !p.part) assert(F.PART_KEYS.includes(p.key), p.key);
+  // The part rows are the 0035 kinds, in the export order (kdpExportRules.BOOK_PARTS = part_kind_ord).
+  assertEquals(F.PART_ROWS.filter((p) => p.part).map((p) => p.key), R.BOOK_PARTS);
   assertEquals(F.PART_ROWS.filter((p) => p.always).map((p) => p.key), ["title", "copyright"]);
-  assertEquals(F.PART_ROWS.find((p) => p.key === "notes").later, "Comes in v2b");
-  assertEquals(F.PART_ROWS.find((p) => p.key === "front").later, "Write in 06 · v2b");
+  assertEquals(F.PART_ROWS.find((p) => p.key === "notes").later, "Comes later");
+  assertEquals(F.PART_ROWS.find((p) => p.key === "review_request").name, "Review request page");
+  assert(!F.PART_ROWS.some((p) => p.key === "front" || p.key === "about"), "the old v2b and 0027 About rows are gone");
+});
+
+Deno.test("E17 partPill: the 06 words (Empty, Draft, nothing for Final, Fixed, books)", () => {
+  assertEquals(F.partPill({ kind: "dedication", words: 0, status: "draft" }), "empty");
+  assertEquals(F.partPill({ kind: "dedication", words: 0, status: "final" }), "empty");
+  assertEquals(F.partPill({ kind: "preface", words: 12, status: "draft" }), "draft");
+  assertEquals(F.partPill({ kind: "preface", words: 12, status: "final" }), null);
+  assertEquals(F.partPill({ kind: "review_request", words: 0, status: null }), "fixed");
+  assertEquals(F.partPill({ kind: "also_by", words: 0, status: null }), "books");
+  assertEquals(F.partPill(null), null);
+});
+
+Deno.test("E17 partsNotReady: on and not in book_parts_files, book order, never a second in-the-file rule", () => {
+  const p = (kind, enabled, words, status) => ({ id: `id-${kind}`, kind, enabled, words, status });
+  const parts = [p("also_by", true, 0, null), p("about_author", true, 40, "draft"), p("dedication", true, 0, "draft"),
+    p("epigraph", false, 9, "draft"), p("foreword", true, 300, "final"), p("review_request", true, 0, null), p("preface", true, 80, "final")];
+  // The server says: foreword and the review request are in the files. Preface is Final but not in the list
+  // (blank text, say): the list wins, so it is not ready.
+  const files = [{ kind: "foreword" }, { kind: "review_request" }];
+  const out = F.partsNotReady(parts, files);
+  assertEquals(out.map((x) => [x.kind, x.why]), [["dedication", "empty"], ["preface", "empty"], ["about_author", "draft"], ["also_by", "no-books"]]);
+  assertEquals(out.map(F.partWhyText), ["Dedication is on but empty.", "Preface is on but empty.", "About the author is a Draft.", "Also by has no books."]);
+  assertEquals(out[0].id, "id-dedication");
+  assertEquals(F.partsNotReady(parts, [{ kind: "dedication" }, { kind: "preface" }, { kind: "about_author" }, { kind: "also_by" }, { kind: "foreword" }, { kind: "review_request" }]), []);
+  assertEquals(F.partsNotReady(null, null), []);
+  assertEquals(F.partsNotReady([p("dedication", false, 0, "draft")], []), [], "a part that is off is never in the box");
 });
 
 Deno.test("E13.2 trimText and marginNote", () => {

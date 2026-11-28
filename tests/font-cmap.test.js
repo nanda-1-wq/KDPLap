@@ -145,6 +145,15 @@ Deno.test("collect: every printed character, where it is, spaces and marks left 
   assert(!got.has("["), "the Verify mark is removed before the check");
 });
 
+Deno.test("collect: E17 book part text is checked as body text, named by the part", () => {
+  const m = R.model(DATA, { include: "final", format: "docx", parts: {} });
+  const got = C.collect(m, { parts: [{ text: "Für Ōma ✦", label: "Dedication" }, { text: "Ünder", label: "Also by" }, null, { text: "", label: "Empty" }] });
+  assertEquals(got.get("Ō").where, ["Dedication"]);
+  assertEquals(got.get("Ō").kind, "body");
+  assertEquals(got.get("✦").where, ["Dedication"]);
+  assertEquals(got.get("Ü").where, ["Also by"]);
+});
+
 Deno.test("missing: per face, body text against the body faces, titles against the head faces too", () => {
   const m = R.model(DATA, { include: "final", format: "docx", parts: {} });
   const all = { has: () => true };

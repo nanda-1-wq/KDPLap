@@ -3828,6 +3828,29 @@ label.fmt-row { cursor: pointer; }
   text-decoration: underline; text-underline-offset: 3px;
 }
 
+/* E17 Part 7 (design 83): book part rows. The row stays 32 px and is the click area (51b); the
+   state, "Open in 06" and the box sit at the end. Pills as the 06 list: Empty dashed, Draft outline. */
+.fmt-bp-name { min-width: 0; }
+.fmt-bp-side { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-width: 0; }
+.fmt-pill {
+  padding: 1px var(--space-2); border: 1px solid var(--ink); border-radius: var(--radius-pill);
+  background: var(--surface); font-size: var(--text-xs); font-weight: 500; color: var(--ink); white-space: nowrap;
+}
+.fmt-pill.is-empty { background: transparent; border-style: dashed; border-color: var(--stone-2); color: var(--graphite); }
+.fmt-bp-books { text-align: left; font-size: var(--text-sm); white-space: nowrap; }
+/* The link is 32 px high (the row); its text sits in the middle of the row, as the name. */
+.fmt-bp-open { display: inline-flex; align-items: center; white-space: nowrap; }
+.fmt-bp-open:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--radius-sm); }
+.fmt-bp[aria-busy="true"] { cursor: progress; }
+.fmt-bp-err { flex-wrap: wrap; padding: 0 0 var(--space-1); }
+.fmt-bp-err .fmt-bp-retry { margin-left: auto; }
+/* The Ready box parts lines (83): sentence, then the link on the same line. */
+.fmt-parts-alert strong { color: var(--warning); }
+.fmt-parts-line { display: block; }
+.fmt-parts-line .fmt-ready-link { display: inline-flex; text-decoration: underline; text-underline-offset: 3px; }
+.fmt-note.fmt-parts-note { align-items: flex-start; flex-wrap: nowrap; }
+.fmt-parts-note svg { flex-shrink: 0; margin-top: 3px; }
+
 /* ISBN under Copyright */
 .fmt-isbn { display: flex; flex-direction: column; gap: 6px; padding: var(--space-1) 0 var(--space-2); }
 .fmt-isbn-line { display: flex; align-items: center; gap: 10px; }

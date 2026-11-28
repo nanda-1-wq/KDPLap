@@ -37,6 +37,11 @@
    kdpFormatRules.pageInfo(meta)  → { pages, blanks, content } (blanks: added to make the count even)
    kdpFormatRules.spineText(pages, paper) → "Spine 0.108 in · no spine text under 80 pages"
    kdpFormatRules.ready({ model, missing, pages, dropped, trim, paper }) → { warnings, finals } (never blocks)
+
+   E17 Part 7 (design 83): the BOOK PARTS rows and the parts Ready box.
+   kdpFormatRules.partPill(part)  → 'empty' | 'draft' | null (Final) | 'fixed' | 'books'
+   kdpFormatRules.partsNotReady(parts, files) → the parts on but not in the files (files: 0035 book_parts_files)
+   kdpFormatRules.partWhyText(x)  → "Dedication is on but empty."
 ═══════════════════════════════════════════════════ */
 
 (function (root) {
@@ -64,20 +69,27 @@
   // KDP's page limits, black ink (KDP help "Set Trim Size, Bleed, and Margins", read Nov 17, 2026).
   const PAGES_MAX = { white: 828, cream: 776 };
   const PAGES_MAX_BY_TRIM = { '8.5x11': { white: 590, cream: 550 } };
-  // Book parts in the fixed print order (design 41; 51b for Introduction and Conclusion).
+  // Book parts in the fixed print order (design 83; 51b for Introduction and Conclusion).
   // always: on, no switch. needs: shown only when the book has that chapter (owner, Nov 4).
   // later: shown off, not a switch (Notes and references: owner Q3, Nov 8).
+  // part: an E17 book part (0035 book_parts.enabled, the same switch as the 06 menu).
   const PART_ROWS = [
     { key: 'title', name: 'Title page', always: true },
     { key: 'copyright', name: 'Copyright', always: true },
+    { key: 'dedication', name: 'Dedication', part: true },
+    { key: 'epigraph', name: 'Epigraph', part: true },
     { key: 'contents', name: 'Contents' },
-    { key: 'front', name: 'Dedication, epigraph, foreword, preface', later: 'Write in 06 · v2b' },
+    { key: 'foreword', name: 'Foreword', part: true },
+    { key: 'preface', name: 'Preface', part: true },
     { key: 'intro', name: 'Introduction', needs: 'intro' },
     { key: 'conclusion', name: 'Conclusion', needs: 'conclusion' },
-    { key: 'notes', name: 'Notes and references, at the back', later: 'Comes in v2b' },
-    { key: 'about', name: 'About the author' },
-    { key: 'also_by', name: 'Also by' }
+    { key: 'acknowledgments', name: 'Acknowledgments', part: true },
+    { key: 'notes', name: 'Notes and references', later: 'Comes later' },
+    { key: 'about_author', name: 'About the author', part: true },
+    { key: 'review_request', name: 'Review request page', part: true },
+    { key: 'also_by', name: 'Also by', part: true }
   ];
+  const PART_FIXED = ['review_request', 'also_by'];   // no text, no status (0035)
 
   function defaults() {
     return {
@@ -269,6 +281,48 @@
     return { warnings: w, finals: model.sections.length };
   }
 
+  /* ── E17 book parts in 08 (design 83) ─────── */
+
+  /**
+   * The state a part row shows (design 83): 'empty' (dashed pill), 'draft' (outline pill), null (Final: no
+   * pill), 'fixed' (review request), 'books' (Also by). p: a book_parts_json part; books: Also by valid entries.
+   * The same words as the 06 list (js/write-parts.js pill): no text is Empty, then the status.
+   */
+  function partPill(p) {
+    if (!p) return null;
+    if (p.kind === 'review_request') return 'fixed';
+    if (p.kind === 'also_by') return 'books';
+    if (!Number(p.words)) return 'empty';
+    return p.status === 'final' ? null : 'draft';
+  }
+
+  /**
+   * The parts that are on but not in the files, in book order, with why (the Ready box, design 83).
+   * "In the file" is never decided here: files is book_parts_files (0035 part_file_list), the one rule.
+   *   parts  book_parts_json parts; files  [{ kind }] from format_json / export_json
+   * → [{ kind, id, name, why: 'empty' | 'draft' | 'no-books' }]
+   */
+  function partsNotReady(parts, files) {
+    const inFile = new Set((Array.isArray(files) ? files : []).map((f) => f && f.kind));
+    const byKind = new Map((Array.isArray(parts) ? parts : []).map((p) => [p && p.kind, p]));
+    const out = [];
+    for (const row of PART_ROWS) {
+      if (!row.part) continue;
+      const p = byKind.get(row.key);
+      if (!p || !p.enabled || inFile.has(row.key)) continue;
+      const why = row.key === 'also_by' ? 'no-books' : partPill(p) === 'draft' ? 'draft' : 'empty';
+      out.push({ kind: row.key, id: p.id, name: row.name, why });
+    }
+    return out;
+  }
+
+  /** One Ready box line: "Dedication is on but empty.", "About the author is a Draft.", "Also by has no books." */
+  function partWhyText(x) {
+    if (x.why === 'draft') return `${x.name} is a Draft.`;
+    if (x.why === 'no-books') return `${x.name} has no books.`;
+    return `${x.name} is on but empty.`;
+  }
+
   function fileName(title, trim) {
     const slug = String(title || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80).replace(/-+$/, '');
@@ -278,6 +332,7 @@
   root.kdpFormatRules = {
     STYLES, CHAPTER_LABELS, PAPERS, TRIMS, LARGE, PART_KEYS, PART_ROWS, ALSO_BY_MAX, HEADER_TITLE_MAX, SPINE_PER_PAGE, MARGIN,
     defaults, normalize, isGroupA, isLarge, layout, maxPages, trimSize, trimText, trimsText, isbnOk, isbnClean, kdpMargin, spine, marginNote, modelOf, fileName,
-    pageInfo, spineText, ready
+    pageInfo, spineText, ready,
+    PART_FIXED, partPill, partsNotReady, partWhyText
   };
 })(globalThis);

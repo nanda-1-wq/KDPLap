@@ -171,7 +171,6 @@
       ${a.intro ? row('intro', 'Introduction', '', plural(nSec('intro'), 'section')) : ''}
       ${row('chapters', 'Chapters', 'Always in the file', plural(st.data.chapters.filter((c) => c.kind === 'chapter').length, 'chapter'), true)}
       ${a.conclusion ? row('conclusion', 'Conclusion', '', plural(nSec('conclusion'), 'section')) : ''}
-      ${a.about ? row('about', 'About the author', `${esc(pen || 'The pen name')}'s bio from Pen Names`, p.about ? 'On' : 'Off') : ''}
     </div></fieldset>`;
   }
 
@@ -522,8 +521,6 @@
       renderReady('[data-exp-include]');
     } else if (t.matches('[data-exp-part]')) {
       st.opts.parts[t.dataset.expPart] = t.checked;
-      const side = t.closest('.exp-tick').querySelector('.exp-side');
-      if (t.dataset.expPart === 'about') side.textContent = t.checked ? 'On' : 'Off';
       renderReady(`[data-exp-part="${t.dataset.expPart}"]`);
     } else if (t.matches('[data-exp-ack]')) {
       st.ack = t.checked;
@@ -567,6 +564,8 @@
     if (res.error || !res.data) { st.data = null; renderError('read'); return; }
     st.data = res.data;
     st.opts = st.opts || R().defaults(st.data);
+    // E17 (Q-4): no About toggle. About follows the part (Final only), read again on every load.
+    st.opts.parts.about = R().aboutInFile(st.data);
     renderReady('[data-exp-format]:checked');
   }
 

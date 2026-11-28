@@ -5,7 +5,7 @@
                          js/autosave.js, js/qc-glyphs.js and js/format/*)
 
    Designs: 41 (08 Format), 41b (Kindle), 41c (engine and section states),
-   43 (Also by and trim dialogs), 51b (rail, 32 px rows).
+   43 (the trim dialog; its Also by dialog went in E17), 51b (rail, 32 px rows), 83 (E17 parts).
    Plan: docs/reviews/2026-11-08-e13-2-plan.md.
    Part 2: the settings column with autosave, the Also by and trim dialogs.
    Part 3: the print preview (the real PDF, js/format/preview.js), the page
@@ -42,8 +42,7 @@
      when a Print PDF exists (owner Q5).
    - Introduction and Conclusion switches show only when the book has them.
      Notes and references: off, "Comes in v2b" (owner Q3).
-   - Also by lists the other books with this pen name and their status from
-     Books (owner Q6).
+   - (E17: the Also by dialog went; 06 edits Also by, design 82.)
    E13.3 Part 3 (designs 41d, 41e; plan docs/reviews/2026-11-23-e13-3-plan.md §3):
    Kindle mode shows the EPUB that kdpEpub.build() makes, in a sandboxed
    frame (js/format/kindle-preview.js): the chips, A A A, Full screen, the
@@ -52,6 +51,18 @@
    after 300 ms; the reader stays on the same part. The Kindle Ready box:
    not Final, needs review, no pen name, links to other ebook stores (Q8).
    The ISBN row is "Print only" (Q2). The 08 done mark stays Print PDF (Q4).
+   E17 Part 7 (design 83; plan docs/reviews/2026-11-25-e17-plan.md):
+   - BOOK PARTS: one row per part in the fixed order, its switch is
+     book_parts.enabled (0035), the same switch as the 06 menu. When on: an
+     Empty or Draft pill (none for Final), "Fixed text", "N books", and
+     "Open in 06" (step 06 with that part open). The 0027 About and Also by
+     rows and the Also by dialog are gone (06 edits Also by, design 82).
+   - "In the file" is never decided here: exp.book_parts is book_parts_files
+     (0035 part_file_list). A part that is on but not in it goes in the amber
+     parts box of the Ready box (Print and Kindle). It never blocks export.
+   - A switch save: the row is busy; a failure puts the box back with a red
+     line and Retry; a success reads export_json and book_parts_json again,
+     rebuilds both previews and reads the 08 mark (format_key changes, 0035).
 ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -62,7 +73,6 @@
   // [name, font] on the style cards. Modern shows its body font (owner Q4).
   const STYLE_NAMES = { classic: ['Classic', 'EB Garamond'], modern: ['Modern', 'Source Serif 4'], clean: ['Clean', 'Literata'], warm: ['Warm', 'Lora'] };
   const LABELS = [['chapter', 'Chapter 2'], ['number', '2'], ['none', 'None']];
-  const STATUS = { in_progress: 'In progress', completed: 'Completed' };
   const TEXT_DELAY = 700;           // header title and ISBN: save after typing stops
   const SLOW_LOAD_MS = 400;         // show the first-visit progress only when loading takes longer
   const MB = (b) => (b / 1e6).toFixed(1);
@@ -78,6 +88,7 @@
     down: svg('<path d="M12 5v14M6 13l6 6 6-6"/>', 16),
     x: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 18, 2.2),
     xBig: svg('<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>', 28, 2.2),
+    info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 16, 1.8),
     doc: svg('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>', 28, 1.8)
   };
 
@@ -116,6 +127,9 @@
   let kTimer = null, kSeq = 0;
   let kSize = 'm';                  // A A A
   let kRetry = false;               // Try again was pressed: the focus follows the result
+  /* E17 Part 7: the book parts (0035 book_parts_json). */
+  let bp = { state: 'idle', data: null };   // idle | ready | off (before 0035) | error
+  let bpSave = {};                  // kind → { state: 'saving' | 'error', on, offline }
 
   /* ── Values ──────────────────────────────── */
 
@@ -125,7 +139,21 @@
   const candidates = () => (fmt && fmt.candidates) || [];
   const validAlsoBy = () => { const ok = new Set(candidates().map((c) => c.id)); return settings.also_by.filter((id) => ok.has(id)); };
   const hasPdf = () => !!(fmt && fmt.last_pdf);
-  const droppedAlsoBy = () => (settings.parts.also_by ? settings.also_by.length - validAlsoBy().length : 0);
+  /* E17: the parts (book_parts_json) and the parts in the file (export_json book_parts = 0035 part_file_list). */
+  const partsList = () => (bp.state === 'ready' && bp.data ? bp.data.parts : []);
+  const partOf = (kind) => partsList().find((p) => p.kind === kind) || null;
+  const filesList = () => (exp && Array.isArray(exp.book_parts) ? exp.book_parts : null);
+  const alsoByBooks = () => (bp.data ? (bp.data.also_by || []).filter((e) => e && e.valid !== false).length : 0);
+  const notReady = () => (bp.state === 'ready' && filesList() ? F().partsNotReady(partsList(), filesList()) : []);
+  const partHref = (id) => `book.html?id=${encodeURIComponent(book.id)}&step=6&part=${encodeURIComponent(id)}`;
+  /** Also by books left out: with 0035, ticks that are no longer valid while Also by is on; before it, the 0027 list. */
+  const droppedAlsoBy = () => {
+    if (filesList()) {
+      const ab = partOf('also_by');
+      return ab && ab.enabled && bp.data ? (bp.data.also_by || []).filter((e) => e && e.valid === false).length : 0;
+    }
+    return settings.parts.also_by ? settings.also_by.length - validAlsoBy().length : 0;
+  };
   const hasFinal = () => !!model && model.sections.length > 0;
   const canPreview = () => load.state === 'ready' && hasFinal() && groupA();
   const sectionHref = (id) => `book.html?id=${encodeURIComponent(book.id)}&step=6${id ? `&section=${encodeURIComponent(id)}` : ''}`;
@@ -142,7 +170,9 @@
 
   /** The export model: Final sections only. Built again only when a part that changes it changes. */
   function ensureModel() {
-    const key = `${settings.parts.intro}|${settings.parts.conclusion}|${settings.parts.about}`;
+    // E17: the parts in the file (kind, version, Also by titles) are part of the key.
+    const files = (filesList() || []).map((p) => [p.kind, p.version_id || null, (p.entries || []).map((e) => e && e.title)]);
+    const key = `${settings.parts.intro}|${settings.parts.conclusion}|${settings.parts.about}|${JSON.stringify(files)}`;
     if (model && key === modelKey) return;
     model = F().modelOf(exp, settings);
     modelKey = key;
@@ -163,9 +193,15 @@
     const style = settings.style;
     const face = { name: G.FONT[style] || style, cmap: { has: (cp) => G.has(style, cp) } };
     const b = model.book || {};
+    // E17: with model.bookParts the parts print (About and Also by among them), never the pen name bio.
+    const bpm = model.bookParts;
+    const parts = (bpm || []).flatMap((p) => {
+      const name = (F().PART_ROWS.find((r) => r.key === p.kind) || {}).name || p.kind;
+      return [{ text: R().strip(p.content || ''), label: name }, ...(p.entries || []).map((e) => ({ text: e.title, label: name }))];
+    });
     const collected = kdpFontCmap.collect(model, {
-      about: settings.parts.about, copyright: R().copyright(b.pen_name, ex.year),
-      alsoBy: ex.alsoBy, headerTitle: head || null
+      about: !bpm && settings.parts.about, copyright: R().copyright(b.pen_name, ex.year),
+      alsoBy: bpm ? [] : ex.alsoBy, headerTitle: head || null, parts
     });
     missing = kdpFontCmap.missing(collected, { body: [face], head: [] });
     missingFor = key;
@@ -189,17 +225,76 @@
     ctx.refresh();
   }
 
+  /** book_parts_json, never throwing: { data } or { error }. */
+  const readParts = () => kdp.parts.json(book.id).catch((e) => ({ data: null, error: e }));
+
+  /** Before 0035 (no function, or no parts): 'off', the part rows stay hidden as in 06. Any other failure: 'error' with Retry. */
+  function partsState(res) {
+    if (res && !res.error && res.data && Array.isArray(res.data.parts)) return { state: 'ready', data: res.data };
+    const e = (res && res.error) || {};
+    if (e.notFound || e.code === 'PGRST202' || e.code === '42883') return { state: 'off', data: null };
+    return { state: 'error', data: null };
+  }
+
+  /**
+   * A part switch or a Retry changed what is in the files: read export_json (book_parts_files) and
+   * book_parts_json again, rebuild the model and both previews, and read the 08 mark again (format_key
+   * and epub_key change with the parts, 0035). A failed read keeps what is on screen.
+   */
+  async function refreshParts(focusSel) {
+    const token = openToken;
+    let x, pj;
+    try { [x, pj] = await Promise.all([kdp.getExportData(book.id), readParts()]); } catch (e) { x = { error: e }; }
+    if (token !== openToken || !root || load.state !== 'ready') return;
+    if (x && !x.error && x.data && x.data.book) exp = x.data;
+    const next = partsState(pj);
+    if (next.state === 'ready' || bp.state !== 'ready') bp = next;
+    model = null;
+    ensureModel();
+    checkChars();
+    rerenderSettings(focusSel);
+    scheduleBuild(false);
+    scheduleKindle(false);
+    paintReady();
+    paintChips();
+    readMarks();
+  }
+
+  /** Turns a part on or off (book_parts.enabled only, the 06 switch). Failure: the box goes back, a red line with Retry. */
+  async function savePart(kind, on) {
+    const p = partOf(kind);
+    if (!p) return;
+    const token = openToken;
+    const focus = `[data-fmt-bp="${kind}"]`;
+    bpSave[kind] = { state: 'saving', on };
+    rerenderSettings(focus);
+    let res;
+    try { res = await kdp.parts.set(p.id, { enabled: on }); } catch (e) { res = { error: e }; }
+    if (token !== openToken || !root) return;   // 08 closed or loaded again: the next read shows the truth
+    if (res.error) {
+      const msg = String((res.error && res.error.message) || '');
+      bpSave[kind] = { state: 'error', on, offline: navigator.onLine === false || /Failed to fetch|NetworkError|Load failed/i.test(msg) };
+      rerenderSettings(focus);
+      return;
+    }
+    p.enabled = on;
+    delete bpSave[kind];
+    await refreshParts(focus);
+  }
+
   async function loadData() {
     const token = ++openToken;
     load = { state: 'loading' };
     paint();
-    let f, x;
-    try { [f, x] = await Promise.all([kdp.ensureFormat(book.id), kdp.getExportData(book.id)]); } catch (e) { f = { error: e }; }
+    let f, x, pj;
+    try { [f, x, pj] = await Promise.all([kdp.ensureFormat(book.id), kdp.getExportData(book.id), readParts()]); } catch (e) { f = { error: e }; }
     if (token !== openToken) return;
     // A reply without the book (or the chapters) is a load error, never a broken screen.
     if (!f || f.error || !f.data || !f.data.book || !x || x.error || !x.data || !x.data.book) { load = { state: 'error' }; paint(); return; }
     fmt = f.data;
     exp = x.data;
+    bp = partsState(pj);
+    bpSave = {};
     // Local edits not saved yet win over the read (a failed save keeps them for Retry).
     const local = saver && saver.hasUnsaved() && settings ? settings : null;
     settings = local || F().normalize(fmt.settings);
@@ -730,6 +825,21 @@
     chip.innerHTML = text ? `${ICON.warn(16)}<span>${esc(text)}</span>${IC.down}` : '';
   }
 
+  /**
+   * E17 (design 83): the parts that are on but not in the files (0035 part_file_list), each with "Open in 06".
+   * '' when there are none. A warning only: it never blocks export.
+   */
+  function partsBoxHtml(list = notReady()) {
+    if (!list.length) return '';
+    const n = list.length;
+    return `<div class="alert alert-warning fmt-alert fmt-parts-alert" role="status" data-fmt-parts-ready>${ICON.warn(18)}
+      <div class="fmt-alert-body"><span><strong>${n === 1 ? '1 book part is' : `${n} book parts are`} not ready.</strong>
+        ${n === 1 ? 'It is left out of the files until it is Final.' : 'They are left out of the files until they are Final.'}</span>
+        ${list.map((x) => `<span class="fmt-parts-line">${esc(F().partWhyText(x))} <a href="${partHref(x.id)}" class="fmt-ready-link" data-fmt-open-part="${esc(x.kind)}">Open in 06<span class="sr-only">: ${esc(x.name)}</span></a></span>`).join('')}</div></div>`;
+  }
+  /** The line under the parts box (design 83). */
+  const partsNote = () => `<p class="fmt-note fmt-parts-note">${IC.info}<span>A warning only: you can still export. Chapters and sections follow the same Final rule as today.</span></p>`;
+
   function paintReady() {
     const el = sel('[data-fmt-ready]');
     if (!el || !model) return;
@@ -740,16 +850,19 @@
       ? `<div class="alert alert-error fmt-alert" role="alert">${IC.x}<div><p class="alert-text">The preview could not be updated. It shows your last good pages.</p>
           <button type="button" class="link-btn" data-fmt-retry-build>Try again</button></div></div>` : '';
     const r = F().ready({ model, missing, pages: build.pages, dropped: droppedAlsoBy(), trim: bookTrim(), paper: settings.paper });
-    const things = r.warnings.length + (rebuildError ? 1 : 0);
-    if (things) paintToCheck(r.warnings.length ? `${things === 1 ? '1 thing' : `${things} things`} to check` : 'Preview not updated');
-    if (r.warnings.length) {
+    const nr = notReady();
+    const warns = r.warnings.length + nr.length;
+    const things = warns + (rebuildError ? 1 : 0);
+    if (things) paintToCheck(warns ? `${things === 1 ? '1 thing' : `${things} things`} to check` : 'Preview not updated');
+    if (warns) {
       const first = r.warnings.find((w) => w.sectionId);
       const link = first ? `<a href="${sectionHref(first.sectionId)}" class="fmt-ready-link">Show in 06 Write</a>` : '';
-      el.innerHTML = `${rebuildError}
+      const other = r.warnings.length ? `
         <div class="alert alert-warning fmt-alert" role="status">${ICON.warn(18)}
           <div class="fmt-alert-body"><strong>${r.warnings.length === 1 ? '1 thing' : `${r.warnings.length} things`} to check</strong>
-          ${r.warnings.map((w) => `<span>${esc(w.text)}</span>`).join('')}${link}</div></div>
-        <p class="fmt-note">You can still export.</p>
+          ${r.warnings.map((w) => `<span>${esc(w.text)}</span>`).join('')}${link}</div></div>` : '';
+      el.innerHTML = `${rebuildError}${partsBoxHtml(nr)}${other}
+        ${nr.length ? partsNote() : '<p class="fmt-note">You can still export.</p>'}
         <p class="fmt-note fmt-qc-line">${qcLine()}</p>`;
       return;
     }
@@ -767,14 +880,16 @@
   function paintKindleReady(el) {
     if (!hasFinal()) { el.innerHTML = ''; return; }   // 41e C: the preview area says why
     const ws = kindleWarnings();
+    const nr = notReady();   // E17: the EPUB leaves them out too
     const link = (l) => (l.go
       ? `<a href="?id=${encodeURIComponent(book.id)}&step=${l.go}" data-fmt-go="${l.go}" class="fmt-ready-link">${esc(l.text)}</a>`
       : `<a href="${l.href}" class="fmt-ready-link">${esc(l.text)}</a>`);
-    if (ws.length) {
-      el.innerHTML = `<div class="alert alert-warning fmt-alert" role="status">${ICON.warn(18)}
+    if (ws.length || nr.length) {
+      el.innerHTML = `${partsBoxHtml(nr)}${ws.length ? `<div class="alert alert-warning fmt-alert" role="status">${ICON.warn(18)}
         <div class="fmt-alert-body"><strong>Check before you export the EPUB.</strong>
           <ul class="kp-warn-list">${ws.map((w) => `<li>${esc(w.text)} ${link(w.link)}</li>`).join('')}</ul>
-          <span class="kp-warn-foot">The reader picks the font, so there is no font check.</span></div></div>`;
+          <span class="kp-warn-foot">The reader picks the font, so there is no font check.</span></div></div>` : ''}
+        ${nr.length ? `${partsNote()}<p class="fmt-note fmt-qc-line">${qcLine()}</p>` : ''}`;
       return;
     }
     const n = model.sections.length;
@@ -798,13 +913,20 @@
       <label class="fmt-row fmt-check${cls ? ` ${cls}` : ''}${disabled ? ' is-off' : ''}"><span>${label}</span>
         <input type="checkbox" ${attr}${on ? ' checked' : ''}${disabled ? ' disabled' : ''} /></label>${after}`;
     const avail = R().available(exp);
-    const bioBlank = R().isBlank(exp.book && exp.book.bio);
     const trim = bookTrim();
     const trims = F().TRIMS.includes(trim) ? F().TRIMS : [...F().TRIMS, trim];
-    const n = validAlsoBy().length;
+    let partsError = false;   // the "could not load" line shows once, at the first part row
     const parts = F().PART_ROWS.map((p) => {
+      if (p.part) {
+        if (bp.state === 'error' && !partsError) {
+          partsError = true;
+          return `<p class="field-error fmt-bp-err" role="alert">${ICON.warn(13)}<span>Book parts could not load.</span>
+            <button type="button" class="btn btn-secondary btn-sm fmt-bp-retry" data-fmt-bp-reload>Retry</button></p>`;
+        }
+        return partRowHtml(p);
+      }
       if (p.key === 'copyright') {
-        return `<div class="fmt-row" id="fmtCopyright" tabindex="-1" data-fmt-copyright><span>Copyright</span><span class="fmt-quiet">Always on</span></div>
+        return `<div class="fmt-row" id="fmtCopyright" tabindex="-1" data-fmt-copyright><span>Copyright</span><span class="fmt-tag">Always on</span></div>
           <div class="fmt-isbn">
             <div class="fmt-isbn-line">
               <label class="fmt-isbn-label" for="fmtIsbn">ISBN</label>
@@ -816,26 +938,14 @@
             <span class="field-error" id="fmtIsbnErr" data-fmt-isbn-err${isbnError ? '' : ' hidden'}>${ICON.warn(13)}<span>${esc(isbnError)}</span></span>
           </div>`;
       }
-      if (p.always) return `<div class="fmt-row"><span>${p.name}</span><span class="fmt-quiet">Always on</span></div>`;
+      if (p.always) return `<div class="fmt-row"><span>${p.name}</span><span class="fmt-tag">Always on</span></div>`;
       if (p.key === 'contents') {
         return check('data-fmt-part="contents"', 'Contents', st.parts.contents)
           + check('data-fmt-flag="contents_sections"', 'Show sections too', st.contents_sections, { disabled: !st.parts.contents, cls: 'is-sub' })
           + '<span class="fmt-row fmt-note is-sub">Kindle: always on (KDP needs it)</span>';
       }
-      if (p.key === 'front') return `<div class="fmt-row is-later"><span>${p.name}</span><span class="fmt-later">${p.later}</span></div>`;
-      if (p.key === 'notes') {
-        return `<div class="fmt-row is-later"><span>${p.name}</span><span class="fmt-later-wrap"><span class="fmt-later">${p.later}</span>
-          <input type="checkbox" disabled aria-label="Notes and references, at the back. Comes in v2b" /></span></div>`;
-      }
+      if (p.later) return `<div class="fmt-row"><span>${p.name}</span><span class="fmt-tag">${p.later}</span></div>`;
       if (p.needs && !avail[p.needs]) return '';
-      if (p.key === 'about') {
-        return check('data-fmt-part="about"', 'About the author', st.parts.about,
-          { after: st.parts.about && bioBlank ? '<p class="fmt-hint fmt-hint-row">Your pen name has no bio yet, so this page is left out.</p>' : '' });
-      }
-      if (p.key === 'also_by') {
-        if (!candidates().length) return '<div class="fmt-row"><span>Also by</span><span class="fmt-quiet">No other books with this pen name</span></div>';
-        return `<div class="fmt-row"><span>Also by</span><button type="button" class="fmt-link" data-fmt-alsoby aria-haspopup="dialog">Choose books (${n})</button></div>`;
-      }
       return check(`data-fmt-part="${p.key}"`, p.name, st.parts[p.key]);
     }).join('');
 
@@ -878,6 +988,37 @@
         ${check('data-fmt-flag="recto_start"', 'Chapters start on a right-hand page', st.recto_start)}
         <p class="fmt-hint fmt-margin" data-fmt-margin>${esc(F().marginNote(0, trim, st.paper))}</p>
       </fieldset>`;
+  }
+
+  /**
+   * One E17 part row (design 83): name, then when on its state and "Open in 06", then the switch
+   * (book_parts.enabled). 32 px, the whole row ticks (51b); the link inside never ticks (a link in a
+   * label is not a label click). '' until book_parts_json has loaded, or before 0035.
+   */
+  function partRowHtml(row) {
+    const p = bp.state === 'ready' ? partOf(row.key) : null;
+    if (!p) return '';
+    const s = bpSave[row.key] || null;
+    const saving = !!s && s.state === 'saving';
+    const on = saving ? s.on : !!p.enabled;
+    let side = '';
+    if (saving) side = '<span class="fmt-quiet">Saving…</span>';
+    else if (on) {
+      const kind = F().partPill(p);
+      const n = alsoByBooks();
+      const state = kind === 'empty' ? '<span class="fmt-pill is-empty">Empty</span>'
+        : kind === 'draft' ? '<span class="fmt-pill">Draft</span>'
+        : kind === 'fixed' ? '<span class="fmt-tag">Fixed text</span>'
+        : kind === 'books' ? `<span class="fmt-quiet fmt-bp-books">${n} ${n === 1 ? 'book' : 'books'}</span>` : '';
+      const open = row.key === 'review_request' ? ''
+        : `<a class="fmt-link fmt-bp-open" href="${partHref(p.id)}" data-fmt-open-part="${row.key}">Open in 06<span class="sr-only">: ${esc(row.name)}</span></a>`;
+      side = state + open;
+    }
+    const err = s && s.state === 'error'
+      ? `<p class="field-error fmt-bp-err" role="alert" id="fmtBpErr-${row.key}">${ICON.warn(13)}<span>${s.offline ? 'You are offline. Not saved.' : 'Not saved.'}</span>
+          <button type="button" class="btn btn-secondary btn-sm fmt-bp-retry" data-fmt-bp-retry="${row.key}">Retry</button></p>` : '';
+    return `<label class="fmt-row fmt-check fmt-bp" data-fmt-bp-row="${row.key}"${saving ? ' aria-busy="true"' : ''}><span class="fmt-bp-name">${esc(row.name)}</span>
+        <span class="fmt-bp-side">${side}<input type="checkbox" data-fmt-bp="${row.key}"${on ? ' checked' : ''}${err ? ` aria-describedby="fmtBpErr-${row.key}"` : ''} /></span></label>${err}`;
   }
 
   /** E13.2b (T9): on a large trim, KDP's Expanded Distribution takes white paper only (KDP help GQTT4W3T5AYK7L45). */
@@ -925,7 +1066,13 @@
       settings.parts[k] = t.checked;
       if (k === 'contents') { const s = sel('[data-fmt-flag="contents_sections"]'); if (s) { s.disabled = !t.checked; s.closest('.fmt-row').classList.toggle('is-off', !t.checked); } }
       edit('parts');
-      if (k === 'about') rerenderSettings('[data-fmt-part="about"]');
+      return;
+    }
+    if (t.matches('[data-fmt-bp]')) {
+      const k = t.dataset.fmtBp;
+      // A second click while the first save is out: the box keeps the value being saved.
+      if (bpSave[k] && bpSave[k].state === 'saving') { t.checked = bpSave[k].on; return; }
+      savePart(k, t.checked);
       return;
     }
     if (t.matches('[data-fmt-flag]')) {
@@ -1000,7 +1147,9 @@
     const sz = t.closest('[data-kp-size]');
     if (sz) { setSize(sz.dataset.kpSize); return; }
     if (t.closest('[data-kp-retry]')) { kRetry = true; kb.state = 'waiting'; scheduleKindle(true); return; }
-    if (t.closest('[data-fmt-alsoby]')) { openAlsoBy(t.closest('[data-fmt-alsoby]')); return; }
+    const rt = t.closest('[data-fmt-bp-retry]');
+    if (rt) { const s = bpSave[rt.dataset.fmtBpRetry]; if (s) savePart(rt.dataset.fmtBpRetry, s.on); return; }
+    if (t.closest('[data-fmt-bp-reload]')) { refreshParts('[data-fmt-bp], [data-fmt-bp-reload]'); return; }
     const go = t.closest('[data-fmt-go]');
     if (go && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); ctx.go(Number(go.dataset.fmtGo)); return; }
     const fb = t.closest('[data-fmt-full]');
@@ -1171,42 +1320,6 @@
     return el;
   }
 
-  async function openAlsoBy(opener) {
-    const pen = (fmt.book.pen_name || '').trim();
-    const ticked = new Set(validAlsoBy());
-    const row = (c, status) => `
-      <label class="fmt-pick"><input type="checkbox" value="${esc(c.id)}"${ticked.has(c.id) ? ' checked' : ''} />
-        <span class="fmt-pick-text"><span class="fmt-pick-title">${esc((c.title || '').trim() || 'Untitled book')}</span><span class="fmt-quiet" data-fmt-status="${esc(c.id)}">${esc(status)}</span></span></label>`;
-    const d = dialog(`
-      <div class="dialog-head"><h2 id="fmtDlgTitle">Also by ${esc(pen)}</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">${ICON.close}</button></div>
-      <p class="fmt-dlg-text">Tick only books that are live on Amazon. Completed in NicheInk does not mean published.</p>
-      <fieldset class="fmt-picks"><legend class="sr-only">Books with this pen name</legend>${candidates().map((c) => row(c, '')).join('')}</fieldset>
-      <p class="fmt-hint">None ticked: the Also by page is left out.</p>
-      <div class="dialog-foot"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button type="button" class="btn btn-primary" data-save>Save</button></div>`, { opener });
-    d.addEventListener('click', (e) => {
-      if (e.target.closest('[data-close]')) { d.close(); return; }
-      if (!e.target.closest('[data-save]')) return;
-      const ids = [...d.querySelectorAll('input[type="checkbox"]:checked')].map((i) => i.value);
-      // Keep the print order of books already ticked; new ones go at the end, in list order.
-      const order = [...settings.also_by.filter((id) => ids.includes(id)), ...ids.filter((id) => !settings.also_by.includes(id))];
-      settings.also_by = order.slice(0, F().ALSO_BY_MAX);
-      settings.parts.also_by = settings.also_by.length > 0;
-      saver.edit('also_by', 0);
-      edit('parts');
-      d.close();
-      rerenderSettings('[data-fmt-alsoby]');
-    });
-    // The status line from Books (owner Q6). A failed read leaves it empty.
-    let res;
-    try { res = await kdp.listBookStatus(candidates().map((c) => c.id)); } catch (e) { return; }
-    if (res.error || !d.isConnected) return;
-    for (const b of res.data) {
-      const el = d.querySelector(`[data-fmt-status="${CSS.escape(b.id)}"]`);
-      if (el) el.textContent = STATUS[b.status] || '';
-    }
-  }
-
   function openTrimDialog(to, opener) {
     const from = bookTrim();
     // The cover warning only when a Print PDF exists (owner Q5).
@@ -1350,6 +1463,6 @@
       });
     },
     /** Tests: the open settings. */
-    _debug: () => ({ settings, fmt, marks, engine, pv, build, eng, missing, full: !!full, fullKind: full ? full.kind : null, kp, kb, kSize, mode })
+    _debug: () => ({ settings, fmt, marks, engine, pv, build, eng, missing, full: !!full, fullKind: full ? full.kind : null, kp, kb, kSize, mode, bp, bpSave, exp, model })
   };
 })();

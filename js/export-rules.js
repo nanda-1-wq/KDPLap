@@ -18,6 +18,7 @@
 
    kdpExportRules.defaults(data)          → { format, include, parts }
    kdpExportRules.available(data)         → { intro, conclusion, about } (rows to show)
+   kdpExportRules.aboutInFile(data)       → E17: About is in the book_parts list (Word and Markdown, Q-4)
    kdpExportRules.model(data, opts)       → everything the dialog and the builder need
    kdpExportRules.versionIds(model)       → the exported version ids, in order
    kdpExportRules.strip(md)               → the text without "[Verify: no source]" marks
@@ -62,9 +63,16 @@
     return {
       format: 'docx',
       include: 'all',
-      parts: { title: true, copyright: true, contents: true, intro: a.intro, conclusion: a.conclusion, about: false }
+      parts: { title: true, copyright: true, contents: true, intro: a.intro, conclusion: a.conclusion, about: aboutInFile(data) }
     };
   }
+
+  /**
+   * E17 (Q-4): About the author is in a Word or Markdown file exactly when the server's book_parts list
+   * (0035 book_parts_files: on and Final, with text) has it. No toggle. Before 0035 (no list): off.
+   * The DOCX row sends it as parts.about, so the 0035 guard keeps About in the snapshot.
+   */
+  const aboutInFile = (data) => Array.isArray(data && data.book_parts) && data.book_parts.some((p) => p && p.kind === 'about_author');
 
   /** The chapter numbers: kind "chapter" only, in outline order (as Write's labels). */
   function numbers(chapters) {
@@ -256,5 +264,5 @@
   }
 
   root.kdpExportRules = { FLAG, PARTS, RUN_FRESH, AI_EDITS, isBlank, available, defaults, model, versionIds, strip, copyright, fileName, markCount, inFile,
-    BOOK_PARTS, PART_TITLES, REVIEW, bookParts };
+    BOOK_PARTS, PART_TITLES, REVIEW, bookParts, aboutInFile };
 })(globalThis);
