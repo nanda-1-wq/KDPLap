@@ -11,6 +11,7 @@
      Escape closes and focus goes back to the button, Tab closes. Turning a
      part on opens its editor (Q-P4). Turning a part off keeps its text.
    - The editor itself is js/book-write.js with a part target (risk P1).
+     Also by has its own page: js/write-also-by.js (design 82, Part 5).
    - Data: kdp.parts (js/supabase.js, 0035 book_parts_json). Before 0035 is
      applied the read fails as "not found": the parts stay hidden.
 ═══════════════════════════════════════════════════ */
@@ -254,17 +255,11 @@
         <p class="help-note wr-fixed-note"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>The book title and the pen name fill in by themselves. The words stay fixed so the page follows Amazon’s review rules: an honest review, no rewards, no asking for a good review only.</span></p>`;
     }
 
-    /** Also by, until its editor (design 82, E17 Part 5): the titles in the list, read only. */
-    function alsoByHtml() {
-      const rows = data ? (data.also_by || []).filter((e) => e.valid !== false && e.title) : [];
-      return `<div class="wr-card wr-fixed"><div class="wr-fixed-page">
-          ${rows.length ? `<ul class="wr-fixed-list">${rows.map((e) => `<li><em>${esc(e.title)}</em></li>`).join('')}</ul>` : '<p class="wr-soon">No books in this list yet.</p>'}
-        </div></div>`;
-    }
-
     return {
       read, shown, state: () => load.state, byId, byKind, list, isText, nameOf, whereOf, hint: (k) => HINTS[k] || '',
-      groupHtml, addHtml, openMenu, closeMenu, menuOpen: () => !!menu, toggle, reviewHtml, alsoByHtml,
+      groupHtml, addHtml, openMenu, closeMenu, menuOpen: () => !!menu, toggle, reviewHtml,
+      // E17 Part 5: the Also by editor (js/write-also-by.js) reads and writes also_by and candidates here.
+      raw: () => data,
       EPIGRAPH_MAX
     };
   }

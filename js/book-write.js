@@ -79,7 +79,7 @@
   const RANK = { not_started: 0, draft: 1, reviewed: 2, final: 3 };
   // What a version's source says in the list (the AI sources arrive in E10.2 and E10.3).
   const SOURCE_NAME = { manual: 'Saved', generate: 'First draft', edit_format: 'Edited', improve: 'Improved', expand: 'Expanded',
-    shorten: 'Shortened', humanize: 'Humanized', custom: 'Custom edit', restore: 'Restored' };
+    shorten: 'Shortened', humanize: 'Humanized', custom: 'Custom edit', restore: 'Restored', bio_copy: 'Copied from pen name' };
   // A run in another tab is fresh while its heartbeat is newer than 20 s and it started under 160 s ago (0020).
   const RUN_FRESH = { heartbeatMs: 20000, startedMs: 160000 };
   const SPARKLE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>';
@@ -92,6 +92,7 @@
   const PANEL_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M14.5 4.5v15"/></svg>';
   const PANEL_KEY = 'nicheink.write.panel';   // "open" or "closed", on this computer
   const INFO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+  const COPY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>';
   const TOOL = {
     bold: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></svg>',
     italic: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 5h-4M14 19h-4M14 5l-4 14"/></svg>',
@@ -113,6 +114,7 @@
   let cmp = null;                     // the Compare dialog
   let ask = null;                     // the confirm dialog (rule B, leave while writing)
   let P = null;                       // E17: the book parts (js/write-parts.js)
+  let AB = null;                      // E17 Part 5: the Also by page (js/write-also-by.js)
   let wantPart = null;                // ?part= from the first URL
   let G = null;                       // Generate (js/write-generate.js)
   let imp = null;                     // the Improve menu (js/write-improve.js)
@@ -212,7 +214,7 @@
   const active = () => !!els && ctx.isActive(6);
   /** Generate is saving first, writing or stopping: the section is read only. */
   const genBusy = () => G.busy();
-  const locked = () => !!cur && (!!cur.conflict || cur.busy === 'apply' || G.busyOn(cur.id));
+  const locked = () => !!cur && (!!cur.conflict || cur.busy === 'apply' || cur.busy === 'copy' || G.busyOn(cur.id));
 
   /* ── Autosave: the draft ─────────────────── */
 
@@ -336,6 +338,7 @@
     }
     // The review request page and Also by have no text, no status and no versions (0035).
     if (part && !P.isText(part.kind)) {
+      if (part.kind === 'also_by') AB.reset();
       Object.assign(cur, { state: 'ready', fixed: true, version: null, savedText: '', base: null, text: '', hasDraft: false, conflict: null, otherRun: false, versions: [], versionsState: 'ready' });
       if (active()) renderAll();
       return;
@@ -355,6 +358,20 @@
       return;
     }
     const { version, draft } = res.data;
+    // E17 (80b): About the author opened for the first time (no version, nothing typed): the pen name bio
+    // becomes v1, with no dialog. No bio: the editor opens empty with the 84 note.
+    if (part && part.kind === 'about_author' && !version && !draft && !opts.noCopy) {
+      let c;
+      try { c = await kdp.parts.copyBioToAbout(book.id, null); } catch (err) { c = { error: err }; }
+      if (token !== sectionToken) return;
+      if (!c.error || c.error.message === 'version_conflict') {
+        await openTarget(type, id, { ...opts, noCopy: true, keepNote: true });
+        if (!c.error && cur && cur.id === id && cur.version) announce(`Copied the pen name bio as version ${cur.version.version_no}.`);
+        return;
+      }
+      if (c.error.message === 'bio_empty') cur.noBio = true;
+      else note = { kind: 'warning', text: 'We couldn’t copy the pen name bio. You can write About the author here, or try Copy from pen name again.' };
+    }
     const savedText = version ? version.content : '';
     const base = version ? version.id : null;
     Object.assign(cur, { state: 'ready', version, savedText, base, text: savedText, hasDraft: !!draft, conflict: null, otherRun: false });
@@ -491,6 +508,66 @@
     const from = (cur.versions || []).find((v) => v.id === versionId);
     await openTarget(type, id, { keepNote: false });
     announce(`Restored ${from ? `v${from.version_no}` : 'the version'} as version ${res.data.version_no}.`);
+  }
+
+  const penName = () => String((one(book.pen_names) || {}).name || '').trim();
+
+  /**
+   * E17 (80b): "Copy from pen name again". With text on screen, the dialog asks first (Cancel /
+   * Replace text, not red: nothing is lost). The typing goes to the server as a draft, then
+   * copy_bio_to_about keeps it as a version and makes the bio the new current version.
+   * The focus comes back to the button.
+   */
+  async function copyBio() {
+    if (!cur || cur.kind !== 'about_author' || cur.state !== 'ready' || cur.conflict || cur.busy || locked()) return;
+    const id = cur.id;
+    const focusBack = () => { const b = els && els.main.querySelector('[data-copy-bio]'); if (b) b.focus(); };
+    if (cur.text.trim()) {
+      const pen = penName();
+      const yes = await confirmDialog({
+        title: 'Replace your About the author text?',
+        html: pen ? `This puts the current bio of the pen name <strong>${esc(pen)}</strong> in place of the text you have here.` : 'This puts the current bio of the pen name in place of the text you have here.',
+        note: 'Your text now is kept as a version, so you can restore it later.',
+        ok: 'Replace text', cancel: 'Cancel'
+      });
+      if (!yes || !cur || cur.id !== id) { focusBack(); return; }
+    }
+    const had = !!cur.text.trim();
+    clearIdle();
+    cur.busy = 'copy';
+    if (active()) {
+      renderHead();
+      renderFoot();
+      const ed = els.main.querySelector('[data-editor]');
+      if (ed) { ed.setAttribute('contenteditable', 'false'); ed.setAttribute('aria-readonly', 'true'); }
+    }
+    if (saver.hasUnsaved()) await saver.flush();
+    if (!cur || cur.id !== id) return;
+    if (saver.state === 'error' && saver.hasUnsaved()) {
+      cur.busy = '';
+      note = { kind: 'error', text: 'Your text is not saved yet, so the bio was not copied. Check your connection and try again.' };
+      if (active()) renderMainShell();
+      focusBack();
+      return;
+    }
+    let res;
+    try { res = await kdp.parts.copyBioToAbout(book.id, cur.base); } catch (err) { res = { error: err }; }
+    if (!cur || cur.id !== id) return;
+    cur.busy = '';
+    if (res.error) {
+      const m = res.error.message;
+      if (m === 'version_conflict') { await adoptRemote(id, null); focusBack(); return; }
+      if (m === 'bio_empty') { cur.noBio = true; note = null; }
+      else note = { kind: 'error', text: 'We couldn’t copy the pen name bio. Your text is safe. Try again.' };
+      if (active()) renderMainShell();
+      focusBack();
+      return;
+    }
+    await openTarget('part', id, { keepNote: false, noCopy: true });
+    // created false: the current version already was the bio (0035); typed text still became a version.
+    const made = !(res.data && res.data.created === false);
+    announce(had ? `Copied the pen name bio${made ? ` as version ${res.data.version_no}` : ''}. Your earlier text is kept as a version.` : (made ? `Copied the pen name bio as version ${res.data.version_no}.` : 'The text is already the pen name bio.'));
+    focusBack();
   }
 
   /**
@@ -817,14 +894,14 @@
   const posLocked = () => !!(one(book.positioning) || {}).locked_at;
 
   /** A small confirm dialog. Resolves true for the main button. */
-  function confirmDialog({ title, text, ok, cancel, list, more, focusOk }) {
+  function confirmDialog({ title, text, html, note: extra, ok, cancel, list, more, focusOk }) {
     if (!ask) {
       const d = document.createElement('dialog');
       d.className = 'dialog dialog-sm';
       d.setAttribute('aria-labelledby', 'wrAskTitle');
       d.innerHTML = `
         <div class="dialog-inner">
-          <div class="dialog-head"><h2 id="wrAskTitle"></h2><p data-ask-text></p></div>
+          <div class="dialog-head"><h2 id="wrAskTitle"></h2><p data-ask-text></p><p data-ask-note hidden></p></div>
           <ol class="wr-ask-list" data-ask-list hidden></ol>
           <div class="dialog-foot">
             <button type="button" class="btn btn-secondary" data-ask-no></button>
@@ -844,7 +921,13 @@
     // Already open (a second Back or Exit while it asks): the same question, the same answer.
     if (ask.pending) return ask.pending;
     ask.d.querySelector('#wrAskTitle').textContent = title;
-    ask.d.querySelector('[data-ask-text]').textContent = text;
+    // html: built by the caller with esc() on every value (E17 80b: the pen name in bold).
+    if (html !== undefined) ask.d.querySelector('[data-ask-text]').innerHTML = html;
+    else ask.d.querySelector('[data-ask-text]').textContent = text;
+    const nt = ask.d.querySelector('[data-ask-note]');
+    nt.hidden = !extra;
+    nt.textContent = extra || '';
+    ask.d.querySelector('.dialog-head').classList.toggle('is-stack', html !== undefined || !!extra);   // 80b: title over the words
     ask.d.querySelector('[data-ask-yes]').textContent = ok;
     ask.d.querySelector('[data-ask-no]').textContent = cancel;
     // Mark all as reviewed (22f, 2): the sections that will change.
@@ -1183,7 +1266,8 @@
     }
     // E17 (81): the review request page and Also by show a page, not an editor.
     if (cur.fixed) {
-      els.main.innerHTML = `<div class="wr-top"><div class="wr-head" data-head></div>${toggleHtml()}</div><div data-notes></div>${cur.kind === 'review_request' ? P.reviewHtml(book) : P.alsoByHtml()}`;
+      els.main.innerHTML = `<div class="wr-top"><div class="wr-head" data-head></div>${toggleHtml()}</div><div data-notes></div>${cur.kind === 'review_request' ? P.reviewHtml(book) : AB.html()}`;
+      if (cur.kind === 'also_by') AB.mount(els.main.querySelector('[data-ab]'));   // 82 (Part 5)
       renderHead();
       renderNotes();
       return;
@@ -1355,9 +1439,14 @@
   function renderPartHead(box) {
     const p = partOf();
     if (!p) return;
+    const tag = cur.kind === 'review_request' ? 'Fixed text' : (cur.kind === 'also_by' ? 'Prints when 1 or more books are ticked' : '');
+    // 80b: About the author copies the pen name bio again (the dialog asks first when there is text).
+    const copy = cur.kind === 'about_author'
+      ? `<button type="button" class="btn btn-secondary wr-copy-bio" data-copy-bio${cur.busy || locked() || cur.state !== 'ready' ? ' disabled' : ''}>${cur.busy === 'copy' ? '<span class="spinner" aria-hidden="true"></span>Copying…' : `${COPY}Copy from pen name again`}</button>`
+      : '';
     const ctl = cur.fixed
-      ? `${cur.kind === 'review_request' ? '<span class="wr-tag wr-fixed-tag">Fixed text</span>' : ''}<button type="button" class="btn btn-secondary" data-part-off>Turn off</button>`
-      : `<label class="wr-status"><span>Status</span><select class="text-input" data-status${locked() ? ' disabled' : ''}>
+      ? `${tag ? `<span class="wr-tag wr-fixed-tag">${tag}</span>` : ''}<button type="button" class="btn btn-secondary" data-part-off>Turn off</button>`
+      : `${copy}<label class="wr-status"><span>Status</span><select class="text-input" data-status${locked() ? ' disabled' : ''}>
           ${[['draft', 'Draft'], ['final', 'Final']].map(([k, l]) => `<option value="${k}"${(p.status || 'draft') === k ? ' selected' : ''}>${l}</option>`).join('')}
         </select></label>`;
     box.innerHTML = `
@@ -1394,6 +1483,14 @@
             <button type="button" class="btn btn-primary btn-sm" data-use-draft${busy ? ' disabled' : ''}>Use my draft</button>
             <button type="button" class="btn btn-secondary btn-sm" data-keep-saved${busy ? ' disabled' : ''}>Keep saved version</button>
           </div></div></div>`);
+    }
+    // E17 (84): About the author and the pen name has no bio yet. Plain words, one next step.
+    if (cur && cur.noBio && cur.kind === 'about_author') {
+      const pid = (one(book.pen_names) || {}).id || book.pen_name_id;
+      const href = pid ? `pen-name.html?id=${encodeURIComponent(pid)}` : 'pen-names.html';
+      parts.push(`<div class="wr-card wr-nobio" data-no-bio role="status"><p class="wr-nobio-title">This pen name has no bio yet.</p>
+          <p class="wr-nobio-text">Write one in Pen Names, then copy it here. Or write About the author here directly.</p>
+          <p><a class="btn btn-secondary" href="${href}">Open Pen Names</a></p></div>`);
     }
     if (note && note.kind === 'info') {
       // E12 fix batch 3 (22f, 14): said once, gray, no button.
@@ -1432,6 +1529,7 @@
     else if (G.busyOn(cur.id)) text = 'The editor is read only while the AI writes.';
     else if (saveErr) text = 'Your latest typing is not saved yet. Use Retry in the sidebar, or Save version.';
     else if (dirty()) text = v ? `Unsaved changes since v${v.version_no}. Kept as a draft while you type.` : 'Not saved as a version yet. Kept as a draft while you type.';
+    else if (v && v.source === 'bio_copy') text = penName() ? `Saved as v${v.version_no} · copied from the pen name ${penName()}` : `Saved as v${v.version_no} · copied from the pen name`;
     else if (v) text = `Saved as v${v.version_no} · ${relTime(v.created_at)}`;
     else text = 'Nothing written yet.';
     const can = dirty() && !blankFirst() && !cur.conflict && !cur.busy && !genBusy();
@@ -1595,6 +1693,7 @@
       if (t.dataset.part) { selectSection(t.dataset.part, 'part'); return; }
       if (t.hasAttribute('data-parts-add')) { if (P.menuOpen()) P.closeMenu(true); else P.openMenu(); return; }
       if (t.hasAttribute('data-part-off') && isPart()) { P.toggle(cur.kind, true); return; }
+      if (t.hasAttribute('data-copy-bio') && isPart()) { copyBio(); return; }
       if (t.hasAttribute('data-parts-retry')) { P.read(book.id).then(() => { if (active()) renderManuscript(); }); return; }
       if (t.hasAttribute('data-retry-load')) { loadOutline(); return; }
       if (t.hasAttribute('data-retry-section')) { openTarget(cur.type, cur.id); return; }
@@ -1807,6 +1906,12 @@
       },
       error: (text) => { note = { kind: 'error', text }; if (active()) renderNotes(); },
       announce
+    });
+    AB = kdpWriteAlsoBy.create({
+      data: () => P.raw(),
+      book: () => book,
+      announce,
+      changed: () => { ctx.refresh(); if (active()) renderManuscript(); }
     });
     Q = kdpWriteQc.create({
       els: () => els,

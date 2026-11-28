@@ -130,7 +130,9 @@ const setup = async page => {
   };
   // E17 Part 4: 0035 book_parts rows (the books trigger: 8 per book, off; text parts 'draft').
   const KINDS = ['dedication', 'epigraph', 'foreword', 'preface', 'acknowledgments', 'about_author', 'review_request', 'also_by'];
-  store.parts = { rows: {}, versions: [], drafts: {}, alsoBy: {} };
+  store.parts = { rows: {}, versions: [], drafts: {}, alsoBy: {}, others: {} };
+  // E17 Part 5: the pen name bio (copy_bio_to_about) and the other books with the same pen name (candidates).
+  store.penBio = 'Nora Hale teaches chair yoga to adults over 60. She lives in Ohio with her two dogs.';
   for (const bid of Object.keys(store.books)) {
     store.parts.rows[bid] = KINDS.map((kind) => ({ id: uid('9'), book_id: bid, kind, enabled: false,
       status: kind === 'review_request' || kind === 'also_by' ? null : 'draft', current_version_id: null, updated_at: ago(1) }));
@@ -422,7 +424,7 @@ const setup = async page => {
     }
     if (path === '/rest/v1/pen_names' && method === 'GET') return json(r, 200, [{ id: PA, name: 'Nora Hale', voice: {} }]);
     // E17 Part 4: book parts (0035), only with globalThis.__modes.parts (other tests see no parts, as before 0035).
-    if (mode('parts') && /^\/rest\/v1\/(rpc\/(book_parts_json|save_part_version|restore_part_version|apply_part_suggestion)|book_parts|book_part_versions|book_part_drafts)$/.test(path)) {
+    if (mode('parts') && /^\/rest\/v1\/(rpc\/(book_parts_json|save_part_version|restore_part_version|apply_part_suggestion|copy_bio_to_about|set_also_by)|book_parts|book_part_versions|book_part_drafts)$/.test(path)) {
       const P = store.parts;
       const partById = (id) => { for (const bid of Object.keys(P.rows)) { const x = P.rows[bid].find((y) => y.id === id); if (x) return x; } return null; };
       const pv = (id) => P.versions.find((v) => v.id === id) || null;
@@ -440,7 +442,62 @@ const setup = async page => {
           parts: rows.map((x) => { const v = pv(x.current_version_id); const d = P.drafts[x.id];
             return { id: x.id, kind: x.kind, enabled: x.enabled, status: x.status, version_id: x.current_version_id, version_no: v ? v.version_no : null, words: v ? v.word_count : 0,
               has_draft: !!d && d.content.trim() !== (v ? v.content : '').trim() }; }),
-          also_by: copy(P.alsoBy[bid] || []), candidates: [], now: now() });
+          also_by: copy(P.alsoBy[bid] || []), now: now(),
+          candidates: copy((P.others[bid] || []).filter((o) => !(P.alsoBy[bid] || []).some((e) => e.book_id === o.id)).map(({ id, title, subtitle }) => ({ id, title, subtitle }))) });
+      }
+      // 0035 copy_bio_to_about: typed draft text first becomes a version (not current), then the bio is the new current one.
+      if (path === '/rest/v1/rpc/copy_bio_to_about') {
+        const f = body();
+        store.writes.push({ table: 'rpc', fn: 'copy_bio_to_about', body: f });
+        if (mode('copyError')) { globalThis.__modes.copyError--; return json(r, 500, { message: 'mock' }); }
+        const x = (P.rows[f.p_book_id] || []).find((y) => y.kind === 'about_author');
+        if (!x) return json(r, 400, { code: 'P0002', message: 'part_not_found' });
+        if ((x.current_version_id || null) !== (f.p_base_version_id || null)) return fail(r, 'P0001', 'version_conflict');
+        const bio = store.penBio;
+        if (!bio || !bio.trim()) return fail(r, 'P0001', 'bio_empty');
+        const c = pv(x.current_version_id);
+        const d = P.drafts[x.id];
+        if (d && d.content.trim() && d.content !== (c ? c.content : '')) { const keep = x.current_version_id; addPv(x, d.content, 'manual'); x.current_version_id = keep; }
+        delete P.drafts[x.id];
+        if (c && c.content === bio) return json(r, 200, { id: c.id, version_no: c.version_no, word_count: c.word_count, created_at: c.created_at, created: false });
+        const v = addPv(x, bio, 'bio_copy');
+        return json(r, 200, { id: v.id, version_no: v.version_no, word_count: v.word_count, created_at: v.created_at, created: true });
+      }
+      // 0035 set_also_by: the whole list in one call, the same checks and messages as the SQL.
+      if (path === '/rest/v1/rpc/set_also_by') {
+        const f = body();
+        store.writes.push({ table: 'rpc', fn: 'set_also_by', body: f });
+        if (mode('alsoByError')) { globalThis.__modes.alsoByError--; return json(r, 500, { message: 'mock' }); }
+        const bid = f.p_book_id;
+        const bad = (details) => json(r, 400, { code: '22023', message: 'also_by_bad', details });
+        if (!P.rows[bid]) return json(r, 400, { code: 'P0002', message: 'book_not_found' });
+        const list = f.p_entries;
+        if (!Array.isArray(list)) return bad('Send the list of books.');
+        if (list.length > 20) return bad('Also by lists at most 20 books.');
+        const out = [];
+        const seen = new Set();
+        const old = (P.alsoBy[bid] || []);
+        for (const e of list) {
+          if (!e || typeof e !== 'object' || Array.isArray(e)) return bad('Each entry is a book or a typed title.');
+          if ('book_id' in e) {
+            if (Object.keys(e).length !== 1) return bad('A ticked entry has a book only.');
+            if (seen.has(e.book_id)) return bad('A book is listed once.');
+            seen.add(e.book_id);
+            const o = (P.others[bid] || []).find((y) => y.id === e.book_id);
+            const was = old.find((y) => y.book_id === e.book_id);
+            if (!o && !was) return fail(r, 'P0001', 'also_by_not_allowed');
+            out.push({ position: out.length + 1, book_id: e.book_id, title: o ? o.title : was.title, subtitle: o ? o.subtitle : was.subtitle, valid: o ? true : was.valid });
+          } else {
+            if (Object.keys(e).some((k) => k !== 'title' && k !== 'subtitle') || typeof e.title !== 'string' || !(e.subtitle === undefined || e.subtitle === null || typeof e.subtitle === 'string')) return bad('A typed entry has a title and can have a subtitle.');
+            const t = e.title.replace(/^[ \t\n\r\f\v]+|[ \t\n\r\f\v]+$/g, '');
+            const sub = (e.subtitle || '').replace(/^[ \t\n\r\f\v]+|[ \t\n\r\f\v]+$/g, '') || null;
+            if ([...t].length < 1 || [...t].length > 200) return bad('A title has 1 to 200 characters.');
+            if (sub && [...sub].length > 200) return bad('A subtitle has at most 200 characters.');
+            out.push({ position: out.length + 1, book_id: null, title: t, subtitle: sub, valid: true });
+          }
+        }
+        P.alsoBy[bid] = out;
+        return json(r, 200, copy(out));
       }
       if (path === '/rest/v1/book_parts' && method === 'GET') { const x = partById(eq('id')); return json(r, 200, x ? [{ id: x.id, current_version_id: x.current_version_id }] : []); }
       if (path === '/rest/v1/book_parts' && method === 'PATCH') {

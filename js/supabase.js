@@ -995,6 +995,24 @@ window.kdp = {
       return oneRow(data, error, 'Part not found.');
     },
 
+    /**
+     * copy_bio_to_about: the pen name bio becomes the current About version. Unsaved typed text is saved
+     * as a version first (inside the RPC). data: { id, version_no, word_count, created_at, created }.
+     * error.message: bio_empty, version_conflict, part_too_long, part_not_found.
+     */
+    async copyBioToAbout(bookId, baseVersionId) {
+      return window.sb.rpc('copy_bio_to_about', { p_book_id: bookId, p_base_version_id: baseVersionId });
+    },
+
+    /**
+     * set_also_by: replaces the whole Also by list in one call, in this order.
+     * entries: [{ book_id }] for a ticked book, [{ title, subtitle }] for a typed one. data: the new list.
+     * error.message: also_by_bad (error.details says why), also_by_not_allowed, book_not_found.
+     */
+    async setAlsoBy(bookId, entries) {
+      return window.sb.rpc('set_also_by', { p_book_id: bookId, p_entries: entries });
+    },
+
     /** Improve on a part (E17 Part 6 adds the stage): apply_part_suggestion, as applySuggestion. */
     async applySuggestion(suggestionId, baseVersionId, fullText) {
       return window.sb.rpc('apply_part_suggestion', { p_suggestion_id: suggestionId, p_base_version_id: baseVersionId, p_full_text: fullText });
